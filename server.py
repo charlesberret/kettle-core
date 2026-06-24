@@ -138,7 +138,7 @@ SWEEP_PROMPT = (
     "nothing has changed since: report 'nothing to sweep since the last pass' in one line and STOP "
     "(do not re-archive, re-restock, or re-log). A re-fire over an unchanged state is a clean no-op, "
     "not a problem. Proceed through the steps below only when there is a real change to process.\n"
-    "3. ASSESS — characterize each change in a sentence or two: what the patron (or his "
+    "3. ASSESS — characterize each change in a sentence or two: what the patron (or their "
     "co-editing agent) did, and the apparent intent.\n"
     "4. RIPPLE — check the changes against the rest of the project for consistency and broader "
     "implications: stale cross-references, contradicted statements, renamed terms. FIX in place "
@@ -180,14 +180,14 @@ QUEUE_SCHEMA = (
     "BRIEF STANDARD (both audiences, in order): the brief is shown to the patron the instant a "
     "file loads — seconds before any agent reply — so it must do real orienting work on its own. "
     "Write it in TWO movements: (1) a FIRST LINE that is plain, jargon-free, and immediately "
-    "useful to a human — what this document is and what is wanted of him, in a sentence he can "
-    "act on cold; (2) then 1–3 sentences of precise detail that also prime the review agent "
+    "useful to a human — what this document is and what is wanted of them, in a sentence they "
+    "can act on cold; (2) then 1–3 sentences of precise detail that also prime the review agent "
     "(specifics, terms of art, what to check). The two movements MUST NOT restate each other — "
     "movement 2 adds only precision movement 1 omitted (an exact quote, the fault's location, a "
     "concrete check); if you'd only be re-saying the lead in other words, stop at the lead. Spell "
     "out abbreviations on first use; no procedural agent-directed tails ('check file X first') — "
     "fold any sharpening cross-reference into the ask itself. 2–4 sentences total. Never make the "
-    "patron decode shorthand to learn why a file is in front of him.\n"
+    "patron decode shorthand to learn why a file is in front of them.\n"
 )
 
 BOOTSTRAP_PROMPT = (
@@ -281,16 +281,16 @@ INTERVIEW_KICKOFF = (
 FOUND_PROMPT = (
     "(The patron clicked finish — the interview is closed and you now hold write tools. "
     "Found the desk for {name} ({root}) in one pass. Everything the interview established "
-    "governs; where his answers and the files disagree, HIS ANSWERS WIN.\n"
+    "governs; where their answers and the files disagree, THEIR ANSWERS WIN.\n"
     "1. THE CHARTER — write {desk_dir}/PROJECT.md: what this project IS in the patron's own "
-    "terms (quote him where his words were exact), the kind you named, document families and "
-    "key paths, the review lens he gave you, conventions and what must never be auto-changed, "
+    "terms (quote them where their words were exact), the kind you named, document families and "
+    "key paths, the review lens they gave you, conventions and what must never be auto-changed, "
     "key references. Under ~80 lines.\n"
     "2. THE MEMORY — seed {desk_dir}/MEMORY.md: a short header naming its purpose (the "
     "curator's accrued judgment — rulings made and patron preferences learned, distilled by "
     "every sweep; honored by every agent without re-asking), then the preferences the patron "
     "STATED in this interview and any attested in the project's own files. Nothing invented.\n"
-    "3. THE PROGRAM — write {desk_dir}/review-program.md: document families, what needs his "
+    "3. THE PROGRAM — write {desk_dir}/review-program.md: document families, what needs their "
     "reading or judgment and why, a batch plan if volume warrants, desk conventions (one "
     "batch at a time; in-editor emendations are the tuning; approve = done; rework sends a "
     "memo).\n"
@@ -301,20 +301,20 @@ FOUND_PROMPT = (
     + QUEUE_SCHEMA +
     "5. Your final message is shown in the RIGHT chat pane, where you live from now on — "
     "address the patron directly: one line on the kind of desk now standing, the first "
-    "batch he'll find in the queue at left, and that he should select the first entry to "
+    "batch they'll find in the queue at left, and that they should select the first entry to "
     "begin; questions and conversation continue in that pane.)"
 )
 
 DEFAULT_ROLE = (
     "You are the desk assistant in the patron's document-review sitting (project: {project}). "
-    "His first message opens with the active file's path and its curatorial brief — context "
-    "prepared in advance so neither of you must re-derive it. Help him understand, "
+    "Their first message opens with the active file's path and its curatorial brief — context "
+    "prepared in advance so neither of you must re-derive it. Help them understand, "
     "troubleshoot, and revise that file; read any project files you need. You CAN edit files "
-    "directly — do so when he asks for changes, with minimal, surgical diffs; his app reloads "
+    "directly — do so when they ask for changes, with minimal, surgical diffs; their app reloads "
     "the open file after your turn. When DISCUSSING a passage rather than changing it, quote "
-    "it in a fenced code block (his app turns those into jump-to-line buttons). Never touch "
-    "append-only records or logs unless he explicitly directs it. Be concise and direct; he "
-    "is mid-sitting and mental gear-shifts are the enemy."
+    "it in a fenced code block (their app turns those into jump-to-line buttons). Never touch "
+    "append-only records or logs unless they explicitly direct it. Be concise and direct; they "
+    "are mid-sitting and mental gear-shifts are the enemy."
 )
 
 CONTEXT_BLOCK = (
@@ -326,12 +326,12 @@ CONTEXT_BLOCK = (
 # conversation warm and surfaces anything unclear, nothing more.
 GLANCE_PROMPT = (
     "You are the desk assistant in the patron's review sitting (project: {project}). "
-    "He has just opened a document; he has ALREADY read its brief (shown to him on load), "
+    "They have just opened a document; they have ALREADY read its brief (shown to them on load), "
     "so do NOT restate or summarize it. In ONE or TWO sentences — no preamble, no greeting — "
     "ADD something: a question worth asking, a tension or risk the brief implies, what you'd "
     "check first, or a connection worth noting. If the brief raises nothing to add, say so in "
-    "a few words rather than padding. Terse and concrete; he reads or edits the document "
-    "next.\n\n[Document: {path}]\n[Brief he just read] {brief}"
+    "a few words rather than padding. Terse and concrete; they read or edit the document "
+    "next.\n\n[Document: {path}]\n[Brief they just read] {brief}"
 )
 
 EMPTY_QUEUE = {"curated": "empty — entries are filed by curating agents", "entries": []}
@@ -756,7 +756,7 @@ def refound_desk(proj: dict) -> dict:
     """Reset a project's desk to the pristine UNFOUNDED seed so its founding interview runs
     again on next selection. The whole old desk (charter, memory, runtime, queue, transcript)
     is copied to a machine-local backup first; the patron's founding note is carried into the
-    fresh seed so the rerun keeps his steer."""
+    fresh seed so the rerun keeps their steer."""
     desk = desk_dir(proj)
     note = ""
     sj = desk / "runtime" / "session.json"
