@@ -1,0 +1,375 @@
+"""Setsweep lineage — who edited what: agent vs. user vs. unattributed.
+
+Implements the model in `LINEAGE.md` (Revision 1; patron ruling 2026-06-18): track agent
+edits against user edits over a desk's files, with an honest `unattributed` residual for
+changes that happened outside the app and can't be confirmed. Two plain files in the desk:
+
+  .setsweep/working-record.jsonl  — append-only; agents (and the app, for the patron's
+                                      own saves) log each edit-batch as it happens
+  .setsweep/lineage-baseline.json  — the last reconciled state: {ts, files: {rel: hash}}
+
+The reconciler compares the tree against the baseline. A change a working-record entry
+claims (since the baseline) is attributed to that entry's actor; an **unclaimed** change is
+`unattributed` and surfaced for the patron to resolve at the desk — trust-by-default
+("unlogged ⇒ user") is rejected, because it would manufacture the false authorship this
+exists to prevent. Content hashes are the dependency-free v1 change-detector; git can back
+it later behind the same interface.
+
+Stdlib only. The reconcile logic is pure and unit-tested; file-walking is plumbing.
+"""
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+from datetime import datetime
+from pathlib import Path
+from typing import Iterable, Iterator, Optional
+
+RECORD_NAME = "working-record.jsonl"
+BASELINE_NAME = "lineage-baseline.json"
+
+# names skipped wholesale while walking a desk (desk machinery + VCS + heavy noise)
+SKIP_DIRS = {".setsweep", ".git", "node_modules", "__pycache__", ".venv",
+             "venv", ".mypy_cache", ".pytest_cache", "dist", "build", ".cache"}
+MAX_BYTES = 1_000_000          # skip files larger than this (likely data/media, not prose/source)
+
+
+def _now() -> str:
+    return datetime.now().astimezone().isoformat(timespec="seconds")
+
+
+def desk_dir(root: Path | str) -> Path:
+    return Path(root) / ".setsweep"
+
+
+# ---------- change detection: content-hash snapshot ----------
+
+def file_hash(path: Path) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(65536), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _is_texty(path: Path) -> bool:
+    try:
+        with open(path, "rb") as f:
+            return b"\x00" not in f.read(8192)      # crude but effective binary sniff
+    except OSError:
+        return False
+
+
+def iter_tracked(root: Path | str, excludes: Optional[set] = None,
+                 max_depth: Optional[int] = None) -> Iterator[Path]:
+    """Walk the desk's tracked working files: text files under root, skipping dotdirs /
+    machinery / oversized / binary. The desk's own `.setsweep/` is never tracked.
+
+    max_depth (>=1) bounds the walk by directory level — 1 = only files in the root folder,
+    2 = root + one level of subdirs — and PRUNES the descent, so a shallow desk over a huge
+    tree (e.g. ~) never enumerates the deep subtrees. 0/None = the whole tree."""
+    root = Path(root)
+    skip = SKIP_DIRS | (excludes or set())
+    bound = max_depth if (isinstance(max_depth, int) and max_depth >= 1) else None
+    for dirpath, dirnames, filenames in os.walk(root):
+        rel = Path(dirpath).relative_to(root)
+        depth = 0 if str(rel) == "." else len(rel.parts)
+        dirnames[:] = [d for d in dirnames if d not in skip and not d.startswith(".")]
+        if bound is not None and depth + 1 >= bound:
+            dirnames[:] = []                       # children would exceed the bound — don't descend
+        if bound is not None and depth >= bound:
+            continue                               # this dir's own files are already out of scope
+        for fn in sorted(filenames):
+            if fn.startswith("."):
+                continue
+            p = Path(dirpath) / fn
+            try:
+                if p.stat().st_size > MAX_BYTES or not _is_texty(p):
+                    continue
+            except OSError:
+                continue
+            yield p
+
+
+def snapshot(root: Path | str, excludes: Optional[set] = None,
+             max_depth: Optional[int] = None) -> dict:
+    """{relpath: content-hash} over the desk's tracked files (bounded by max_depth)."""
+    root = Path(root)
+    return {str(p.relative_to(root)): file_hash(p)
+            for p in iter_tracked(root, excludes, max_depth)}
+
+
+def load_baseline(root: Path | str) -> dict:
+    try:
+        return json.loads((desk_dir(root) / BASELINE_NAME).read_text())
+    except (OSError, json.JSONDecodeError):
+        return {"ts": None, "files": {}}
+
+
+def save_baseline(root: Path | str, manifest: dict) -> dict:
+    d = desk_dir(root)
+    d.mkdir(parents=True, exist_ok=True)
+    (d / BASELINE_NAME).write_text(json.dumps(manifest, indent=1, ensure_ascii=False))
+    return manifest
+
+
+def accept_baseline(root: Path | str, excludes: Optional[set] = None,
+                    git: bool = False, max_depth: Optional[int] = None) -> dict:
+    """Mark the current tree as the reconciled baseline (the patron has seen it). When
+    `git` is on, also commit a watermarked snapshot to the separate lineage history."""
+    m = save_baseline(root, {"ts": _now(), "files": snapshot(root, excludes, max_depth)})
+    if git:
+        git_snapshot(root, f"lineage: baseline {m['ts']}")
+    return m
+
+
+# ---------- the working record (agent/app self-logging) ----------
+
+def record_path(root: Path | str) -> Path:
+    return desk_dir(root) / RECORD_NAME
+
+
+def read_record(root: Path | str) -> list:
+    try:
+        text = record_path(root).read_text(encoding="utf-8")
+    except OSError:
+        return []
+    return [json.loads(ln) for ln in text.splitlines() if ln.strip()]
+
+
+def log_edit(root: Path | str, actor: str, actor_kind: str, files: Iterable[str],
+             summary: str = "", session: str = "", ts: Optional[str] = None) -> dict:
+    """Append one edit-batch to the desk's working record. `files` are paths relative to
+    the desk root. `actor_kind` is 'agent' or 'user'. The single way edits get attributed
+    as they happen; everything not logged becomes the reconciler's `unattributed`."""
+    rec = {"ts": ts or _now(), "actor": actor, "actor_kind": actor_kind,
+           "session": session, "files": list(files), "summary": summary}
+    d = desk_dir(root)
+    d.mkdir(parents=True, exist_ok=True)
+    with (d / RECORD_NAME).open("a", encoding="utf-8") as f:
+        f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    return rec
+
+
+def _parse_ts(s) -> Optional[datetime]:
+    try:
+        return datetime.fromisoformat(s) if s else None
+    except (ValueError, TypeError):
+        return None
+
+
+def claims_since(records: list, baseline_ts: Optional[str]) -> dict:
+    """Latest claim per file from records at/after the baseline. {relpath: entry}. A claim
+    older than the baseline can't explain a change made since, so it is excluded. The
+    record is append-ordered (chronological), so last-write-wins is the latest claim."""
+    floor = _parse_ts(baseline_ts)
+    latest: dict = {}
+    for e in records:
+        ets = _parse_ts(e.get("ts"))
+        if floor and ets and ets < floor:
+            continue
+        for rel in e.get("files", []):
+            latest[rel] = e          # later entry overwrites → newest claim wins
+    return latest
+
+
+# ---------- the reconciler ----------
+
+def _attribute(rel: str, change: str, claims: dict) -> dict:
+    e = claims.get(rel)
+    if e is None:
+        return {"path": rel, "change": change, "status": "unattributed", "by": None, "at": None}
+    kind = e.get("actor_kind")
+    status = kind if kind in ("agent", "user") else "unattributed"
+    return {"path": rel, "change": change, "status": status,
+            "by": e.get("actor"), "at": e.get("ts")}
+
+
+def reconcile(root: Path | str, baseline: dict, records: list,
+              excludes: Optional[set] = None, max_depth: Optional[int] = None) -> list:
+    """Compare the tree against the baseline; attribute each change via the working record.
+    Returns [{path, change: added|modified|deleted, status: agent|user|unattributed, by, at}]."""
+    cur = snapshot(root, excludes, max_depth)
+    base = baseline.get("files", {})
+    claims = claims_since(records, baseline.get("ts"))
+    out = []
+    for rel, h in cur.items():
+        old = base.get(rel)
+        if old == h:
+            continue
+        out.append(_attribute(rel, "added" if old is None else "modified", claims))
+    for rel in base:
+        if rel not in cur:
+            out.append(_attribute(rel, "deleted", claims))
+    return sorted(out, key=lambda c: (c["status"], c["path"]))
+
+
+def status(root: Path | str, excludes: Optional[set] = None,
+           max_depth: Optional[int] = None) -> dict:
+    """Full lineage picture for a desk: counts + the attributed change list (bounded by max_depth)."""
+    baseline = load_baseline(root)
+    changes = reconcile(root, baseline, read_record(root), excludes, max_depth)
+    counts = {"agent": 0, "user": 0, "unattributed": 0}
+    for c in changes:
+        counts[c["status"]] = counts.get(c["status"], 0) + 1
+    return {"baseline_ts": baseline.get("ts"), "counts": counts,
+            "changed": len(changes), "changes": changes}
+
+
+WRITE_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
+
+
+def _relativize(root: Path | str, paths: Iterable[str]) -> list:
+    """Absolute/relative edit paths → unique desk-relative paths. Paths outside the desk
+    root, and desk machinery under a dot-dir (`.setsweep/`, `.git/`), are dropped — the
+    record tracks the desk's *working* files, the same set the reconciler walks."""
+    root = Path(root).resolve()
+    rels: list = []
+    seen = set()
+    for p in paths:
+        try:
+            rp = Path(p)
+            if not rp.is_absolute():
+                rp = root / rp                          # the editing cwd is the desk root
+            rel = rp.resolve().relative_to(root)
+        except (ValueError, OSError):
+            continue
+        if rel.parts and rel.parts[0].startswith("."):
+            continue
+        s = str(rel)
+        if s not in seen:
+            seen.add(s)
+            rels.append(s)
+    return rels
+
+
+def log_agent_edits(root: Path | str, abs_paths: Iterable[str], actor: str = "agent",
+                    session: str = "", summary: str = "") -> Optional[dict]:
+    """Log a turn's file edits as one agent batch, so Setsweep's own agents self-record
+    without the honor system. Returns the record, or None if nothing trackable was edited."""
+    rels = _relativize(root, abs_paths)
+    if not rels:
+        return None
+    return log_edit(root, actor=actor, actor_kind="agent", files=rels, session=session,
+                    summary=summary or f"{actor}: edited {len(rels)} file(s)")
+
+
+def log_user_edit(root: Path | str, abs_paths: Iterable[str], actor: str = "patron",
+                  session: str = "", summary: str = "patron save (editor)") -> Optional[dict]:
+    """Log the patron's own in-app edits (a middle-pane save) as a user batch — the other
+    half of in-app attribution, the counterpart to log_agent_edits."""
+    rels = _relativize(root, abs_paths)
+    if not rels:
+        return None
+    return log_edit(root, actor=actor, actor_kind="user", files=rels, session=session,
+                    summary=summary)
+
+
+def resolve(root: Path | str, path: str, actor_kind: str = "user",
+            actor: str = "patron", summary: str = "desk-resolve", git: bool = False) -> dict:
+    """Record the patron's resolution of an unattributed change (a patron action — the
+    authoritative attribution). Appends a claim so the next reconcile attributes it; the
+    patron then accepts the baseline to clear it from 'changed since'."""
+    rec = log_edit(root, actor=actor, actor_kind=actor_kind, files=[path], summary=summary)
+    if git:
+        git_snapshot(root, f"lineage: {path} resolved as {actor_kind} by {actor}")
+    return rec
+
+
+# ---------- the binding directive (transparent, fenced, opt-in) ----------
+
+DIRECTIVE_TAG = "setsweep:lineage"
+EDITING_MD = """# Editing this project — the lineage protocol
+
+Any agent that edits files in this project records its work, so Setsweep can tell agent
+edits from the user's. The rule:
+
+- When you edit files here, append one entry per edit-batch to `working-record.jsonl`:
+  `{"ts": …, "actor": …, "actor_kind": "agent", "files": [<paths relative to the project
+  root>], "summary": …}`.
+- **Attribute honestly. An agent edit is an agent edit — never recorded as the user's.**
+  If you are proposing rather than enacting the user's decision, say "proposal".
+- Setsweep's own agents do this automatically; this rule is for any *other* agent working
+  in the tree (e.g. a separate CLI session).
+
+Changes nobody logs are reconciled as `unattributed` and surfaced for the user to resolve —
+nothing is ever silently attributed to them. Setsweep desk config lives in this
+`.setsweep/` directory.
+"""
+
+_DIRECTIVE_BLOCK = (
+    "<!-- {tag} (added by `setsweep bind`; safe to delete this whole block) -->\n"
+    "**Editing this project:** record each edit to `.setsweep/working-record.jsonl` and "
+    "attribute honestly — an agent edit is an agent edit, never the user's. "
+    "Protocol: `.setsweep/EDITING.md`. Desk config: `.setsweep/`.\n"
+    "<!-- /{tag} -->"
+).format(tag=DIRECTIVE_TAG)
+
+
+def ensure_directive(root: Path | str, agent_file: str = "CLAUDE.md") -> dict:
+    """Add (or refresh) the fenced lineage directive in the project's agent-instructions
+    file, and write a standard `.setsweep/EDITING.md` if absent. Idempotent and visible:
+    the block is marker-fenced so it is identifiable and removable. Returns what it did."""
+    import re
+    root = Path(root)
+    d = desk_dir(root)
+    d.mkdir(parents=True, exist_ok=True)
+    editing_created = False
+    if not (d / "EDITING.md").exists():
+        (d / "EDITING.md").write_text(EDITING_MD, encoding="utf-8")
+        editing_created = True
+
+    f = root / agent_file
+    existing = f.read_text(encoding="utf-8") if f.exists() else ""
+    if f"<!-- {DIRECTIVE_TAG}" in existing:
+        new = re.sub(rf"<!-- {re.escape(DIRECTIVE_TAG)}.*?<!-- /{re.escape(DIRECTIVE_TAG)} -->",
+                     _DIRECTIVE_BLOCK, existing, flags=re.S)
+        action = "updated"
+    elif existing.strip():
+        new = existing.rstrip() + "\n\n" + _DIRECTIVE_BLOCK + "\n"
+        action = "appended"
+    else:
+        new = _DIRECTIVE_BLOCK + "\n"
+        action = "created"
+    f.write_text(new, encoding="utf-8")
+    return {"file": str(f), "action": action, "editing_created": editing_created}
+
+
+# ---------- optional git substrate (separate history; never the project's own repo) ----------
+
+GIT_DIR = ".setsweep/lineage.git"          # a history apart from any user .git in the tree
+
+
+def _git(root: Path, *args, check: bool = True):
+    import subprocess
+    return subprocess.run(
+        ["git", "--git-dir", str(Path(root) / GIT_DIR), "--work-tree", str(root), *args],
+        capture_output=True, text=True, check=check)
+
+
+def git_snapshot(root: Path | str, message: str) -> Optional[str]:
+    """Commit the desk's working files to a SEPARATE lineage git history (init if needed)
+    with a watermarked message — never the project's own repo, so a user's git is untouched.
+    Returns the short commit hash, or None (nothing to commit / git unavailable). Toggled by
+    the `lineage_git` setting; the hash baseline is the dependency-free default."""
+    import subprocess
+    root = Path(root)
+    gd = root / GIT_DIR
+    try:
+        if not gd.exists():
+            _git(root, "init", "-q")
+            _git(root, "config", "user.email", "desk@setsweep.local", check=False)
+            _git(root, "config", "user.name", "Setsweep", check=False)
+            # keep the user's .git, desk machinery, and heavy noise out of the lineage history
+            (gd / "info").mkdir(parents=True, exist_ok=True)
+            (gd / "info" / "exclude").write_text(
+                "\n".join([".git", ".setsweep", "node_modules", "__pycache__",
+                           ".venv", "venv", "dist", "build", ".cache", ""]))
+        _git(root, "add", "-A")
+        if _git(root, "diff", "--cached", "--quiet", check=False).returncode == 0:
+            return None                                    # nothing changed
+        _git(root, "commit", "-q", "-m", message)
+        return _git(root, "rev-parse", "--short", "HEAD").stdout.strip() or None
+    except (subprocess.CalledProcessError, OSError):
+        return None

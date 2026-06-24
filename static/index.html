@@ -1,0 +1,2901 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>setsweep</title>
+<style>
+  /* ---- bundled IBM Plex (served locally from /fonts/ — no network dependency) ---- */
+  @font-face { font-family:'IBM Plex Mono'; font-weight:400; font-style:normal;
+               src:url('/fonts/IBMPlexMono-Regular.woff2') format('woff2'); font-display:swap; }
+  @font-face { font-family:'IBM Plex Mono'; font-weight:500 600; font-style:normal;
+               src:url('/fonts/IBMPlexMono-Medium.woff2') format('woff2'); font-display:swap; }
+  @font-face { font-family:'IBM Plex Mono'; font-weight:400; font-style:italic;
+               src:url('/fonts/IBMPlexMono-Italic.woff2') format('woff2'); font-display:swap; }
+  @font-face { font-family:'IBM Plex Sans'; font-weight:400; font-style:normal;
+               src:url('/fonts/IBMPlexSans-Regular.woff2') format('woff2'); font-display:swap; }
+  @font-face { font-family:'IBM Plex Sans'; font-weight:600 700; font-style:normal;
+               src:url('/fonts/IBMPlexSans-SemiBold.woff2') format('woff2'); font-display:swap; }
+  @font-face { font-family:'IBM Plex Sans'; font-weight:400; font-style:italic;
+               src:url('/fonts/IBMPlexSans-Italic.woff2') format('woff2'); font-display:swap; }
+  :root {
+    /* ---- palette: 16 base colours (the only things that hold raw hex) ---- */
+    --c-black:#16161e; --c-white:#d8d8e0;
+    --c-gray1:#1d1d28; --c-gray2:#23232f; --c-gray3:#32323f;
+    --c-gray4:#565663; --c-gray5:#8a8a98; --c-gray6:#b6b6c2;
+    --c-yellow:#c8a24a; --c-green:#7dba6f; --c-teal:#389bb4; --c-blue:#7d9fc8;
+    --c-indigo:#6b74c0; --c-purple:#9a76c2; --c-red:#d4756b; --c-orange:#c0692e;
+    /* ---- interface roles: each picks a palette colour (overridable in admin) ---- */
+    --bg:var(--c-black); --fg:var(--c-white);
+    --panel:var(--c-gray1); --panel2:var(--c-gray2); --line:var(--c-gray3);
+    --acc:var(--c-yellow); --good:var(--c-green); --warn:var(--c-red);
+    --selection:var(--c-blue); --qtag:var(--c-gray5); --activebg:var(--c-gray2);
+    --urghigh:var(--c-red); --urgmed:var(--c-yellow); --urglow:var(--c-gray5);
+    /* ---- helper aliases used by text rules (not directly user-editable) ---- */
+    --dim:var(--c-gray5); --blue:var(--c-blue); --teal:var(--c-teal); --burnt:var(--c-orange);
+    /* ---- fonts: mono interface, sans body (overridable in admin) ---- */
+    --ui-font:'IBM Plex Mono', "SF Mono", Menlo, monospace;
+    --body-font:'IBM Plex Sans', -apple-system, system-ui, "Helvetica Neue", sans-serif;
+  }
+  * { box-sizing:border-box; }
+  #meta, #midbar, #fname, #chat, #render, #findbar { -webkit-user-select:text; user-select:text; }
+  html, body { height:100%; }
+  body { margin:0; height:100dvh; overflow:hidden; display:grid;
+         grid-template-columns:300px 5px 1fr 5px 400px; grid-template-rows:100dvh;
+         background:var(--bg); color:var(--fg);
+         font:14px/1.45 var(--ui-font); }
+  #left, #mid, #right { min-height:0; height:100%; overflow:hidden; }
+
+  /* scrollbars: transparent tracks inherit each panel's background; thumbs stay quiet */
+  ::-webkit-scrollbar { width:10px; height:10px; }
+  ::-webkit-scrollbar-track { background:transparent; }
+  ::-webkit-scrollbar-corner { background:transparent; }
+  ::-webkit-scrollbar-thumb { background:var(--line); border-radius:5px;
+                              border:2px solid transparent; background-clip:padding-box; }
+  ::-webkit-scrollbar-thumb:hover { background:var(--dim); border:2px solid transparent;
+                                    background-clip:padding-box; }
+
+  /* draggable column dividers */
+  .divider { cursor:col-resize; background:transparent; }
+  .divider:hover, .divider.dragging { background:var(--acc); opacity:.45; }
+
+  /* left */
+  #left { display:flex; flex-direction:column; border-right:1px solid var(--line); min-width:0; }
+  #queue { flex:1 1 60%; min-height:0; overflow-y:auto; }
+  #queue h1, #meta h1 { font-size:12px; letter-spacing:.18em; color:var(--acc); margin:0; padding:12px 14px 8px;
+              text-transform:uppercase; display:flex; align-items:center; gap:8px; }
+  #proj { background:var(--panel2); color:var(--fg); border:1px solid var(--line); border-radius:4px;
+          font:12px var(--ui-font); padding:2px 6px; max-width:150px; }
+  .applyblock { background:var(--panel2); border:1px solid var(--line); border-radius:6px;
+                margin:8px 0; overflow:hidden; }
+  .applyblock pre { margin:0; padding:10px 12px; white-space:pre-wrap; word-break:break-word;
+                    max-height:260px; overflow-y:auto; font-size:12.5px; }
+  .applyblock .abar { display:flex; justify-content:flex-end; gap:6px; padding:4px 8px;
+                      border-top:1px solid var(--line); }
+  .applyblock button { padding:2px 10px; font-size:12px; }
+  .qitem { padding:8px 14px; border-bottom:1px solid var(--line); cursor:pointer; }
+  .qitem:hover { background:var(--panel); }
+  .qitem.active { background:var(--activebg); padding-left:14px; }
+  .qitem .t { display:flex; gap:8px; align-items:baseline; }
+  .dot { width:8px; height:8px; border-radius:2px; flex:none; align-self:center; }
+  .dot.high { background:var(--urghigh); } .dot.medium { background:var(--urgmed); } .dot.low { background:var(--urglow); }
+  .qname { flex:1 1 auto; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .qtag { flex:none; font-size:9.5px; color:var(--qtag); border:1px solid var(--line);
+          border-radius:4px; padding:0 5px; letter-spacing:.06em; }
+  .qsum { color:var(--dim); font-size:12px; margin-left:16px; white-space:nowrap;
+          overflow:hidden; text-overflow:ellipsis; }
+  .qitem.approved { opacity:.38; } .qitem.approved .qname { text-decoration:line-through; }
+  .qitem.rework .qname { color:var(--warn); }
+  /* this-sitting change badge on the queue entry's first line */
+  .qitem .qdiff { margin-left:auto; flex:none; font-size:10.5px; font-variant-numeric:tabular-nums;
+                  white-space:nowrap; padding-left:8px; }
+  .qitem .qdiff .add { color:var(--good); }
+  .qitem .qdiff .del { color:var(--burnt); margin-left:5px; }
+  /* info-panel: view-diff peek + small inline link */
+  .minilink { font-size:11px; color:var(--acc); cursor:pointer; text-decoration:none; margin-left:6px; }
+  .minilink:hover { text-decoration:underline; }
+  .diffview { margin:6px 0 2px; padding:8px 10px; background:var(--panel2); border:1px solid var(--line);
+              border-radius:6px; font:11.5px/1.5 var(--ui-font); white-space:pre-wrap; word-break:break-word;
+              max-height:240px; overflow:auto; color:var(--fg); }
+  .qsweep { padding:18px 14px; color:var(--dim); font-size:12.5px; font-style:italic; line-height:1.5; }
+  /* sweep state: blank the editor placeholder; dim+deactivate the file-action buttons */
+  body.sweeping #editor::placeholder { color:transparent; }
+  /* deactivated chrome — dim AND disable: file-actions (incl. the edit toggle) need an open
+     file; sweep needs a project; everything stands down during a running sweep. Kept in lockstep
+     so the lower bar reads consistently at every transitional point (launch, project switch, sweep). */
+  body.sweeping #midfoot button, body.sweeping #viewmode, body.sweeping #findtoggle, body.sweeping #sweepbtn,
+  body.nofile  #midfoot button, body.nofile  #viewmode, body.nofile  #findtoggle,
+  body.noproj  #sweepbtn { opacity:.35; pointer-events:none; }
+  body.founding #sweepbtn, body.founding #metaedit { opacity:.35; pointer-events:none; }
+  #meta { flex:1 1 40%; min-height:0; overflow-y:auto; border-top:2px solid var(--line);
+          padding:0 14px 12px; font-size:13px; }
+  #meta h1 { padding:12px 0 8px; }
+  #meta dt { color:var(--fg); font-size:11px; text-transform:uppercase; letter-spacing:.1em; margin-top:9px; }
+  #meta dd { margin:2px 0 0; word-break:break-word; color:var(--dim); }
+  #meta .brief { white-space:pre-wrap; color:var(--dim); }
+  /* inbox: the source item a drafted response answers (paired with the draft's path) */
+  #meta .src { color:var(--slot-ctxpath, var(--teal)); }
+
+  /* middle */
+  #mid { display:flex; flex-direction:column; min-width:0; }
+  #midbar { flex:none; display:flex; align-items:center; gap:10px; padding:8px 14px;
+            border-bottom:1px solid var(--line); background:var(--panel); }
+  #fname { flex:1; color:var(--dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #fname .fbase { color:var(--blue); }
+  #dirty { color:var(--warn); display:none; }
+
+  /* find/replace bar */
+  #findbar { flex:none; display:none; align-items:center; gap:6px; padding:6px 14px;
+             border-bottom:1px solid var(--line); background:var(--panel2); }
+  #findbar.open { display:flex; }
+  #findbar input { flex:1; min-width:60px; background:var(--bg); color:var(--fg);
+                   border:1px solid var(--line); border-radius:4px; padding:4px 8px; font:inherit; }
+  #findbar button { padding:3px 9px; font-size:12px; }
+  #findcount { color:var(--dim); font-size:12px; min-width:48px; text-align:center; }
+
+  /* middle bottom bar */
+  #midfoot { flex:none; display:flex; align-items:center; gap:10px; padding:8px 14px;
+             border-top:1px solid var(--line); background:var(--panel); }
+  #rework { color:var(--warn); }
+  #comment { color:var(--blue); }
+  #comment.has { color:var(--blue); }
+  #commentpanel { display:none; flex:none; flex-direction:column; gap:8px; padding:10px 14px;
+                  border-top:1px solid var(--line); background:var(--panel2); }
+  #commentpanel.open { display:flex; }
+  #commentlist { overflow-y:auto; max-height:120px; display:flex; flex-direction:column; gap:6px;
+                 font-size:12px; }
+  #commentlist .citem { border-left:2px solid var(--acc); padding-left:8px; white-space:pre-wrap;
+                        color:var(--fg); }
+  #commentlist .cdate { color:var(--dim); font-size:10px; }
+  #commentlist .cnone { color:var(--dim); }
+  #commentin { background:var(--bg); color:var(--fg); border:1px solid var(--line); border-radius:5px;
+               padding:8px 10px; font:inherit; resize:vertical; min-height:58px; }
+  #commentpanel .crow { display:flex; align-items:center; gap:8px; }
+  #commenthint { color:var(--dim); font-size:11px; }
+
+  /* modals (rework, add project) */
+  #modalbg, #addbg, #setupbg { position:fixed; inset:0; background:rgba(0,0,0,.55); display:none;
+             align-items:center; justify-content:center; z-index:20; }
+  #modalbg.open, #addbg.open, #setupbg.open { display:flex; }
+  #reworkmodal, #addmodal, #setupmodal { background:var(--panel); border:1px solid var(--line); border-radius:8px;
+                 width:min(560px, 90vw); padding:18px 20px; display:flex;
+                 flex-direction:column; gap:12px; }
+  #reworkmodal h2, #addmodal h2 { margin:0; font-size:13px; letter-spacing:.14em; text-transform:uppercase;
+                    color:var(--warn); }
+  #addmodal h2 { color:var(--acc); }
+  #reworkmemo { background:var(--bg); color:var(--fg); border:1px solid var(--line);
+                border-radius:5px; padding:8px 10px; font:inherit; resize:vertical;
+                min-height:110px; }
+  #reworkmodal .mrow, #addmodal .mrow { display:flex; align-items:center; gap:10px; }
+  #addmodal input { background:var(--bg); color:var(--fg); border:1px solid var(--line);
+                    border-radius:5px; padding:8px 10px; font:inherit; }
+  #addmodal .mnote { color:var(--dim); font-size:12px; }
+  #reworkagent { flex:1; background:var(--panel2); color:var(--fg); border:1px solid var(--line);
+                 border-radius:4px; font:12px var(--ui-font); padding:4px 6px; }
+  button { background:var(--panel2); color:var(--fg); border:1px solid var(--line); border-radius:5px;
+           padding:5px 14px; font:inherit; cursor:pointer; }
+  button:hover { border-color:var(--acc); }
+  .browse { font-size:11px; padding:2px 10px; margin:-2px 0 2px; opacity:.85; }
+  /* founding form: kit dropdown + the customization (additional notes) note */
+  .kitsel { display:block; width:100%; box-sizing:border-box; margin:6px 0 0;
+            background:var(--panel2); color:var(--fg); border:1px solid var(--line);
+            border-radius:4px; font:13px var(--ui-font); padding:6px 8px; }
+  .kitnote { display:block; width:100%; box-sizing:border-box; margin:6px 0 0; min-height:62px;
+             background:var(--panel2); color:var(--fg); border:1px solid var(--line);
+             border-radius:4px; font:13px/1.5 var(--ui-font); padding:7px 9px; resize:vertical; }
+  .kitnote::placeholder, .kitsel:invalid { color:var(--dim); }
+  /* normalized button typography: match #metaedit (the base button) — font/size/weight only, colour kept per-id.
+     #sweepbtn is intentionally NOT in this set — it's the signature control, styled on its own below. */
+  #metaedit, #comment, #approve, #reworkbtn {
+    font-family:inherit; font-size:inherit; font-weight:inherit; }
+  #approve { color:var(--good); }
+  #reworkbtn { color:var(--burnt); }
+  #edwrap { flex:1; min-height:0; display:flex; overflow:hidden; position:relative; background:var(--bg); }
+  #gutter { flex:none; width:var(--gutter-w,56px); overflow:hidden; background:var(--panel); color:var(--dim);
+            text-align:right; padding:18px 10px 18px 0; border-right:1px solid var(--line);
+            font:var(--ed-font,13.5px)/1.55 var(--ui-font); user-select:none; }
+  #hlband { position:absolute; left:var(--gutter-w,56px); right:0; display:none; background:rgba(125,159,200,.13);
+            pointer-events:none; z-index:0; }
+  #editor { flex:1; min-height:0; width:100%; overflow-y:auto; background:transparent;
+            color:transparent; caret-color:var(--fg);
+            position:relative; z-index:2;
+            border:0; outline:none; padding:18px 22px 18px 14px;
+            font:var(--ed-font,13.5px)/1.55 var(--ui-font); resize:none; tab-size:4; }
+  #editor::selection { background:color-mix(in srgb, var(--selection) 35%, transparent); }
+  ::selection { background:color-mix(in srgb, var(--selection) 35%, transparent); }
+  #edback { position:absolute; top:0; bottom:0; left:var(--gutter-w,56px); right:0; overflow:hidden; z-index:1;
+            padding:18px 22px 18px 14px; pointer-events:none; color:var(--fg);
+            white-space:pre-wrap; overflow-wrap:break-word; word-break:normal;
+            font:var(--ed-font,13.5px)/1.55 var(--ui-font); tab-size:4; }
+  #edback .mdhead { color:var(--acc); }
+  #edback .mdsyn { color:var(--dim); }
+  #mirror { position:absolute; visibility:hidden; left:-99999px; top:0; white-space:pre-wrap;
+            overflow-wrap:break-word; word-break:normal; padding:0; border:0;
+            font:var(--ed-font,13.5px)/1.55 var(--ui-font); tab-size:4; }
+
+  /* rendered (reading) view */
+  #render { flex:1; min-height:0; overflow-y:auto; padding:22px 34px; display:none; max-width:100%;
+            font:15px/1.65 var(--body-font); }
+  body.reading #render { display:block; }
+  body.reading #edwrap { display:none; }
+  #render h1, #render h2, #render h3, #render h4 { color:var(--acc); line-height:1.25; }
+  #render h1 { font-size:21px; border-bottom:1px solid var(--line); padding-bottom:6px; }
+  #render h2 { font-size:17px; } #render h3 { font-size:15px; }
+  #render table { border-collapse:collapse; margin:12px 0; font-size:13px; }
+  #render th, #render td { border:1px solid var(--line); padding:4px 10px; text-align:left; }
+  #render th { background:var(--panel); }
+  #render code { background:var(--panel2); padding:1px 5px; border-radius:4px;
+                 font:12.5px var(--ui-font); }
+  #render pre { background:var(--panel2); padding:10px 14px; border-radius:6px; overflow-x:auto; }
+  #render pre code { background:none; padding:0; }
+  #render blockquote { border-left:3px solid var(--acc); margin:10px 0; padding:2px 14px; color:var(--dim); }
+  #render a { color:var(--acc); }
+  #render hr { border:0; border-top:1px solid var(--line); }
+  #render li { margin:3px 0; }
+  #render input[type=checkbox] { accent-color:var(--acc); transform:scale(1.18); margin-right:7px; cursor:pointer; }
+  /* ── the sweep button: Setsweep's signature control — deliberately distinct from the
+     per-file buttons (approve/rework/comment). Tweak its entire look via these vars. ── */
+  :root{
+    --sweep-fg: var(--good);  --sweep-border: var(--good);  --sweep-bg: transparent;
+    --sweep-size: 11px;  --sweep-spacing: .16em;  --sweep-weight: 600;
+    --sweep-radius: 4px;  --sweep-pad: 3px 12px;
+  }
+  #sweepbtn { margin-left:auto; font-family:var(--ui-font);
+    font-size:var(--sweep-size); font-weight:var(--sweep-weight);
+    letter-spacing:var(--sweep-spacing); text-transform:uppercase;
+    color:var(--sweep-fg); background:var(--sweep-bg);
+    border:1px solid var(--sweep-border); border-radius:var(--sweep-radius);
+    padding:var(--sweep-pad); transition:background .15s; }
+  #sweepbtn:hover { background:color-mix(in srgb, var(--sweep-border) 14%, transparent); }
+  #sweepbtn.arming { color:var(--warn); border-color:var(--warn); animation: sweepfade 5s linear forwards; }
+  @keyframes sweepfade { from { opacity:1; } to { opacity:.25; } }
+  /* reload the queue — pick up out-of-band changes (live intake, a sweep in another viewport) */
+  #reloadbtn { margin-left:8px; font-family:var(--ui-font); font-size:13px; line-height:1;
+    color:var(--dim); background:transparent; border:1px solid var(--line); border-radius:4px;
+    padding:2px 7px; cursor:pointer; transition:color .15s, border-color .15s; }
+  #reloadbtn:hover { color:var(--acc); border-color:var(--acc); }
+  #reloadbtn:disabled { opacity:.5; cursor:default; }
+  #reloadbtn.spinning { color:var(--acc); border-color:var(--acc); }
+  #reloadbtn.spinning span { display:inline-block; animation: spin360 .7s linear infinite; }
+  @keyframes spin360 { to { transform: rotate(360deg); } }
+  #sweepconfirm { background:var(--panel); border:1px solid var(--line); border-radius:8px;
+                  width:min(440px, 90vw); padding:18px 20px; display:flex; flex-direction:column; gap:12px; }
+  #sweepconfirm h2 { margin:0; font-size:13px; letter-spacing:.14em; text-transform:uppercase; color:var(--good); }
+  #sweepconfirm label { color:var(--dim); font-size:12px; display:flex; gap:6px; align-items:center; }
+  #sweepthrust { background:var(--bg); color:var(--fg); border:1px solid var(--line); border-radius:5px;
+                 padding:8px 10px; font:inherit; resize:vertical; min-height:64px; }
+  #sweepthrust:focus { outline:none; border-color:var(--good); }
+  #model { background:var(--panel2); color:var(--fg); border:1px solid var(--line); border-radius:4px;
+           font:11px var(--ui-font); padding:1px 4px; }
+  #ctxbar { margin-left:auto; width:116px; height:18px; border:1px solid var(--line); border-radius:6px;
+            position:relative; cursor:pointer; overflow:hidden; flex:none; }
+  #ctxfill { display:block; height:100%; width:0%; min-width:0; background:var(--good); transition:width .3s; }
+  #ctxbar .ctxlabel { position:absolute; inset:0; display:none; align-items:center; justify-content:center;
+                      font-size:10.5px; letter-spacing:.02em; white-space:nowrap; color:var(--fg); background:var(--panel2); }
+  #ctxbar:hover .ctxlabel { display:flex; }
+  #ctxcost { font-size:11px; opacity:.6; margin-left:8px; font-variant-numeric:tabular-nums; }
+
+  /* right */
+  #right { display:flex; flex-direction:column; border-left:1px solid var(--line); min-width:0; }
+  #right h1 { flex:none; display:flex; align-items:center; gap:6px; font-size:12px; letter-spacing:.18em; color:var(--acc); margin:0;
+              padding:12px 14px 8px; text-transform:uppercase; }
+  #chat { flex:1; min-height:0; overflow-y:auto; padding:6px 14px; }
+  .msg { margin:10px 0; white-space:pre-wrap; word-break:break-word; color:var(--dim); }
+  .msg.agent strong { color:var(--fg); font-weight:600; }
+  .msg.user { color:var(--acc); }
+  .msg.tool { color:var(--dim); font-style:italic; font-size:12px; margin:4px 0; }
+  .msg.err { color:var(--warn); }
+  .msg.sys { color:var(--dim); font-size:12px; }
+  .msg.ctx .ctxhead { color:var(--slot-ctxhead, var(--fg)); font-size:12px; margin-bottom:4px; }
+  .msg.ctx .ctxhead .fpath { color:var(--blue); }
+  .msg.ctx .ctxbody { color:var(--fg); }
+  .msg.sys .blabel { color:var(--dim); }
+  .msg.sys .bbody { color:var(--fg); font-size:13px; white-space:pre-wrap; }
+  /* founding interview — takes over the center panel until the desk is founded */
+  #interview { display:none; flex:1; min-height:0; flex-direction:column; background:var(--bg); }
+  #mid.interviewing #interview { display:flex; }
+  #mid.interviewing #midbar, #mid.interviewing #findbar, #mid.interviewing #edwrap,
+  #mid.interviewing #render, #mid.interviewing #commentpanel, #mid.interviewing #midfoot { display:none !important; }
+  #ivhead { flex:none; padding:9px 14px; border-bottom:1px solid var(--line); color:var(--acc); font-size:13px;
+            display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  #ivhead .ivacts { display:flex; gap:7px; flex:none; }
+  /* the two escape hatches: never trap an unfounded desk — found it quickly, or open it as-is */
+  #ivhead .ivacts button { font-family:var(--ui-font); font-size:11px; line-height:1; cursor:pointer;
+    background:transparent; border:1px solid var(--line); border-radius:4px; padding:3px 9px;
+    transition:color .15s, border-color .15s; }
+  #ivquick { color:var(--good); } #ivquick:hover { border-color:var(--good); }
+  #ivskip { color:var(--dim); } #ivskip:hover { color:var(--acc); border-color:var(--acc); }
+  #ivhead .ivacts button:disabled { opacity:.45; cursor:default; }
+  #ivchat { flex:1; min-height:0; overflow-y:auto; padding:6px 18px; }
+  #ivthink { display:none; flex:none; padding:4px 18px; color:var(--burnt); font-style:italic; font-size:12px; }
+  #ivbar { flex:none; display:flex; gap:8px; padding:10px 14px; border-top:1px solid var(--line); align-items:flex-end; }
+  #ivin { flex:1; background:var(--panel2); color:var(--fg); border:1px solid var(--line); border-radius:5px;
+          padding:8px 10px; font:inherit; resize:none; min-height:60px; overflow-y:hidden; }
+  #ivfinish { color:var(--good); font-weight:600; white-space:nowrap; }
+  #ivstart { display:none; flex:1; flex-direction:column; justify-content:center; align-items:center; gap:10px; padding:30px; }
+  #interview.fresh #ivstart { display:flex; }
+  #interview.fresh #ivchat, #interview.fresh #ivbar, #interview.fresh #ivthink, #interview.fresh #ivhead { display:none; }
+  #ivstart h2 { color:var(--fg); font-size:15px; font-weight:600; margin:0 0 4px; }
+  #ivstart .ivnote { color:var(--dim); font-size:12.5px; width:min(440px, 80%); text-align:left; line-height:1.5; }
+  /* every control in the founding form shares one width + box model (scoped here, so the
+     add-project modal's full-width .kitsel/.kitnote styling stays as-is) */
+  #ivstart input, #ivstart select, #ivstart textarea {
+    width:min(440px, 80%); box-sizing:border-box; margin:0;
+    background:var(--panel2); color:var(--fg); border:1px solid var(--line);
+    border-radius:5px; padding:8px 10px; font:inherit; }
+  #ivstart textarea { min-height:100px; resize:vertical; line-height:1.5; }
+  /* one muted placeholder colour across the form; typed text stays bright --fg */
+  #ivstart input::placeholder, #ivstart textarea::placeholder { color:color-mix(in srgb, var(--fg) 34%, var(--bg)); }
+  /* kit select: when the unselected 'auto-detect' value shows, gray it like a placeholder;
+     the open dropdown options stay --fg (white) */
+  #ivkit:invalid, #addkit:invalid { color:color-mix(in srgb, var(--fg) 34%, var(--bg)); }
+  #ivkit option, #addkit option { color:var(--fg); }
+  #ivstart #ivbegin { width:min(440px, 80%); box-sizing:border-box; margin-top:2px;
+    background:var(--good); color:var(--bg); border:1px solid var(--good); border-radius:5px;
+    padding:9px 10px; font:inherit; font-weight:600; cursor:pointer; }
+  #ivstart #ivbegin:hover { filter:brightness(1.08); }
+  #iverr { color:var(--warn); font-size:12.5px; min-height:16px; }
+  #chatbar { flex:none; display:flex; gap:8px; padding:10px 14px; border-top:1px solid var(--line); }
+  #spin { flex:none; }
+  #queue h1 { flex:none; position:sticky; top:0; z-index:5; background:var(--bg); }
+  #chatin { flex:1; background:var(--panel2); color:var(--fg); border:1px solid var(--line); border-radius:5px;
+            padding:8px 10px; font:inherit; resize:none; min-height:40px; overflow-y:hidden; }
+  #spin { display:none; color:var(--burnt); padding:4px 14px 10px; font-size:12px; font-style:italic; }
+
+  /* admin / debug overlay */
+  /* floating, draggable, resizable panel — stays out of the way so settings
+     can be tweaked while the main window is visible */
+  #admin { position:fixed; z-index:50; display:none;
+           top:48px; right:24px; width:600px; max-width:calc(100vw - 32px);
+           height:78vh; min-width:300px; min-height:200px; overflow:auto; resize:both;
+           background:var(--c-gray3); color:var(--fg); padding:0 0 22px;
+           border:1px solid var(--line); border-radius:8px;
+           box-shadow:0 18px 52px rgba(0,0,0,.55);
+           font:13px/1.5 var(--ui-font); }
+  #admin.open { display:block; }
+  #adminhead { position:sticky; top:0; z-index:2; display:flex; align-items:center; gap:12px;
+               padding:14px 22px; background:var(--panel); border-bottom:1px solid var(--line);
+               cursor:move; user-select:none; border-radius:8px 8px 0 0; }
+  #adminhead h1 { margin:0; font-size:13px; letter-spacing:.18em; text-transform:uppercase; color:var(--acc); }
+  #adminhead .spacer { flex:1; }
+  #adminclose { font-size:16px; line-height:1; padding:2px 10px; }
+  #admin .asec { border-bottom:1px solid var(--line); padding:16px 22px; max-width:960px; }
+  #admin .asec h2 { margin:0 0 12px; font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--acc); }
+  #admin .arow { display:flex; align-items:center; gap:10px; margin:5px 0; flex-wrap:wrap; }
+  #admin .arow label.lbl { width:130px; color:var(--dim); flex:none; }
+  #admin .arow .vname { width:130px; color:var(--fg); flex:none; }
+  #admin input[type=color] { width:34px; height:24px; padding:0; border:1px solid var(--line);
+                             border-radius:4px; background:var(--panel2); cursor:pointer; }
+  #admin input[type=text].hex, #admin input[type=number] {
+    background:var(--panel2); color:var(--fg); border:1px solid var(--line); border-radius:4px;
+    padding:4px 8px; font:inherit; }
+  #admin input[type=text].hex { width:100px; }
+  #admin input[type=number] { width:90px; }
+  #admin input:focus { outline:none; border-color:var(--acc); }
+  #admin .achk { display:flex; align-items:flex-start; gap:8px; margin:9px 0; }
+  #admin .achk input { margin-top:3px; accent-color:var(--acc); }
+  #admin .achk .ctext { display:flex; flex-direction:column; gap:2px; }
+  #admin .achk .ctext .ctitle { color:var(--fg); }
+  #admin .achk .ctext .cdesc { color:var(--dim); font-size:11.5px; }
+  #admin button { padding:5px 14px; font-size:12px; }
+  #admin pre.adump { background:var(--panel2); border:1px solid var(--line); border-radius:6px;
+                     padding:10px 12px; white-space:pre-wrap; word-break:break-word;
+                     max-height:300px; overflow:auto; font-size:12px; color:var(--fg); margin:0; }
+  #admin .kv { display:grid; grid-template-columns:170px 1fr; gap:3px 12px; align-items:baseline; }
+  #admin .kv .k { color:var(--dim); }
+  #admin .kv .v { color:var(--fg); word-break:break-word; }
+  #admin .v.ok { color:var(--good); } #admin .v.bad { color:var(--warn); } #admin .v.warnv { color:var(--acc); }
+  #admin .ptable { width:100%; border-collapse:collapse; font-size:12px; margin-top:4px; }
+  #admin .ptable th, #admin .ptable td { border:1px solid var(--line); padding:4px 9px; text-align:left; }
+  #admin .ptable th { background:var(--panel); color:var(--dim); font-weight:normal; }
+  #admin .errlist { display:flex; flex-direction:column; gap:6px; max-height:280px; overflow-y:auto; }
+  #admin .errlist .eitem { border-left:2px solid var(--warn); padding-left:8px; }
+  #admin .errlist .emsg { color:var(--warn); white-space:pre-wrap; word-break:break-word; }
+  #admin .errlist .emeta { color:var(--dim); font-size:11px; }
+  #admin .errlist .enone, #admin .mono-dim { color:var(--dim); }
+  #admin .evlog { font-size:11.5px; color:var(--dim); white-space:pre-wrap; word-break:break-word; }
+  /* admin appearance sections laid side-by-side, rows flowing into columns */
+  #admin .asec.wide { max-width:none; }
+  /* K · curators — the kit editor */
+  #admin .kitf { display:block; margin:8px 0 0; font-size:11px; letter-spacing:.04em; color:var(--dim); }
+  #admin .kitf input, #admin .kitf textarea { display:block; width:100%; box-sizing:border-box; margin-top:3px;
+    background:var(--panel2); color:var(--fg); border:1px solid var(--line); border-radius:4px;
+    font:12px var(--ui-font); padding:5px 7px; }
+  #admin .kitf textarea { min-height:46px; resize:vertical; line-height:1.5; }
+  #admin #kf_lens, #admin #kf_urgency, #admin #kf_firstQueue { min-height:54px; }
+  #admin #kitio { min-height:80px; font-size:11px; }
+  #admin #kitpick { background:var(--panel2); color:var(--fg); border:1px solid var(--line);
+    border-radius:4px; font:12px var(--ui-font); padding:4px 7px; min-width:220px; }
+  #admin .projrow .pkit { background:var(--panel2); color:var(--fg); border:1px solid var(--line);
+    border-radius:4px; font:11px var(--ui-font); padding:3px 5px; }
+  #admin .projrow .pdepth { flex:none; width:48px; background:var(--panel2); color:var(--fg);
+    border:1px solid var(--line); border-radius:4px; font:11px var(--ui-font); padding:3px 5px; }
+  #admin .asec-cols { display:flex; gap:32px; flex-wrap:wrap; align-items:flex-start; }
+  #admin .asec-col { flex:1 1 360px; min-width:300px; }
+  #admin .asec-col h2 { margin:0 0 10px; font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--acc); }
+  #admin .grid2 { display:grid; grid-template-columns:repeat(2, max-content); gap:2px 26px; }
+  #admin #colorrows .crow { flex-wrap:nowrap; gap:8px; margin:3px 0; }
+  #admin #colorrows .cname { width:auto; min-width:46px; }
+  #admin #colorrows input[type=text].hex { width:74px; }
+  /* force every palette swatch to the same box so none shrinks in the flex row */
+  #admin #colorrows input[type=color] {
+    flex:none; width:34px; height:24px; min-width:34px; box-sizing:border-box; }
+  #admin .slotrow .slabel { width:128px; }
+  #admin .slotrow select, #admin .palrow select, #admin .palrow input[type=text] {
+    background:var(--panel2); color:var(--fg); border:1px solid var(--line); border-radius:4px;
+    padding:4px 8px; font:inherit; }
+  #admin .slotrow select { min-width:120px; }
+  #admin .slotrow .swatch { width:14px; height:14px; border-radius:3px; border:1px solid var(--line); flex:none; }
+  #admin .palrow { gap:8px; }
+  #admin .agentrow { gap:8px; }
+  #admin .agentrow .amodel { flex:1 1 200px; max-width:280px; background:var(--panel2); color:var(--fg);
+            border:1px solid var(--line); border-radius:4px; padding:4px 8px; font:inherit; }
+  #admin .projrow { gap:6px; }
+  #admin .projrow .pname { flex:0 0 130px; background:var(--panel2); color:var(--fg);
+            border:1px solid var(--line); border-radius:4px; padding:4px 7px; font:inherit; }
+  #admin .projrow .proot { flex:1 1 220px; min-width:160px; background:var(--panel2); color:var(--dim);
+            border:1px solid var(--line); border-radius:4px; padding:4px 7px; font:inherit; }
+  #admin .projrow .pdel { color:var(--dim); }
+  #admin .projrow .pdel.arm { color:var(--warn); font-weight:600; }
+  #admin .projrow .prefound { flex:none; font-size:11px; }
+  #admin .projrow .prefound.arm { color:var(--warn); font-weight:600; }
+
+  /* horizontal (row) divider between queue and info panes */
+  .hdivider { cursor:row-resize; height:5px; flex:none; background:transparent; }
+  .hdivider:hover, .hdivider.dragging { background:var(--acc); opacity:.45; }
+
+  /* info-pane edit mode */
+  #meta .metaedit { display:flex; flex-direction:column; gap:2px; margin-top:2px; }
+  #meta .metaedit input, #meta .metaedit select, #meta .metaedit textarea {
+    background:var(--panel2); color:var(--fg); border:1px solid var(--line); border-radius:4px;
+    padding:4px 7px; font:inherit; font-size:12.5px; width:100%; }
+  #meta .metaedit textarea { resize:vertical; min-height:70px; white-space:pre-wrap; }
+  #meta .metaedit input:focus, #meta .metaedit select:focus, #meta .metaedit textarea:focus {
+    outline:none; border-color:var(--acc); }
+  #metabar { display:flex; gap:8px; align-items:center; }
+  #metabar button { font-size:11px; padding:2px 9px; }
+
+  /* clickable [[wikilinks]] */
+  .wikilink { color:var(--slot-wikilink, var(--blue)); cursor:pointer; text-decoration:none;
+              border-bottom:1px dotted currentColor; }
+  .wikilink:hover { opacity:.8; }
+
+  /* the auto-glance reaction reads dimmer than a full agent turn, with a
+     scannable "comment" heading mirroring the context block's "context ·" head */
+  .msg.glance { color:var(--slot-glance, var(--dim)); font-style:italic; }
+  .msg.glance::before { content:'comment'; display:block; font-style:normal;
+                        color:var(--slot-cmthead, var(--fg)); font-size:12px; margin-bottom:4px; }
+
+  /* semantic colour slots (overridable element colours; fall back to palette) */
+  #comment { color:var(--slot-comment, var(--blue)); }
+  .notedot { display:inline-block; width:8px; height:8px; border-radius:50%;
+             background:var(--slot-comment, var(--blue)); flex:none; align-self:center; }
+  #comment.has::after { content:''; display:inline-block; width:7px; height:7px;
+    border-radius:50%; background:var(--slot-comment, var(--blue));
+    margin-left:7px; vertical-align:middle; }
+  #fnote { color:var(--slot-comment, var(--blue)); display:none; }
+  .msg.ctx .ctxbody { color:var(--slot-ctxbody, var(--fg)); }
+  .msg.ctx .ctxhead .fpath { color:var(--slot-ctxpath, var(--blue)); }
+  .msg.agent { color:var(--slot-agent, var(--dim)); }
+  .msg.user { color:var(--slot-user, var(--acc)); }
+  #queue h1, #meta h1, #right h1 { color:var(--slot-header, var(--acc)); }
+</style>
+</head>
+<body>
+
+<div id="left">
+  <div id="queue">
+    <h1>queue <select id="proj"></select><button id="reloadbtn" title="reload the queue — pick up new or removed entries (live intake, a sweep elsewhere)"><span>⟳</span></button><button id="sweepbtn" title="close the sitting — apply rulings, diff &amp; assess the batch, fix/flag ripples, log the session, restock the queue">sweep</button></h1>
+    <div id="qlist"></div>
+  </div>
+  <div id="divQ" class="hdivider" title="drag to resize"></div>
+  <div id="meta">
+    <h1>info <span style="flex:1"></span>
+      <span id="metabar"><button id="metaedit" title="edit fields">edit</button></span></h1>
+    <dl id="metadl"><dd style="color:var(--dim)">select a file</dd></dl>
+  </div>
+</div>
+
+<div id="divL" class="divider" title="drag to resize"></div>
+
+<div id="mid">
+  <div id="midbar">
+    <span id="fname">—</span><span id="dirty">●</span><span id="fnote" title="this file has a note">●</span>
+    <button id="findtoggle" title="find/replace in source">find</button>
+    <button id="viewmode" title="⌘E — toggle view/edit">edit</button>
+  </div>
+  <div id="findbar">
+    <input id="findin" placeholder="find" spellcheck="false">
+    <input id="replin" placeholder="replace" spellcheck="false">
+    <span id="findcount">—</span>
+    <button id="fprev" title="previous match">‹</button>
+    <button id="fnext" title="next match">›</button>
+    <button id="frep" title="replace current match">replace</button>
+    <button id="frepall" title="replace all matches">all</button>
+    <button id="fclose" title="Esc">✕</button>
+  </div>
+  <div id="edwrap">
+    <div id="gutter"></div>
+    <div id="hlband"></div>
+    <div id="edback" aria-hidden="true"></div>
+    <textarea id="editor" spellcheck="false" placeholder="select a file from the queue"></textarea>
+  </div>
+  <div id="render"></div>
+  <div id="commentpanel">
+    <textarea id="commentin" spellcheck="false" placeholder="a note for the sweep, tied to this file — Enter saves · Shift+Enter newline · Esc cancels"></textarea>
+    <div class="crow"><span id="commenthint">tied to this file; the sweep reads it when it closes the sitting</span><span style="flex:1"></span><button id="commentsave">save</button></div>
+  </div>
+  <div id="midfoot">
+    <button id="comment" title="leave a note on this file for the sweep">comment</button>
+    <span style="flex:1"></span>
+    <button id="reworkbtn" title="send back for a full rework — opens a note for the reworking agent">rework</button>
+    <button id="approve" title="clear from queue">approve</button>
+  </div>
+  <div id="interview">
+    <div id="ivhead"><span class="ivtitle">founding interview · <span id="ivpname"></span></span><span class="ivacts"><button id="ivquick" type="button" title="skip the interview — the curator surveys the existing files and founds the desk (charter, memory, first queue) in one pass">found from files</button><button id="ivskip" type="button" title="leave founding for later — open the project as-is (no charter or queue yet); reselect it to resume founding">skip for now</button></span></div>
+    <div id="ivstart">
+      <h2>choose a project</h2>
+      <div class="ivnote">point the founding curator at a folder — it surveys briskly, then interviews you in this panel; nothing is written until you click finish.</div>
+      <input id="ivname" placeholder="project name" spellcheck="false" autofocus>
+      <input id="ivroot" placeholder="folder (absolute or ~/ path)" spellcheck="false">
+      <button id="ivbrowse" class="browse" type="button">browse…</button>
+      <select id="ivkit" class="kitsel" required title="the curator's kind playbook — auto-detected from the folder; confirm or override">
+        <option value="">select project type…</option>
+        <option value="writing">writing</option>
+        <option value="code">code</option>
+        <option value="records">records</option>
+        <option value="knowledge">knowledge</option>
+      </select>
+      <input id="ivdepth" class="kitsel" type="number" min="0" step="1" placeholder="max depth (0 or blank = whole tree)" title="how many directory levels below the root to review — 1 = root files only, 2 = + one subdir level, 0/blank = unlimited">
+      <textarea id="ivnote" class="kitnote" spellcheck="false" placeholder="additional notes (optional) — conventions to honor, things never to touch, tools or corpora the curator should use, what you most want a second reader for"></textarea>
+      <div id="iverr"></div>
+      <button id="ivbegin">begin the founding interview</button>
+    </div>
+    <div id="ivchat"></div>
+    <div id="ivthink">the curator is thinking…</div>
+    <div id="ivbar">
+      <textarea id="ivin" placeholder="answer the curator — Enter sends · Shift+Enter newline" spellcheck="false"></textarea>
+      <button id="ivfinish" title="close the interview — the curator founds the desk and continues in the chat pane">finish ✓</button>
+    </div>
+  </div>
+  <div id="mirror" aria-hidden="true"></div>
+</div>
+
+<div id="divR" class="divider" title="drag to resize"></div>
+
+<div id="right">
+  <h1>agent <select id="model">
+    <option value="haiku">Haiku</option>
+    <option value="sonnet">Sonnet</option>
+    <option value="opus">Opus</option>
+    <option value="fable">Fable</option>
+  </select>
+  <span id="ctxbar" title="context used — click to clear this file's session"><span id="ctxfill"></span><span class="ctxlabel">clear</span></span></h1>
+  <div id="chat"></div>
+  <div id="spin">thinking…</div>
+  <div id="chatbar">
+    <textarea id="chatin" placeholder=""></textarea>
+  </div>
+</div>
+
+<div id="modalbg">
+  <div id="reworkmodal">
+    <h2>rework memo</h2>
+    <textarea id="reworkmemo" placeholder="memo to the reworking agent… (⌘Enter sends, Esc cancels)"></textarea>
+    <div class="mrow">
+      <select id="reworkagent"></select>
+      <button id="reworkcancel" title="Esc">cancel</button>
+      <button id="reworksend" title="⌘Enter">send ↺</button>
+    </div>
+  </div>
+</div>
+
+<div id="addbg">
+  <div id="addmodal">
+    <h2>add project</h2>
+    <input id="addname" placeholder="name" spellcheck="false">
+    <input id="addroot" placeholder="folder (absolute or ~/ path)" spellcheck="false">
+    <button id="addbrowse" class="browse" type="button">browse…</button>
+    <select id="addkit" class="kitsel" required title="the curator's kind playbook — auto-detected from the folder; confirm or override">
+      <option value="">select project type…</option>
+      <option value="writing">writing</option>
+      <option value="code">code</option>
+      <option value="records">records</option>
+      <option value="knowledge">knowledge</option>
+    </select>
+    <input id="adddepth" class="kitsel" type="number" min="0" step="1" placeholder="max depth (0 or blank = whole tree)" title="how many directory levels below the root to review — 1 = root files only, 2 = + one subdir level, 0/blank = unlimited">
+    <textarea id="addnote" class="kitnote" spellcheck="false" placeholder="additional notes (optional) — conventions to honor, things never to touch, tools or corpora the curator should use, what you most want a second reader for"></textarea>
+    <div class="mnote">the founding curator surveys the folder, then interviews you in the center panel; the desk is founded when you click finish</div>
+    <div class="mrow">
+      <span style="flex:1"></span>
+      <button id="addcancel" title="Esc">cancel</button>
+      <button id="addgo" title="⌘Enter">add &amp; interview</button>
+    </div>
+  </div>
+</div>
+
+<div id="setupbg">
+  <div id="setupmodal">
+    <h2>set up Setsweep</h2>
+    <div class="mnote">choose a model for each kind of agent. defaults are Claude Code models — type any id your agent CLI accepts. you can change these anytime in admin (⌘⇧A → agents).</div>
+    <div id="setuprows"></div>
+    <div class="mrow">
+      <span style="flex:1"></span>
+      <button id="setupdone" title="save and continue">save &amp; continue</button>
+    </div>
+  </div>
+</div>
+
+<div id="sweepbg" style="position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:21;">
+  <div id="sweepconfirm">
+    <h2>sweep the desk?</h2>
+    <div style="font-size:13px;color:var(--fg)">Closes the sitting: applies ticked rulings (launches become logged directives), diffs and assesses every reviewed entry, fixes or flags ripples, writes the session log, and restocks the queue.</div>
+    <label><input type="checkbox" id="sweepnoask"> don't ask again (button becomes a 5-second undo instead)</label>
+    <textarea id="sweepthrust" spellcheck="false" placeholder="a steer for this pass — what's most on your mind as you close the sitting. the agent reads it first (optional · ⌘Enter sweeps)"></textarea>
+    <div style="display:flex;justify-content:flex-end;gap:8px;">
+      <button id="sweepcancel">cancel</button>
+      <button id="sweepgo" style="color:var(--good);font-weight:600;">sweep</button>
+    </div>
+  </div>
+</div>
+
+<div id="admin">
+  <div id="adminhead">
+    <h1>admin · debug</h1>
+    <span class="spacer"></span>
+    <button id="adminclose" title="Esc">✕</button>
+  </div>
+
+  <div class="asec">
+    <h2>A · reload</h2>
+    <div class="arow"><button id="adminreload">⟳ reload the app</button>
+      <span class="mono-dim">also: View › Reload, or ⌘⇧A then this button</span></div>
+  </div>
+
+  <div class="asec wide">
+    <h2>B · appearance</h2>
+    <div class="asec-cols">
+      <div class="asec-col">
+        <h2>palette — 16 colours</h2>
+        <div id="colorrows" class="grid2"></div>
+        <div class="arow"><button id="colorreset">reset colours</button></div>
+      </div>
+      <div class="asec-col">
+        <h2>text colours — assign a palette colour to chat / text</h2>
+        <div id="slotrows"></div>
+        <div class="arow"><button id="slotreset">reset text colours</button></div>
+      </div>
+      <div class="asec-col">
+        <h2>interface colours — assign a palette colour to the chrome</h2>
+        <div id="ifacerows"></div>
+        <div class="arow"><button id="ifacereset">reset interface colours</button></div>
+      </div>
+      <div class="asec-col">
+        <h2>fonts — interface (mono) &amp; body (sans)</h2>
+        <div id="fontrows"></div>
+        <div class="arow"><button id="fontreset">reset fonts</button></div>
+        <h2 style="margin-top:18px">sizes</h2>
+        <div id="sizerows"></div>
+        <div class="arow"><button id="sizereset">reset sizes</button></div>
+        <h2 style="margin-top:18px">saved palettes</h2>
+        <div class="arow palrow">
+          <input type="text" id="palname" placeholder="name this palette" spellcheck="false">
+          <button id="palsave">save current</button>
+        </div>
+        <div class="arow palrow">
+          <select id="palload"><option value="">— load a palette —</option></select>
+          <button id="palapply">load</button>
+          <button id="paldel" title="delete the selected palette">✕</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="asec">
+    <h2>C · agents</h2>
+    <div id="agentrows"></div>
+    <div class="arow mono-dim" style="font-size:11px">model is any id your agent CLI accepts — pick a suggestion or type your own. (CLIs beyond Claude Code: a flagged future project.)</div>
+    <datalist id="modellist"></datalist>
+  </div>
+
+  <div class="asec">
+    <h2>D · behaviour</h2>
+    <label class="achk"><input type="checkbox" id="optHlLine">
+      <span class="ctext"><span class="ctitle">highlight current line</span>
+      <span class="cdesc">the editor's highlight band follows the caret as you move it</span></span></label>
+    <label class="achk"><input type="checkbox" id="optMd">
+      <span class="ctext"><span class="ctitle">markdown syntax highlighting</span>
+      <span class="cdesc">the syntax backdrop behind the editor; off makes text plain --fg (kill-switch)</span></span></label>
+    <label class="achk"><input type="checkbox" id="optSweepConfirm">
+      <span class="ctext"><span class="ctitle">sweep confirmation</span>
+      <span class="cdesc">ask before sweeping; off turns the button into a 5-second undo</span></span></label>
+    <label class="achk"><input type="checkbox" id="optGlance">
+      <span class="ctext"><span class="ctitle">glance on open</span>
+      <span class="cdesc">the agent reacts in a sentence or two to each file's brief as it loads (fast, haiku)</span></span></label>
+    <label class="achk"><input type="checkbox" id="optUnwrap">
+      <span class="ctext"><span class="ctitle">unwrap hard-wrapped paragraphs</span>
+      <span class="cdesc">on open, join fixed-width-wrapped prose into one line per paragraph for comfortable editing (skips code, lists, tables, headings); saving keeps the unwrapped form</span></span></label>
+    <label class="achk"><input type="checkbox" id="optCtxCompact">
+      <span class="ctext"><span class="ctitle">context-bar click compacts</span>
+      <span class="cdesc">clicking the context bar runs /compact on the file's session (summarize-and-continue, keeps the thread); off makes the click clear the session instead (throw it away, fresh start next message)</span></span></label>
+    <label class="achk"><input type="checkbox" id="optAutoCompact">
+      <span class="ctext"><span class="ctitle">auto-compact the session</span>
+      <span class="cdesc">the project session threads interview→found→chat→sweep and bloats fast (the founding survey alone runs 100s of K). On: compact automatically after founding and after each sweep, and when context exceeds 70% of the model window — keeps the single thread lean. Off: compact only when you click the bar.</span></span></label>
+    <div class="arow"><span class="lbl">autosave interval</span>
+      <input type="number" id="optAutosave" min="3" max="600" step="1"> <span class="mono-dim">seconds</span></div>
+  </div>
+
+  <div class="asec">
+    <h2>E · projects</h2>
+    <div id="projrows"></div>
+    <div class="arow mono-dim" style="font-size:11px">delete only unregisters — the folder and its .setsweep desk are left on disk.</div>
+  </div>
+
+  <div class="asec">
+    <h2>K · curators (kits)</h2>
+    <div class="arow">
+      <select id="kitpick" title="a kit to view or edit"></select>
+      <span id="kitsrc" class="mono-dim"></span>
+    </div>
+    <div id="kiteditor">
+      <label class="kitf">name<input id="kf_name" spellcheck="false"></label>
+      <label class="kitf">review lens<textarea id="kf_lens" spellcheck="false"></textarea></label>
+      <label class="kitf">urgency rubric<textarea id="kf_urgency" spellcheck="false"></textarea></label>
+      <label class="kitf">first-queue heuristic<textarea id="kf_firstQueue" spellcheck="false"></textarea></label>
+      <label class="kitf">sweep self-checks <span class="mono-dim">· one per line</span><textarea id="kf_sweepChecks" spellcheck="false"></textarea></label>
+      <label class="kitf">tools <span class="mono-dim">· one per line as <code>type: ref</code> — builtin/skill/mcp/rag/corpus</span><textarea id="kf_tools" spellcheck="false"></textarea></label>
+    </div>
+    <div class="arow">
+      <button id="kitsave" title="save — forks a shipped default into your settings">save</button>
+      <button id="kitsaveas" title="save the current fields as a new custom kit (named above)">save as…</button>
+      <button id="kitdel" title="delete this user kit — a shipped default returns">delete</button>
+    </div>
+    <label class="kitf">JSON <span class="mono-dim">· export writes here; paste a kit and import</span><textarea id="kitio" spellcheck="false"></textarea></label>
+    <div class="arow">
+      <button id="kitexport">export → JSON</button>
+      <button id="kitimport">import JSON</button>
+    </div>
+    <div class="arow mono-dim" style="font-size:11px">shipped defaults are read-only — editing one forks a copy into your settings. assign a kit to a project in <b>E · projects</b> above.</div>
+  </div>
+
+  <div class="asec">
+    <h2>F · debug / background</h2>
+    <div class="arow"><button id="adminrefresh">↻ refresh</button>
+      <span id="adminstamp" class="mono-dim"></span></div>
+    <div id="admindebug" style="margin-top:10px"></div>
+  </div>
+
+  <div class="asec">
+    <h2>L · lineage — who edited what</h2>
+    <div id="lineagebox" style="margin-top:6px"></div>
+  </div>
+
+  <div class="asec">
+    <h2>G · js error log</h2>
+    <div class="arow"><button id="errclear">clear</button>
+      <span class="mono-dim">most recent first (last ~30)</span></div>
+    <div id="errlistbox" class="errlist" style="margin-top:8px"></div>
+  </div>
+</div>
+
+<script src="/marked.min.js"></script>
+<script>
+/* running in-memory JS error log — the admin overlay (section F) renders the last
+   ~30, most recent first; the banner stays as the loud, immediate signal */
+const JSERR = [];
+function pushJsErr(msg, src, line){
+  JSERR.unshift({msg: String(msg||''), src: (src||'').split('/').pop(), line: line, ts: Date.now()});
+  if(JSERR.length > 30) JSERR.length = 30;
+  if(typeof renderErrLog === 'function' && document.getElementById('admin').classList.contains('open')) renderErrLog();
+}
+window.addEventListener('error', e => {
+  pushJsErr(e.message, e.filename, e.lineno);
+  let b = document.getElementById('errbanner');
+  if(!b){
+    b = document.createElement('div'); b.id = 'errbanner';
+    b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99;background:#d4756b;color:#16161e;padding:6px 14px;font:12px Menlo,monospace;';
+    document.body.appendChild(b);
+  }
+  b.textContent = 'script error: ' + e.message + ' (' + (e.filename||'').split('/').pop() + ':' + e.lineno + ')';
+});
+window.addEventListener('unhandledrejection', e => {
+  pushJsErr('unhandled rejection: ' + (e.reason && e.reason.message || e.reason), '', 0);
+});
+let Q = null, cur = null, dirty = false, busy = false, PROJECT = null, PROJECTS = [], mode = 'reading';
+// one Claude session per project (setsweep-<project>): true once a chat/found turn has
+// run for the loaded project, so compact/clear know a live thread exists. Reset per project.
+let PROJECT_SESSION = false;
+let SETTINGS = {}, HOMEDIR = '', findIdx = -1;
+/* persistent per-project transcript: every addMsg/addCtx logs here and debounce-saves
+   to <desk>/chatlog.json; `restoring` suppresses re-pushing while history re-renders */
+let CHATLOG = [], restoring = false, chatlogTimer = null;
+const CHATLOG_SHOW = 200;  // display cap on reload (server keeps 500)
+const MODELS = ['sonnet', 'opus', 'haiku', 'fable'];
+
+/* per-task agents. setup = founding survey / sweep / rework (agentic, edits files);
+   chat = the per-file review conversation (also the top-bar selector); glance = the
+   tool-less reaction on open. Model is a free string — any id the agent CLI accepts,
+   not just the four standards. (CLI backends beyond Claude Code are a flagged future
+   project — see DESIGN.md.) */
+const AGENT_TASKS = [
+  ['setup',  'curatorial setup', 'founding survey · sweep · rework — agentic, edits files'],
+  ['chat',   'session chat',     'the per-file review conversation (mirrors the top-bar selector)'],
+  ['glance', 'context glance',   'the quick reaction on file open — tool-less, so any model fits'],
+];
+const AGENT_DEFAULTS = {setup: 'sonnet', chat: 'sonnet', glance: 'haiku'};
+function agentModel(task){
+  const a = SETTINGS.agents || {};
+  return a[task] || AGENT_DEFAULTS[task];
+}
+function setAgent(task, model){
+  const agents = Object.assign({}, AGENT_DEFAULTS, SETTINGS.agents, {[task]: (model || '').trim() || AGENT_DEFAULTS[task]});
+  SETTINGS.agents = agents; saveSettings({agents});
+  if(task === 'chat') syncModelBar();
+}
+function syncModelBar(){                       // reflect the chat agent in the top-bar <select>
+  const sel = $('model'); if(!sel) return;
+  const m = agentModel('chat');
+  if(![...sel.options].some(o => o.value === m)){
+    const opt = document.createElement('option'); opt.value = m; opt.textContent = m; sel.appendChild(opt);
+  }
+  sel.value = m;
+}
+const $ = id => document.getElementById(id);
+
+async function jget(u){ const r = await fetch(u); const j = await r.json(); if(!r.ok) throw j.error; return j; }
+async function jpost(u,b){ const r = await fetch(u,{method:'POST',body:JSON.stringify(b)}); const j = await r.json(); if(!r.ok) throw j.error; return j; }
+
+const esc = s => String(s==null?'':s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function shortName(p){ const parts = p.split('/'); return parts.slice(-2).join('/'); }
+function expandHome(p){ return p && p.startsWith('~') ? HOMEDIR + p.slice(1) : p; }
+
+/* full path relative to the active project's root; last-two segments if outside */
+function relPath(p){
+  const proj = PROJECTS.find(x => x.id === PROJECT);
+  if(proj && proj.root){
+    const root = expandHome(proj.root).replace(/\/+$/, '') + '/';
+    const full = expandHome(p);
+    if(full.startsWith(root)) return full.slice(root.length);
+  }
+  return shortName(p);
+}
+
+function setFname(p){
+  const rel = relPath(p);
+  const i = rel.lastIndexOf('/');
+  $('fname').innerHTML =
+    `<span class="fdir">${esc(i >= 0 ? rel.slice(0, i+1) : '')}</span>` +
+    `<span class="fbase">${esc(rel.slice(i+1))}</span>`;
+}
+
+/* the +added/−removed badge for a queue entry (this sitting's change vs. its snapshot) */
+function diffBadge(d){
+  if(!d || (!d.added && !d.removed)) return '';
+  const a = d.added ? `<span class="add">+${d.added}</span>` : '';
+  const r = d.removed ? `<span class="del">−${d.removed}</span>` : '';
+  return `<span class="qdiff">${a}${r}</span>`;
+}
+function renderQueue(){
+  const order = {high:0, medium:1, low:2};
+  const list = [...Q.entries].sort((a,b) =>
+    (a.status==='approved')-(b.status==='approved') || (order[a.urgency]??9)-(order[b.urgency]??9));
+  $('qlist').innerHTML = '';
+  for(const e of list){
+    const d = document.createElement('div');
+    d.className = 'qitem' + (cur && e.id===cur.id ? ' active':'') + (e.status==='approved' ? ' approved':'')
+                + (e.status==='rework' ? ' rework':'');
+    const dash = e.title.search(/ [—–-] /);
+    const tname = dash > 0 ? e.title.slice(0, dash) : e.title;
+    const tsum  = dash > 0 ? e.title.slice(dash + 3) : (e.ask || '');
+    d.innerHTML = `<div class="t"><span class="dot ${esc(e.urgency)}"></span>
+        <span class="qname">${esc(tname)}</span>${e.comment ? '<span class="notedot" title="has a note"></span>' : ''}${diffBadge(e.diff)}</div>
+        <div class="qsum">${e.ask_type ? `<span class="qtag">${esc(e.ask_type)}</span> ` : ''}${esc(tsum)}${e.desk_item ? ' · desk #' + esc(e.desk_item) : ''}</div>`;
+    d.onclick = () => select(e.id);
+    $('qlist').appendChild(d);
+  }
+  syncChrome();
+}
+
+// keep the lower-bar chrome honest: file-actions + the edit toggle need an open file; the
+// sweep button needs a project. The CSS dims AND disables (pointer-events) off these classes;
+// the keyboard paths (⌘E, sweep) guard on the same state so dimming == deactivation.
+function syncChrome(){
+  document.body.classList.toggle('nofile', !cur);
+  document.body.classList.toggle('noproj', !PROJECT);
+}
+
+let metaEditing = false;
+const META_OPTS = {
+  status: ['pending', 'approved', 'rework'],
+  urgency: ['high', 'medium', 'low'],
+  ask_type: ['input', 'tuning', 'judgment', 'fill'],
+};
+function renderMeta(e){
+  $('metaedit').style.display = e ? '' : 'none';
+  if(!e){ $('metadl').innerHTML = '<dd style="color:var(--dim)">select a file</dd>'; return; }
+  if(metaEditing){ renderMetaEdit(e); return; }
+  $('metadl').innerHTML =
+    `<dt>path</dt><dd>${esc(e.path)}</dd>` +
+    (e.source ? `<dt>source</dt><dd class="src">${esc(e.source)}</dd>` : '') +
+    `<dt>title</dt><dd>${esc(e.title||'—')}</dd>` +
+    `<dt>status · urgency</dt><dd>${esc(e.status)} · ${esc(e.urgency)}</dd>` +
+    `<dt>changes this sitting</dt><dd id="metachanges">${diffLine(e.diff)}</dd>` +
+    `<dt>words</dt><dd id="metawords">${wordCount()}</dd>` +
+    `<dt>ask type</dt><dd>${esc(e.ask_type||'—')}</dd>` +
+    `<dt>ask</dt><dd>${esc(e.ask||'—')}</dd>` +
+    (e.unblocks ? `<dt>unblocks</dt><dd>${esc(e.unblocks)}</dd>` : '') +
+    `<dt>curatorial brief</dt><dd class="brief">${esc(e.brief||'—')}</dd>`;
+  linkifyWikilinks($('metadl'));
+  const vd = $('viewdiff'); if(vd) vd.onclick = (ev) => { ev.preventDefault(); toggleDiffView(e); };
+}
+/* Info-panel helpers: this-sitting change line, live word count, and the view-diff peek */
+function wordCount(){ const t = ($('editor').value || '').trim(); return t ? t.split(/\s+/).length : 0; }
+function refreshMetaWords(){ const w = $('metawords'); if(w) w.textContent = wordCount(); }
+function diffLine(d){
+  if(!d) return '<span style="color:var(--dim)">no baseline yet</span>';
+  if(!d.added && !d.removed) return '<span style="color:var(--dim)">unchanged this sitting</span>';
+  const a = d.added ? `<span style="color:var(--good)">+${d.added}</span>` : '';
+  const r = d.removed ? `<span style="color:var(--burnt)">−${d.removed}</span>` : '';
+  return `${a} ${r} <a href="#" id="viewdiff" class="minilink">view diff</a>`;
+}
+async function toggleDiffView(e){
+  const open = $('diffview');
+  if(open){ open.remove(); return; }   // toggle closed
+  try {
+    const r = await jget(`/api/diff?project=${encodeURIComponent(PROJECT)}&id=${encodeURIComponent(e.id)}`);
+    const pre = document.createElement('pre');
+    pre.id = 'diffview'; pre.className = 'diffview';
+    pre.textContent = r.diff || '(no differences vs the original)';
+    $('metadl').appendChild(pre);
+  } catch(err){}
+}
+function field(label, key, val, kind){
+  if(kind === 'select'){
+    const opts = META_OPTS[key].map(o =>
+      `<option value="${o}"${o===val?' selected':''}>${o}</option>`).join('');
+    return `<dt>${label}</dt><div class="metaedit"><select data-k="${key}">${opts}</select></div>`;
+  }
+  if(kind === 'area')
+    return `<dt>${label}</dt><div class="metaedit"><textarea data-k="${key}">${esc(val||'')}</textarea></div>`;
+  return `<dt>${label}</dt><div class="metaedit"><input data-k="${key}" value="${esc(val||'')}" spellcheck="false"></div>`;
+}
+function renderMetaEdit(e){
+  $('metadl').innerHTML =
+    `<dt>path</dt><dd>${esc(e.path)}</dd>` +
+    (e.source ? field('source', 'source', e.source, 'text') : '') +
+    field('title', 'title', e.title, 'text') +
+    field('status', 'status', e.status, 'select') +
+    field('urgency', 'urgency', e.urgency, 'select') +
+    field('ask type', 'ask_type', e.ask_type, 'select') +
+    field('ask', 'ask', e.ask, 'text') +
+    field('unblocks', 'unblocks', e.unblocks, 'text') +
+    field('curatorial brief', 'brief', e.brief, 'area');
+}
+function toggleMetaEdit(){
+  if(!cur) return;
+  if(metaEditing){ saveMeta(); return; }
+  metaEditing = true; $('metaedit').textContent = 'save'; renderMeta(cur);
+}
+async function saveMeta(){
+  const fields = {};
+  $('metadl').querySelectorAll('[data-k]').forEach(el => { fields[el.dataset.k] = el.value; });
+  try {
+    const r = await jpost('/api/entry', {project: PROJECT, id: cur.id, fields});
+    Object.assign(cur, r.entry);
+  } catch(err){ addMsg('err', 'field save failed: ' + err); return; }
+  metaEditing = false; $('metaedit').textContent = 'edit';
+  renderMeta(cur); renderQueue();
+}
+
+/* Obsidian-style [[wikilinks]] → clickable; opens in the OS default text editor */
+function linkifyWikilinks(root){
+  const rx = /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g;
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const targets = [];
+  let n; while((n = walker.nextNode())) if(rx.test(n.nodeValue)){ rx.lastIndex = 0; targets.push(n); }
+  for(const node of targets){
+    const frag = document.createDocumentFragment();
+    let last = 0, m; rx.lastIndex = 0;
+    const s = node.nodeValue;
+    while((m = rx.exec(s))){
+      if(m.index > last) frag.appendChild(document.createTextNode(s.slice(last, m.index)));
+      const a = document.createElement('a');
+      a.className = 'wikilink'; a.dataset.name = m[1].trim();
+      a.textContent = (m[2] || m[1]).trim();
+      a.title = 'open ' + m[1].trim() + ' in your text editor';
+      frag.appendChild(a);
+      last = m.index + m[0].length;
+    }
+    if(last < s.length) frag.appendChild(document.createTextNode(s.slice(last)));
+    node.parentNode.replaceChild(frag, node);
+  }
+}
+document.addEventListener('click', async e => {
+  const a = e.target.closest && e.target.closest('a.wikilink');
+  if(!a) return;
+  e.preventDefault();
+  try {
+    const r = await jpost('/api/open-link', {project: PROJECT, name: a.dataset.name});
+    if(!r.ok) addMsg('err', r.error || 'link not found');
+  } catch(err){ addMsg('err', 'open link failed: ' + err); }
+});
+
+async function select(id){
+  if(dirty){ try { await save(); } catch(e){ addMsg('err', 'autosave on switch failed: ' + e); return; } }
+  cur = Q.entries.find(e => e.id===id);
+  renderQueue(); renderMeta(cur);
+  commentMark();
+  $('fnote').style.display = (cur && cur.comment) ? 'inline' : 'none';
+  setFname(cur.path);
+  closeFind();
+  $('editor').value = 'loading…';
+  try {
+    const f = await jget('/api/file?path=' + encodeURIComponent(cur.path) + '&project=' + encodeURIComponent(PROJECT));
+    $('editor').value = SETTINGS.unwrap ? unwrapParagraphs(f.content) : f.content;
+  } catch(err){ $('editor').value = '⚠ ' + err; }
+  setDirty(false);
+  refreshMetaWords();   // the file is loaded now — correct the word count in the Info panel
+  clearBand();
+  $('editor').scrollTop = 0;
+  setMode('reading');
+  renderGutter();
+  renderBack();
+  pendingMsgs = [];
+  // the transcript persists across file switches — append this file's context entry
+  // (skip only if it would duplicate the transcript's latest entry, e.g. on reload)
+  const ctxText = relPath(cur.path) + '\n' + (cur.brief || '(no brief prepared)');
+  const lastLogged = CHATLOG[CHATLOG.length - 1];
+  if(!(lastLogged && lastLogged.cls === 'ctx' && lastLogged.text === ctxText)){
+    addCtx(relPath(cur.path), cur.brief || '(no brief prepared)');
+    glance(cur);  // a one-breath reaction to keep the conversation warm
+  }
+}
+
+/* glance: fire a fast, terse comment on the just-loaded brief. Non-blocking and
+   superseded the moment another file is opened (AbortController). Reads the brief
+   only — never the file — so it stays cheap. */
+let glanceCtl = null;
+async function glance(entry){
+  if(glanceCtl) glanceCtl.abort();
+  if(SETTINGS.glance === false) return;          // admin kill-switch
+  const ctl = new AbortController(); glanceCtl = ctl;
+  const eid = entry.id;
+  showSpin();                                    // the agent is reading the note context
+  try {
+    const r = await fetch('/api/glance', {method:'POST', signal: ctl.signal,
+      body: JSON.stringify({project: PROJECT, brief: entry.brief || '', path: entry.path, model: agentModel('glance')})});
+    if(!r.ok) return;
+    let acc = '';
+    await pipeStream(r, (cls, text) => { if(cls === 'agent') acc += text; });
+    if(!ctl.signal.aborted && cur && cur.id === eid && acc.trim())
+      addMsg('glance', acc.trim());
+  } catch(err){ /* aborted or failed: a glance is best-effort, never surfaced as an error */ }
+  finally { if(glanceCtl === ctl && !busy) hideSpin(); }   // don't stomp a live send's spinner
+}
+
+function setDirty(v){ dirty = v; $('dirty').style.display = v ? 'inline' : 'none'; }
+
+/* reading view: rendered markdown, checkboxes live-wired to the source */
+function setMode(m){
+  if(!cur) return;   // no open file: the edit/view toggle is deactivated (matches the dimmed button)
+  mode = m;
+  document.body.classList.toggle('reading', m === 'reading');
+  $('viewmode').textContent = m === 'reading' ? 'edit' : 'view';
+  $('findtoggle').style.display = m === 'reading' ? 'none' : '';
+  if(m === 'reading'){ closeFind(); renderMd(); } else { renderGutter(); renderBack(); $('editor').focus(); }
+}
+
+function sanitizeRender(el){
+  el.querySelectorAll('script,iframe,object,embed,link,style').forEach(n => n.remove());
+  el.querySelectorAll('*').forEach(n => {
+    [...n.attributes].forEach(a => {
+      if(/^on/i.test(a.name)) n.removeAttribute(a.name);
+      if(a.name === 'href' && /^javascript:/i.test(n.getAttribute('href') || '')) n.removeAttribute('href');
+    });
+  });
+}
+
+/* source offsets of the state-char of each task checkbox, skipping fenced code
+   blocks — keeps rendered checkboxes mapped to the right source line even when
+   a code block contains checkbox-shaped text */
+function taskBoxOffsets(src){
+  const out = [];
+  let pos = 0, fence = false;
+  for(const line of src.split('\n')){
+    if(/^\s*(```|~~~)/.test(line)) fence = !fence;
+    else if(!fence){
+      const m = line.match(/^(\s*[-*+] )\[( |x|X)\]/);
+      if(m) out.push(pos + m[1].length + 1);  // offset of the char inside [ ]
+    }
+    pos += line.length + 1;
+  }
+  return out;
+}
+
+/* opt-in reflow: join hard-wrapped prose paragraphs into one line each, so editing
+   a fixed-width-wrapped file isn't mid-sentence-broken. Conservative — leaves fenced
+   code, headings, list items, table rows, blockquotes, and frontmatter untouched, and
+   preserves blank-line paragraph breaks. A no-op on already-unwrapped (long-line) prose. */
+function unwrapParagraphs(text){
+  const lines = text.split('\n');
+  const out = [];
+  let fence = false, para = [];
+  const flush = () => { if(para.length){ out.push(para.join(' ')); para = []; } };
+  const structural = l =>
+    l.trim() === '' ||                                   // blank → paragraph break
+    /^\s{4,}\S/.test(l) ||                                // indented code
+    /^\s*(#{1,6}\s|[-*+]\s|\d+[.)]\s|>|\||---|===|\[\^?[^\]]+\]:|:?:|\$\$)/.test(l); // md structure
+  for(const l of lines){
+    if(/^\s*(```|~~~)/.test(l)){ flush(); fence = !fence; out.push(l); continue; }
+    if(fence){ out.push(l); continue; }
+    if(structural(l)){ flush(); out.push(l); continue; }
+    if(/\\$/.test(l.trimEnd()) || /  $/.test(l)){        // an intentional hard break — keep it
+      para.push(l.trim()); flush(); continue;
+    }
+    para.push(l.trim());
+  }
+  flush();
+  return out.join('\n');
+}
+
+function renderMd(){
+  const r = $('render');
+  r.innerHTML = marked.parse($('editor').value, {gfm: true});
+  sanitizeRender(r);
+  linkifyWikilinks(r);
+  const offsets = taskBoxOffsets($('editor').value);
+  const boxes = r.querySelectorAll('input[type=checkbox]');
+  boxes.forEach((cb, i) => {
+    if(i < offsets.length){
+      cb.disabled = false;
+      cb.addEventListener('change', () => toggleBox(offsets[i]));
+    }  // count mismatch → leave the box inert rather than guess
+  });
+}
+
+function toggleBox(pos){
+  const ed = $('editor');
+  const v = ed.value;
+  const c = v[pos];
+  if(c !== ' ' && c !== 'x' && c !== 'X'){ renderMd(); return; }
+  ed.value = v.slice(0, pos) + (c === ' ' ? 'x' : ' ') + v.slice(pos + 1);
+  setDirty(true);
+  renderMd();
+}
+
+/* line-number gutter: heights measured per logical line via the hidden mirror,
+   so numbers stay aligned under soft wrap */
+let gutterTimer = null;
+function renderGutter(){
+  const ed = $('editor'), mirror = $('mirror');
+  const cs = getComputedStyle(ed);
+  mirror.style.width = (ed.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)) + 'px';
+  const lines = ed.value.split('\n');
+  // size the gutter to the widest line number: ~8.5px/digit + 10px each side, so the
+  // numbers sit with equal left/right margins instead of hugging the right of a fixed column.
+  document.documentElement.style.setProperty(
+    '--gutter-w', Math.max(34, String(lines.length).length * 8.5 + 20) + 'px');
+  let html = '';
+  for(let i = 0; i < lines.length; i++){
+    mirror.textContent = lines[i] || ' ';
+    html += `<div style="height:${mirror.offsetHeight}px">${i+1}</div>`;
+  }
+  $('gutter').innerHTML = html;
+  syncGutter();
+}
+/* syntax layer behind the transparent textarea: heading lines gold (matching the
+   reading view), markdown formatting characters dimmed; body text unchanged */
+function renderBack(){
+  const w = $('editor').clientWidth;
+  if(!w) return;  // editor not laid out (reading mode) — renders on source entry
+  const src = $('editor').value;
+  let fence = false;
+  const out = src.split('\n').map(line => {
+    if(/^\s*(```|~~~)/.test(line)){ fence = !fence; return '<span class="mdsyn">' + esc(line) + '</span>'; }
+    if(fence) return esc(line);
+    let m = line.match(/^(#{1,6} )(.*)$/);
+    if(m) return '<span class="mdhead"><span class="mdsyn">' + esc(m[1]) + '</span>' + esc(m[2]) + '</span>';
+    let h = esc(line)
+      .replace(/^(\s*(?:[-*+]|\d+\.) )(\[[ xX]\] )?/, (a, bullet, box) =>
+        '<span class="mdsyn">' + bullet + (box || '') + '</span>')
+      .replace(/^(&gt;\s*)/, '<span class="mdsyn">$1</span>')
+      .replace(/\*\*([^*\n]+)\*\*/g, '<span class="mdsyn">**</span>$1<span class="mdsyn">**</span>')
+      .replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, '$1<span class="mdsyn">*</span>$2<span class="mdsyn">*</span>')
+      .replace(/`([^`\n]+)`/g, '<span class="mdsyn">`</span>$1<span class="mdsyn">`</span>')
+      .replace(/\|/g, '<span class="mdsyn">|</span>');
+    if(/^(-{3,}|={3,})\s*$/.test(line)) h = '<span class="mdsyn">' + esc(line) + '</span>';
+    return h;
+  }).join('\n');
+  $('edback').style.width = w + 'px';
+  $('edback').innerHTML = out + '\n';
+  syncBack();
+}
+function syncBack(){ $('edback').scrollTop = $('editor').scrollTop; }
+function scheduleGutter(){ clearTimeout(gutterTimer); gutterTimer = setTimeout(() => { renderGutter(); renderBack(); }, 120); }
+function syncGutter(){ $('gutter').scrollTop = $('editor').scrollTop; }
+
+async function save(){
+  if(!cur || !dirty) return;
+  await jpost('/api/save', {path: cur.path, content: $('editor').value});
+  setDirty(false);
+  refreshDiff();   // the write landed — recompute +/− for the badge and the Info panel
+}
+/* re-pull this entry's change-vs-snapshot after a save (or load) and update both surfaces */
+async function refreshDiff(){
+  const e = cur; if(!e || !PROJECT) return;
+  try {
+    const r = await jget(`/api/diffstat?project=${encodeURIComponent(PROJECT)}&id=${encodeURIComponent(e.id)}`);
+    e.diff = r.diff;                 // e is a reference into Q.entries → the queue badge updates too
+  } catch(err){ return; }
+  renderQueue();
+  if(cur === e){                     // panel still shows this entry: refresh its changes line
+    const mc = $('metachanges');
+    if(mc){ mc.innerHTML = diffLine(e.diff);
+            const vd = $('viewdiff'); if(vd) vd.onclick = (ev) => { ev.preventDefault(); toggleDiffView(e); }; }
+  }
+}
+/* autosave: 30s after the last edit (deferred while the agent is mid-turn), and on blur */
+let autosaveTimer = null;
+function scheduleAutosave(){
+  clearTimeout(autosaveTimer);
+  const secs = (typeof SETTINGS.autosaveSecs === 'number' && SETTINGS.autosaveSecs >= 3) ? SETTINGS.autosaveSecs : 30;
+  autosaveTimer = setTimeout(async () => {
+    if(busy){ scheduleAutosave(); return; }  // agent running: wait, the refresh guard arbitrates
+    try { await save(); } catch(e){ addMsg('err', 'autosave failed: ' + e); }
+  }, secs * 1000);
+}
+
+function commentMark(){
+  const has = !!(cur && cur.comment);
+  $('comment').textContent = 'comment';        // text no longer changes
+  $('comment').classList.toggle('has', has);   // .has drives the dot
+}
+function openComment(){
+  if(!cur) return;
+  $('commentin').value = cur.comment || '';   // edit the file's existing note
+  $('commentpanel').classList.add('open');
+  $('commentin').focus();
+  const n = $('commentin').value.length; $('commentin').setSelectionRange(n, n);
+}
+function closeComment(){ $('commentpanel').classList.remove('open'); }
+async function saveComment(){
+  if(!cur) return;
+  const text = $('commentin').value.trim();
+  try { await jpost('/api/comment', {project: PROJECT, id: cur.id, text}); }
+  catch(err){ addMsg('err', 'comment failed: ' + err); return; }
+  if(text) cur.comment = text; else delete cur.comment;   // strictly this entry
+  commentMark(); $('fnote').style.display = (cur && cur.comment) ? 'inline' : 'none'; renderQueue(); closeComment();
+}
+
+async function approve(){
+  if(!cur) return;
+  try {
+    if(dirty) await save();
+    await jpost('/api/approve', {id: cur.id, project: PROJECT});
+  } catch(err){ addMsg('err', 'approve failed: ' + err); return; }
+  cur.status = 'approved';
+  renderQueue(); renderMeta(cur);
+  maybeAutoSweep();
+}
+
+function postChatlog(pid, msgs){
+  jpost('/api/chatlog', {project: pid, messages: msgs.slice(-500)}).catch(()=>{});
+}
+function logChat(cls, text){
+  if(restoring) return;
+  CHATLOG.push({cls, text, ts: Date.now()});
+  if(CHATLOG.length > 600) CHATLOG = CHATLOG.slice(-500);
+  clearTimeout(chatlogTimer);
+  const pid = PROJECT;
+  chatlogTimer = setTimeout(() => { chatlogTimer = null; if(pid) postChatlog(pid, CHATLOG); }, 2000);
+}
+function flushChatlog(){  // settle any pending save before the project switches
+  if(!chatlogTimer) return;
+  clearTimeout(chatlogTimer); chatlogTimer = null;
+  if(PROJECT) postChatlog(PROJECT, CHATLOG);
+}
+
+function addMsg(cls, text){
+  logChat(cls, text);
+  const d = document.createElement('div');
+  d.className = 'msg ' + cls;
+  if(cls === 'agent' && text.includes('```')){
+    // render fenced blocks with an apply-to-editor affordance
+    const parts = text.split(/```[^\n]*\n?/);
+    for(let i = 0; i < parts.length; i++){
+      if(i % 2 === 0){
+        if(parts[i].trim()){ const s = document.createElement('span'); s.textContent = parts[i]; d.appendChild(s); }
+      } else {
+        const block = parts[i].replace(/\n$/, '');
+        const wrap = document.createElement('div'); wrap.className = 'applyblock';
+        const pre = document.createElement('pre'); pre.textContent = block;
+        const bar = document.createElement('div'); bar.className = 'abar';
+        const cp = document.createElement('button'); cp.textContent = 'copy';
+        cp.onclick = () => navigator.clipboard.writeText(block);
+        const ap = document.createElement('button'); ap.textContent = '→ editor';
+        ap.title = 'jump to this passage in the file (highlights the line); if the text is not in the file, inserts it at the cursor';
+        ap.onclick = () => {
+          if(locateInEditor(block)) return;
+          if(mode !== 'source') setMode('source');
+          const ed = $('editor');
+          ed.setRangeText(block, ed.selectionStart, ed.selectionEnd, 'end');
+          setDirty(true); scheduleGutter(); ed.focus();
+        };
+        bar.append(cp, ap); wrap.append(pre, bar); d.appendChild(wrap);
+      }
+    }
+  } else if(cls === 'agent' && text.includes('**')){
+    d.innerHTML = esc(text).replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
+  } else {
+    d.textContent = text;
+  }
+  $('chat').appendChild(d);
+  $('chat').scrollTop = $('chat').scrollHeight;
+  return d;
+}
+
+function addCtx(path, brief){
+  logChat('ctx', path + '\n' + brief);  // serialized form; re-rendered specially on reload
+  const d = document.createElement('div');
+  d.className = 'msg ctx';
+  const head = document.createElement('div'); head.className = 'ctxhead';
+  const fp = document.createElement('span'); fp.className = 'fpath'; fp.textContent = path;
+  head.append('context ', fp);
+  const body = document.createElement('div'); body.className = 'ctxbody';
+  body.textContent = brief;
+  d.append(head, body);
+  $('chat').appendChild(d);
+  $('chat').scrollTop = $('chat').scrollHeight;
+  return d;
+}
+
+async function pipeStream(r, out, opts){
+  const say = out || addMsg;  // default sink: the right chat pane; the interview passes ivMsg
+  const trackCtx = !!(opts && opts.trackCtx);  // only genuine chat/rework turns drive the context bar; glance must not stomp it
+  const reader = r.body.getReader();
+  const dec = new TextDecoder();
+  let buf = '';
+  while(true){
+    const {done, value} = await reader.read();
+    if(done) break;
+    buf += dec.decode(value, {stream:true});
+    let i;
+    while((i = buf.indexOf('\n')) >= 0){
+      const line = buf.slice(0, i); buf = buf.slice(i+1);
+      if(!line.trim()) continue;
+      let ev; try { ev = JSON.parse(line); } catch { continue; }
+      if(ev.t === 'text') say('agent', ev.s);
+      else if(ev.t === 'tool') say('tool', '⚙ ' + ev.s);
+      else if(ev.t === 'model'){ if(trackCtx){ CTX_WINDOW = windowFor(ev.s); setCtxBar(CTX_USED); } }
+      else if(ev.t === 'usage'){ if(trackCtx && ev.context != null) setCtxBar(ev.context); }  // live, per message
+      else if(ev.t === 'done'){
+        if(trackCtx && ev.ctx != null) setCtxBar(ev.ctx);
+        if(ev.error) say('err', 'agent error: ' + ev.error);
+      }
+      else if(ev.t === 'error') say('err', ev.s);
+    }
+  }
+}
+
+let pendingMsgs = [];
+async function refreshOpenFile(){
+  if(!cur) return;
+  try {
+    const f = await jget('/api/file?path=' + encodeURIComponent(cur.path) + '&project=' + encodeURIComponent(PROJECT));
+    if(f.content === $('editor').value) return;
+    if(dirty){
+      addMsg('err', 'the agent changed this file on disk while you have unsaved edits — saving now would overwrite its work; copy your changes, then re-select the file to reload.');
+      return;
+    }
+    $('editor').value = f.content;
+    clearBand();
+    if(mode === 'reading') renderMd(); else { renderGutter(); renderBack(); }
+    addMsg('sys', '(file updated on disk — reloaded)');
+  } catch(e){ /* file may be unreadable mid-edit; next turn will catch it */ }
+}
+/* show/hide the "thinking…" indicator. Showing it shrinks #chat (it's a flex
+   sibling below), so pin the scroll to the bottom or the last line gets clipped
+   behind the indicator. */
+function showSpin(){ $('spin').style.display = 'block'; const c = $('chat'); c.scrollTop = c.scrollHeight; }
+function hideSpin(){ $('spin').style.display = 'none'; }
+
+async function send(){
+  const m = $('chatin').value.trim();
+  if(!m) return;
+  // No file need be selected: a project-level turn (answering a sweep's question, or
+  // chatting with nothing open) is valid — the session is per-project, not per-file.
+  $('chatin').value = '';
+  autoGrow();
+  if(busy){  // interject: queue it; dispatches the moment the current run ends (incl. mid-sweep)
+    pendingMsgs.push(m);
+    const d = addMsg('user', m);
+    d.style.opacity = '.55'; d.dataset.queued = '1';
+    return;
+  }
+  addMsg('user', m);
+  await runTurn(m);
+}
+async function runTurn(m){
+  busy = true; showSpin();
+  try {
+    const r = await fetch('/api/chat', {method:'POST',
+      body: JSON.stringify({id: cur ? cur.id : null, message: m, project: PROJECT, model: agentModel('chat')})});
+    await pipeStream(r, null, {trackCtx:true});
+    PROJECT_SESSION = true;  // a live project session now exists (server persisted its id)
+    await refreshOpenFile();
+  } catch(err){ addMsg('err', String(err)); }
+  busy = false; hideSpin();
+  if(pendingMsgs.length){   // dispatch queued interjections even with no file open
+    const next = pendingMsgs.shift();
+    const q = document.querySelector('.msg.user[data-queued]');
+    if(q){ q.style.opacity = ''; delete q.dataset.queued; }
+    await runTurn(next);
+  } else {
+    await autoCompact(false);   // burst done — compact if context ran high
+  }
+}
+
+async function sweep(thrust){
+  if(busy) return;
+  busy = true; showSpin(); $('sweepbtn').disabled = true;
+  document.body.classList.add('sweeping');
+  // clear the work panels so only the chat remains to process the sweep; the
+  // queue/info/editor restock at the end of this function. /api/sweep takes only
+  // {project, model}, so wiping the UI here is safe.
+  cur = null;
+  $('qlist').innerHTML = '<div class="qsweep">agent is building a new file queue…</div>';
+  renderMeta(null); $('metadl').innerHTML = '';   // no "select a file" during sweep
+  // fully clear the editor panel — value AND the syntax backdrop/gutter/filename, or the
+  // old file's highlighted text lingers behind the empty textarea until a resize re-syncs it.
+  // readOnly stops the user editing a file mid-sweep.
+  $('editor').value = ''; $('editor').readOnly = true;
+  $('gutter').innerHTML = ''; $('edback').innerHTML = ''; $('render').innerHTML = '';
+  $('fname').textContent = '—'; clearBand();
+  if((thrust || '').trim()) addCtx('steer for this sweep', thrust.trim());  // the agent reads this first; keep it in the record
+  addMsg('sys', '— sweep started: rulings · diff · assess · ripple · log · restock —');
+  try {
+    const r = await fetch('/api/sweep', {method:'POST',
+      body: JSON.stringify({project: PROJECT, model: agentModel('setup'),
+        thrust: (thrust || '').trim()})});
+    await pipeStream(r, null, {trackCtx:true});
+    PROJECT_SESSION = true;   // the sweep ran on the project session — it continues the thread
+    addMsg('sys', '— sweep finished —');
+  } catch(err){ addMsg('err', String(err)); }
+  busy = false; hideSpin(); $('sweepbtn').disabled = false;
+  document.body.classList.remove('sweeping');
+  $('editor').readOnly = false;
+  // fresh-sitting setup (mirrors the bootstrap ending): reload the restocked queue,
+  // summarize it into the running transcript, reset the context bar — no auto-select,
+  // no chat wipe; the whole cycle stays visible in the transcript.
+  try {
+    Q = await jget('/api/queue?project=' + encodeURIComponent(PROJECT));
+    if(cur && !Q.entries.find(e => e.id === cur.id)){
+      // the open entry was archived by the restock — release it
+      cur = null; setDirty(false); closeFind(); clearBand();
+      $('editor').value = ''; $('fname').textContent = '—';
+      $('gutter').innerHTML = ''; $('render').innerHTML = '';
+      $('metadl').innerHTML = '<dd style="color:var(--dim)">select a file</dd>';
+    } else if(cur && !dirty){  // the sweep may have edited the open file (e.g. the ledger)
+      const f = await jget('/api/file?path=' + encodeURIComponent(cur.path) + '&project=' + encodeURIComponent(PROJECT));
+      $('editor').value = f.content;
+      if(mode === 'reading') renderMd(); else renderGutter();
+    }
+    renderQueue();
+    const pending = Q.entries.filter(e => e.status !== 'approved');
+    if(pending.length){
+      const lines = pending.map(e => `• ${e.title} (${e.urgency}) — ${e.ask || ''}`);
+      addMsg('sys', 'now in the queue:');
+      addMsg('agent', lines.join('\n'));
+      addMsg('sys', 'select an entry on the left when ready — this chat stays.');
+    } else {
+      addMsg('sys', 'the queue is empty — the review program may be exhausted; see the sweep report above.');
+    }
+  } catch(err){ addMsg('err', String(err)); }
+  await autoCompact(true);   // shed the batch-review context; the thread continues, summarized
+}
+
+/* Reload the queue on demand — picks up entries filed out of band (live intake, or a sweep
+   in another viewport) without reloading the whole app. Read-only: refetch, reconcile the open
+   entry (released if archived, refreshed otherwise), re-render. Never wipes the chat. */
+async function reloadQueue(){
+  if(!PROJECT) return;
+  const btn = $('reloadbtn');
+  btn.classList.add('spinning'); btn.disabled = true;
+  try {
+    Q = await jget('/api/queue?project=' + encodeURIComponent(PROJECT));
+    if(cur){
+      const fresh = Q.entries.find(e => e.id === cur.id);
+      if(!fresh){
+        // the open entry was archived/removed out of band — release it
+        cur = null; setDirty(false); closeFind(); clearBand();
+        $('editor').value = ''; $('fname').textContent = '—';
+        $('gutter').innerHTML = ''; $('render').innerHTML = '';
+        $('metadl').innerHTML = '<dd style="color:var(--dim)">select a file</dd>';
+      } else {
+        cur = fresh;                       // refresh status/brief/urgency/source on the open entry
+        if(!dirty){                        // reload its file in case it changed on disk
+          try {
+            const f = await jget('/api/file?path=' + encodeURIComponent(cur.path) + '&project=' + encodeURIComponent(PROJECT));
+            $('editor').value = f.content;
+            if(mode === 'reading') renderMd(); else renderGutter();
+          } catch(e){ /* file may be gone; leave the buffer as-is */ }
+        }
+        renderMeta(cur);
+      }
+    }
+    renderQueue();
+  } catch(err){ addMsg('err', 'reload failed: ' + err); }
+  finally { btn.classList.remove('spinning'); btn.disabled = false; }
+}
+
+/* ---- settings: loaded before first render; shallow-merged on save ---- */
+async function saveSettings(patch){
+  Object.assign(SETTINGS, patch);
+  try { await jpost('/api/settings', patch); } catch(e){ /* non-fatal */ }
+}
+
+/* ---- adjustable column widths ---- */
+function applyCols(){
+  const w = SETTINGS.colWidths;
+  document.body.style.gridTemplateColumns = `${w.left}px 5px 1fr 5px ${w.right}px`;
+  scheduleGutter();
+}
+/* the queue/info split within the left column (fraction given to the queue) */
+function applySplit(){
+  const f = clamp(SETTINGS.colWidths.queueFrac ?? 0.6, 0.15, 0.85);
+  $('queue').style.flex = `${f} 1 0`;
+  $('meta').style.flex = `${1 - f} 1 0`;
+}
+/* generic divider drag: axis 'x' (column widths) or 'y' (queue/info split) */
+function makeDrag(el, axis, fn){
+  el.addEventListener('mousedown', e => {
+    e.preventDefault();
+    el.classList.add('dragging');
+    const p0 = axis === 'y' ? e.clientY : e.clientX;
+    const w0 = {...SETTINGS.colWidths};
+    const apply = axis === 'y' ? applySplit : applyCols;
+    const move = ev => { fn((axis === 'y' ? ev.clientY : ev.clientX) - p0, w0); apply(); };
+    const up = () => {
+      document.removeEventListener('mousemove', move);
+      document.removeEventListener('mouseup', up);
+      el.classList.remove('dragging');
+      saveSettings({colWidths: SETTINGS.colWidths});
+    };
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
+  });
+}
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+function initDividers(){
+  makeDrag($('divL'), 'x', (dx, w0) => { SETTINGS.colWidths.left = clamp(w0.left + dx, 180, 600); });
+  makeDrag($('divR'), 'x', (dx, w0) => { SETTINGS.colWidths.right = clamp(w0.right - dx, 240, 720); });
+  makeDrag($('divQ'), 'y', (dy, w0) => {
+    const h = $('left').clientHeight || 1;
+    SETTINGS.colWidths.queueFrac = clamp((w0.queueFrac ?? 0.6) + dy / h, 0.15, 0.85);
+  });
+}
+
+/* ---- find/replace (plain string, source textarea) ---- */
+function findMatches(){
+  const needle = $('findin').value, hay = $('editor').value, out = [];
+  if(needle){
+    let i = 0;
+    while((i = hay.indexOf(needle, i)) >= 0){ out.push(i); i += needle.length; }
+  }
+  return out;
+}
+function updateFindCount(ms){
+  $('findcount').textContent = ms.length ? `${findIdx >= 0 ? findIdx + 1 : 0}/${ms.length}` : '0';
+}
+/* locate a quoted passage in the document: jump there and highlight its line.
+   The band's top/height come from the same mirror measurement the gutter uses. */
+function lineHighlightAt(charIdx){
+  const ed = $('editor'), mirror = $('mirror'), cs = getComputedStyle(ed);
+  const v = ed.value;
+  const lineStart = v.lastIndexOf('\n', Math.max(0, charIdx - 1)) + 1;
+  let lineEnd = v.indexOf('\n', charIdx); if(lineEnd < 0) lineEnd = v.length;
+  mirror.style.width = (ed.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)) + 'px';
+  mirror.textContent = v.slice(0, lineStart) || ' ';
+  const top = (v.slice(0, lineStart) ? mirror.offsetHeight : 0) + parseFloat(cs.paddingTop);
+  mirror.textContent = v.slice(lineStart, lineEnd) || ' ';
+  const hgt = mirror.offsetHeight;
+  const band = $('hlband');
+  band.style.top = (top - ed.scrollTop) + 'px';
+  band.style.height = hgt + 'px';
+  band.style.display = 'block';
+  band.dataset.top = top; band.dataset.hgt = hgt;
+  return [lineStart, lineEnd];
+}
+function clearBand(){ $('hlband').style.display = 'none'; }
+function repositionBand(){
+  const band = $('hlband');
+  if(band.style.display === 'none') return;
+  band.style.top = (parseFloat(band.dataset.top) - $('editor').scrollTop) + 'px';
+}
+function locateInEditor(block){
+  const ed = $('editor');
+  let needle = block.trim();
+  let idx = needle ? ed.value.indexOf(needle) : -1;
+  if(idx < 0){  // fall back to the block's first substantial line
+    const first = block.split('\n').map(s => s.trim()).filter(s => s.length > 3)[0];
+    if(first) { needle = first; idx = ed.value.indexOf(first); }
+  }
+  if(idx < 0) return false;
+  if(mode !== 'source') setMode('source');
+  scrollEditorTo(idx);
+  const [ls, le] = lineHighlightAt(idx);
+  ed.focus();
+  ed.setSelectionRange(ls, le);
+  repositionBand();
+  return true;
+}
+
+function scrollEditorTo(charIdx){
+  const ed = $('editor'), mirror = $('mirror'), cs = getComputedStyle(ed);
+  mirror.style.width = (ed.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)) + 'px';
+  mirror.textContent = ed.value.slice(0, charIdx) || ' ';
+  ed.scrollTop = Math.max(0, mirror.offsetHeight - ed.clientHeight / 3);
+  syncGutter();
+}
+function gotoMatch(dir){
+  const ms = findMatches();
+  if(!ms.length){ findIdx = -1; updateFindCount(ms); return; }
+  findIdx = ((findIdx + dir) % ms.length + ms.length) % ms.length;
+  const ed = $('editor'), start = ms[findIdx];
+  ed.setSelectionRange(start, start + $('findin').value.length);
+  scrollEditorTo(start);
+  updateFindCount(ms);
+}
+function replaceCurrent(){
+  const ms = findMatches();
+  if(!ms.length) return;
+  if(findIdx < 0 || findIdx >= ms.length){ gotoMatch(1); return; }
+  const ed = $('editor'), start = ms[findIdx];
+  ed.setRangeText($('replin').value, start, start + $('findin').value.length);
+  setDirty(true); scheduleGutter();
+  findIdx--;          // positions shifted; re-land on what is now the next match
+  gotoMatch(1);
+}
+function replaceAll(){
+  const needle = $('findin').value;
+  if(!needle) return;
+  const ed = $('editor'), n = findMatches().length;
+  if(!n) return;
+  ed.value = ed.value.split(needle).join($('replin').value);
+  setDirty(true); scheduleGutter();
+  findIdx = -1;
+  $('findcount').textContent = `${n} replaced`;
+}
+function openFind(){
+  if(!cur) return;   // no open file: find is deactivated (matches the dimmed button)
+  if(mode !== 'source') setMode('source');
+  $('findbar').classList.add('open');
+  findIdx = -1; updateFindCount(findMatches());
+  $('findin').focus(); $('findin').select();
+}
+function closeFind(){
+  $('findbar').classList.remove('open');
+  findIdx = -1;
+}
+
+/* ---- rework modal ---- */
+function openRework(){
+  if(!cur) return;
+  const proj = PROJECTS.find(x => x.id === PROJECT);
+  const agents = (proj && proj.rework_agents) || [];
+  $('reworkagent').innerHTML = agents.length
+    ? agents.map(a => `<option value="${esc(a.id)}">${esc(a.name)}</option>`).join('')
+    : '<option value="">— no rework agents configured —</option>';
+  $('reworkagent').selectedIndex = 0;   // first entry = the project's default
+  $('reworkmemo').value = '';
+  $('modalbg').classList.add('open');
+  $('reworkmemo').focus();
+}
+function closeRework(){ $('modalbg').classList.remove('open'); }
+async function submitRework(){
+  if(!cur) return;
+  const agent = $('reworkagent').value;
+  if(!agent){ addMsg('err', 'no rework agent configured for this project'); return; }
+  try {
+    await jpost('/api/rework', {project: PROJECT, id: cur.id, agent, memo: $('reworkmemo').value});
+  } catch(err){ addMsg('err', 'rework failed: ' + err); return; }
+  closeRework();
+  cur.status = 'rework';
+  renderQueue(); renderMeta(cur);
+  addMsg('sys', `— sent back for rework (memo filed to ${agent}) —`);
+  maybeAutoSweep();
+}
+
+/* ---- add-project modal + founding curation ---- */
+function renderProjOptions(){
+  $('proj').innerHTML = PROJECTS.map(p => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('')
+    + '<option value="__add__">+ Project</option>';
+  if(PROJECT) $('proj').value = PROJECT;
+}
+
+/* ---- admin · projects: edit name/root or unregister ---- */
+function buildProjRows(){
+  const box = $('projrows'); if(!box) return;
+  box.innerHTML = '';
+  for(const p of PROJECTS){
+    const row = document.createElement('div'); row.className = 'arow projrow';
+    const kitOpts = `<option value="">— no kit —</option>` +
+      KITS.map(k => `<option value="${esc(k._key)}"${p.kit === k._key ? ' selected' : ''}>${esc(k.name || k._key)}</option>`).join('');
+    row.innerHTML =
+      `<input class="pname" value="${esc(p.name)}" title="project name" spellcheck="false">` +
+      `<input class="proot" value="${esc(p.root)}" title="project folder" spellcheck="false">` +
+      `<select class="pkit" title="curator kit">${kitOpts}</select>` +
+      `<input class="pdepth" type="number" min="0" value="${p.max_depth || ''}" title="max depth (0/blank = whole tree)">` +
+      `<button class="psave" title="save name / folder / kit / depth">save</button>` +
+      `<button class="prefound" title="reset this desk and re-run its founding interview (old desk backed up)">re-found</button>` +
+      `<button class="pdel" title="unregister (files left on disk)">✕</button>`;
+    row.querySelector('.psave').onclick = () => saveProj(p.id, row);
+    row.querySelector('.prefound').onclick = (e) => refoundProj(p.id, e.currentTarget);
+    row.querySelector('.pdel').onclick = (e) => deleteProj(p.id, e.currentTarget);
+    box.appendChild(row);
+  }
+}
+async function saveProj(id, row){
+  const name = row.querySelector('.pname').value.trim();
+  const root = row.querySelector('.proot').value.trim();
+  const kitSel = row.querySelector('.pkit');
+  const depthEl = row.querySelector('.pdepth');
+  try {
+    const r = await jpost('/api/projects/edit',
+      {id, name, root, kit: kitSel ? kitSel.value : '', max_depth: depthEl ? depthEl.value : ''});
+    PROJECTS = r.projects; renderProjOptions(); buildProjRows();
+    addMsg('sys', `project "${name}" updated`);
+  } catch(err){ addMsg('err', 'edit failed: ' + err); }
+}
+async function deleteProj(id, btn){
+  if(btn.dataset.armed !== '1'){            // two-click arm (WKWebView blocks native confirm)
+    btn.dataset.armed = '1'; btn.textContent = 'remove?'; btn.classList.add('arm');
+    setTimeout(() => { if(btn.isConnected){ btn.dataset.armed = ''; btn.textContent = '✕'; btn.classList.remove('arm'); } }, 3000);
+    return;
+  }
+  try {
+    const r = await jpost('/api/projects/delete', {id});
+    PROJECTS = r.projects;
+    if(PROJECT === id) PROJECT = PROJECTS[0] ? PROJECTS[0].id : null;
+    renderProjOptions(); buildProjRows();
+  } catch(err){ addMsg('err', 'delete failed: ' + err); }
+}
+async function refoundProj(id, btn){
+  if(btn.dataset.armed !== '1'){            // two-click arm (resetting a desk is destructive)
+    btn.dataset.armed = '1'; btn.textContent = 're-found?'; btn.classList.add('arm');
+    setTimeout(() => { if(btn.isConnected){ btn.dataset.armed = ''; btn.textContent = 're-found'; btn.classList.remove('arm'); } }, 3500);
+    return;
+  }
+  try {
+    const r = await jpost('/api/projects/refound', {id});
+    addMsg('sys', `"${id}" desk reset to its founding seed — old desk backed up to ${r.backup}`);
+    buildProjRows();
+    if(PROJECT === id){ await loadProject(id); }   // re-enters the fresh founding interview
+    else addMsg('sys', `select ${id} to run its founding interview`);
+  } catch(err){ addMsg('err', 're-found failed: ' + err); }
+}
+
+/* ---- admin · agents: per-task model (datalist accepts any id) ---- */
+function buildAgentRows(){
+  const box = $('agentrows'); if(!box) return;
+  const dl = $('modellist'); if(dl) dl.innerHTML = MODELS.map(m => `<option value="${esc(m)}">`).join('');
+  box.innerHTML = '';
+  for(const [task, label, desc] of AGENT_TASKS){
+    const row = document.createElement('div'); row.className = 'arow agentrow';
+    row.innerHTML =
+      `<span class="vname slabel" title="${esc(desc)}">${esc(label)}</span>` +
+      `<input class="amodel" list="modellist" value="${esc(agentModel(task))}" spellcheck="false" title="${esc(desc)}">`;
+    row.querySelector('.amodel').addEventListener('change', e => setAgent(task, e.target.value));
+    box.appendChild(row);
+  }
+}
+
+/* ---- first-run setup window: bootstrap the per-task agents, then project setup ---- */
+function buildSetupRows(){
+  const box = $('setuprows'); if(!box) return;
+  const dl = $('modellist'); if(dl) dl.innerHTML = MODELS.map(m => `<option value="${esc(m)}">`).join('');
+  box.innerHTML = '';
+  for(const [task, label, desc] of AGENT_TASKS){
+    const row = document.createElement('div'); row.className = 'mrow';
+    row.innerHTML = `<span class="lbl" title="${esc(desc)}">${esc(label)}</span>` +
+      `<input class="smodel" data-task="${esc(task)}" list="modellist" value="${esc(agentModel(task))}" spellcheck="false" style="flex:1">`;
+    box.appendChild(row);
+  }
+}
+function showSetup(){ buildSetupRows(); $('setupbg').classList.add('open'); }
+function finishSetup(){
+  const agents = Object.assign({}, AGENT_DEFAULTS, SETTINGS.agents);
+  $('setuprows').querySelectorAll('.smodel').forEach(i => {
+    agents[i.dataset.task] = (i.value || '').trim() || AGENT_DEFAULTS[i.dataset.task];
+  });
+  SETTINGS.agents = agents; saveSettings({agents}); syncModelBar();
+  $('setupbg').classList.remove('open');
+  // on first run the founding interview is already showing underneath; nothing more to open
+}
+/* ---- K · curators: the kit editor (fork-on-edit; shipped defaults stay pristine) ---- */
+let KITS = [], KIT_KINDS = [];
+async function loadKits(){
+  try { const r = await jget('/api/kits'); KITS = r.kits || []; KIT_KINDS = r.kinds || []; }
+  catch(e){ KITS = []; KIT_KINDS = []; }
+  buildKitPicker();
+  buildProjRows();   // so each project row's kit dropdown reflects the current kit list
+}
+function curKit(){ return KITS.find(k => k._key === $('kitpick').value) || null; }
+function buildKitPicker(){
+  const sel = $('kitpick'); if(!sel) return;
+  const prev = sel.value;
+  sel.innerHTML = KITS.map(k => `<option value="${esc(k._key)}">${esc(k.name || k._key)} · ${k._source}</option>`).join('');
+  if(KITS.some(k => k._key === prev)) sel.value = prev;
+  sel.onchange = () => showKit(sel.value);
+  showKit(sel.value);
+}
+function showKit(key){
+  const k = KITS.find(x => x._key === key); if(!k) return;
+  $('kf_name').value = k.name || '';
+  $('kf_lens').value = k.lens || '';
+  $('kf_urgency').value = k.urgency || '';
+  $('kf_firstQueue').value = k.firstQueue || '';
+  $('kf_sweepChecks').value = (k.sweepChecks || []).join('\n');
+  $('kf_tools').value = (k.tools || []).map(t => `${t.type}: ${t.ref}`).join('\n');
+  $('kitsrc').textContent = k._source === 'default' ? 'shipped default — editing forks a copy' : 'your kit';
+  $('kitdel').style.display = k._source === 'user' ? '' : 'none';
+}
+function gatherKit(){
+  const k = curKit() || {};
+  const tools = $('kf_tools').value.split('\n').map(l => l.trim()).filter(Boolean).map(l => {
+    const i = l.indexOf(':');
+    return {type: (i < 0 ? 'builtin' : l.slice(0, i)).trim(), ref: (i < 0 ? l : l.slice(i + 1)).trim()};
+  });
+  return {
+    name: $('kf_name').value.trim() || k.name || k._key,
+    kind: k.kind || 'custom',
+    lens: $('kf_lens').value.trim(),
+    urgency: $('kf_urgency').value.trim(),
+    firstQueue: $('kf_firstQueue').value.trim(),
+    tools,
+    sweepChecks: $('kf_sweepChecks').value.split('\n').map(s => s.trim()).filter(Boolean),
+  };
+}
+function afterKitWrite(r, selectKey){
+  KITS = r.kits || []; KIT_KINDS = r.kinds || KIT_KINDS;
+  if(selectKey) $('kitpick').value = selectKey;
+  buildKitPicker(); buildProjRows();
+}
+async function kitSave(){            // fork-on-edit: write under the current key (a kind for defaults)
+  const k = curKit(); if(!k) return;
+  const kit = gatherKit();
+  try { const r = await jpost('/api/kits/save', {key: k._key, kit}); afterKitWrite(r, k._key); addMsg('sys', `kit "${kit.name}" saved`); }
+  catch(e){ addMsg('err', 'kit save failed: ' + e); }
+}
+async function kitSaveAs(){          // new custom kit, keyed by the name field
+  const kit = gatherKit(); kit.kind = 'custom'; const key = kit.name;
+  if(!key){ addMsg('err', 'give the kit a name first'); return; }
+  try { const r = await jpost('/api/kits/save', {key, kit}); afterKitWrite(r, key); addMsg('sys', `custom kit "${key}" created`); }
+  catch(e){ addMsg('err', 'kit save failed: ' + e); }
+}
+async function kitDelete(){
+  const k = curKit(); if(!k || k._source !== 'user') return;
+  try { const r = await jpost('/api/kits/delete', {key: k._key}); afterKitWrite(r, null); addMsg('sys', `kit "${k.name}" deleted — default returns if one exists`); }
+  catch(e){ addMsg('err', 'kit delete failed: ' + e); }
+}
+function kitExport(){ $('kitio').value = JSON.stringify(gatherKit(), null, 2); }
+function kitImport(){
+  let k; try { k = JSON.parse($('kitio').value); } catch(e){ addMsg('err', 'invalid kit JSON'); return; }
+  $('kf_name').value = k.name || ''; $('kf_lens').value = k.lens || '';
+  $('kf_urgency').value = k.urgency || ''; $('kf_firstQueue').value = k.firstQueue || '';
+  $('kf_sweepChecks').value = (k.sweepChecks || []).join('\n');
+  $('kf_tools').value = (k.tools || []).map(t => `${t.type}: ${t.ref}`).join('\n');
+  addMsg('sys', 'kit JSON loaded into the editor — click save or save as to keep it');
+}
+
+function openAddProj(){
+  $('addname').value = ''; $('addroot').value = '';
+  $('addkit').value = ''; $('addnote').value = ''; $('adddepth').value = '';
+  $('addbg').classList.add('open');
+  $('addname').focus();
+}
+function closeAddProj(){ $('addbg').classList.remove('open'); }
+async function submitAddProj(){
+  const name = $('addname').value.trim(), root = $('addroot').value.trim();
+  if(!name || !root) return;
+  if(busy){ addMsg('err', 'agent busy — wait for the current stream to finish'); return; }
+  let added;
+  try { added = await jpost('/api/projects/add',
+        {name, root, kit: $('addkit').value, note: $('addnote').value.trim(), max_depth: $('adddepth').value}); }
+  catch(err){ addMsg('err', 'add project failed: ' + err); return; }  // modal stays open to correct
+  closeAddProj();
+  try {
+    const pj = await jget('/api/projects');
+    PROJECTS = pj.projects; HOMEDIR = pj.home || HOMEDIR;
+    PROJECT = added.id;
+    renderProjOptions();
+    await loadProject(added.id);  // detects the unfounded desk and opens the interview
+  } catch(err){ addMsg('err', String(err)); return; }
+}
+
+/* ---- native folder picker (pywebview bridge; web mode falls back to text entry) ---- */
+function nativePicker(){
+  return !!(window.pywebview && window.pywebview.api && window.pywebview.api.pick_folder);
+}
+async function pickFolderInto(rootId, nameId){
+  if(!nativePicker()) return;
+  try {
+    const p = await window.pywebview.api.pick_folder();
+    if(!p) return;
+    const r = $(rootId); r.value = p;
+    if(nameId){
+      const n = $(nameId);
+      if(!n.value.trim()){
+        const base = p.replace(/\/+$/,'').split('/').pop() || '';
+        n.value = base.replace(/[-_]+/g,' ').replace(/\b\w/g, c => c.toUpperCase());
+      }
+    }
+    r.focus();
+  } catch(e){ /* dialog failed — leave text entry intact */ }
+}
+function syncBrowseButtons(){
+  const show = nativePicker();
+  document.querySelectorAll('.browse').forEach(b => { b.style.display = show ? '' : 'none'; });
+}
+window.addEventListener('pywebviewready', syncBrowseButtons);
+syncBrowseButtons();
+if($('addbrowse')) $('addbrowse').onclick = () => pickFolderInto('addroot', 'addname');
+if($('ivbrowse'))  $('ivbrowse').onclick  = () => pickFolderInto('ivroot', 'ivname');
+
+
+/* ================= founding interview (center panel) =================
+   Phase A: the curator surveys (read-only) and interviews the patron in the
+   middle pane. Phase B (finish): the same session gains write tools, founds
+   the desk, and "swings over" \u2014 its founding stream renders in the right chat
+   pane, the queue fills, and review begins. The center transcript is not
+   persisted locally; the claude session holds the conversation, so a relaunch
+   resumes server-side. */
+let ivBusy = false;
+const SKIPPED_FOUNDING = new Set();   // desks the patron chose to open un-founded this session (escape hatch)
+function ivMsg(cls, text){
+  const d = document.createElement('div');
+  d.className = 'msg ' + cls;
+  if(cls === 'agent' && text.includes('**'))
+    d.innerHTML = esc(text).replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
+  else d.textContent = text;
+  $('ivchat').appendChild(d);
+  $('ivchat').scrollTop = $('ivchat').scrollHeight;
+  return d;
+}
+function enterInterview(opts){
+  opts = opts || {};
+  $('mid').classList.add('interviewing');
+  document.body.classList.add('founding');   // dim cross-panel actions (sweep, edit) during founding
+  $('interview').classList.toggle('fresh', !!opts.form);
+  const p = PROJECTS.find(x => x.id === PROJECT);
+  $('ivpname').textContent = opts.form ? '' : (p ? p.name : PROJECT || '');
+  if(opts.form){ $('ivname').focus(); setTimeout(() => $('ivname').focus(), 60); return; }
+  if(!$('ivchat').children.length){
+    if(opts.resume){
+      ivMsg('sys', '(resuming the founding interview \u2014 the curator holds the earlier exchange)');
+      ivTurn('(the patron has returned to the interview \u2014 restate in two lines where things stand and what you still need)');
+    } else {
+      ivMsg('sys', '\u2014 the curator is surveying the project \u2014');
+      ivTurn('');
+    }
+  } else $('ivin').focus();
+}
+function exitInterview(){
+  $('mid').classList.remove('interviewing');
+  document.body.classList.remove('founding');
+  $('interview').classList.remove('fresh');
+  $('ivchat').innerHTML = ''; $('ivin').value = '';
+}
+async function ivTurn(m){
+  if(ivBusy) return;
+  ivBusy = true; busy = true; $('ivthink').style.display = 'block';
+  try {
+    const r = await fetch('/api/interview', {method:'POST',
+      body: JSON.stringify({project: PROJECT, message: m, model: agentModel('setup')})});
+    if(!r.ok){ const j = await r.json(); throw j.error; }
+    await pipeStream(r, ivMsg, {trackCtx:true});
+  } catch(err){ ivMsg('err', String(err)); }
+  ivBusy = false; busy = false; $('ivthink').style.display = 'none';
+  $('ivin').focus();
+}
+function ivSend(){
+  const m = $('ivin').value.trim();
+  if(!m || ivBusy) return;
+  $('ivin').value = '';
+  autoGrowIv();          // shrink back to the resting height after sending
+  ivMsg('user', m);
+  ivTurn(m);
+}
+async function finishFounding(){
+  if(ivBusy || busy) return;
+  const pid = PROJECT;
+  exitInterview();
+  addMsg('sys', '\u2014 interview closed \u00b7 the curator is founding the desk \u2014');
+  busy = true; showSpin(); $('sweepbtn').disabled = true;
+  try {
+    const r = await fetch('/api/found', {method:'POST',
+      body: JSON.stringify({project: pid, model: agentModel('setup')})});
+    if(!r.ok){ const j = await r.json(); throw j.error; }
+    await pipeStream(r, null, {trackCtx:true});
+    PROJECT_SESSION = true;  // founding ran on the project session \u2014 chat continues that thread
+    addMsg('sys', '\u2014 desk founded \u2014');
+  } catch(err){ addMsg('err', String(err)); }
+  busy = false; hideSpin(); $('sweepbtn').disabled = false;
+  if(PROJECT !== pid) return;  // the patron moved on mid-founding
+  await autoCompact(true);   // shed the heavy founding survey before review begins
+  await revealQueue(pid);
+}
+async function revealQueue(pid){
+  try {
+    Q = await jget('/api/queue?project=' + encodeURIComponent(pid));
+    renderQueue();
+    const pending = Q.entries.filter(e => e.status !== 'approved');
+    if(pending.length){
+      const lines = pending.map(e => `\u2022 ${e.title} (${e.urgency}) \u2014 ${e.ask || ''}`);
+      addMsg('sys', 'now in the queue:');
+      addMsg('agent', lines.join('\n'));
+      addMsg('sys', 'select an entry on the left when ready \u2014 this chat stays.');
+    } else {
+      addMsg('sys', 'the curator filed no entries \u2014 see its report above; reselect the project to reopen the interview.');
+    }
+  } catch(err){ addMsg('err', String(err)); }
+}
+
+/* Escape hatch #1 — open an un-founded desk as-is. Drops the interview surface and shows the
+   bare three-pane (likely an empty queue + a hint). Session-scoped: reselecting the project, or
+   reloading the app, re-offers founding. Nothing is written. */
+function skipInterview(){
+  const pid = PROJECT;
+  SKIPPED_FOUNDING.add(pid);        // don't re-trap on re-render within this session
+  exitInterview();
+  renderQueue();
+  $('metadl').innerHTML = (Q && Q.entries && Q.entries.some(e => e.status !== 'approved'))
+    ? '<dd style="color:var(--dim)">select a file from the queue</dd>'
+    : '<dd style="color:var(--dim)">not founded yet — reselect the project to resume founding, or found it from the interview header</dd>';
+}
+
+/* Escape hatch #2 — found from the existing files in one pass (no interview). Calls /api/bootstrap:
+   the curator surveys, writes charter + memory + first queue, and marks the desk founded. Mirrors
+   finishFounding, but survey-driven rather than interview-driven, so it works whether or not an
+   interview was ever started. */
+async function quickFound(){
+  if(ivBusy || busy) return;
+  const pid = PROJECT;
+  SKIPPED_FOUNDING.delete(pid);     // founding for real now
+  exitInterview();
+  addMsg('sys', '— founding from existing files · the curator is surveying —');
+  busy = true; showSpin(); $('sweepbtn').disabled = true;
+  try {
+    const r = await fetch('/api/bootstrap', {method:'POST',
+      body: JSON.stringify({project: pid, model: agentModel('setup')})});
+    if(!r.ok){ const j = await r.json(); throw j.error; }
+    await pipeStream(r, null, {trackCtx:true});
+    PROJECT_SESSION = true;         // founding ran on the project session — chat continues that thread
+    addMsg('sys', '— desk founded —');
+  } catch(err){ addMsg('err', String(err)); }
+  busy = false; hideSpin(); $('sweepbtn').disabled = false;
+  if(PROJECT !== pid) return;       // the patron moved on mid-founding
+  await autoCompact(true);          // shed the heavy founding survey before review begins
+  await revealQueue(pid);
+}
+
+/* ---- chat input auto-grow (cap ~40% of the column) ---- */
+/* shared textarea auto-grow: expand with content up to maxLines, then scroll. Used by both
+   the right-panel chat input and the founding-interview answer box, so they behave alike. */
+function growTextarea(el, maxLines = 10){
+  if(!el) return;
+  el.style.height = 'auto';
+  const cs = getComputedStyle(el);
+  const line = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.5;
+  const extra = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom)
+              + parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth);
+  const cap = Math.round(line * maxLines + extra);
+  el.style.height = Math.min(el.scrollHeight, cap) + 'px';
+  el.style.overflowY = el.scrollHeight > cap ? 'auto' : 'hidden';
+}
+function autoGrow(){ growTextarea($('chatin'), 10); }      // right-panel chat input
+function autoGrowIv(){ growTextarea($('ivin'), 10); }      // founding-interview answer box
+
+$('editor').addEventListener('input', () => { setDirty(true); scheduleGutter(); clearBand(); scheduleAutosave(); });
+$('editor').addEventListener('scroll', () => { syncGutter(); repositionBand(); syncBack(); });
+$('editor').addEventListener('blur', () => { if(!busy) save().catch(()=>{}); });
+window.addEventListener('resize', scheduleGutter);
+$('approve').onclick = approve;
+$('comment').onclick = () => $('commentpanel').classList.contains('open') ? closeComment() : openComment();
+$('commentsave').onclick = saveComment;
+$('commentin').addEventListener('keydown', e => {
+  if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); saveComment(); }
+  if(e.key==='Escape'){ e.preventDefault(); closeComment(); }
+});
+$('ivfinish').onclick = finishFounding;
+$('ivquick').onclick = quickFound;
+$('ivskip').onclick = skipInterview;
+$('ivin').addEventListener('keydown', e => {
+  if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); ivSend(); }
+});
+$('ivin').addEventListener('input', autoGrowIv);
+$('ivbegin').onclick = async () => {
+  const name = $('ivname').value.trim(), root = $('ivroot').value.trim();
+  $('iverr').textContent = '';
+  if(!name || !root){ $('iverr').textContent = 'name and folder are both required'; return; }
+  let added;
+  try { added = await jpost('/api/projects/add',
+        {name, root, kit: $('ivkit').value, note: $('ivnote').value.trim(), max_depth: $('ivdepth').value}); }
+  catch(err){ $('iverr').textContent = String(err); return; }
+  try {
+    const pj = await jget('/api/projects');
+    PROJECTS = pj.projects; HOMEDIR = pj.home || HOMEDIR;
+    renderProjOptions();
+    $('proj').value = added.id;
+    await loadProject(added.id);  // unfounded → re-enters the interview, now in chat form
+  } catch(err){ $('iverr').textContent = String(err); }
+};
+let sweepArm = null;
+function maybeAutoSweep(){
+  // Auto-open the sweep flow once every queued file is handled (approved or reworked).
+  if(!Q.entries.length) return;                       // nothing to sweep
+  if(Q.entries.some(e => e.status !== 'approved' && e.status !== 'rework')) return;  // unhandled remain
+  if(sweepArm) return;                                // confirm-off undo already armed
+  if($('sweepbg').style.display === 'flex') return;   // confirm-on modal already open
+  sweepClicked();
+}
+function sweepClicked(){
+  if(busy || !PROJECT || document.body.classList.contains('founding')) return;   // no project / founding: deactivated
+  if(SETTINGS.sweepConfirm === false){
+    if(sweepArm){  // second click during countdown = undo
+      clearTimeout(sweepArm); sweepArm = null;
+      const b = $('sweepbtn'); b.classList.remove('arming'); b.textContent = 'sweep';
+      return;
+    }
+    const b = $('sweepbtn');
+    b.classList.add('arming'); b.textContent = 'undo';
+    sweepArm = setTimeout(() => {
+      sweepArm = null; b.classList.remove('arming'); b.textContent = 'sweep';
+      sweep();
+    }, 5000);
+    return;
+  }
+  $('sweepbg').style.display = 'flex';
+  $('sweepthrust').focus();   // the steer is the point of the window — land the cursor there
+}
+$('sweepbtn').onclick = sweepClicked;
+$('reloadbtn').onclick = reloadQueue;
+$('sweepcancel').onclick = () => { $('sweepbg').style.display = 'none'; $('sweepthrust').value = ''; };
+$('sweepbg').onclick = (e) => { if(e.target === $('sweepbg')) $('sweepbg').style.display = 'none'; };
+function sweepGo(){
+  if($('sweepnoask').checked){ SETTINGS.sweepConfirm = false; saveSettings({sweepConfirm:false}); }
+  $('sweepbg').style.display = 'none';
+  const thrust = $('sweepthrust').value;   // capture before clearing — the steer the agent reads first
+  $('sweepthrust').value = '';
+  sweep(thrust);
+}
+$('sweepgo').onclick = sweepGo;
+$('sweepthrust').addEventListener('keydown', (e) => {
+  if((e.metaKey || e.ctrlKey) && e.key === 'Enter'){ e.preventDefault(); sweepGo(); }
+});
+$('viewmode').onclick = () => setMode(mode === 'reading' ? 'source' : 'reading');
+$('findtoggle').onclick = () => $('findbar').classList.contains('open') ? closeFind() : openFind();
+$('fclose').onclick = closeFind;
+$('fprev').onclick = () => gotoMatch(-1);
+$('fnext').onclick = () => gotoMatch(1);
+$('frep').onclick = replaceCurrent;
+$('frepall').onclick = replaceAll;
+$('findin').addEventListener('input', () => { findIdx = -1; updateFindCount(findMatches()); });
+$('findin').addEventListener('keydown', e => {
+  if(e.key === 'Enter'){ e.preventDefault(); gotoMatch(e.shiftKey ? -1 : 1); }
+});
+$('reworkbtn').onclick = openRework;
+$('reworkcancel').onclick = closeRework;
+$('reworksend').onclick = submitRework;
+$('modalbg').addEventListener('mousedown', e => { if(e.target === $('modalbg')) closeRework(); });
+$('reworkmemo').addEventListener('keydown', e => {
+  if((e.metaKey||e.ctrlKey) && e.key === 'Enter'){ e.preventDefault(); submitRework(); }
+});
+$('addcancel').onclick = closeAddProj;
+$('addgo').onclick = submitAddProj;
+$('addbg').addEventListener('mousedown', e => { if(e.target === $('addbg')) closeAddProj(); });
+for(const id of ['addname', 'addroot']) $(id).addEventListener('keydown', e => {
+  if((e.metaKey||e.ctrlKey) && e.key === 'Enter'){ e.preventDefault(); submitAddProj(); }
+});
+$('chatin').addEventListener('input', autoGrow);
+$('chatin').addEventListener('keydown', e => {
+  if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); send(); }
+});
+document.addEventListener('keydown', e => {
+  if((e.metaKey||e.ctrlKey) && e.key==='s'){ e.preventDefault(); save(); }
+  if((e.metaKey||e.ctrlKey) && e.key==='e'){ e.preventDefault(); setMode(mode === 'reading' ? 'source' : 'reading'); }
+  if(e.key === 'Escape'){
+    if($('addbg').classList.contains('open')) closeAddProj();
+    else if($('modalbg').classList.contains('open')) closeRework();
+    else if($('findbar').classList.contains('open')) closeFind();
+  }
+});
+
+// context window is model-specific (opus/fable carry ~1M; sonnet/haiku ~200K). CTX_WINDOW
+// is updated from each turn's reported model (the stream's 'model' event), not hard-coded.
+const CTX_WINDOWS = { opus: 1000000, fable: 1000000, sonnet: 200000, haiku: 200000 };
+function windowFor(model){
+  const m = (model || '').toLowerCase();
+  for(const k in CTX_WINDOWS) if(m.includes(k)) return CTX_WINDOWS[k];
+  return 200000;
+}
+let CTX_WINDOW = 200000;
+let CTX_USED = 0;
+const fmtK = n => n >= 1e6 ? +(n / 1e6).toFixed(1) + 'M' : n >= 1000 ? (n / 1000).toFixed(n < 10000 ? 1 : 0) + 'k' : String(n);
+function setCtxBar(used){
+  CTX_USED = used || 0;
+  const frac = Math.min(1, CTX_USED / CTX_WINDOW);
+  const hue = 120 * (1 - frac);  // green → red
+  $('ctxfill').style.width = (frac * 100).toFixed(1) + '%';
+  $('ctxfill').style.background = `hsl(${hue}, 55%, 48%)`;
+  const lab = $('ctxbar').querySelector('.ctxlabel');
+  if(lab) lab.textContent = fmtK(CTX_USED) + ' / ' + fmtK(CTX_WINDOW);
+  const act = (SETTINGS.ctxClick === 'clear') ? 'clear' : 'compact';
+  $('ctxbar').title = 'context: ' + CTX_USED.toLocaleString() + ' / ' + CTX_WINDOW.toLocaleString()
+    + ' tokens — click to ' + act + " this file's session";
+}
+// session weight — output tokens generated this session (the honest "how much work" figure on a
+// flat-rate plan, where dollars are only an API-list-price equivalent, not actual spend). Context
+// is occupancy-now; this is cumulative throughput. Both accumulate per turn; reset on clear.
+let SESSION_COST = 0, SESSION_OUT = 0;
+function setCost(){
+  const el = $('ctxcost'); if(!el) return;
+  el.textContent = SESSION_OUT > 0 ? fmtK(SESSION_OUT) + ' tok' : '';
+  el.title = 'session output: ' + SESSION_OUT.toLocaleString() + ' tokens'
+    + (SESSION_COST > 0 ? '  ·  ≈ $' + SESSION_COST.toFixed(SESSION_COST < 1 ? 3 : 2)
+       + ' at API list prices (not what your plan is billed)' : '');
+}
+function addCost(c){ SESSION_COST += (c || 0); setCost(); }
+function addOut(n){ SESSION_OUT += (n || 0); setCost(); }
+// the per-project session threads interview\u2192found\u2192chat\u2192sweep, so it bloats fast (the
+// founding survey alone can run 100s of K). Compact at phase boundaries and when context
+// runs high, so the single thread stays lean. CTX_COMPACT_AT is a fraction of the window.
+const CTX_COMPACT_AT = 0.7;
+async function runCompact(){
+  if(!PROJECT_SESSION) return;
+  busy = true; showSpin();
+  addMsg('sys', '\u2014 compacting the working session \u2014');
+  try {
+    const r = await fetch('/api/compact', {method:'POST',
+      body: JSON.stringify({project: PROJECT, model: agentModel('chat')})});
+    await pipeStream(r, null, {trackCtx:false});  // the compact turn's usage is the OLD size; the bar refreshes on the next real turn
+    addMsg('sys', 'context compacted \u2014 the thread continues, summarized');
+  } catch(err){ addMsg('err', 'compact failed: ' + err); }
+  busy = false; hideSpin();
+}
+// force=true at phase boundaries (after founding / after a sweep); else only when high.
+async function autoCompact(force){
+  if(SETTINGS.autoCompact === false || !PROJECT_SESSION || busy) return;
+  if(force || CTX_USED > CTX_COMPACT_AT * CTX_WINDOW) await runCompact();
+}
+$('ctxbar').onclick = async () => {
+  // the unit is the PROJECT session now (setsweep-<project>), so this works whenever a
+  // project is loaded \u2014 no open file required; the server resolves the project session
+  if(!PROJECT || busy) return;
+  if(SETTINGS.ctxClick === 'clear'){
+    try { await jpost('/api/clear-session', {project: PROJECT}); }
+    catch(err){ addMsg('err', 'clear failed: ' + err); return; }
+    PROJECT_SESSION = false;      // the transcript stays \u2014 only the agent session resets
+    setCtxBar(0); SESSION_COST = 0; SESSION_OUT = 0; setCost();
+    addMsg('sys', 'context cleared \u2014 fresh session on next message');
+    return;
+  }
+  if(!PROJECT_SESSION){ addMsg('sys', 'no live session yet \u2014 nothing to compact'); return; }
+  await runCompact();
+};
+
+async function loadProject(pid){
+  if(dirty){ try { await save(); } catch(e){} }
+  flushChatlog();  // settle the outgoing project's transcript before switching
+  PROJECT = pid;
+  // remember the active project so the next launch reopens it (shallow-merges into settings)
+  if(SETTINGS.lastProject !== pid){ SETTINGS.lastProject = pid; jpost('/api/settings', {lastProject: pid}).catch(()=>{}); }
+  cur = null; setDirty(false);
+  PROJECT_SESSION = false;  // first chat/found turn of this load proves the live session
+  pendingMsgs = [];
+  $('editor').value = ''; $('fname').textContent = '—'; $('gutter').innerHTML = '';
+  $('render').innerHTML = '';
+  // restore the project's persistent transcript (display capped; re-render must not re-log)
+  CHATLOG = [];
+  try {
+    const cl = await jget('/api/chatlog?project=' + encodeURIComponent(pid));
+    if(Array.isArray(cl.messages)) CHATLOG = cl.messages;
+  } catch(e){ /* absent or unreadable: start fresh */ }
+  restoring = true;
+  $('chat').innerHTML = '';
+  for(const m of CHATLOG.slice(-CHATLOG_SHOW)){
+    if(!m || typeof m.text !== 'string') continue;
+    if(m.cls === 'ctx'){
+      const i = m.text.indexOf('\n');
+      addCtx(i < 0 ? m.text : m.text.slice(0, i), i < 0 ? '' : m.text.slice(i + 1));
+    } else addMsg(m.cls, m.text);
+  }
+  restoring = false;
+  Q = await jget('/api/queue?project=' + encodeURIComponent(pid));
+  // an unfounded desk opens the founding interview in the center panel instead
+  let ivst = {status: 'none'};
+  try { ivst = await jget('/api/interview?project=' + encodeURIComponent(pid)); } catch(e){}
+  // the server may already hold a persisted session for this project (a prior run): trust
+  // its word, not just in-page activity, so compact/clear work on load without a first turn.
+  PROJECT_SESSION = !!ivst.has_session;
+  const unfounded = (ivst.status === 'interviewing' ||
+    (ivst.status !== 'founded' && !Q.entries.length && /awaiting founding/i.test(Q.curated || '')))
+    && !SKIPPED_FOUNDING.has(pid);   // honor a 'skip for now' choice this session
+  exitInterview();  // clear any prior project's interview surface
+  if(unfounded){
+    renderQueue();
+    $('metadl').innerHTML = '<dd style="color:var(--dim)">founding in progress — the interview is in the center panel</dd>';
+    enterInterview({resume: ivst.status === 'interviewing'});
+    return;
+  }
+  renderQueue();
+  // no file auto-loads on launch or project change: selecting a file is what fires the
+  // glance/agent read, so an auto-loaded first file burns tokens before the patron has
+  // chosen. Leave the center panel clear (editor shows its placeholder) until a pick.
+  if(Q.entries.some(e => e.status!=='approved'))
+    $('metadl').innerHTML = '<dd style="color:var(--dim)">select a file from the queue</dd>';
+  else
+    $('metadl').innerHTML = '<dd style="color:var(--dim)">queue empty — agents file entries here as they produce documents</dd>';
+}
+
+/* ============================ admin / debug overlay ============================ */
+/* the 16 palette vars, in display order, with their built-in defaults */
+/* the palette is pure colour: black, white, six greys, eight tones.
+   each entry is [css-var, default-hex, display-label]. */
+const PALETTE = [
+  ['--c-black','#16161e','black'],   ['--c-white','#d8d8e0','white'],
+  ['--c-gray1','#1d1d28','gray 1'],  ['--c-gray2','#23232f','gray 2'],  ['--c-gray3','#32323f','gray 3'],
+  ['--c-gray4','#565663','gray 4'],  ['--c-gray5','#8a8a98','gray 5'],  ['--c-gray6','#b6b6c2','gray 6'],
+  ['--c-yellow','#c8a24a','yellow'], ['--c-green','#7dba6f','green'],   ['--c-teal','#389bb4','teal'],   ['--c-blue','#7d9fc8','blue'],
+  ['--c-indigo','#6b74c0','indigo'], ['--c-purple','#9a76c2','purple'], ['--c-red','#d4756b','red'],     ['--c-orange','#c0692e','orange'],
+];
+const PAL_LABEL = Object.fromEntries(PALETTE.map(([n,,l]) => [n, l]));
+const SIZE_DEFAULTS = {edFont:13.5, uiFont:14, gutter:56};
+const COLW_DEFAULTS = {left:300, right:400};
+
+const isHex = v => /^#[0-9a-fA-F]{6}$/.test(v);
+
+/* apply a saved palette to :root (called at load, before first render) */
+function applyColors(){
+  const c = SETTINGS.colors || {};
+  for(const [name] of PALETTE){
+    if(isHex(c[name])) document.documentElement.style.setProperty(name, c[name]);
+  }
+}
+/* apply saved sizes (editor font, UI base font, gutter width) */
+function applySizes(){
+  const s = SETTINGS.sizes || {};
+  const ed = (typeof s.edFont === 'number') ? s.edFont : SIZE_DEFAULTS.edFont;
+  const gw = (typeof s.gutter === 'number') ? s.gutter : SIZE_DEFAULTS.gutter;
+  const ui = (typeof s.uiFont === 'number') ? s.uiFont : SIZE_DEFAULTS.uiFont;
+  document.documentElement.style.setProperty('--ed-font', ed + 'px');
+  document.documentElement.style.setProperty('--gutter-w', gw + 'px');
+  document.body.style.fontSize = ui + 'px';
+  if(typeof scheduleGutter === 'function') scheduleGutter();
+}
+
+/* ---- fonts: interface (--ui-font, mono) and body/view (--body-font, sans) ----
+   each option is a full family stack; defaults are the bundled IBM Plex faces */
+const FONT_DEFAULTS = {
+  ui: "'IBM Plex Mono', \"SF Mono\", Menlo, monospace",
+  body: "'IBM Plex Sans', -apple-system, system-ui, \"Helvetica Neue\", sans-serif",
+};
+const FONT_OPTS = [
+  ['IBM Plex Mono', "'IBM Plex Mono', \"SF Mono\", Menlo, monospace"],
+  ['IBM Plex Sans', "'IBM Plex Sans', -apple-system, system-ui, \"Helvetica Neue\", sans-serif"],
+  ['SF Mono (system mono)', '"SF Mono", Menlo, monospace'],
+  ['System sans', '-apple-system, system-ui, sans-serif'],
+];
+function applyFonts(){
+  const f = SETTINGS.fonts || {};
+  document.documentElement.style.setProperty('--ui-font', f.ui || FONT_DEFAULTS.ui);
+  document.documentElement.style.setProperty('--body-font', f.body || FONT_DEFAULTS.body);
+}
+function buildFontRows(){
+  const box = $('fontrows'); if(!box) return;
+  box.innerHTML = '';
+  const f = SETTINGS.fonts || {};
+  const rows = [
+    ['interface font', 'ui', f.ui || FONT_DEFAULTS.ui],
+    ['body font', 'body', f.body || FONT_DEFAULTS.body],
+  ];
+  for(const [label, key, chosen] of rows){
+    const opts = FONT_OPTS.map(([name, stack]) =>
+      `<option value="${esc(stack)}"${stack===chosen?' selected':''}>${esc(name)}</option>`).join('');
+    const row = document.createElement('div'); row.className = 'arow slotrow';
+    row.innerHTML = `<span class="vname slabel">${esc(label)}</span>` +
+      `<select data-fontkey="${key}">${opts}</select>`;
+    box.appendChild(row);
+  }
+  box.querySelectorAll('select[data-fontkey]').forEach(sel =>
+    sel.addEventListener('change', () => {
+      const fonts = Object.assign({}, SETTINGS.fonts, {[sel.dataset.fontkey]: sel.value});
+      SETTINGS.fonts = fonts; applyFonts(); saveSettings({fonts});
+    }));
+}
+function resetFonts(){
+  SETTINGS.fonts = {}; saveSettings({fonts: {}}); applyFonts(); buildFontRows();
+}
+
+function buildColorRows(){
+  const box = $('colorrows'); box.innerHTML = '';
+  const c = SETTINGS.colors || {};
+  for(const [name, def, label] of PALETTE){
+    const cur = isHex(c[name]) ? c[name]
+      : (getComputedStyle(document.documentElement).getPropertyValue(name).trim() || def);
+    const row = document.createElement('div'); row.className = 'arow crow';
+    row.innerHTML =
+      `<span class="vname cname">${esc(label || name)}</span>` +
+      `<input type="color" data-var="${esc(name)}" value="${esc(isHex(cur)?cur:def)}">` +
+      `<input type="text" class="hex" data-var="${esc(name)}" value="${esc(cur)}" spellcheck="false">`;
+    box.appendChild(row);
+  }
+  box.querySelectorAll('input[type=color]').forEach(inp =>
+    inp.addEventListener('input', () => setColor(inp.dataset.var, inp.value)));
+  box.querySelectorAll('input.hex').forEach(inp =>
+    inp.addEventListener('change', () => { if(isHex(inp.value.trim())) setColor(inp.dataset.var, inp.value.trim()); }));
+}
+function setColor(name, val){
+  if(!isHex(val)) return;
+  document.documentElement.style.setProperty(name, val);
+  const colors = Object.assign({}, SETTINGS.colors, {[name]: val});
+  saveSettings({colors});
+  // keep the paired inputs in sync
+  $('colorrows').querySelectorAll(`input[data-var="${name}"]`).forEach(i => { i.value = val; });
+}
+function resetColors(){
+  for(const [name] of PALETTE) document.documentElement.style.removeProperty(name);
+  saveSettings({colors: {}});
+  applyColors();  // re-applies (now empty → CSS defaults stand)
+  buildColorRows();
+}
+
+/* ---- colour assignment: each role picks one of the 16 palette colours ----
+   TEXT_SLOTS drive --slot-<key> (chat/text elements); IFACE_SLOTS drive the
+   interface roles --bg/--fg/--panel/... directly. def is the palette var the
+   role falls back to. */
+const TEXT_SLOTS = [
+  ['header', 'section headers', '--c-yellow'],
+  ['ctxhead', 'context heading', '--c-white'],
+  ['ctxbody', 'context text (chat)', '--c-white'],
+  ['ctxpath', 'context file-path', '--c-blue'],
+  ['cmthead', 'comment heading', '--c-white'],
+  ['comment', 'comment button', '--c-blue'],
+  ['wikilink', 'wiki-links', '--c-blue'],
+  ['agent', 'agent text', '--c-gray5'],
+  ['user', 'your text', '--c-yellow'],
+  ['glance', 'glance reaction', '--c-gray5'],
+];
+const IFACE_SLOTS = [
+  ['bg', 'background', '--c-black'],
+  ['fg', 'foreground text', '--c-white'],
+  ['panel', 'panel', '--c-gray1'],
+  ['panel2', 'panel · raised', '--c-gray2'],
+  ['line', 'lines / borders', '--c-gray3'],
+  ['acc', 'accent', '--c-yellow'],
+  ['good', 'good / success', '--c-green'],
+  ['warn', 'warn / error', '--c-red'],
+  ['selection', 'text selection', '--c-blue'],
+  ['qtag', 'queue tags', '--c-gray5'],
+  ['activebg', 'active file bg', '--c-gray2'],
+  ['urghigh', 'urgency · high', '--c-red'],
+  ['urgmed', 'urgency · medium', '--c-yellow'],
+  ['urglow', 'urgency · low', '--c-gray5'],
+];
+const PAL_NAMES = PALETTE.map(([n]) => n);
+const palOpts = chosen => PALETTE.map(([n,,l]) =>
+  `<option value="${n}"${n===chosen?' selected':''}>${esc(l)}</option>`).join('');
+
+function applySlots(){            // text colours -> --slot-<key>
+  const s = SETTINGS.slots || {};
+  for(const [key,, def] of TEXT_SLOTS){
+    const v = PAL_NAMES.includes(s[key]) ? s[key] : def;
+    document.documentElement.style.setProperty('--slot-' + key, `var(${v})`);
+  }
+}
+function applyIface(){            // interface colours -> --<key>
+  const s = SETTINGS.iface || {};
+  for(const [key,, def] of IFACE_SLOTS){
+    const v = PAL_NAMES.includes(s[key]) ? s[key] : def;
+    document.documentElement.style.setProperty('--' + key, `var(${v})`);
+  }
+}
+/* one builder for both categories: SLOTDEF + settings-key + var-prefix + apply fn */
+function buildAssignRows(boxId, defs, sKey, varPrefix, applyFn){
+  const box = $(boxId); box.innerHTML = '';
+  const s = SETTINGS[sKey] || {};
+  for(const [key, label, def] of defs){
+    const chosen = PAL_NAMES.includes(s[key]) ? s[key] : def;
+    const row = document.createElement('div'); row.className = 'arow slotrow';
+    row.innerHTML = `<span class="vname slabel">${esc(label)}</span>` +
+      `<span class="swatch" style="background:var(${chosen})"></span>` +
+      `<select data-slot="${key}">${palOpts(chosen)}</select>`;
+    box.appendChild(row);
+  }
+  box.querySelectorAll('select[data-slot]').forEach(sel =>
+    sel.addEventListener('change', () => {
+      const next = Object.assign({}, SETTINGS[sKey], {[sel.dataset.slot]: sel.value});
+      SETTINGS[sKey] = next; applyFn(); saveSettings({[sKey]: next});
+      const sw = sel.previousElementSibling;
+      if(sw) sw.style.background = `var(${sel.value})`;
+    }));
+}
+function buildSlotRows(){ buildAssignRows('slotrows', TEXT_SLOTS, 'slots', '--slot-', applySlots); }
+function buildIfaceRows(){ buildAssignRows('ifacerows', IFACE_SLOTS, 'iface', '--', applyIface); }
+function resetSlots(){ SETTINGS.slots = {}; saveSettings({slots: {}}); applySlots(); buildSlotRows(); }
+function resetIface(){ SETTINGS.iface = {}; saveSettings({iface: {}}); applyIface(); buildIfaceRows(); }
+
+/* ---- saved palettes: snapshot colours + element-colours under a name ---- */
+function buildPaletteSelect(){
+  const sel = $('palload'); const pals = SETTINGS.palettes || {};
+  sel.innerHTML = '<option value="">— load a palette —</option>' +
+    Object.keys(pals).map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
+}
+function savePalette(){
+  const name = $('palname').value.trim();
+  if(!name){ $('palname').focus(); return; }
+  const snapshot = {
+    colors: Object.assign({}, SETTINGS.colors),
+    slots:  Object.assign({}, SETTINGS.slots),
+    iface:  Object.assign({}, SETTINGS.iface),
+  };
+  SETTINGS.palettes = Object.assign({}, SETTINGS.palettes, {[name]: snapshot});
+  saveSettings({palettes: SETTINGS.palettes});
+  $('palname').value = '';
+  buildPaletteSelect();
+  $('palload').value = name;
+}
+function applyPalette(){
+  const name = $('palload').value; const p = (SETTINGS.palettes || {})[name];
+  if(!p) return;
+  SETTINGS.colors = Object.assign({}, p.colors);
+  SETTINGS.slots = Object.assign({}, p.slots);
+  SETTINGS.iface = Object.assign({}, p.iface || {});
+  saveSettings({colors: SETTINGS.colors, slots: SETTINGS.slots, iface: SETTINGS.iface});
+  for(const [n] of PALETTE) document.documentElement.style.removeProperty(n);
+  applyColors(); applySlots(); applyIface();
+  buildColorRows(); buildSlotRows(); buildIfaceRows();
+}
+function deletePalette(){
+  const name = $('palload').value; if(!name) return;
+  const palettes = Object.assign({}, SETTINGS.palettes); delete palettes[name];
+  SETTINGS.palettes = palettes; saveSettings({palettes}); buildPaletteSelect();
+}
+
+function buildSizeRows(){
+  const box = $('sizerows'); box.innerHTML = '';
+  const s = SETTINGS.sizes || {}, w = SETTINGS.colWidths || COLW_DEFAULTS;
+  const rows = [
+    ['editor font-size', 'edFont', (typeof s.edFont==='number'?s.edFont:SIZE_DEFAULTS.edFont), 8, 28, 0.5],
+    ['UI base font-size', 'uiFont', (typeof s.uiFont==='number'?s.uiFont:SIZE_DEFAULTS.uiFont), 10, 22, 0.5],
+    ['gutter width', 'gutter', (typeof s.gutter==='number'?s.gutter:SIZE_DEFAULTS.gutter), 30, 120, 1],
+    ['default col · left', 'left', (w.left??COLW_DEFAULTS.left), 180, 600, 1],
+    ['default col · right', 'right', (w.right??COLW_DEFAULTS.right), 240, 720, 1],
+  ];
+  for(const [label, key, val, min, max, step] of rows){
+    const row = document.createElement('div'); row.className = 'arow';
+    row.innerHTML = `<span class="lbl">${esc(label)}</span>` +
+      `<input type="number" data-key="${esc(key)}" value="${esc(val)}" min="${min}" max="${max}" step="${step}">`;
+    box.appendChild(row);
+  }
+  box.querySelectorAll('input[type=number]').forEach(inp =>
+    inp.addEventListener('input', () => setSize(inp.dataset.key, parseFloat(inp.value))));
+}
+function setSize(key, val){
+  if(!isFinite(val)) return;
+  if(key === 'left' || key === 'right'){
+    const colWidths = Object.assign({}, COLW_DEFAULTS, SETTINGS.colWidths, {[key]: val});
+    SETTINGS.colWidths = colWidths; applyCols(); saveSettings({colWidths});
+  } else {
+    const sizes = Object.assign({}, SETTINGS.sizes, {[key]: val});
+    SETTINGS.sizes = sizes; applySizes(); saveSettings({sizes});
+  }
+}
+function resetSizes(){
+  SETTINGS.sizes = {}; SETTINGS.colWidths = Object.assign({}, COLW_DEFAULTS);
+  saveSettings({sizes: {}, colWidths: SETTINGS.colWidths});
+  applySizes(); applyCols(); buildSizeRows();
+}
+
+/* ---- behavior toggles (current-line highlight is wired in init) ---- */
+let hlLineEnabled = false;
+function caretLineHighlight(){
+  if(!hlLineEnabled || mode !== 'source' || !cur) return;
+  const ed = $('editor');
+  if(typeof lineHighlightAt === 'function') lineHighlightAt(ed.selectionStart);
+}
+function applyMdToggle(){
+  const on = SETTINGS.mdHighlight !== false;  // default on
+  if(on){
+    $('editor').style.color = 'transparent';
+    $('edback').style.display = '';
+    if(mode === 'source' && typeof renderBack === 'function') renderBack();
+  } else {
+    $('editor').style.color = 'var(--fg)';
+    $('edback').style.display = 'none';
+  }
+}
+function syncBehaviorInputs(){
+  hlLineEnabled = SETTINGS.hlLine === true;
+  $('optHlLine').checked = hlLineEnabled;
+  $('optMd').checked = SETTINGS.mdHighlight !== false;
+  $('optSweepConfirm').checked = SETTINGS.sweepConfirm !== false;
+  if($('optGlance')) $('optGlance').checked = SETTINGS.glance !== false;
+  if($('optUnwrap')) $('optUnwrap').checked = SETTINGS.unwrap === true;
+  if($('optCtxCompact')) $('optCtxCompact').checked = (SETTINGS.ctxClick || 'compact') !== 'clear';
+  if($('optAutoCompact')) $('optAutoCompact').checked = SETTINGS.autoCompact !== false;
+  $('optAutosave').value = (typeof SETTINGS.autosaveSecs === 'number') ? SETTINGS.autosaveSecs : 30;
+}
+
+/* ---- debug section ---- */
+const pad2 = n => String(n).padStart(2, '0');
+function stamp(){ const d = new Date(); return `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`; }
+async function loadAdminDebug(){
+  const box = $('admindebug');
+  box.innerHTML = '<span class="mono-dim">loading…</span>';
+  let a;
+  try { a = await jget('/api/admin?project=' + encodeURIComponent(PROJECT || '')); }
+  catch(err){ box.innerHTML = `<span class="v bad">admin read failed: ${esc(err)}</span>`; return; }
+  $('adminstamp').textContent = 'as of ' + stamp();
+  const s = a.server || {}, sen = a.sentinel || {}, w = a.watcher;
+  const senCls = {live:'ok', stale:'warnv', down:'bad'}[sen.state] || '';
+  let h = '';
+  // server
+  h += `<div class="kv">
+    <span class="k">bound port</span><span class="v">${esc(s.port)}</span>
+    <span class="k">claude path</span><span class="v ${s.claude_exists?'ok':'bad'}">${esc(s.claude_path)} ${s.claude_exists?'✓':'✗ missing'}</span>
+    <span class="k">active projects</span><span class="v">${esc(s.project_count)}</span>
+  </div>`;
+  // sentinel
+  h += `<h2 style="margin-top:16px">sentinel</h2><div class="kv">
+    <span class="k">state</span><span class="v ${senCls}">${esc(sen.state)}</span>
+    <span class="k">heartbeat age</span><span class="v">${sen.heartbeat_age==null?'—':esc(sen.heartbeat_age)+'s'}</span>
+    <span class="k">pid</span><span class="v">${sen.pid==null?'—':esc(sen.pid)+(sen.pid_alive?' (live)':' (dead)')}</span>
+  </div>`;
+  // watcher beacon
+  h += `<h2 style="margin-top:16px">setsweep-watch beacon</h2>`;
+  h += w ? `<div class="kv">
+      <span class="k">status</span><span class="v ${w.status==='ok'?'ok':'bad'}">${esc(w.status)}</span>
+      <span class="k">last run</span><span class="v">${esc(w.last_run)}</span>
+      <span class="k">rows written</span><span class="v">${esc(w.rows_written)}</span>
+    </div>` : `<span class="mono-dim">— not present —</span>`;
+  // projects
+  h += `<h2 style="margin-top:16px">projects</h2>`;
+  const ps = a.projects || [];
+  if(ps.length){
+    h += `<table class="ptable"><tr><th>project</th><th>entries</th><th>status</th><th>comments</th><th>snapshots</th><th>chatlog</th><th>sessions</th></tr>`;
+    for(const p of ps){
+      const st = Object.entries(p.status||{}).map(([k,v])=>`${esc(k)}:${esc(v)}`).join(' ') || '—';
+      h += `<tr><td>${esc(p.name)}${p.error?` <span class="v bad">err</span>`:''}</td>
+        <td>${p.entries==null?'—':esc(p.entries)}</td><td>${st}</td>
+        <td>${esc(p.comments)}</td><td>${p.snapshots==null?'—':esc(p.snapshots)}</td>
+        <td>${p.chatlog?'✓':'—'}</td><td>${p.sessions?'✓':'—'}</td></tr>`;
+    }
+    h += `</table>`;
+  } else h += `<span class="mono-dim">— none —</span>`;
+  // persona-rebuild family status (Xanadu) — whole-family progress, not just the queue
+  const famProj = ps.find(p => p.persona_family);
+  if(famProj && famProj.persona_family){
+    const f = famProj.persona_family;
+    const pct = f.total ? Math.round(100*f.rebuilt/f.total) : 0;
+    h += `<h2 style="margin-top:16px">persona rebuild — ${esc(famProj.name)}</h2><div class="kv">
+      <span class="k">rebuilt (BODY+SOURCES)</span><span class="v ${f.rebuilt===f.total?'ok':''}">${esc(f.rebuilt)} / ${esc(f.total)} (${pct}%)</span>
+      <span class="k">pending</span><span class="v">${esc(f.pending)}</span>
+      <span class="k">curiosity seeded</span><span class="v">${esc(f.curiosity)}</span>
+    </div>`;
+  }
+  // settings dump
+  h += `<h2 style="margin-top:16px">settings.json</h2><pre class="adump">${esc(JSON.stringify(a.settings, null, 2))}</pre>`;
+  // events
+  h += `<h2 style="margin-top:16px">desk-events.log (last 20)</h2>`;
+  h += (a.events && a.events.length)
+    ? `<pre class="adump evlog">${esc(a.events.join('\n'))}</pre>`
+    : `<span class="mono-dim">— empty —</span>`;
+  box.innerHTML = h;
+}
+
+/* ---- lineage: surface unattributed (out-of-band) changes; resolve with one click ---- */
+async function renderLineage(){
+  const box = $('lineagebox'); if(!box) return;
+  if(!PROJECT){ box.innerHTML = '<span class="mono-dim">— no project —</span>'; return; }
+  box.innerHTML = '<span class="mono-dim">loading…</span>';
+  let st;
+  try { st = await jget('/api/lineage?project=' + encodeURIComponent(PROJECT)); }
+  catch(err){ box.innerHTML = `<span class="v bad">lineage read failed: ${esc(err)}</span>`; return; }
+  if(st.baseline_ts == null){
+    box.innerHTML = `<span class="mono-dim">no baseline yet — </span>` +
+      `<button data-act="accept" class="browse">set baseline</button>`;
+    return;
+  }
+  const c = st.counts || {};
+  let h = `<div class="kv">
+    <span class="k">baseline</span><span class="v">${esc(st.baseline_ts)}</span>
+    <span class="k">changed since</span><span class="v">agent ${esc(c.agent||0)} · user ${esc(c.user||0)} · `
+    + `<b class="${c.unattributed?'warnv':''}">unattributed ${esc(c.unattributed||0)}</b></span>
+  </div>`;
+  const un = (st.changes || []).filter(x => x.status === 'unattributed');
+  if(un.length){
+    h += `<div class="mono-dim" style="margin:6px 0 4px">changed outside the app — whose are these?</div>`;
+    h += `<table class="ptable"><tr><th>change</th><th></th></tr>`;
+    for(const ch of un){
+      h += `<tr><td>${esc(ch.change)} · ${esc(ch.path)}</td>
+        <td style="white-space:nowrap;text-align:right">
+          <button data-act="resolve" data-as="user" data-path="${esc(ch.path)}" class="browse">mine</button>
+          <button data-act="resolve" data-as="agent" data-path="${esc(ch.path)}" class="browse">an agent</button>
+        </td></tr>`;
+    }
+    h += `</table>`;
+  } else {
+    h += `<span class="mono-dim">nothing unattributed — every change is accounted for.</span>`;
+  }
+  if(st.changed){
+    h += `<div class="arow" style="margin-top:8px">`
+      + `<button data-act="accept" class="browse">✓ re-baseline (mark all seen)</button></div>`;
+  }
+  h += `<div class="arow" style="margin-top:8px">
+    <button data-act="bind" class="browse">add directive to CLAUDE.md</button>
+    <span class="mono-dim" style="margin-left:12px">
+      <input type="checkbox" id="lingit" data-act="git" ${SETTINGS.lineage_git?'checked':''}>
+      <label for="lingit"> git history (separate from any project git)</label></span></div>`;
+  box.innerHTML = h;
+}
+async function lineageClick(e){
+  const b = e.target.closest('[data-act]'); if(!b) return;
+  const act = b.dataset.act;
+  try {
+    if(act === 'resolve'){
+      await jpost('/api/lineage/resolve', {project: PROJECT, path: b.dataset.path, as: b.dataset.as});
+    } else if(act === 'accept'){
+      await jpost('/api/lineage/accept', {project: PROJECT});
+    } else if(act === 'bind'){
+      const r = await jpost('/api/lineage/bind', {project: PROJECT});
+      if(typeof addMsg === 'function') addMsg('sys', `lineage directive ${r.action} in ${r.file}`);
+      return;
+    } else if(act === 'git'){
+      SETTINGS.lineage_git = b.checked; saveSettings({lineage_git: b.checked});
+      return;                                  // a setting toggle — no list to re-render
+    }
+  } catch(err){ if(typeof addMsg === 'function') addMsg('err', 'lineage: ' + err); }
+  renderLineage();
+}
+if($('lineagebox')) $('lineagebox').addEventListener('click', lineageClick);
+
+function renderErrLog(){
+  const box = $('errlistbox');
+  if(!JSERR.length){ box.innerHTML = '<span class="enone">— no errors —</span>'; return; }
+  box.innerHTML = JSERR.map(e => {
+    const t = new Date(e.ts); const tt = `${pad2(t.getHours())}:${pad2(t.getMinutes())}:${pad2(t.getSeconds())}`;
+    const loc = (e.src ? e.src : '') + (e.line ? ':' + e.line : '');
+    return `<div class="eitem"><div class="emsg">${esc(e.msg)}</div>` +
+      `<div class="emeta">${esc(tt)}${loc ? ' · ' + esc(loc) : ''}</div></div>`;
+  }).join('');
+}
+
+function openAdmin(){
+  buildColorRows(); buildFontRows(); buildSizeRows(); buildSlotRows(); buildIfaceRows(); buildPaletteSelect(); buildProjRows(); buildAgentRows(); syncBehaviorInputs();
+  renderErrLog();
+  $('admin').classList.add('open');
+  loadAdminDebug();
+  renderLineage();
+  loadKits();   // K · curators — fetch kits, fill the editor + project kit dropdowns
+}
+function closeAdmin(){ $('admin').classList.remove('open'); }
+
+/* drag by the header, resize by the corner (CSS), remember where it sits */
+function saveAdminBox(){
+  const p = $('admin'); if(!p.classList.contains('open')) return;
+  const r = p.getBoundingClientRect(); if(r.width < 40) return;
+  SETTINGS.adminBox = {left: Math.round(r.left), top: Math.round(r.top),
+                       w: Math.round(r.width), h: Math.round(r.height)};
+  saveSettings({adminBox: SETTINGS.adminBox});
+}
+function makeAdminDraggable(){
+  const panel = $('admin'), head = $('adminhead');
+  const b = SETTINGS.adminBox;
+  if(b && typeof b.left === 'number'){
+    panel.style.left = b.left + 'px'; panel.style.top = b.top + 'px'; panel.style.right = 'auto';
+    if(b.w) panel.style.width = b.w + 'px';
+    if(b.h) panel.style.height = b.h + 'px';
+  }
+  let drag = null;
+  head.addEventListener('mousedown', e => {
+    if(e.target.closest('button')) return;                 // ✕ stays clickable
+    const r = panel.getBoundingClientRect();
+    drag = {dx: e.clientX - r.left, dy: e.clientY - r.top};
+    panel.style.right = 'auto'; e.preventDefault();
+  });
+  window.addEventListener('mousemove', e => {
+    if(!drag) return;
+    const x = Math.max(0, Math.min(window.innerWidth - 60, e.clientX - drag.dx));
+    const y = Math.max(0, Math.min(window.innerHeight - 30, e.clientY - drag.dy));
+    panel.style.left = x + 'px'; panel.style.top = y + 'px';
+  });
+  window.addEventListener('mouseup', () => { if(drag){ drag = null; saveAdminBox(); } });
+  if(window.ResizeObserver){
+    let t; new ResizeObserver(() => { clearTimeout(t); t = setTimeout(saveAdminBox, 400); }).observe(panel);
+  }
+}
+
+function wireAdmin(){
+  $('adminclose').onclick = closeAdmin;
+  makeAdminDraggable();
+  $('colorreset').onclick = resetColors;
+  $('fontreset').onclick = resetFonts;
+  $('sizereset').onclick = resetSizes;
+  $('slotreset').onclick = resetSlots;
+  $('ifacereset').onclick = resetIface;
+  $('palsave').onclick = savePalette;
+  $('palapply').onclick = applyPalette;
+  $('paldel').onclick = deletePalette;
+  $('optGlance') && ($('optGlance').onchange = () => saveSettings({glance: $('optGlance').checked}));
+  $('optUnwrap') && ($('optUnwrap').onchange = () => saveSettings({unwrap: $('optUnwrap').checked}));
+  $('optCtxCompact') && ($('optCtxCompact').onchange = () => { saveSettings({ctxClick: $('optCtxCompact').checked ? 'compact' : 'clear'}); setCtxBar(CTX_USED); });
+  $('optAutoCompact') && ($('optAutoCompact').onchange = () => saveSettings({autoCompact: $('optAutoCompact').checked}));
+  $('adminreload').onclick = () => location.reload();
+  $('adminrefresh').onclick = () => { loadAdminDebug(); renderLineage(); };
+  $('kitsave')   && ($('kitsave').onclick   = kitSave);
+  $('kitsaveas') && ($('kitsaveas').onclick = kitSaveAs);
+  $('kitdel')    && ($('kitdel').onclick    = kitDelete);
+  $('kitexport') && ($('kitexport').onclick = kitExport);
+  $('kitimport') && ($('kitimport').onclick = kitImport);
+  $('errclear').onclick = () => { JSERR.length = 0; renderErrLog(); };
+  $('optHlLine').onchange = () => {
+    hlLineEnabled = $('optHlLine').checked;
+    saveSettings({hlLine: hlLineEnabled});
+    if(!hlLineEnabled) clearBand(); else caretLineHighlight();
+  };
+  $('optMd').onchange = () => { saveSettings({mdHighlight: $('optMd').checked}); applyMdToggle(); };
+  $('optSweepConfirm').onchange = () => saveSettings({sweepConfirm: $('optSweepConfirm').checked});
+  $('optAutosave').onchange = () => {
+    let v = parseInt($('optAutosave').value, 10);
+    if(!isFinite(v) || v < 3) v = 30;
+    $('optAutosave').value = v; saveSettings({autosaveSecs: v});
+  };
+  // caret-tracking for the current-line highlight
+  const ed = $('editor');
+  ['keyup','click','select'].forEach(ev => ed.addEventListener(ev, caretLineHighlight));
+  ed.addEventListener('blur', () => { if(hlLineEnabled && document.activeElement !== ed) clearBand(); });
+  // ⌘⇧A / Ctrl+⇧A — reliable fallback if the native menu is flaky
+  document.addEventListener('keydown', e => {
+    if((e.metaKey||e.ctrlKey) && e.shiftKey && (e.key === 'A' || e.key === 'a')){
+      e.preventDefault();
+      $('admin').classList.contains('open') ? closeAdmin() : openAdmin();
+    }
+    if(e.key === 'Escape' && $('admin').classList.contains('open')) closeAdmin();
+  });
+}
+
+(async function init(){
+  try { SETTINGS = await jget('/api/settings'); } catch(e){ SETTINGS = {}; }
+  SETTINGS.colWidths = Object.assign({left:300, right:400}, SETTINGS.colWidths || {});
+  applyColors(); applySlots(); applyIface(); applySizes(); applyFonts();  // palette + text/interface colours + sizes + fonts before first paint
+  syncBehaviorInputs(); applyMdToggle(); wireAdmin();
+  applyCols(); applySplit();
+  initDividers();
+  $('metaedit').onclick = toggleMetaEdit;
+  const freshSetup = !SETTINGS.agents && !SETTINGS.model;   // never configured an agent → bootstrap
+  if(!SETTINGS.agents && SETTINGS.model){ SETTINGS.agents = {...AGENT_DEFAULTS, chat: SETTINGS.model}; }  // migrate old single model -> chat agent
+  syncModelBar();
+  $('model').onchange = () => setAgent('chat', $('model').value);
+  $('setupdone').onclick = finishSetup;
+  const pj = await jget('/api/projects');
+  PROJECTS = pj.projects;
+  HOMEDIR = pj.home || '';
+  renderProjOptions();
+  $('proj').onchange = () => {
+    const v = $('proj').value;
+    if(v === '__add__'){ $('proj').value = PROJECT; openAddProj(); return; }
+    loadProject(v);
+  };
+  if(PROJECTS.length){
+    // reopen the last active project if it still exists, else the alphabetically-first
+    const last = SETTINGS.lastProject;
+    const start = (last && PROJECTS.some(p => p.id === last)) ? last : PROJECTS[0].id;
+    await loadProject(start);
+  }
+  else enterInterview({form: true});  // first launch: found the first project from the center panel
+  syncChrome();                        // set nofile/noproj from the start (covers the no-projects case)
+  if(freshSetup) showSetup();          // bootstrap agents on top, before anything else
+})();
+</script>
+</body>
+</html>

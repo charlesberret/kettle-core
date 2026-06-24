@@ -1,0 +1,28 @@
+{
+  "note": "The desk's project registry. One stanza per project. Copy this file to projects.json and edit, or register a project with `setsweep add <folder>` (CLI) or the GUI's 'add project' flow. Each project's .setsweep/ desk (charter, memory, queue, logs) is created on first selection. Fields: id (unique slug), name (display), root (the agent's working dir; ~ is honored), kit (curator playbook — writing|code|records|knowledge|inbox, or omit for a general curator), rework_agents (recipients for the rework button; first is the default), optional role (per-project system prompt for the review agent), optional intake (inbox kind only: a watched folder that auto-curates new files into the queue).",
+  "projects": [
+    {
+      "id": "my-notes",
+      "name": "My Notes",
+      "root": "~/Documents/notes",
+      "kit": "knowledge",
+      "rework_agents": [
+        { "id": "curator", "name": "the My Notes curator" }
+      ]
+    },
+    {
+      "id": "support-inbox",
+      "name": "Support Inbox",
+      "root": "~/work/support",
+      "kit": "inbox",
+      "intake": {
+        "watch": "intake",
+        "responses": "responses",
+        "outbound": "outbox"
+      },
+      "rework_agents": [
+        { "id": "curator", "name": "the Support Inbox curator" }
+      ]
+    }
+  ]
+}

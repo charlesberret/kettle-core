@@ -1,0 +1,15 @@
+{
+  "name": "Code",
+  "kind": "code",
+  "lens": "Read for correctness, clarity, reuse, and doc-drift. Flag logic that can break, duplication of something that already exists in the tree, and documentation or comments that no longer match the code they describe.",
+  "urgency": "high = a correctness or security risk; medium = duplication, unclear structure, or stale docs; low = naming and style.",
+  "firstQueue": "Surface the files with the most recent or most consequential changes, plus any docs whose code has moved underneath them.",
+  "tools": [],
+  "sweepChecks": [
+    "every entry assessed",
+    "no append-only record touched",
+    "doc/code drift fixed or flagged",
+    "duplication noted against existing code",
+    "MEMORY kept under ~80 lines"
+  ]
+}

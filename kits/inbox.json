@@ -1,0 +1,15 @@
+{
+  "name": "Inbox",
+  "kind": "inbox",
+  "lens": "Read each item for what it actually asks — the sender, the request, the deadline, the decision it forces. The queued artifact is a drafted RESPONSE, not the incoming item: read the brief as a triage summary, then read and edit the draft reply. The patron's hand is the only authority on what goes out; the draft is a starting point, never a fait accompli.",
+  "urgency": "high = a hard deadline, an upset or important sender, or a request that blocks someone; medium = a normal ask awaiting a reply; low = FYI, acknowledgement, or no-action-needed.",
+  "firstQueue": "Surface the items with the nearest deadlines and the highest-stakes senders first; FYIs and acknowledgements last.",
+  "tools": [],
+  "sweepChecks": [
+    "every entry assessed",
+    "each approved draft reflects the patron's edits, not the agent's first draft",
+    "approved drafts staged to the configured outbound, never transmitted",
+    "the source item is preserved unedited (read-only context)",
+    "MEMORY records standing tone/handling preferences, kept under ~80 lines"
+  ]
+}
