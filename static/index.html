@@ -2289,6 +2289,7 @@ async function loadProject(pid){
   if(dirty){ try { await save(); } catch(e){} }
   flushChatlog();  // settle the outgoing project's transcript before switching
   PROJECT = pid;
+  if($('proj').value !== pid) $('proj').value = pid;   // keep the selector in sync with the load
   // remember the active project so the next launch reopens it (shallow-merges into settings)
   if(SETTINGS.lastProject !== pid){ SETTINGS.lastProject = pid; jpost('/api/settings', {lastProject: pid}).catch(()=>{}); }
   cur = null; setDirty(false);
@@ -2297,11 +2298,13 @@ async function loadProject(pid){
   $('editor').value = ''; $('fname').textContent = '—'; $('gutter').innerHTML = '';
   $('render').innerHTML = '';
   // restore the project's persistent transcript (display capped; re-render must not re-log)
-  CHATLOG = [];
+  let msgs = [];
   try {
     const cl = await jget('/api/chatlog?project=' + encodeURIComponent(pid));
-    if(Array.isArray(cl.messages)) CHATLOG = cl.messages;
+    if(Array.isArray(cl.messages)) msgs = cl.messages;
   } catch(e){ /* absent or unreadable: start fresh */ }
+  if(PROJECT !== pid) return;   // a newer selection superseded this load mid-fetch
+  CHATLOG = msgs;
   restoring = true;
   $('chat').innerHTML = '';
   for(const m of CHATLOG.slice(-CHATLOG_SHOW)){
@@ -2312,10 +2315,12 @@ async function loadProject(pid){
     } else addMsg(m.cls, m.text);
   }
   restoring = false;
-  Q = await jget('/api/queue?project=' + encodeURIComponent(pid));
+  const qData = await jget('/api/queue?project=' + encodeURIComponent(pid));
   // an unfounded desk opens the founding interview in the center panel instead
   let ivst = {status: 'none'};
   try { ivst = await jget('/api/interview?project=' + encodeURIComponent(pid)); } catch(e){}
+  if(PROJECT !== pid) return;   // superseded mid-load — don't render stale state over the newer one
+  Q = qData;
   // the server may already hold a persisted session for this project (a prior run): trust
   // its word, not just in-page activity, so compact/clear work on load without a first turn.
   PROJECT_SESSION = !!ivst.has_session;
