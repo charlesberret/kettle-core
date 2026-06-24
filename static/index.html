@@ -884,12 +884,13 @@ function renderQueue(){
     const d = document.createElement('div');
     d.className = 'qitem' + (cur && e.id===cur.id ? ' active':'') + (e.status==='approved' ? ' approved':'')
                 + (e.status==='rework' ? ' rework':'');
-    const dash = e.title.search(/ [—–-] /);
-    const tname = dash > 0 ? e.title.slice(0, dash) : e.title;
-    const tsum  = dash > 0 ? e.title.slice(dash + 3) : (e.ask || '');
+    // line 1 is the FILE you'll open (the key identifier); line 2 is why it's queued.
+    const fname = relPath(e.path);
+    const dash = e.title ? e.title.search(/ [—–-] /) : -1;
+    const tsum = dash > 0 ? e.title.slice(dash + 3) : (e.title || e.ask || '');
     d.innerHTML = `<div class="t"><span class="dot ${esc(e.urgency)}"></span>
-        <span class="qname">${esc(tname)}</span>${e.comment ? '<span class="notedot" title="has a note"></span>' : ''}${diffBadge(e.diff)}</div>
-        <div class="qsum">${e.ask_type ? `<span class="qtag">${esc(e.ask_type)}</span> ` : ''}${esc(tsum)}${e.desk_item ? ' · desk #' + esc(e.desk_item) : ''}</div>`;
+        <span class="qname" title="${esc(e.path)}">${esc(fname)}</span>${e.comment ? '<span class="notedot" title="has a note"></span>' : ''}${diffBadge(e.diff)}</div>
+        <div class="qsum" title="${esc(e.title || '')}">${e.ask_type ? `<span class="qtag">${esc(e.ask_type)}</span> ` : ''}${esc(tsum)}${e.desk_item ? ' · desk #' + esc(e.desk_item) : ''}</div>`;
     d.onclick = () => select(e.id);
     $('qlist').appendChild(d);
   }
@@ -2324,7 +2325,7 @@ async function loadProject(pid){
   exitInterview();  // clear any prior project's interview surface
   if(unfounded){
     renderQueue();
-    $('metadl').innerHTML = '<dd style="color:var(--dim)">founding in progress — the interview is in the center panel</dd>';
+    $('metadl').innerHTML = '<dd style="color:var(--dim)">project founding in progress</dd>';
     enterInterview({resume: ivst.status === 'interviewing'});
     return;
   }
