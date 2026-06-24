@@ -153,8 +153,17 @@ New files in the watched folder are curated into the queue: for each, a curator 
 into `responses/` and files an entry whose `path` is the **draft** (what you edit) and whose
 `source` is the incoming item, with a triage brief. You read the brief, edit the reply by hand, and
 approve; at sweep, approved drafts are **staged** to `outbound/` for an out-of-band tool to send —
-the sweep never transmits anything itself. The folder-watch automation is driven by an optional
-companion cron script (not bundled in this repo); the in-app sweep handles the outbound staging.
+the sweep never transmits anything itself.
+
+The folder-watch is the bundled **`setsweep-watch`** script (installed as a console command). Run
+it on a schedule so new files curate automatically:
+
+```cron
+*/15 * * * *  setsweep-watch        # every 15 min; logs health to ~/.cache/setsweep/watch-health.json
+```
+
+It's self-contained (stdlib + the `claude` CLI), scans each `intake` project's folder, and curates
+only files it hasn't seen before. The in-app sweep handles the outbound staging.
 
 ## Settings & Admin
 

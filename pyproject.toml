@@ -19,10 +19,11 @@ gui = ["pywebview>=5"]             # the native window (app.py); CLI and --web n
 
 [project.scripts]
 setsweep = "setsweep_main:main"
+setsweep-watch = "setsweep_watch:main"   # the inbox folder-watch — run on a schedule (cron/timer)
 
 [tool.setuptools]
 # Flat layout: explicit module list disables auto-discovery (which would choke on the
 # test_*.py siblings). Install editable (`pip install -e`) so APPDIR resolves to the repo
 # and static/ + projects.json are found in place. A non-editable wheel would need the
 # tree restructured under a package + package-data for static/ — deferred (see INSTALL.md).
-py-modules = ["setsweep_main", "server", "runtime", "lineage", "cli", "app", "kits"]
+py-modules = ["setsweep_main", "server", "runtime", "lineage", "cli", "app", "kits", "setsweep_watch"]
