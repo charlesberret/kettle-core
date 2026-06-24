@@ -846,11 +846,12 @@ async function jget(u){ const r = await fetch(u); const j = await r.json(); if(!
 async function jpost(u,b){ const r = await fetch(u,{method:'POST',body:JSON.stringify(b)}); const j = await r.json(); if(!r.ok) throw j.error; return j; }
 
 const esc = s => String(s==null?'':s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-function shortName(p){ const parts = p.split('/'); return parts.slice(-2).join('/'); }
+function shortName(p){ if(!p) return ''; const parts = p.split('/'); return parts.slice(-2).join('/'); }
 function expandHome(p){ return p && p.startsWith('~') ? HOMEDIR + p.slice(1) : p; }
 
 /* full path relative to the active project's root; last-two segments if outside */
 function relPath(p){
+  if(!p) return '';
   const proj = PROJECTS.find(x => x.id === PROJECT);
   if(proj && proj.root){
     const root = expandHome(proj.root).replace(/\/+$/, '') + '/';
@@ -885,11 +886,16 @@ function renderQueue(){
     d.className = 'qitem' + (cur && e.id===cur.id ? ' active':'') + (e.status==='approved' ? ' approved':'')
                 + (e.status==='rework' ? ' rework':'');
     // line 1 is the FILE you'll open (the key identifier); line 2 is why it's queued.
-    const fname = relPath(e.path);
+    // Legacy/non-standard entries may carry no path — fall back to the title so the
+    // render never throws (a single bad entry must not blank the whole queue).
+    const hasPath = !!e.path;
+    const fname = hasPath ? relPath(e.path) : (e.title || e.id || 'entry');
     const dash = e.title ? e.title.search(/ [—–-] /) : -1;
-    const tsum = dash > 0 ? e.title.slice(dash + 3) : (e.title || e.ask || '');
-    d.innerHTML = `<div class="t"><span class="dot ${esc(e.urgency)}"></span>
-        <span class="qname" title="${esc(e.path)}">${esc(fname)}</span>${e.comment ? '<span class="notedot" title="has a note"></span>' : ''}${diffBadge(e.diff)}</div>
+    const tsum = hasPath
+      ? (dash > 0 ? e.title.slice(dash + 3) : (e.title || e.ask || ''))
+      : (e.note || e.ask || '');
+    d.innerHTML = `<div class="t"><span class="dot ${esc(e.urgency || '')}"></span>
+        <span class="qname" title="${esc(e.path || e.title || '')}">${esc(fname)}</span>${e.comment ? '<span class="notedot" title="has a note"></span>' : ''}${diffBadge(e.diff)}</div>
         <div class="qsum" title="${esc(e.title || '')}">${e.ask_type ? `<span class="qtag">${esc(e.ask_type)}</span> ` : ''}${esc(tsum)}${e.desk_item ? ' · desk #' + esc(e.desk_item) : ''}</div>`;
     d.onclick = () => select(e.id);
     $('qlist').appendChild(d);
