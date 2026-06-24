@@ -2021,8 +2021,8 @@ async function finishFounding(){
   } catch(err){ addMsg('err', String(err)); }
   busy = false; hideSpin(); $('sweepbtn').disabled = false;
   if(PROJECT !== pid) return;  // the patron moved on mid-founding
-  await autoCompact(true);   // shed the heavy founding survey before review begins
-  await revealQueue(pid);
+  await revealQueue(pid);    // show the founded queue FIRST — it's already on disk
+  await autoCompact(true);   // then shed the heavy founding survey (slow; must not gate the reveal)
 }
 async function revealQueue(pid){
   try {
@@ -2074,8 +2074,8 @@ async function quickFound(){
   } catch(err){ addMsg('err', String(err)); }
   busy = false; hideSpin(); $('sweepbtn').disabled = false;
   if(PROJECT !== pid) return;       // the patron moved on mid-founding
-  await autoCompact(true);          // shed the heavy founding survey before review begins
-  await revealQueue(pid);
+  await revealQueue(pid);           // show the founded queue FIRST — it's already on disk
+  await autoCompact(true);          // then shed the heavy founding survey (slow; must not gate the reveal)
 }
 
 /* ---- chat input auto-grow (cap ~40% of the column) ---- */
