@@ -249,13 +249,14 @@
   #sweepbtn.arming { color:var(--warn); border-color:var(--warn); animation: sweepfade 5s linear forwards; }
   @keyframes sweepfade { from { opacity:1; } to { opacity:.25; } }
   /* reload the queue — pick up out-of-band changes (live intake, a sweep in another viewport) */
-  #reloadbtn { margin-left:8px; font-family:var(--ui-font); font-size:13px; line-height:1;
+  #reloadbtn { margin-left:8px; font-family:var(--ui-font); line-height:1;
     color:var(--dim); background:transparent; border:1px solid var(--line); border-radius:4px;
-    padding:2px 7px; cursor:pointer; transition:color .15s, border-color .15s; }
+    padding:1px 7px; cursor:pointer; transition:color .15s, border-color .15s; }
+  #reloadbtn span { display:inline-block; font-size:17px; font-weight:600; }
   #reloadbtn:hover { color:var(--acc); border-color:var(--acc); }
   #reloadbtn:disabled { opacity:.5; cursor:default; }
   #reloadbtn.spinning { color:var(--acc); border-color:var(--acc); }
-  #reloadbtn.spinning span { display:inline-block; animation: spin360 .7s linear infinite; }
+  #reloadbtn.spinning span { animation: spin360 .7s linear infinite; }
   @keyframes spin360 { to { transform: rotate(360deg); } }
   #sweepconfirm { background:var(--panel); border:1px solid var(--line); border-radius:8px;
                   width:min(440px, 90vw); padding:18px 20px; display:flex; flex-direction:column; gap:12px; }
@@ -309,7 +310,7 @@
   #ivthink { display:none; flex:none; padding:4px 18px; color:var(--burnt); font-style:italic; font-size:12px; }
   #ivbar { flex:none; display:flex; gap:8px; padding:10px 14px; border-top:1px solid var(--line); align-items:flex-end; }
   #ivin { flex:1; background:var(--panel2); color:var(--fg); border:1px solid var(--line); border-radius:5px;
-          padding:8px 10px; font:inherit; resize:none; min-height:60px; overflow-y:hidden; }
+          padding:8px 10px; font:inherit; resize:none; min-height:40px; overflow-y:hidden; }
   #ivfinish { color:var(--good); font-weight:600; white-space:nowrap; }
   #ivstart { display:none; flex:1; flex-direction:column; justify-content:center; align-items:center; gap:10px; padding:30px; }
   #interview.fresh #ivstart { display:flex; }
@@ -484,7 +485,7 @@
 
 <div id="left">
   <div id="queue">
-    <h1>queue <select id="proj"></select><button id="reloadbtn" title="reload the queue — pick up new or removed entries (live intake, a sweep elsewhere)"><span>⟳</span></button><button id="sweepbtn" title="close the sitting — apply rulings, diff &amp; assess the batch, fix/flag ripples, log the session, restock the queue">sweep</button></h1>
+    <h1>queue <select id="proj"></select><button id="reloadbtn" title="reload the queue"><span>⟳</span></button><button id="sweepbtn" title="close the sitting — apply rulings, diff &amp; assess the batch, fix/flag ripples, log the session, restock the queue">sweep</button></h1>
     <div id="qlist"></div>
   </div>
   <div id="divQ" class="hdivider" title="drag to resize"></div>
@@ -525,10 +526,10 @@
     <div class="crow"><span id="commenthint">tied to this file; the sweep reads it when it closes the sitting</span><span style="flex:1"></span><button id="commentsave">save</button></div>
   </div>
   <div id="midfoot">
-    <button id="comment" title="leave a note on this file for the sweep">comment</button>
+    <button id="comment" title="leave a note on this file for the agent to address during the sweep">comment</button>
     <span style="flex:1"></span>
     <button id="reworkbtn" title="send back for a full rework — opens a note for the reworking agent">rework</button>
-    <button id="approve" title="clear from queue">approve</button>
+    <button id="approve" title="mark as finished/reviewed">approve</button>
   </div>
   <div id="interview">
     <div id="ivhead"><span class="ivtitle">founding interview · <span id="ivpname"></span></span><span class="ivacts"><button id="ivquick" type="button" title="skip the interview — the curator surveys the existing files and founds the desk (charter, memory, first queue) in one pass">found from files</button><button id="ivskip" type="button" title="leave founding for later — open the project as-is (no charter or queue yet); reselect it to resume founding">skip for now</button></span></div>
@@ -569,7 +570,7 @@
     <option value="opus">Opus</option>
     <option value="fable">Fable</option>
   </select>
-  <span id="ctxbar" title="context used — click to clear this file's session"><span id="ctxfill"></span><span class="ctxlabel">clear</span></span></h1>
+  <span id="ctxbar" title="context used — click to clear this session"><span id="ctxfill"></span><span class="ctxlabel">clear</span></span></h1>
   <div id="chat"></div>
   <div id="spin">thinking…</div>
   <div id="chatbar">
