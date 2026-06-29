@@ -18,20 +18,19 @@
   @font-face { font-family:'IBM Plex Sans'; font-weight:400; font-style:italic;
                src:url('/fonts/IBMPlexSans-Italic.woff2') format('woff2'); font-display:swap; }
   :root {
-    /* ---- palette: 16 base colours (the only things that hold raw hex) ---- */
-    --c-black:#16161e; --c-white:#d8d8e0;
-    --c-gray1:#1d1d28; --c-gray2:#23232f; --c-gray3:#32323f;
-    --c-gray4:#565663; --c-gray5:#8a8a98; --c-gray6:#b6b6c2;
-    --c-yellow:#c8a24a; --c-green:#7dba6f; --c-teal:#389bb4; --c-blue:#7d9fc8;
-    --c-indigo:#6b74c0; --c-purple:#9a76c2; --c-red:#d4756b; --c-orange:#c0692e;
-    /* ---- interface roles: each picks a palette colour (overridable in admin) ---- */
-    --bg:var(--c-black); --fg:var(--c-white);
-    --panel:var(--c-gray1); --panel2:var(--c-gray2); --line:var(--c-gray3);
-    --acc:var(--c-yellow); --good:var(--c-green); --warn:var(--c-red);
-    --selection:var(--c-blue); --qtag:var(--c-gray5); --activebg:var(--c-gray2);
-    --urghigh:var(--c-red); --urgmed:var(--c-yellow); --urglow:var(--c-gray5);
+    /* ---- ANSI 16-color palette (hex defaults; overridden by theme + settings) ---- */
+    --ansi-0:#000000; --ansi-1:#cd0000; --ansi-2:#00cd00; --ansi-3:#cdcd00;
+    --ansi-4:#0000ee; --ansi-5:#cd00cd; --ansi-6:#00cdcd; --ansi-7:#e5e5e5;
+    --ansi-8:#7f7f7f; --ansi-9:#ff0000; --ansi-10:#00ff00; --ansi-11:#ffff00;
+    --ansi-12:#5c5cff; --ansi-13:#ff00ff; --ansi-14:#00ffff; --ansi-15:#ffffff;
+    /* ---- interface roles: each picks an ANSI colour (overridable in settings) ---- */
+    --bg:var(--ansi-0); --fg:var(--ansi-7);
+    --panel:var(--ansi-8); --panel2:var(--ansi-0); --line:var(--ansi-8);
+    --acc:var(--ansi-3); --good:var(--ansi-2); --warn:var(--ansi-1);
+    --selection:var(--ansi-4); --qtag:var(--ansi-8); --activebg:var(--ansi-8);
+    --urghigh:var(--ansi-1); --urgmed:var(--ansi-3); --urglow:var(--ansi-8);
     /* ---- helper aliases used by text rules (not directly user-editable) ---- */
-    --dim:var(--c-gray5); --blue:var(--c-blue); --teal:var(--c-teal); --burnt:var(--c-orange);
+    --dim:var(--ansi-8); --blue:var(--ansi-4); --teal:var(--ansi-6); --burnt:var(--ansi-1);
     /* ---- fonts: mono interface, sans body (overridable in admin) ---- */
     --ui-font:'IBM Plex Mono', "SF Mono", Menlo, monospace;
     --body-font:'IBM Plex Sans', -apple-system, system-ui, "Helvetica Neue", sans-serif;
@@ -342,120 +341,119 @@
             padding:8px 10px; font:inherit; resize:none; min-height:40px; overflow-y:hidden; }
   #spin { display:none; color:var(--burnt); padding:4px 14px 10px; font-size:12px; font-style:italic; }
 
-  /* admin / debug overlay */
-  /* floating, draggable, resizable panel — stays out of the way so settings
-     can be tweaked while the main window is visible */
+  /* settings panel — neutral system-menu chrome (independent of app accent colours) */
   #admin { position:fixed; z-index:50; display:none;
-           top:48px; right:24px; width:600px; max-width:calc(100vw - 32px);
-           height:78vh; min-width:300px; min-height:200px; overflow:auto; resize:both;
-           background:var(--c-gray3); color:var(--fg); padding:0 0 22px;
-           border:1px solid var(--line); border-radius:8px;
-           box-shadow:0 18px 52px rgba(0,0,0,.55);
-           font:13px/1.5 var(--ui-font); }
+           top:48px; right:24px; width:640px; max-width:calc(100vw - 32px);
+           height:78vh; min-width:320px; min-height:200px; overflow:auto; resize:both;
+           padding:0 0 16px; border:1px solid var(--adm-border); border-radius:10px;
+           box-shadow:0 12px 40px rgba(0,0,0,.18);
+           font:13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+           background:var(--adm-bg); color:var(--adm-fg); }
+  #admin[data-adm-tone="dark"] {
+    --adm-bg:#2b2b2b; --adm-bg2:#383838; --adm-fg:#f5f5f7; --adm-muted:#98989d;
+    --adm-border:#484848; --adm-hover:#404040; --adm-focus:#0a84ff; --adm-sep:#3a3a3a;
+  }
+  #admin[data-adm-tone="light"] {
+    --adm-bg:#ececec; --adm-bg2:#ffffff; --adm-fg:#1d1d1f; --adm-muted:#6e6e73;
+    --adm-border:#c6c6c8; --adm-hover:#e0e0e0; --adm-focus:#007aff; --adm-sep:#d8d8dc;
+  }
   #admin.open { display:block; }
-  #adminstick { position:sticky; top:0; z-index:2; background:var(--panel);
-                border-radius:8px 8px 0 0; }
-  #adminhead { display:flex; align-items:center; gap:12px;
-               padding:14px 22px; border-bottom:1px solid var(--line);
+  #adminstick { position:sticky; top:0; z-index:2; background:var(--adm-bg2);
+                border-radius:10px 10px 0 0; border-bottom:1px solid var(--adm-sep); }
+  #adminhead { display:flex; align-items:center; gap:12px; padding:12px 16px;
                cursor:move; user-select:none; }
-  #adminhead h1 { margin:0; font-size:13px; letter-spacing:.18em; text-transform:uppercase; color:var(--acc); }
+  #adminhead h1 { margin:0; font-size:13px; font-weight:600; letter-spacing:-0.01em;
+                  text-transform:none; color:var(--adm-fg); }
   #adminhead .spacer { flex:1; }
-  #adminhead button { font-size:13px; line-height:1; padding:2px 10px; background:none; border:none;
-                      color:var(--dim); cursor:pointer; }
-  #adminhead button:hover { color:var(--fg); }
-  /* tab bar — horizontal, runs under the header */
-  #admintabs { display:flex; flex-wrap:wrap; gap:2px; padding:0 18px;
-               border-bottom:1px solid var(--line); overflow-x:auto; }
+  #adminhead button { font-size:13px; line-height:1; padding:4px 10px; background:transparent;
+                      border:1px solid transparent; border-radius:6px;
+                      color:var(--adm-muted); cursor:pointer; }
+  #adminhead button:hover { background:var(--adm-hover); color:var(--adm-fg); }
+  #admintabs { display:flex; flex-wrap:wrap; gap:0; padding:0 12px; overflow-x:auto;
+               background:var(--adm-bg2); }
   #admin .atab { background:none; border:none; border-bottom:2px solid transparent;
-                 padding:10px 14px; font:inherit; font-size:11.5px; letter-spacing:.14em;
-                 text-transform:uppercase; color:var(--dim); cursor:pointer;
-                 margin-bottom:-1px; transition:color .12s, border-color .12s; }
-  #admin .atab:hover { color:var(--fg); }
-  #admin .atab.active { color:var(--acc); border-bottom-color:var(--acc); }
-  /* sections — hidden by default; shown when their data-tab matches the active tab */
-  #admin .asec { display:none; border-bottom:1px solid var(--line); padding:16px 22px; max-width:960px; }
+                 padding:9px 12px; font:inherit; font-size:12px; font-weight:500;
+                 letter-spacing:0; text-transform:none; color:var(--adm-muted); cursor:pointer;
+                 margin-bottom:-1px; border-radius:0; }
+  #admin .atab:hover { color:var(--adm-fg); background:var(--adm-hover); }
+  #admin .atab.active { color:var(--adm-fg); border-bottom-color:var(--adm-focus); background:transparent; }
+  #admin .asec { display:none; border-bottom:1px solid var(--adm-sep); padding:14px 16px; max-width:none; }
   #admin .asec.show { display:block; }
-  /* the last visible section in a tab loses its bottom border — looks tidier */
   #admin .asec.show + .asec:not(.show) { border-top:0; }
-  #admin .asec h2 { margin:0 0 12px; font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--acc); }
-  #admin .arow { display:flex; align-items:center; gap:10px; margin:5px 0; flex-wrap:wrap; }
-  #admin .arow label.lbl { width:130px; color:var(--dim); flex:none; }
-  #admin .arow .vname { width:130px; color:var(--fg); flex:none; }
-  #admin input[type=color] { width:34px; height:24px; padding:0; border:1px solid var(--line);
-                             border-radius:4px; background:var(--panel2); cursor:pointer; }
+  #admin .asec h2 { margin:0 0 10px; font-size:11px; font-weight:600; letter-spacing:.04em;
+                    text-transform:uppercase; color:var(--adm-muted); }
+  #admin .arow { display:flex; align-items:center; gap:10px; margin:6px 0; flex-wrap:wrap; }
+  #admin .arow label.lbl { width:120px; color:var(--adm-muted); flex:none; font-size:12px; }
+  #admin .arow .vname { width:120px; color:var(--adm-fg); flex:none; font-size:12px; }
+  #admin input[type=color] { width:32px; height:22px; padding:0; border:1px solid var(--adm-border);
+                             border-radius:4px; background:var(--adm-bg2); cursor:pointer; }
   #admin input[type=text].hex, #admin input[type=number] {
-    background:var(--panel2); color:var(--fg); border:1px solid var(--line); border-radius:4px;
-    padding:4px 8px; font:inherit; }
-  #admin input[type=text].hex { width:100px; }
-  #admin input[type=number] { width:90px; }
-  #admin input:focus { outline:none; border-color:var(--acc); }
-  #admin .achk { display:flex; align-items:flex-start; gap:8px; margin:9px 0; }
-  #admin .achk input { margin-top:3px; accent-color:var(--acc); }
+    background:var(--adm-bg2); color:var(--adm-fg); border:1px solid var(--adm-border); border-radius:6px;
+    padding:4px 8px; font:12px/1.4 ui-monospace, "SF Mono", Menlo, monospace; }
+  #admin input[type=text].hex { width:74px; }
+  #admin input[type=number] { width:80px; }
+  #admin input:focus, #admin select:focus { outline:none; border-color:var(--adm-focus);
+    box-shadow:0 0 0 2px color-mix(in srgb, var(--adm-focus) 25%, transparent); }
+  #admin .achk { display:flex; align-items:flex-start; gap:8px; margin:8px 0; }
+  #admin .achk input { margin-top:3px; accent-color:var(--adm-focus); }
   #admin .achk .ctext { display:flex; flex-direction:column; gap:2px; }
-  #admin .achk .ctext .ctitle { color:var(--fg); }
-  #admin .achk .ctext .cdesc { color:var(--dim); font-size:11.5px; }
-  #admin button { padding:5px 14px; font-size:12px; }
-  #admin pre.adump { background:var(--panel2); border:1px solid var(--line); border-radius:6px;
+  #admin .achk .ctext .ctitle { color:var(--adm-fg); font-size:13px; }
+  #admin .achk .ctext .cdesc { color:var(--adm-muted); font-size:12px; }
+  #admin button:not(.atab) { padding:5px 12px; font-size:12px; font-weight:500; border-radius:6px;
+    background:var(--adm-bg2); color:var(--adm-fg); border:1px solid var(--adm-border); cursor:pointer; }
+  #admin button:not(.atab):hover { background:var(--adm-hover); }
+  #admin pre.adump { background:var(--adm-bg); border:1px solid var(--adm-border); border-radius:6px;
                      padding:10px 12px; white-space:pre-wrap; word-break:break-word;
-                     max-height:300px; overflow:auto; font-size:12px; color:var(--fg); margin:0; }
+                     max-height:300px; overflow:auto; font-size:12px; color:var(--adm-fg); margin:0; }
   #admin .kv { display:grid; grid-template-columns:170px 1fr; gap:3px 12px; align-items:baseline; }
-  #admin .kv .k { color:var(--dim); }
-  #admin .kv .v { color:var(--fg); word-break:break-word; }
-  #admin .v.ok { color:var(--good); } #admin .v.bad { color:var(--warn); } #admin .v.warnv { color:var(--acc); }
+  #admin .kv .k { color:var(--adm-muted); }
+  #admin .kv .v { color:var(--adm-fg); word-break:break-word; }
+  #admin .v.ok { color:var(--good); } #admin .v.bad { color:var(--warn); }
+  #admin .v.warnv { color:var(--adm-fg); }
   #admin .ptable { width:100%; border-collapse:collapse; font-size:12px; margin-top:4px; }
-  #admin .ptable th, #admin .ptable td { border:1px solid var(--line); padding:4px 9px; text-align:left; }
-  #admin .ptable th { background:var(--panel); color:var(--dim); font-weight:normal; }
+  #admin .ptable th, #admin .ptable td { border:1px solid var(--adm-sep); padding:4px 9px; text-align:left; }
+  #admin .ptable th { background:var(--adm-bg); color:var(--adm-muted); font-weight:600; }
   #admin .errlist { display:flex; flex-direction:column; gap:6px; max-height:280px; overflow-y:auto; }
   #admin .errlist .eitem { border-left:2px solid var(--warn); padding-left:8px; }
   #admin .errlist .emsg { color:var(--warn); white-space:pre-wrap; word-break:break-word; }
-  #admin .errlist .emeta { color:var(--dim); font-size:11px; }
-  #admin .errlist .enone, #admin .mono-dim { color:var(--dim); }
-  #admin .evlog { font-size:11.5px; color:var(--dim); white-space:pre-wrap; word-break:break-word; }
-  /* admin appearance sections laid side-by-side, rows flowing into columns */
+  #admin .errlist .emeta, #admin .errlist .enone, #admin .mono-dim, #admin .evlog { color:var(--adm-muted); }
   #admin .asec.wide { max-width:none; }
-  /* K · curators — the kit editor */
-  #admin .kitf { display:block; margin:8px 0 0; font-size:11px; letter-spacing:.04em; color:var(--dim); }
+  #admin .theme-bar { padding:12px 16px 4px; border-bottom:1px solid var(--adm-sep);
+                      background:var(--adm-bg2); display:flex; flex-wrap:wrap; gap:12px 24px; }
+  #admin .theme-bar .arow { margin:0; flex:1 1 200px; }
+  #admin .kitf { display:block; margin:8px 0 0; font-size:11px; letter-spacing:.04em; color:var(--adm-muted); }
   #admin .kitf input, #admin .kitf textarea { display:block; width:100%; box-sizing:border-box; margin-top:3px;
-    background:var(--panel2); color:var(--fg); border:1px solid var(--line); border-radius:4px;
-    font:12px var(--ui-font); padding:5px 7px; }
+    background:var(--adm-bg2); color:var(--adm-fg); border:1px solid var(--adm-border); border-radius:6px;
+    font:12px/1.45 var(--ui-font); padding:5px 7px; }
   #admin .kitf textarea { min-height:46px; resize:vertical; line-height:1.5; }
   #admin #kf_lens, #admin #kf_urgency, #admin #kf_firstQueue { min-height:54px; }
   #admin #kitio { min-height:80px; font-size:11px; }
-  #admin #kitpick { background:var(--panel2); color:var(--fg); border:1px solid var(--line);
-    border-radius:4px; font:12px var(--ui-font); padding:4px 7px; min-width:220px; }
-  #admin .projrow .pkit { background:var(--panel2); color:var(--fg); border:1px solid var(--line);
-    border-radius:4px; font:11px var(--ui-font); padding:3px 5px; }
-  #admin .projrow .pdepth { flex:none; width:48px; background:var(--panel2); color:var(--fg);
-    border:1px solid var(--line); border-radius:4px; font:11px var(--ui-font); padding:3px 5px; }
-  #admin .asec-cols { display:flex; gap:32px; flex-wrap:wrap; align-items:flex-start; }
-  #admin .asec-col { flex:1 1 360px; min-width:300px; }
-  #admin .asec-col h2 { margin:0 0 10px; font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--acc); }
-  #admin .grid2 { display:grid; grid-template-columns:repeat(2, max-content); gap:2px 26px; }
-  #admin #colorrows .crow { flex-wrap:nowrap; gap:8px; margin:3px 0; }
-  #admin #colorrows .cname { width:auto; min-width:46px; }
-  #admin #colorrows input[type=text].hex { width:74px; }
-  /* force every palette swatch to the same box so none shrinks in the flex row */
-  #admin #colorrows input[type=color] {
-    flex:none; width:34px; height:24px; min-width:34px; box-sizing:border-box; }
-  #admin .slotrow .slabel { width:128px; }
-  #admin .slotrow select, #admin .palrow select, #admin .palrow input[type=text] {
-    background:var(--panel2); color:var(--fg); border:1px solid var(--line); border-radius:4px;
-    padding:4px 8px; font:inherit; }
-  #admin .slotrow select { min-width:120px; }
-  #admin .slotrow .swatch { width:14px; height:14px; border-radius:3px; border:1px solid var(--line); flex:none; }
+  #admin #kitpick, #admin .projrow .pkit, #admin .projrow .pdepth, #admin .projrow .pname,
+  #admin .projrow .proot, #admin .slotrow select, #admin .palrow select, #admin .palrow input[type=text],
+  #admin .agentrow .amodel {
+    background:var(--adm-bg2); color:var(--adm-fg); border:1px solid var(--adm-border); border-radius:6px; }
+  #admin #kitpick { font:12px var(--ui-font); padding:4px 7px; min-width:220px; }
+  #admin .projrow .pkit, #admin .projrow .pdepth { font:11px var(--ui-font); padding:3px 5px; }
+  #admin .asec-cols { display:flex; gap:24px; flex-wrap:wrap; align-items:flex-start; }
+  #admin .asec-col { flex:1 1 280px; min-width:260px; }
+  #admin .asec-col h2 { margin:0 0 8px; font-size:11px; font-weight:600; letter-spacing:.04em;
+                        text-transform:uppercase; color:var(--adm-muted); }
+  #admin .grid2 { display:grid; grid-template-columns:repeat(2, max-content); gap:2px 20px; }
+  #admin #colorrows .crow { flex-wrap:nowrap; gap:8px; margin:2px 0; }
+  #admin #colorrows .cname { width:auto; min-width:72px; font-size:11px; }
+  #admin #colorrows input[type=color] { flex:none; width:32px; height:22px; min-width:32px; box-sizing:border-box; }
+  #admin .slotrow .slabel { width:110px; }
+  #admin .slotrow select { min-width:110px; font-size:12px; padding:3px 6px; }
+  #admin .slotrow .swatch { width:14px; height:14px; border-radius:3px; border:1px solid var(--adm-border); flex:none; }
   #admin .palrow { gap:8px; }
   #admin .agentrow { gap:8px; }
-  #admin .agentrow .amodel { flex:1 1 200px; max-width:280px; background:var(--panel2); color:var(--fg);
-            border:1px solid var(--line); border-radius:4px; padding:4px 8px; font:inherit; }
+  #admin .agentrow .amodel { flex:1 1 200px; max-width:280px; padding:4px 8px; font:inherit; }
   #admin .projrow { gap:6px; }
-  #admin .projrow .pname { flex:0 0 130px; background:var(--panel2); color:var(--fg);
-            border:1px solid var(--line); border-radius:4px; padding:4px 7px; font:inherit; }
-  #admin .projrow .proot { flex:1 1 220px; min-width:160px; background:var(--panel2); color:var(--dim);
-            border:1px solid var(--line); border-radius:4px; padding:4px 7px; font:inherit; }
-  #admin .projrow .pdel { color:var(--dim); }
-  #admin .projrow .pdel.arm { color:var(--warn); font-weight:600; }
+  #admin .projrow .pname { flex:0 0 130px; padding:4px 7px; font:inherit; }
+  #admin .projrow .proot { flex:1 1 220px; min-width:160px; color:var(--adm-muted); padding:4px 7px; font:inherit; }
+  #admin .projrow .pdel, #admin .projrow .prefound { color:var(--adm-muted); }
+  #admin .projrow .pdel.arm, #admin .projrow .prefound.arm { color:var(--warn); font-weight:600; }
   #admin .projrow .prefound { flex:none; font-size:11px; }
-  #admin .projrow .prefound.arm { color:var(--warn); font-weight:600; }
 
   /* horizontal (row) divider between queue and info panes */
   .hdivider { cursor:row-resize; height:5px; flex:none; background:transparent; }
@@ -656,7 +654,7 @@
   </div>
 </div>
 
-<div id="admin">
+<div id="admin" data-adm-tone="dark">
   <div id="adminstick">
     <div id="adminhead">
       <h1>settings</h1>
@@ -676,38 +674,52 @@
   </div>
 
   <div class="asec wide" data-tab="appearance">
+    <div class="theme-bar">
+      <div class="arow">
+        <span class="lbl">mode</span>
+        <select id="themeMode">
+          <option value="system">System</option>
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+        </select>
+      </div>
+      <div class="arow">
+        <span class="lbl">color theme</span>
+        <select id="builtinTheme"></select>
+      </div>
+    </div>
     <div class="asec-cols">
       <div class="asec-col">
-        <h2>palette — 16 colours</h2>
+        <h2>ANSI colors</h2>
         <div id="colorrows" class="grid2"></div>
-        <div class="arow"><button id="colorreset">reset colours</button></div>
+        <div class="arow"><button id="colorreset" type="button">reset to theme</button></div>
       </div>
       <div class="asec-col">
-        <h2>text colours — assign a palette colour to chat / text</h2>
+        <h2>text colors</h2>
         <div id="slotrows"></div>
-        <div class="arow"><button id="slotreset">reset text colours</button></div>
+        <div class="arow"><button id="slotreset" type="button">reset text colors</button></div>
       </div>
       <div class="asec-col">
-        <h2>interface colours — assign a palette colour to the chrome</h2>
+        <h2>interface colors</h2>
         <div id="ifacerows"></div>
-        <div class="arow"><button id="ifacereset">reset interface colours</button></div>
+        <div class="arow"><button id="ifacereset" type="button">reset interface colors</button></div>
       </div>
       <div class="asec-col">
-        <h2>fonts — interface (mono) &amp; body (sans)</h2>
+        <h2>fonts</h2>
         <div id="fontrows"></div>
-        <div class="arow"><button id="fontreset">reset fonts</button></div>
+        <div class="arow"><button id="fontreset" type="button">reset fonts</button></div>
         <h2 style="margin-top:18px">sizes</h2>
         <div id="sizerows"></div>
-        <div class="arow"><button id="sizereset">reset sizes</button></div>
-        <h2 style="margin-top:18px">saved palettes</h2>
+        <div class="arow"><button id="sizereset" type="button">reset sizes</button></div>
+        <h2 style="margin-top:18px">saved themes</h2>
         <div class="arow palrow">
-          <input type="text" id="palname" placeholder="name this palette" spellcheck="false">
-          <button id="palsave">save current</button>
+          <input type="text" id="palname" placeholder="name this theme" spellcheck="false">
+          <button id="palsave" type="button">save current</button>
         </div>
         <div class="arow palrow">
-          <select id="palload"><option value="">— load a palette —</option></select>
-          <button id="palapply">load</button>
-          <button id="paldel" title="delete the selected palette">✕</button>
+          <select id="palload"><option value="">— load a saved theme —</option></select>
+          <button id="palapply" type="button">load</button>
+          <button id="paldel" type="button" title="delete the selected theme">✕</button>
         </div>
       </div>
     </div>
@@ -796,6 +808,7 @@
   </div>
 </div>
 
+<script src="/themes.js"></script>
 <script src="/marked.min.js"></script>
 <script>
 /* running in-memory JS error log — the diagnostics tab renders the last
@@ -2369,28 +2382,142 @@ async function loadProject(pid){
 }
 
 /* ============================ admin / debug overlay ============================ */
-/* the 16 palette vars, in display order, with their built-in defaults */
-/* the palette is pure colour: black, white, six greys, eight tones.
-   each entry is [css-var, default-hex, display-label]. */
-const PALETTE = [
-  ['--c-black','#16161e','black'],   ['--c-white','#d8d8e0','white'],
-  ['--c-gray1','#1d1d28','gray 1'],  ['--c-gray2','#23232f','gray 2'],  ['--c-gray3','#32323f','gray 3'],
-  ['--c-gray4','#565663','gray 4'],  ['--c-gray5','#8a8a98','gray 5'],  ['--c-gray6','#b6b6c2','gray 6'],
-  ['--c-yellow','#c8a24a','yellow'], ['--c-green','#7dba6f','green'],   ['--c-teal','#389bb4','teal'],   ['--c-blue','#7d9fc8','blue'],
-  ['--c-indigo','#6b74c0','indigo'], ['--c-purple','#9a76c2','purple'], ['--c-red','#d4756b','red'],     ['--c-orange','#c0692e','orange'],
-];
-const PAL_LABEL = Object.fromEntries(PALETTE.map(([n,,l]) => [n, l]));
+const PALETTE = ANSI_LABELS.map((label, i) => {
+  const name = `--ansi-${i}`;
+  return [name, XTERM_DEFAULTS[name] || '#000000', `${i}: ${label}`];
+});
+const PAL_LABEL = Object.fromEntries(PALETTE.map(([n,, l]) => [n, l]));
+
 const SIZE_DEFAULTS = {edFont:13.5, uiFont:14, gutter:56};
 const COLW_DEFAULTS = {left:300, right:400};
-
 const isHex = v => /^#[0-9a-fA-F]{6}$/.test(v);
 
-/* apply a saved palette to :root (called at load, before first render) */
-function applyColors(){
-  const c = SETTINGS.colors || {};
-  for(const [name] of PALETTE){
-    if(isHex(c[name])) document.documentElement.style.setProperty(name, c[name]);
+function migratePaletteKey(key) {
+  return LEGACY_PALETTE_KEYS[key] || key;
+}
+
+function migrateRoleMap(map) {
+  if (!map || typeof map !== 'object') return {};
+  const out = {};
+  for (const [k, v] of Object.entries(map)) out[k] = migratePaletteKey(v);
+  return out;
+}
+
+function migrateThemeSettings() {
+  SETTINGS.colors = migrateRoleMap(SETTINGS.colors);
+  SETTINGS.slots = migrateRoleMap(SETTINGS.slots);
+  SETTINGS.iface = migrateRoleMap(SETTINGS.iface);
+  if (!SETTINGS.themeMode) SETTINGS.themeMode = 'dark';
+  if (!SETTINGS.builtinTheme || !BUILTIN_THEMES[SETTINGS.builtinTheme]) SETTINGS.builtinTheme = 'setsweep';
+  if (SETTINGS.palettes) {
+    const pals = {};
+    for (const [name, snap] of Object.entries(SETTINGS.palettes)) {
+      pals[name] = {
+        colors: migrateRoleMap(snap.colors),
+        slots: migrateRoleMap(snap.slots),
+        iface: migrateRoleMap(snap.iface || {}),
+        themeMode: snap.themeMode,
+        builtinTheme: snap.builtinTheme,
+      };
+    }
+    SETTINGS.palettes = pals;
   }
+}
+
+function resolvedThemeMode() {
+  const m = SETTINGS.themeMode || 'system';
+  if (m === 'system') {
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  }
+  return m === 'light' ? 'light' : 'dark';
+}
+
+function activeBuiltinTheme() {
+  const id = SETTINGS.builtinTheme || 'setsweep';
+  return BUILTIN_THEMES[id] || BUILTIN_THEMES.setsweep;
+}
+
+function builtinThemePreset() {
+  const theme = activeBuiltinTheme();
+  return theme[resolvedThemeMode()] || theme.dark;
+}
+
+function clearPaletteVars() {
+  for (let i = 0; i < 16; i++) document.documentElement.style.removeProperty(`--ansi-${i}`);
+  for (const [key] of IFACE_SLOTS) document.documentElement.style.removeProperty('--' + key);
+  for (const [key] of TEXT_SLOTS) document.documentElement.style.removeProperty('--slot-' + key);
+}
+
+function applyTheme() {
+  const mode = resolvedThemeMode();
+  document.documentElement.dataset.themeMode = mode;
+  const admin = $('admin');
+  if (admin) admin.dataset.admTone = mode;
+
+  const preset = builtinThemePreset();
+  const mergedColors = Object.assign({}, preset.colors, SETTINGS.colors || {});
+  const mergedSlots = Object.assign({}, preset.slots || {}, SETTINGS.slots || {});
+  const mergedIface = Object.assign({}, preset.iface || {}, SETTINGS.iface || {});
+
+  for (let i = 0; i < 16; i++) {
+    const name = `--ansi-${i}`;
+    const hex = mergedColors[name];
+    if (isHex(hex)) document.documentElement.style.setProperty(name, hex);
+    else document.documentElement.style.removeProperty(name);
+  }
+
+  const slotsHold = SETTINGS.slots;
+  const ifaceHold = SETTINGS.iface;
+  SETTINGS.slots = mergedSlots;
+  SETTINGS.iface = mergedIface;
+  applySlots();
+  applyIface();
+  SETTINGS.slots = slotsHold;
+  SETTINGS.iface = ifaceHold;
+}
+
+function applyColors(){
+  applyTheme();
+}
+
+function buildThemeControls(){
+  const modeSel = $('themeMode');
+  const themeSel = $('builtinTheme');
+  if (!modeSel || !themeSel) return;
+
+  modeSel.value = SETTINGS.themeMode || 'system';
+  themeSel.innerHTML = Object.entries(BUILTIN_THEMES).map(([id, t]) =>
+    `<option value="${esc(id)}"${id === (SETTINGS.builtinTheme || 'setsweep') ? ' selected' : ''}>${esc(t.label)}</option>`
+  ).join('');
+
+  if (!modeSel.dataset.wired) {
+    modeSel.dataset.wired = '1';
+    modeSel.addEventListener('change', () => {
+      SETTINGS.themeMode = modeSel.value;
+      saveSettings({themeMode: SETTINGS.themeMode});
+      applyTheme();
+      buildColorRows(); buildSlotRows(); buildIfaceRows();
+    });
+  }
+  if (!themeSel.dataset.wired) {
+    themeSel.dataset.wired = '1';
+    themeSel.addEventListener('change', () => {
+      SETTINGS.builtinTheme = themeSel.value;
+      SETTINGS.colors = {};
+      SETTINGS.slots = {};
+      SETTINGS.iface = {};
+      saveSettings({builtinTheme: SETTINGS.builtinTheme, colors: {}, slots: {}, iface: {}});
+      applyTheme();
+      buildColorRows(); buildSlotRows(); buildIfaceRows();
+    });
+  }
+}
+
+if (!window.__setsweepThemeMedia) {
+  window.__setsweepThemeMedia = window.matchMedia('(prefers-color-scheme: dark)');
+  window.__setsweepThemeMedia.addEventListener('change', () => {
+    if ((SETTINGS.themeMode || 'system') === 'system') applyTheme();
+  });
 }
 /* apply saved sizes (editor font, UI base font, gutter width) */
 function applySizes(){
@@ -2467,75 +2594,80 @@ function buildColorRows(){
 }
 function setColor(name, val){
   if(!isHex(val)) return;
-  document.documentElement.style.setProperty(name, val);
   const colors = Object.assign({}, SETTINGS.colors, {[name]: val});
+  SETTINGS.colors = colors;
   saveSettings({colors});
-  // keep the paired inputs in sync
+  applyTheme();
   $('colorrows').querySelectorAll(`input[data-var="${name}"]`).forEach(i => { i.value = val; });
 }
 function resetColors(){
-  for(const [name] of PALETTE) document.documentElement.style.removeProperty(name);
+  SETTINGS.colors = {};
   saveSettings({colors: {}});
-  applyColors();  // re-applies (now empty → CSS defaults stand)
+  applyTheme();
   buildColorRows();
 }
 
-/* ---- colour assignment: each role picks one of the 16 palette colours ----
-   TEXT_SLOTS drive --slot-<key> (chat/text elements); IFACE_SLOTS drive the
-   interface roles --bg/--fg/--panel/... directly. def is the palette var the
-   role falls back to. */
+/* ---- colour assignment: each role picks one of the 16 ANSI colours ---- */
 const TEXT_SLOTS = [
-  ['header', 'section headers', '--c-yellow'],
-  ['ctxhead', 'context heading', '--c-white'],
-  ['ctxbody', 'context text (chat)', '--c-white'],
-  ['ctxpath', 'context file-path', '--c-blue'],
-  ['cmthead', 'comment heading', '--c-white'],
-  ['comment', 'comment button', '--c-blue'],
-  ['wikilink', 'wiki-links', '--c-blue'],
-  ['agent', 'agent text', '--c-gray5'],
-  ['user', 'your text', '--c-yellow'],
-  ['glance', 'glance reaction', '--c-gray5'],
+  ['header', 'section headers', '--ansi-3'],
+  ['ctxhead', 'context heading', '--ansi-7'],
+  ['ctxbody', 'context text (chat)', '--ansi-7'],
+  ['ctxpath', 'context file-path', '--ansi-4'],
+  ['cmthead', 'comment heading', '--ansi-7'],
+  ['comment', 'comment button', '--ansi-4'],
+  ['wikilink', 'wiki-links', '--ansi-4'],
+  ['agent', 'agent text', '--ansi-8'],
+  ['user', 'your text', '--ansi-3'],
+  ['glance', 'glance reaction', '--ansi-8'],
 ];
 const IFACE_SLOTS = [
-  ['bg', 'background', '--c-black'],
-  ['fg', 'foreground text', '--c-white'],
-  ['panel', 'panel', '--c-gray1'],
-  ['panel2', 'panel · raised', '--c-gray2'],
-  ['line', 'lines / borders', '--c-gray3'],
-  ['acc', 'accent', '--c-yellow'],
-  ['good', 'good / success', '--c-green'],
-  ['warn', 'warn / error', '--c-red'],
-  ['selection', 'text selection', '--c-blue'],
-  ['qtag', 'queue tags', '--c-gray5'],
-  ['activebg', 'active file bg', '--c-gray2'],
-  ['urghigh', 'urgency · high', '--c-red'],
-  ['urgmed', 'urgency · medium', '--c-yellow'],
-  ['urglow', 'urgency · low', '--c-gray5'],
+  ['bg', 'background', '--ansi-0'],
+  ['fg', 'foreground text', '--ansi-7'],
+  ['panel', 'panel', '--ansi-8'],
+  ['panel2', 'panel · raised', '--ansi-0'],
+  ['line', 'lines / borders', '--ansi-8'],
+  ['acc', 'accent', '--ansi-3'],
+  ['good', 'good / success', '--ansi-2'],
+  ['warn', 'warn / error', '--ansi-1'],
+  ['selection', 'text selection', '--ansi-4'],
+  ['qtag', 'queue tags', '--ansi-8'],
+  ['activebg', 'active file bg', '--ansi-8'],
+  ['urghigh', 'urgency · high', '--ansi-1'],
+  ['urgmed', 'urgency · medium', '--ansi-3'],
+  ['urglow', 'urgency · low', '--ansi-8'],
 ];
 const PAL_NAMES = PALETTE.map(([n]) => n);
 const palOpts = chosen => PALETTE.map(([n,,l]) =>
   `<option value="${n}"${n===chosen?' selected':''}>${esc(l)}</option>`).join('');
 
-function applySlots(){            // text colours -> --slot-<key>
+function applySlots(){
+  const preset = builtinThemePreset();
   const s = SETTINGS.slots || {};
   for(const [key,, def] of TEXT_SLOTS){
-    const v = PAL_NAMES.includes(s[key]) ? s[key] : def;
-    document.documentElement.style.setProperty('--slot-' + key, `var(${v})`);
+    const pick = PAL_NAMES.includes(s[key]) ? s[key]
+      : (PAL_NAMES.includes((preset.slots || {})[key]) ? preset.slots[key] : def);
+    document.documentElement.style.setProperty('--slot-' + key, `var(${pick})`);
   }
 }
-function applyIface(){            // interface colours -> --<key>
+function applyIface(){
+  const preset = builtinThemePreset();
   const s = SETTINGS.iface || {};
   for(const [key,, def] of IFACE_SLOTS){
-    const v = PAL_NAMES.includes(s[key]) ? s[key] : def;
-    document.documentElement.style.setProperty('--' + key, `var(${v})`);
+    const pick = PAL_NAMES.includes(s[key]) ? s[key]
+      : (PAL_NAMES.includes((preset.iface || {})[key]) ? preset.iface[key] : def);
+    document.documentElement.style.setProperty('--' + key, `var(${pick})`);
   }
 }
 /* one builder for both categories: SLOTDEF + settings-key + var-prefix + apply fn */
 function buildAssignRows(boxId, defs, sKey, varPrefix, applyFn){
   const box = $(boxId); box.innerHTML = '';
   const s = SETTINGS[sKey] || {};
+  const presetMap = sKey === 'slots'
+    ? (builtinThemePreset().slots || {})
+    : (builtinThemePreset().iface || {});
   for(const [key, label, def] of defs){
-    const chosen = PAL_NAMES.includes(s[key]) ? s[key] : def;
+    const chosen = PAL_NAMES.includes(s[key]) ? s[key]
+      : (PAL_NAMES.includes(presetMap[key]) ? presetMap[key] : def);
     const row = document.createElement('div'); row.className = 'arow slotrow';
     row.innerHTML = `<span class="vname slabel">${esc(label)}</span>` +
       `<span class="swatch" style="background:var(${chosen})"></span>` +
@@ -2545,26 +2677,28 @@ function buildAssignRows(boxId, defs, sKey, varPrefix, applyFn){
   box.querySelectorAll('select[data-slot]').forEach(sel =>
     sel.addEventListener('change', () => {
       const next = Object.assign({}, SETTINGS[sKey], {[sel.dataset.slot]: sel.value});
-      SETTINGS[sKey] = next; applyFn(); saveSettings({[sKey]: next});
+      SETTINGS[sKey] = next; saveSettings({[sKey]: next}); applyTheme();
       const sw = sel.previousElementSibling;
       if(sw) sw.style.background = `var(${sel.value})`;
     }));
 }
 function buildSlotRows(){ buildAssignRows('slotrows', TEXT_SLOTS, 'slots', '--slot-', applySlots); }
 function buildIfaceRows(){ buildAssignRows('ifacerows', IFACE_SLOTS, 'iface', '--', applyIface); }
-function resetSlots(){ SETTINGS.slots = {}; saveSettings({slots: {}}); applySlots(); buildSlotRows(); }
-function resetIface(){ SETTINGS.iface = {}; saveSettings({iface: {}}); applyIface(); buildIfaceRows(); }
+function resetSlots(){ SETTINGS.slots = {}; saveSettings({slots: {}}); applyTheme(); buildSlotRows(); }
+function resetIface(){ SETTINGS.iface = {}; saveSettings({iface: {}}); applyTheme(); buildIfaceRows(); }
 
-/* ---- saved palettes: snapshot colours + element-colours under a name ---- */
+/* ---- saved themes: snapshot colours + role assignments under a name ---- */
 function buildPaletteSelect(){
   const sel = $('palload'); const pals = SETTINGS.palettes || {};
-  sel.innerHTML = '<option value="">— load a palette —</option>' +
+  sel.innerHTML = '<option value="">— load a saved theme —</option>' +
     Object.keys(pals).map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
 }
 function savePalette(){
   const name = $('palname').value.trim();
   if(!name){ $('palname').focus(); return; }
   const snapshot = {
+    themeMode: SETTINGS.themeMode,
+    builtinTheme: SETTINGS.builtinTheme,
     colors: Object.assign({}, SETTINGS.colors),
     slots:  Object.assign({}, SETTINGS.slots),
     iface:  Object.assign({}, SETTINGS.iface),
@@ -2578,13 +2712,20 @@ function savePalette(){
 function applyPalette(){
   const name = $('palload').value; const p = (SETTINGS.palettes || {})[name];
   if(!p) return;
+  if (p.themeMode) SETTINGS.themeMode = p.themeMode;
+  if (p.builtinTheme) SETTINGS.builtinTheme = p.builtinTheme;
   SETTINGS.colors = Object.assign({}, p.colors);
   SETTINGS.slots = Object.assign({}, p.slots);
   SETTINGS.iface = Object.assign({}, p.iface || {});
-  saveSettings({colors: SETTINGS.colors, slots: SETTINGS.slots, iface: SETTINGS.iface});
-  for(const [n] of PALETTE) document.documentElement.style.removeProperty(n);
-  applyColors(); applySlots(); applyIface();
-  buildColorRows(); buildSlotRows(); buildIfaceRows();
+  saveSettings({
+    themeMode: SETTINGS.themeMode,
+    builtinTheme: SETTINGS.builtinTheme,
+    colors: SETTINGS.colors,
+    slots: SETTINGS.slots,
+    iface: SETTINGS.iface,
+  });
+  applyTheme();
+  buildThemeControls(); buildColorRows(); buildSlotRows(); buildIfaceRows();
 }
 function deletePalette(){
   const name = $('palload').value; if(!name) return;
@@ -2815,6 +2956,7 @@ function setAdminTab(name){
   saveSettings({adminTab: name});
 }
 function openAdmin(){
+  buildThemeControls();
   buildColorRows(); buildFontRows(); buildSizeRows(); buildSlotRows(); buildIfaceRows(); buildPaletteSelect(); buildProjRows(); buildAgentRows(); syncBehaviorInputs();
   renderErrLog();
   $('admin').classList.add('open');
@@ -2929,7 +3071,8 @@ function wireAdmin(){
 (async function init(){
   try { SETTINGS = await jget('/api/settings'); } catch(e){ SETTINGS = {}; }
   SETTINGS.colWidths = Object.assign({left:300, right:400}, SETTINGS.colWidths || {});
-  applyColors(); applySlots(); applyIface(); applySizes(); applyFonts();  // palette + text/interface colours + sizes + fonts before first paint
+  migrateThemeSettings();
+  applyTheme(); applySizes(); applyFonts();
   syncBehaviorInputs(); applyMdToggle(); wireAdmin();
   applyCols(); applySplit();
   initDividers();
