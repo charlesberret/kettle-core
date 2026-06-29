@@ -457,7 +457,7 @@
     background:var(--adm-bg2); color:var(--adm-fg); border:1px solid var(--adm-border); border-radius:6px; }
   #admin .ap-saved-row select { flex:1 1 160px; min-width:120px; font-size:12px; padding:4px 6px; }
   #admin #kitpick, #admin .projrow .pkit, #admin .projrow .pdepth, #admin .projrow .pname,
-  #admin .projrow .proot, #admin .agentrow .amodel,
+  #admin .projrow .proot, #admin .agentrow .amodel, #admin .agentrow .amodel-custom,
   #admin .ap-form-row select, #admin .ap-form-stack select {
     background:var(--adm-bg2); color:var(--adm-fg); border:1px solid var(--adm-border); border-radius:6px; }
   #admin #kitpick { font:12px var(--ui-font); padding:4px 7px; min-width:220px; }
@@ -470,7 +470,8 @@
   #admin #kitio { min-height:80px; font-size:11px; }
   #admin .projrow .pkit, #admin .projrow .pdepth { font:11px var(--ui-font); padding:3px 5px; }
   #admin .agentrow { gap:8px; }
-  #admin .agentrow .amodel { flex:1 1 200px; max-width:280px; padding:4px 8px; font:inherit; }
+  #admin .agentrow .amodel { flex:0 1 140px; min-width:120px; padding:4px 8px; font:inherit; }
+  #admin .agentrow .amodel-custom { flex:1 1 140px; min-width:120px; padding:4px 8px; font:inherit; }
   #admin .projrow { gap:6px; }
   #admin .projrow .pname { flex:0 0 130px; padding:4px 7px; font:inherit; }
   #admin .projrow .proot { flex:1 1 220px; min-width:160px; color:var(--adm-muted); padding:4px 7px; font:inherit; }
@@ -765,8 +766,7 @@
 
   <div class="asec" data-tab="agents">
     <div id="agentrows"></div>
-    <div class="arow mono-dim" style="font-size:11px">model is any id your agent CLI accepts — pick a suggestion or type your own. (CLIs beyond Claude Code: a flagged future project.)</div>
-    <datalist id="modellist"></datalist>
+    <div class="arow mono-dim" style="font-size:11px">model is any id your agent CLI accepts — pick a standard model or type a custom id below. (CLIs beyond Claude Code: a flagged future project.)</div>
   </div>
 
   <div class="asec" data-tab="behavior">
@@ -880,6 +880,26 @@ let SETTINGS = {}, HOMEDIR = '', findIdx = -1;
 let CHATLOG = [], restoring = false, chatlogTimer = null;
 const CHATLOG_SHOW = 200;  // display cap on reload (server keeps 500)
 const MODELS = ['sonnet', 'opus', 'haiku', 'fable'];
+const MODEL_LABELS = {sonnet: 'Sonnet', opus: 'Opus', haiku: 'Haiku', fable: 'Fable'};
+
+/** Populate a <select> with every standard model; append the current value if custom. */
+function fillModelSelect(sel, current){
+  const m = (current || '').trim() || 'sonnet';
+  sel.innerHTML = '';
+  for(const id of MODELS){
+    const o = document.createElement('option');
+    o.value = id;
+    o.textContent = MODEL_LABELS[id] || id;
+    if(id === m) o.selected = true;
+    sel.appendChild(o);
+  }
+  if(!MODELS.includes(m)){
+    const o = document.createElement('option');
+    o.value = m; o.textContent = m; o.selected = true;
+    sel.insertBefore(o, sel.firstChild);
+  }
+  sel.value = m;
+}
 
 /* per-task agents. setup = founding survey / sweep / rework (agentic, edits files);
    chat = the per-file review conversation (also the top-bar selector); glance = the
@@ -903,11 +923,7 @@ function setAgent(task, model){
 }
 function syncModelBar(){                       // reflect the chat agent in the top-bar <select>
   const sel = $('model'); if(!sel) return;
-  const m = agentModel('chat');
-  if(![...sel.options].some(o => o.value === m)){
-    const opt = document.createElement('option'); opt.value = m; opt.textContent = m; sel.appendChild(opt);
-  }
-  sel.value = m;
+  fillModelSelect(sel, agentModel('chat'));
 }
 const $ = id => document.getElementById(id);
 
@@ -1851,17 +1867,38 @@ async function refoundProj(id, btn){
   } catch(err){ addMsg('err', 're-found failed: ' + err); }
 }
 
-/* ---- admin · agents: per-task model (datalist accepts any id) ---- */
+/* ---- admin · agents: per-task model (<select> lists all standards; custom id optional) ---- */
 function buildAgentRows(){
   const box = $('agentrows'); if(!box) return;
-  const dl = $('modellist'); if(dl) dl.innerHTML = MODELS.map(m => `<option value="${esc(m)}">`).join('');
   box.innerHTML = '';
   for(const [task, label, desc] of AGENT_TASKS){
     const row = document.createElement('div'); row.className = 'arow agentrow';
     row.innerHTML =
       `<span class="vname slabel" title="${esc(desc)}">${esc(label)}</span>` +
-      `<input class="amodel" list="modellist" value="${esc(agentModel(task))}" spellcheck="false" title="${esc(desc)}">`;
-    row.querySelector('.amodel').addEventListener('change', e => setAgent(task, e.target.value));
+      `<select class="amodel" data-task="${esc(task)}" title="${esc(desc)}"></select>` +
+      `<input class="amodel-custom" data-task="${esc(task)}" spellcheck="false" placeholder="custom model id" title="any id your agent CLI accepts">`;
+    const sel = row.querySelector('.amodel');
+    const custom = row.querySelector('.amodel-custom');
+    fillModelSelect(sel, agentModel(task));
+    custom.style.display = 'none';
+    sel.addEventListener('change', () => {
+      if(sel.value === '__custom__'){
+        custom.style.display = '';
+        custom.focus();
+        return;
+      }
+      custom.style.display = 'none';
+      custom.value = '';
+      setAgent(task, sel.value);
+    });
+    custom.addEventListener('change', () => setAgent(task, custom.value));
+    custom.addEventListener('keydown', e => { if(e.key === 'Enter') setAgent(task, custom.value); });
+    // offer explicit "custom…" entry point when on a standard model
+    if(![...sel.options].some(o => o.value === '__custom__')){
+      const o = document.createElement('option');
+      o.value = '__custom__'; o.textContent = 'custom…';
+      sel.appendChild(o);
+    }
     box.appendChild(row);
   }
 }
@@ -1869,20 +1906,28 @@ function buildAgentRows(){
 /* ---- first-run setup window: bootstrap the per-task agents, then project setup ---- */
 function buildSetupRows(){
   const box = $('setuprows'); if(!box) return;
-  const dl = $('modellist'); if(dl) dl.innerHTML = MODELS.map(m => `<option value="${esc(m)}">`).join('');
   box.innerHTML = '';
   for(const [task, label, desc] of AGENT_TASKS){
     const row = document.createElement('div'); row.className = 'mrow';
     row.innerHTML = `<span class="lbl" title="${esc(desc)}">${esc(label)}</span>` +
-      `<input class="smodel" data-task="${esc(task)}" list="modellist" value="${esc(agentModel(task))}" spellcheck="false" style="flex:1">`;
+      `<select class="smodel" data-task="${esc(task)}" title="${esc(desc)}" style="flex:1"></select>`;
+    const sel = row.querySelector('.smodel');
+    fillModelSelect(sel, agentModel(task));
+    if(![...sel.options].some(o => o.value === '__custom__')){
+      const o = document.createElement('option');
+      o.value = '__custom__'; o.textContent = 'custom…';
+      sel.appendChild(o);
+    }
     box.appendChild(row);
   }
 }
 function showSetup(){ buildSetupRows(); $('setupbg').classList.add('open'); }
 function finishSetup(){
   const agents = Object.assign({}, AGENT_DEFAULTS, SETTINGS.agents);
-  $('setuprows').querySelectorAll('.smodel').forEach(i => {
-    agents[i.dataset.task] = (i.value || '').trim() || AGENT_DEFAULTS[i.dataset.task];
+  $('setuprows').querySelectorAll('.smodel').forEach(sel => {
+    const task = sel.dataset.task;
+    const v = sel.value === '__custom__' ? '' : (sel.value || '').trim();
+    agents[task] = v || AGENT_DEFAULTS[task];
   });
   SETTINGS.agents = agents; saveSettings({agents}); syncModelBar();
   $('setupbg').classList.remove('open');
