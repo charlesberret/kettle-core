@@ -983,8 +983,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
                 self.wfile.write(body)
-            elif url.path == "/marked.min.js":
-                body = (STATIC / "marked.min.js").read_bytes()
+            elif url.path in ("/marked.min.js", "/themes.js"):
+                body = (STATIC / url.path.lstrip("/")).read_bytes()
                 self.send_response(200)
                 self.send_header("Content-Type", "application/javascript")
                 self.send_header("Content-Length", str(len(body)))
