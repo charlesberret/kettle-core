@@ -9,7 +9,7 @@ allowlist, acceptEdits); each queue entry's curatorial brief is injected
 as system-prompt context so the agent starts aligned without re-reading the file.
 
 Run standalone (web mode):  python3 server.py [--port 4242] [--no-open]
-Embedded (Desk.app):        app.py imports start_server().
+Bundled (Electron .app):     PyInstaller sidecar; set DESK_PROJECTS for the registry path.
 """
 
 import difflib
@@ -34,7 +34,16 @@ import lineage  # who-edited-what: agent edits self-record to the desk's working
 import runtime  # viewport-neutral agent adapter: spawn · usage normalizer · session ledger
 
 HOME = Path.home()
-APPDIR = Path(__file__).resolve().parent
+
+
+def _app_dir() -> Path:
+    """Repo root in dev; PyInstaller extract dir when frozen as a bundled sidecar."""
+    if getattr(sys, "frozen", False):
+        return Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
+    return Path(__file__).resolve().parent
+
+
+APPDIR = _app_dir()
 STATIC = APPDIR / "static"
 PROJECTS_PATH = Path(os.environ.get("DESK_PROJECTS", APPDIR / "projects.json"))
 SETTINGS_PATH = PROJECTS_PATH.parent / "settings.json"
@@ -1705,7 +1714,7 @@ class Handler(BaseHTTPRequestHandler):
 # ---------- entry points ----------
 
 def start_server(port: int = 0) -> tuple[ThreadingHTTPServer, int]:
-    """Start in a daemon thread; returns (server, bound_port). Used by app.py."""
+    """Start in a daemon thread; returns (server, bound_port)."""
     global SERVER_PORT, SERVER_STARTED
     srv = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     SERVER_PORT = srv.server_address[1]
