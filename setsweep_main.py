@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """setsweep — unified entrypoint (the installed console script).
 
-One command, three viewports onto the same desk:
+One command, two viewports onto the same desk:
 
-  setsweep                          the native window           (default; needs `gui` extra)
-  setsweep --web [--port N]         browser mode                (stdlib only)
+  setsweep                          browser / server mode       (default; stdlib only)
+  setsweep --web [--port N]         same as bare launch
   setsweep projects                 list registered desks       ┐
   setsweep add     <folder>         register a folder as a desk │
   setsweep init                     register the current folder │  the CLI viewport
@@ -13,9 +13,8 @@ One command, three viewports onto the same desk:
   setsweep chat    <project> [id]   talk to the resident curator┘
   setsweep --help                   this message
 
-Routing keeps the GUI as the default — the same behavior as the prior bash launcher —
-and folds the terminal viewport in under the same name. GUI/web go through `server.py`;
-the CLI subcommands go through `cli.py`; nothing starts a server unless you ask for one.
+The native macOS window lives in the separate setsweep-desktop Electron shell.
+Routing keeps web/server as the default; the CLI subcommands go through `cli.py`.
 """
 import sys
 
@@ -32,12 +31,11 @@ def main(argv=None) -> int:
     if cmd in CLI_CMDS:
         import cli
         return cli.main(args)
-    if cmd == "--web":
-        import server          # server.main() reads sys.argv (--port/--no-open); --web is ignored
-        return server.main()
-    # default (bare), --app, --replace → the native window
-    import app
-    return app.main() or 0
+    if cmd in (None, "--web", "--app", "--replace"):
+        import server          # server.main() reads sys.argv (--port/--no-open)
+        return server.main() or 0
+    print(f"setsweep: unknown command {cmd!r} (try setsweep --help)", file=sys.stderr)
+    return 2
 
 
 if __name__ == "__main__":

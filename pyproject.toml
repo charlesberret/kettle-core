@@ -14,9 +14,6 @@ authors = [{ name = "Charles Berret" }]
 keywords = ["review", "agents", "claude", "editor", "curation", "inbox"]
 dependencies = []                  # the server and the CLI viewport are stdlib-only
 
-[project.optional-dependencies]
-gui = ["pywebview>=5"]             # the native window (app.py); CLI and --web need nothing
-
 [project.scripts]
 setsweep = "setsweep_main:main"
 setsweep-watch = "setsweep_watch:main"   # the inbox folder-watch — run on a schedule (cron/timer)
@@ -26,4 +23,4 @@ setsweep-watch = "setsweep_watch:main"   # the inbox folder-watch — run on a s
 # test_*.py siblings). Install editable (`pip install -e`) so APPDIR resolves to the repo
 # and static/ + projects.json are found in place. A non-editable wheel would need the
 # tree restructured under a package + package-data for static/ — deferred (see INSTALL.md).
-py-modules = ["setsweep_main", "server", "runtime", "lineage", "cli", "app", "kits", "setsweep_watch"]
+py-modules = ["setsweep_main", "server", "runtime", "lineage", "cli", "kits", "setsweep_watch"]

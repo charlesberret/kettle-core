@@ -3,7 +3,7 @@ Setsweep agent runtime — the viewport-neutral adapter (v2 seed).
 
 The prototype's right-pane agent borrows three things from the `claude` process that
 the desk should own. This module takes them back, with no dependency on `server.py`,
-so any viewport — the pywebview app today, a CLI tomorrow — drives the same adapter:
+so any viewport — the Electron shell today, the CLI tomorrow — drives the same adapter:
 
   1. **spawn** — run the headless agent, normalize its stream into clean client events
      (the SAME shapes `static/index.html` already reads: model · text · tool · done ·

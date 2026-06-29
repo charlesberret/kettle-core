@@ -10,7 +10,7 @@ your edits and approvals are then applied outward mechanically by a *sweep*. Not
 re-derive what an agent already knows, and nothing lets an agent commit what is yours to decide.
 
 The agent runtime is **Claude Code headless** (the `claude` CLI). The server and CLI are
-Python-stdlib-only; the native window adds one optional dependency.
+Python-stdlib-only; the native macOS window is the separate setsweep-desktop Electron shell.
 
 > **Vocabulary.** Two words recur in this project. **You** are the reviewer (the docs sometimes
 > call you *the patron*). The **curator** is a per-project agent *identity carried in files*
@@ -21,18 +21,17 @@ Python-stdlib-only; the native window adds one optional dependency.
 
 ```bash
 pip install -e .            # CLI + web mode — standard library only
-pip install -e '.[gui]'     # + the native desktop window (adds pywebview)
 ```
 
 Requirements: **Python 3.11+** and the **`claude` CLI** on your `PATH`. setsweep stores **no API
 key** — it uses `claude`'s ambient auth (its own login or `ANTHROPIC_API_KEY` in the environment).
-See [`INSTALL.md`](./INSTALL.md) for the native app bundle.
+See [`INSTALL.md`](./INSTALL.md) for the native `.app` bundle.
 
 ## Run
 
 ```bash
-setsweep              # native window  (requires the [gui] extra)
-setsweep --web        # browser mode at http://127.0.0.1:4242
+setsweep              # browser / server mode  (default)
+setsweep --web        # same — http://127.0.0.1:4242
 setsweep add <dir>    # register a project from the CLI
 setsweep projects     # list registered projects
 ```
@@ -48,8 +47,8 @@ A foreign occupant of the port → graceful fallback to an ephemeral one.
   (resolve-then-`is_relative_to`) to registered project roots plus a configurable base; registered
   roots extend the fence, so registration is the gate (a folder must exist, be a directory, and
   live under your home).
-- **`app.py`** — the native shell: a WKWebView window via `pywebview`. The server rides as a
-  daemon thread and dies with the window.
+- **`setsweep-desktop`** — the native macOS shell: an Electron app that bundles this server
+  and loads it in a BrowserWindow. See `~/Repos/setsweep-desktop/`.
 - **`projects.json`** — the registry (self-creates; see [`projects.example.json`](./projects.example.json)).
   One stanza per project: `id`, `name`, `root` (the agent's working directory), `kit` (the curator
   playbook — see below), `rework_agents` (recipients for the rework button), an optional `role`
