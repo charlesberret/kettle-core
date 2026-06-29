@@ -353,13 +353,30 @@
            box-shadow:0 18px 52px rgba(0,0,0,.55);
            font:13px/1.5 var(--ui-font); }
   #admin.open { display:block; }
-  #adminhead { position:sticky; top:0; z-index:2; display:flex; align-items:center; gap:12px;
-               padding:14px 22px; background:var(--panel); border-bottom:1px solid var(--line);
-               cursor:move; user-select:none; border-radius:8px 8px 0 0; }
+  #adminstick { position:sticky; top:0; z-index:2; background:var(--panel);
+                border-radius:8px 8px 0 0; }
+  #adminhead { display:flex; align-items:center; gap:12px;
+               padding:14px 22px; border-bottom:1px solid var(--line);
+               cursor:move; user-select:none; }
   #adminhead h1 { margin:0; font-size:13px; letter-spacing:.18em; text-transform:uppercase; color:var(--acc); }
   #adminhead .spacer { flex:1; }
-  #adminclose { font-size:16px; line-height:1; padding:2px 10px; }
-  #admin .asec { border-bottom:1px solid var(--line); padding:16px 22px; max-width:960px; }
+  #adminhead button { font-size:13px; line-height:1; padding:2px 10px; background:none; border:none;
+                      color:var(--dim); cursor:pointer; }
+  #adminhead button:hover { color:var(--fg); }
+  /* tab bar — horizontal, runs under the header */
+  #admintabs { display:flex; flex-wrap:wrap; gap:2px; padding:0 18px;
+               border-bottom:1px solid var(--line); overflow-x:auto; }
+  #admin .atab { background:none; border:none; border-bottom:2px solid transparent;
+                 padding:10px 14px; font:inherit; font-size:11.5px; letter-spacing:.14em;
+                 text-transform:uppercase; color:var(--dim); cursor:pointer;
+                 margin-bottom:-1px; transition:color .12s, border-color .12s; }
+  #admin .atab:hover { color:var(--fg); }
+  #admin .atab.active { color:var(--acc); border-bottom-color:var(--acc); }
+  /* sections — hidden by default; shown when their data-tab matches the active tab */
+  #admin .asec { display:none; border-bottom:1px solid var(--line); padding:16px 22px; max-width:960px; }
+  #admin .asec.show { display:block; }
+  /* the last visible section in a tab loses its bottom border — looks tidier */
+  #admin .asec.show + .asec:not(.show) { border-top:0; }
   #admin .asec h2 { margin:0 0 12px; font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--acc); }
   #admin .arow { display:flex; align-items:center; gap:10px; margin:5px 0; flex-wrap:wrap; }
   #admin .arow label.lbl { width:130px; color:var(--dim); flex:none; }
@@ -640,20 +657,25 @@
 </div>
 
 <div id="admin">
-  <div id="adminhead">
-    <h1>admin · debug</h1>
-    <span class="spacer"></span>
-    <button id="adminclose" title="Esc">✕</button>
+  <div id="adminstick">
+    <div id="adminhead">
+      <h1>settings</h1>
+      <span class="spacer"></span>
+      <button id="adminreload" title="reload the app">⟳ reload</button>
+      <button id="adminclose" title="Esc">✕</button>
+    </div>
+
+    <nav id="admintabs" role="tablist">
+      <button class="atab" data-tab="appearance"  role="tab" aria-selected="false">Appearance</button>
+      <button class="atab" data-tab="behavior"    role="tab" aria-selected="false">Behavior</button>
+      <button class="atab" data-tab="agents"      role="tab" aria-selected="false">Agents</button>
+      <button class="atab" data-tab="projects"    role="tab" aria-selected="false">Projects</button>
+      <button class="atab" data-tab="curators"    role="tab" aria-selected="false">Curators</button>
+      <button class="atab" data-tab="diagnostics" role="tab" aria-selected="false">Diagnostics</button>
+    </nav>
   </div>
 
-  <div class="asec">
-    <h2>A · reload</h2>
-    <div class="arow"><button id="adminreload">⟳ reload the app</button>
-      <span class="mono-dim">also: View › Reload, or ⌘⇧A then this button</span></div>
-  </div>
-
-  <div class="asec wide">
-    <h2>B · appearance</h2>
+  <div class="asec wide" data-tab="appearance">
     <div class="asec-cols">
       <div class="asec-col">
         <h2>palette — 16 colours</h2>
@@ -691,15 +713,13 @@
     </div>
   </div>
 
-  <div class="asec">
-    <h2>C · agents</h2>
+  <div class="asec" data-tab="agents">
     <div id="agentrows"></div>
     <div class="arow mono-dim" style="font-size:11px">model is any id your agent CLI accepts — pick a suggestion or type your own. (CLIs beyond Claude Code: a flagged future project.)</div>
     <datalist id="modellist"></datalist>
   </div>
 
-  <div class="asec">
-    <h2>D · behaviour</h2>
+  <div class="asec" data-tab="behavior">
     <label class="achk"><input type="checkbox" id="optHlLine">
       <span class="ctext"><span class="ctitle">highlight current line</span>
       <span class="cdesc">the editor's highlight band follows the caret as you move it</span></span></label>
@@ -725,14 +745,12 @@
       <input type="number" id="optAutosave" min="3" max="600" step="1"> <span class="mono-dim">seconds</span></div>
   </div>
 
-  <div class="asec">
-    <h2>E · projects</h2>
+  <div class="asec" data-tab="projects">
     <div id="projrows"></div>
     <div class="arow mono-dim" style="font-size:11px">delete only unregisters — the folder and its .setsweep desk are left on disk.</div>
   </div>
 
-  <div class="asec">
-    <h2>K · curators (kits)</h2>
+  <div class="asec" data-tab="curators">
     <div class="arow">
       <select id="kitpick" title="a kit to view or edit"></select>
       <span id="kitsrc" class="mono-dim"></span>
@@ -755,23 +773,23 @@
       <button id="kitexport">export → JSON</button>
       <button id="kitimport">import JSON</button>
     </div>
-    <div class="arow mono-dim" style="font-size:11px">shipped defaults are read-only — editing one forks a copy into your settings. assign a kit to a project in <b>E · projects</b> above.</div>
+    <div class="arow mono-dim" style="font-size:11px">shipped defaults are read-only — editing one forks a copy into your settings. assign a kit to a project in the <b>Projects</b> tab.</div>
   </div>
 
-  <div class="asec">
-    <h2>F · debug / background</h2>
+  <div class="asec" data-tab="diagnostics">
+    <h2>server &amp; background</h2>
     <div class="arow"><button id="adminrefresh">↻ refresh</button>
       <span id="adminstamp" class="mono-dim"></span></div>
     <div id="admindebug" style="margin-top:10px"></div>
   </div>
 
-  <div class="asec">
-    <h2>L · lineage — who edited what</h2>
+  <div class="asec" data-tab="diagnostics">
+    <h2>lineage</h2>
     <div id="lineagebox" style="margin-top:6px"></div>
   </div>
 
-  <div class="asec">
-    <h2>G · js error log</h2>
+  <div class="asec" data-tab="diagnostics">
+    <h2>javascript errors</h2>
     <div class="arow"><button id="errclear">clear</button>
       <span class="mono-dim">most recent first (last ~30)</span></div>
     <div id="errlistbox" class="errlist" style="margin-top:8px"></div>
@@ -780,7 +798,7 @@
 
 <script src="/marked.min.js"></script>
 <script>
-/* running in-memory JS error log — the admin overlay (section F) renders the last
+/* running in-memory JS error log — the diagnostics tab renders the last
    ~30, most recent first; the banner stays as the loud, immediate signal */
 const JSERR = [];
 function pushJsErr(msg, src, line){
@@ -2783,13 +2801,27 @@ function renderErrLog(){
   }).join('');
 }
 
+const ADMIN_TABS = ['appearance','behavior','agents','projects','curators','diagnostics'];
+function setAdminTab(name){
+  if(!ADMIN_TABS.includes(name)) name = ADMIN_TABS[0];
+  document.querySelectorAll('#admin .atab').forEach(b => {
+    const on = b.dataset.tab === name;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-selected', on ? 'true' : 'false');
+  });
+  document.querySelectorAll('#admin .asec').forEach(s =>
+    s.classList.toggle('show', s.dataset.tab === name));
+  SETTINGS.adminTab = name;
+  saveSettings({adminTab: name});
+}
 function openAdmin(){
   buildColorRows(); buildFontRows(); buildSizeRows(); buildSlotRows(); buildIfaceRows(); buildPaletteSelect(); buildProjRows(); buildAgentRows(); syncBehaviorInputs();
   renderErrLog();
   $('admin').classList.add('open');
+  setAdminTab(SETTINGS.adminTab || ADMIN_TABS[0]);
   loadAdminDebug();
   renderLineage();
-  loadKits();   // K · curators — fetch kits, fill the editor + project kit dropdowns
+  loadKits();   // curators tab — fetch kits, fill the editor + project kit dropdowns
 }
 function closeAdmin(){ $('admin').classList.remove('open'); }
 
@@ -2830,6 +2862,8 @@ function makeAdminDraggable(){
 
 function wireAdmin(){
   $('adminclose').onclick = closeAdmin;
+  document.querySelectorAll('#admin .atab').forEach(b =>
+    b.addEventListener('click', () => setAdminTab(b.dataset.tab)));
   makeAdminDraggable();
   $('colorreset').onclick = resetColors;
   $('fontreset').onclick = resetFonts;
@@ -2867,13 +2901,28 @@ function wireAdmin(){
   const ed = $('editor');
   ['keyup','click','select'].forEach(ev => ed.addEventListener(ev, caretLineHighlight));
   ed.addEventListener('blur', () => { if(hlLineEnabled && document.activeElement !== ed) clearBand(); });
-  // ⌘⇧A / Ctrl+⇧A — reliable fallback if the native menu is flaky
+  // ⌘, (standard preferences) and ⌘⇧A — both open/close settings; ⌘⇧A predates ⌘,
   document.addEventListener('keydown', e => {
-    if((e.metaKey||e.ctrlKey) && e.shiftKey && (e.key === 'A' || e.key === 'a')){
+    const cmd = e.metaKey || e.ctrlKey;
+    if(cmd && !e.shiftKey && e.key === ','){
+      e.preventDefault();
+      $('admin').classList.contains('open') ? closeAdmin() : openAdmin();
+    }
+    if(cmd && e.shiftKey && (e.key === 'A' || e.key === 'a')){
       e.preventDefault();
       $('admin').classList.contains('open') ? closeAdmin() : openAdmin();
     }
     if(e.key === 'Escape' && $('admin').classList.contains('open')) closeAdmin();
+    if($('admin').classList.contains('open') && !e.target.closest('input,textarea,select')
+        && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')){
+      const cur = ADMIN_TABS.includes(SETTINGS.adminTab) ? SETTINGS.adminTab : ADMIN_TABS[0];
+      const i = ADMIN_TABS.indexOf(cur);
+      const next = e.key === 'ArrowRight'
+        ? ADMIN_TABS[(i + 1) % ADMIN_TABS.length]
+        : ADMIN_TABS[(i - 1 + ADMIN_TABS.length) % ADMIN_TABS.length];
+      e.preventDefault();
+      setAdminTab(next);
+    }
   });
 }
 
