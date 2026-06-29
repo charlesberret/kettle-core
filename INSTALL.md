@@ -52,7 +52,9 @@ The project registry is `projects.json` (override its location with `DESK_PROJEC
 `projects.example.json` for the format). Each project points at a directory; its desk state lives
 in `<root>/.setsweep/`. Add a project with `setsweep add <dir>`, by editing `projects.json` by
 hand, or via the app's admin panel. The bundled Electron `.app` stores its registry at
-`~/Library/Application Support/Setsweep/projects.json`.
+`~/Library/Application Support/Setsweep/projects.json`. On first launch the shell copies
+`projects.json` from your setsweep source tree if the userData file does not exist yet
+(override the source with `SETSWEEP_PROJECTS_SRC`).
 
 ## Notes for the maintainer
 
