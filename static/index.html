@@ -438,11 +438,22 @@
   #admin .ap-role-row { display:grid; grid-template-columns:1fr 16px minmax(120px, 160px);
                         gap:8px 10px; align-items:center; padding:5px 0;
                         border-bottom:1px solid var(--adm-sep); font-size:12px; }
+  #admin .ap-iface-row { grid-template-columns:1fr 16px minmax(96px, 118px) 44px; }
+  #admin .ap-iface-head { display:grid; grid-template-columns:1fr 16px minmax(96px, 118px) 44px;
+                          gap:8px 10px; padding:0 0 4px; font-size:10px; font-weight:600;
+                          letter-spacing:.04em; text-transform:uppercase; color:var(--adm-muted);
+                          border-bottom:1px solid var(--adm-sep); }
+  #admin .ap-iface-head span:last-child { text-align:right; }
+  #admin .ap-hint { margin:-2px 0 10px; font-size:11px; color:var(--adm-muted); line-height:1.45; max-width:480px; }
   #admin .ap-role-row:last-child { border-bottom:0; }
   #admin .ap-role-name { color:var(--adm-fg); min-width:0; }
-  #admin .ap-role-row .swatch { width:14px; height:14px; border-radius:3px;
-                                border:1px solid var(--adm-border); justify-self:center; }
+  #admin .ap-role-row .swatch { width:14px; height:14px; border-radius:3px; justify-self:center;
+    background:repeating-conic-gradient(var(--adm-border) 0 25%, transparent 0 50%) 0 0/8px 8px; }
+  #admin .ap-role-row .swatch-inner { display:block; width:14px; height:14px; border-radius:3px;
+    border:1px solid var(--adm-border); box-sizing:border-box; }
   #admin .ap-role-row select { width:100%; font-size:12px; padding:3px 6px; }
+  #admin .ap-iface-opacity { width:100%; padding:3px 4px; font-size:11px; text-align:right;
+    background:var(--adm-bg2); color:var(--adm-fg); border:1px solid var(--adm-border); border-radius:6px; }
   #admin .ap-actions { margin-top:8px; }
   #admin .ap-saved-row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; max-width:520px; }
   #admin .ap-saved-row input[type=text] { flex:1 1 140px; min-width:100px; padding:4px 8px;
@@ -726,6 +737,7 @@
 
       <section class="ap-block">
         <h2>Interface colors</h2>
+        <p class="ap-hint">Each role picks an ANSI color and an opacity. Values below 100% blend over the layer behind — useful when two roles share the same base color but need contrast (e.g. panel over background).</p>
         <div class="ap-rolelist" id="ifacerows"></div>
         <div class="ap-actions"><button id="ifacereset" type="button" class="btn btn-sm btn-default">reset interface colors</button></div>
       </section>
@@ -2489,6 +2501,7 @@ function migrateThemeSettings() {
         colors: migrateRoleMap(snap.colors),
         slots: migrateRoleMap(snap.slots),
         iface: migrateRoleMap(snap.iface || {}),
+        ifaceOpacity: Object.assign({}, snap.ifaceOpacity || {}),
         themeMode: snap.themeMode,
         builtinTheme: snap.builtinTheme,
       };
@@ -2579,7 +2592,8 @@ function buildThemeControls(){
       SETTINGS.colors = {};
       SETTINGS.slots = {};
       SETTINGS.iface = {};
-      saveSettings({builtinTheme: SETTINGS.builtinTheme, colors: {}, slots: {}, iface: {}});
+      SETTINGS.ifaceOpacity = {};
+      saveSettings({builtinTheme: SETTINGS.builtinTheme, colors: {}, slots: {}, iface: {}, ifaceOpacity: {}});
       applyTheme();
       buildColorRows(); buildSlotRows(); buildIfaceRows();
     });
@@ -2715,6 +2729,21 @@ const PAL_NAMES = PALETTE.map(([n]) => n);
 const palOpts = chosen => PALETTE.map(([n,,l]) =>
   `<option value="${n}"${n===chosen?' selected':''}>${esc(l)}</option>`).join('');
 
+function ifaceRolePick(key, def){
+  const preset = builtinThemePreset();
+  const s = SETTINGS.iface || {};
+  return PAL_NAMES.includes(s[key]) ? s[key]
+    : (PAL_NAMES.includes((preset.iface || {})[key]) ? preset.iface[key] : def);
+}
+function ifaceOpacityPct(key){
+  const v = (SETTINGS.ifaceOpacity || {})[key];
+  return (typeof v === 'number' && isFinite(v)) ? Math.max(0, Math.min(100, Math.round(v))) : 100;
+}
+function ifaceColorCss(pick, alphaPct){
+  const a = (typeof alphaPct === 'number' && isFinite(alphaPct)) ? Math.max(0, Math.min(100, alphaPct)) : 100;
+  if(a >= 100) return `var(${pick})`;
+  return `color-mix(in srgb, var(${pick}) ${a}%, transparent)`;
+}
 function applySlots(){
   const preset = builtinThemePreset();
   const s = SETTINGS.slots || {};
@@ -2725,13 +2754,27 @@ function applySlots(){
   }
 }
 function applyIface(){
-  const preset = builtinThemePreset();
-  const s = SETTINGS.iface || {};
   for(const [key,, def] of IFACE_SLOTS){
-    const pick = PAL_NAMES.includes(s[key]) ? s[key]
-      : (PAL_NAMES.includes((preset.iface || {})[key]) ? preset.iface[key] : def);
-    document.documentElement.style.setProperty('--' + key, `var(${pick})`);
+    const pick = ifaceRolePick(key, def);
+    document.documentElement.style.setProperty('--' + key, ifaceColorCss(pick, ifaceOpacityPct(key)));
   }
+}
+function updateIfaceSwatch(row, key){
+  const def = IFACE_SLOTS.find(x => x[0] === key)?.[2];
+  const inner = row.querySelector('.swatch-inner');
+  if(!inner) return;
+  inner.style.background = ifaceColorCss(ifaceRolePick(key, def), ifaceOpacityPct(key));
+}
+function setIfaceOpacity(key, raw){
+  const val = Math.round(Number(raw));
+  if(!isFinite(val)) return;
+  const clamped = Math.max(0, Math.min(100, val));
+  const op = Object.assign({}, SETTINGS.ifaceOpacity || {});
+  if(clamped >= 100) delete op[key];
+  else op[key] = clamped;
+  SETTINGS.ifaceOpacity = op;
+  saveSettings({ifaceOpacity: op});
+  applyTheme();
 }
 /* one builder for both categories: SLOTDEF + settings-key + var-prefix + apply fn */
 function buildAssignRows(boxId, defs, sKey, varPrefix, applyFn){
@@ -2758,9 +2801,41 @@ function buildAssignRows(boxId, defs, sKey, varPrefix, applyFn){
     }));
 }
 function buildSlotRows(){ buildAssignRows('slotrows', TEXT_SLOTS, 'slots', '--slot-', applySlots); }
-function buildIfaceRows(){ buildAssignRows('ifacerows', IFACE_SLOTS, 'iface', '--', applyIface); }
+function buildIfaceRows(){
+  const box = $('ifacerows'); if(!box) return;
+  box.innerHTML = '';
+  const head = document.createElement('div'); head.className = 'ap-iface-head';
+  head.innerHTML = '<span>role</span><span></span><span>color</span><span>%</span>';
+  box.appendChild(head);
+  for(const [key, label, def] of IFACE_SLOTS){
+    const chosen = ifaceRolePick(key, def);
+    const op = ifaceOpacityPct(key);
+    const row = document.createElement('div'); row.className = 'ap-role-row ap-iface-row';
+    row.innerHTML = `<span class="ap-role-name">${esc(label)}</span>` +
+      `<span class="swatch"><span class="swatch-inner"></span></span>` +
+      `<select data-iface="${esc(key)}">${palOpts(chosen)}</select>` +
+      `<input type="number" class="ap-iface-opacity" data-iface="${esc(key)}" value="${op}" min="0" max="100" step="1" title="opacity — 100 is solid">`;
+    box.appendChild(row);
+    updateIfaceSwatch(row, key);
+  }
+  box.querySelectorAll('select[data-iface]').forEach(sel =>
+    sel.addEventListener('change', () => {
+      const k = sel.dataset.iface;
+      const next = Object.assign({}, SETTINGS.iface, {[k]: sel.value});
+      SETTINGS.iface = next; saveSettings({iface: next}); applyTheme();
+      updateIfaceSwatch(sel.closest('.ap-iface-row'), k);
+    }));
+  box.querySelectorAll('input.ap-iface-opacity').forEach(inp =>
+    inp.addEventListener('change', () => {
+      setIfaceOpacity(inp.dataset.iface, inp.value);
+      updateIfaceSwatch(inp.closest('.ap-iface-row'), inp.dataset.iface);
+    }));
+}
 function resetSlots(){ SETTINGS.slots = {}; saveSettings({slots: {}}); applyTheme(); buildSlotRows(); }
-function resetIface(){ SETTINGS.iface = {}; saveSettings({iface: {}}); applyTheme(); buildIfaceRows(); }
+function resetIface(){
+  SETTINGS.iface = {}; SETTINGS.ifaceOpacity = {};
+  saveSettings({iface: {}, ifaceOpacity: {}}); applyTheme(); buildIfaceRows();
+}
 
 /* ---- saved themes: snapshot colours + role assignments under a name ---- */
 function buildPaletteSelect(){
@@ -2777,6 +2852,7 @@ function savePalette(){
     colors: Object.assign({}, SETTINGS.colors),
     slots:  Object.assign({}, SETTINGS.slots),
     iface:  Object.assign({}, SETTINGS.iface),
+    ifaceOpacity: Object.assign({}, SETTINGS.ifaceOpacity || {}),
   };
   SETTINGS.palettes = Object.assign({}, SETTINGS.palettes, {[name]: snapshot});
   saveSettings({palettes: SETTINGS.palettes});
@@ -2792,12 +2868,14 @@ function applyPalette(){
   SETTINGS.colors = Object.assign({}, p.colors);
   SETTINGS.slots = Object.assign({}, p.slots);
   SETTINGS.iface = Object.assign({}, p.iface || {});
+  SETTINGS.ifaceOpacity = Object.assign({}, p.ifaceOpacity || {});
   saveSettings({
     themeMode: SETTINGS.themeMode,
     builtinTheme: SETTINGS.builtinTheme,
     colors: SETTINGS.colors,
     slots: SETTINGS.slots,
     iface: SETTINGS.iface,
+    ifaceOpacity: SETTINGS.ifaceOpacity,
   });
   applyTheme();
   buildThemeControls(); buildColorRows(); buildSlotRows(); buildIfaceRows();
