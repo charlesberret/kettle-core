@@ -418,9 +418,49 @@
   #admin .errlist .emsg { color:var(--warn); white-space:pre-wrap; word-break:break-word; }
   #admin .errlist .emeta, #admin .errlist .enone, #admin .mono-dim, #admin .evlog { color:var(--adm-muted); }
   #admin .asec.wide { max-width:none; }
-  #admin .theme-bar { padding:12px 16px 4px; border-bottom:1px solid var(--adm-sep);
-                      background:var(--adm-bg2); display:flex; flex-wrap:wrap; gap:12px 24px; }
-  #admin .theme-bar .arow { margin:0; flex:1 1 200px; }
+  /* appearance tab — single-column sections, table for ANSI colors */
+  #admin[data-active-tab="appearance"] { width:880px; min-width:720px; }
+  #admin .ap-body { padding:0 16px 16px; }
+  #admin .ap-block { margin:0 0 20px; }
+  #admin .ap-block:last-child { margin-bottom:0; }
+  #admin .ap-block > h2 { margin:16px 0 8px; font-size:11px; font-weight:600; letter-spacing:.04em;
+                           text-transform:uppercase; color:var(--adm-muted); }
+  #admin .ap-block > h2:first-child { margin-top:12px; }
+  #admin .ap-form-row { display:grid; grid-template-columns:minmax(88px, 120px) 1fr;
+                        gap:10px 14px; align-items:center; max-width:420px; margin:6px 0; }
+  #admin .ap-form-row .lbl { color:var(--adm-muted); font-size:12px; }
+  #admin .ap-form-stack { display:flex; flex-direction:column; gap:2px; max-width:420px; }
+  #admin .ap-scroll { max-height:220px; overflow:auto; border:1px solid var(--adm-sep);
+                      border-radius:6px; background:var(--adm-bg2); }
+  #admin .ap-table { width:100%; border-collapse:collapse; font-size:12px; }
+  #admin .ap-table th { position:sticky; top:0; z-index:1; background:var(--adm-bg2);
+                         color:var(--adm-muted); font-weight:600; text-align:left;
+                         padding:6px 10px; border-bottom:1px solid var(--adm-sep); }
+  #admin .ap-table td { padding:4px 10px; border-bottom:1px solid var(--adm-sep); vertical-align:middle; }
+  #admin .ap-table tr:last-child td { border-bottom:0; }
+  #admin .ap-table .ap-idx { width:28px; color:var(--adm-muted); font-variant-numeric:tabular-nums; }
+  #admin .ap-table .ap-cname { white-space:nowrap; }
+  #admin .ap-table input[type=color] { display:block; }
+  #admin .ap-table input.hex { width:100%; min-width:68px; box-sizing:border-box; }
+  #admin .ap-rolelist { display:flex; flex-direction:column; gap:0; max-width:480px; }
+  #admin .ap-role-row { display:grid; grid-template-columns:1fr 16px minmax(120px, 160px);
+                        gap:8px 10px; align-items:center; padding:5px 0;
+                        border-bottom:1px solid var(--adm-sep); font-size:12px; }
+  #admin .ap-role-row:last-child { border-bottom:0; }
+  #admin .ap-role-name { color:var(--adm-fg); min-width:0; }
+  #admin .ap-role-row .swatch { width:14px; height:14px; border-radius:3px;
+                                border:1px solid var(--adm-border); justify-self:center; }
+  #admin .ap-role-row select { width:100%; font-size:12px; padding:3px 6px; }
+  #admin .ap-actions { margin-top:8px; }
+  #admin .ap-saved-row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; max-width:520px; }
+  #admin .ap-saved-row input[type=text] { flex:1 1 140px; min-width:100px; padding:4px 8px;
+    background:var(--adm-bg2); color:var(--adm-fg); border:1px solid var(--adm-border); border-radius:6px; }
+  #admin .ap-saved-row select { flex:1 1 160px; min-width:120px; font-size:12px; padding:4px 6px; }
+  #admin #kitpick, #admin .projrow .pkit, #admin .projrow .pdepth, #admin .projrow .pname,
+  #admin .projrow .proot, #admin .agentrow .amodel,
+  #admin .ap-form-row select, #admin .ap-form-stack select {
+    background:var(--adm-bg2); color:var(--adm-fg); border:1px solid var(--adm-border); border-radius:6px; }
+  #admin #kitpick { font:12px var(--ui-font); padding:4px 7px; min-width:220px; }
   #admin .kitf { display:block; margin:8px 0 0; font-size:11px; letter-spacing:.04em; color:var(--adm-muted); }
   #admin .kitf input, #admin .kitf textarea { display:block; width:100%; box-sizing:border-box; margin-top:3px;
     background:var(--adm-bg2); color:var(--adm-fg); border:1px solid var(--adm-border); border-radius:6px;
@@ -428,24 +468,7 @@
   #admin .kitf textarea { min-height:46px; resize:vertical; line-height:1.5; }
   #admin #kf_lens, #admin #kf_urgency, #admin #kf_firstQueue { min-height:54px; }
   #admin #kitio { min-height:80px; font-size:11px; }
-  #admin #kitpick, #admin .projrow .pkit, #admin .projrow .pdepth, #admin .projrow .pname,
-  #admin .projrow .proot, #admin .slotrow select, #admin .palrow select, #admin .palrow input[type=text],
-  #admin .agentrow .amodel {
-    background:var(--adm-bg2); color:var(--adm-fg); border:1px solid var(--adm-border); border-radius:6px; }
-  #admin #kitpick { font:12px var(--ui-font); padding:4px 7px; min-width:220px; }
   #admin .projrow .pkit, #admin .projrow .pdepth { font:11px var(--ui-font); padding:3px 5px; }
-  #admin .asec-cols { display:flex; gap:24px; flex-wrap:wrap; align-items:flex-start; }
-  #admin .asec-col { flex:1 1 280px; min-width:260px; }
-  #admin .asec-col h2 { margin:0 0 8px; font-size:11px; font-weight:600; letter-spacing:.04em;
-                        text-transform:uppercase; color:var(--adm-muted); }
-  #admin .grid2 { display:grid; grid-template-columns:repeat(2, max-content); gap:2px 20px; }
-  #admin #colorrows .crow { flex-wrap:nowrap; gap:8px; margin:2px 0; }
-  #admin #colorrows .cname { width:auto; min-width:72px; font-size:11px; }
-  #admin #colorrows input[type=color] { flex:none; width:32px; height:22px; min-width:32px; box-sizing:border-box; }
-  #admin .slotrow .slabel { width:110px; }
-  #admin .slotrow select { min-width:110px; font-size:12px; padding:3px 6px; }
-  #admin .slotrow .swatch { width:14px; height:14px; border-radius:3px; border:1px solid var(--adm-border); flex:none; }
-  #admin .palrow { gap:8px; }
   #admin .agentrow { gap:8px; }
   #admin .agentrow .amodel { flex:1 1 200px; max-width:280px; padding:4px 8px; font:inherit; }
   #admin .projrow { gap:6px; }
@@ -674,54 +697,69 @@
   </div>
 
   <div class="asec wide" data-tab="appearance">
-    <div class="theme-bar">
-      <div class="arow">
-        <span class="lbl">mode</span>
-        <select id="themeMode">
-          <option value="system">System</option>
-          <option value="light">Light</option>
-          <option value="dark">Dark</option>
-        </select>
-      </div>
-      <div class="arow">
-        <span class="lbl">color theme</span>
-        <select id="builtinTheme"></select>
-      </div>
-    </div>
-    <div class="asec-cols">
-      <div class="asec-col">
-        <h2>ANSI colors</h2>
-        <div id="colorrows" class="grid2"></div>
-        <div class="arow"><button id="colorreset" type="button">reset to theme</button></div>
-      </div>
-      <div class="asec-col">
-        <h2>text colors</h2>
-        <div id="slotrows"></div>
-        <div class="arow"><button id="slotreset" type="button">reset text colors</button></div>
-      </div>
-      <div class="asec-col">
-        <h2>interface colors</h2>
-        <div id="ifacerows"></div>
-        <div class="arow"><button id="ifacereset" type="button">reset interface colors</button></div>
-      </div>
-      <div class="asec-col">
-        <h2>fonts</h2>
-        <div id="fontrows"></div>
-        <div class="arow"><button id="fontreset" type="button">reset fonts</button></div>
-        <h2 style="margin-top:18px">sizes</h2>
-        <div id="sizerows"></div>
-        <div class="arow"><button id="sizereset" type="button">reset sizes</button></div>
-        <h2 style="margin-top:18px">saved themes</h2>
-        <div class="arow palrow">
-          <input type="text" id="palname" placeholder="name this theme" spellcheck="false">
-          <button id="palsave" type="button">save current</button>
+    <div class="ap-body">
+      <section class="ap-block">
+        <h2>Theme</h2>
+        <div class="ap-form-stack">
+          <div class="ap-form-row">
+            <span class="lbl">mode</span>
+            <select id="themeMode">
+              <option value="system">System</option>
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+            </select>
+          </div>
+          <div class="ap-form-row">
+            <span class="lbl">palette</span>
+            <select id="builtinTheme"></select>
+          </div>
         </div>
-        <div class="arow palrow">
+      </section>
+
+      <section class="ap-block">
+        <h2>ANSI colors</h2>
+        <div class="ap-scroll">
+          <table class="ap-table">
+            <thead><tr><th>#</th><th>name</th><th></th><th>hex</th></tr></thead>
+            <tbody id="colorrows"></tbody>
+          </table>
+        </div>
+        <div class="ap-actions"><button id="colorreset" type="button">reset to theme</button></div>
+      </section>
+
+      <section class="ap-block">
+        <h2>Text colors</h2>
+        <div class="ap-rolelist" id="slotrows"></div>
+        <div class="ap-actions"><button id="slotreset" type="button">reset text colors</button></div>
+      </section>
+
+      <section class="ap-block">
+        <h2>Interface colors</h2>
+        <div class="ap-rolelist" id="ifacerows"></div>
+        <div class="ap-actions"><button id="ifacereset" type="button">reset interface colors</button></div>
+      </section>
+
+      <section class="ap-block">
+        <h2>Typography</h2>
+        <div class="ap-form-stack" id="fontrows"></div>
+        <div class="ap-actions"><button id="fontreset" type="button">reset fonts</button></div>
+        <h2>Sizes</h2>
+        <div class="ap-form-stack" id="sizerows"></div>
+        <div class="ap-actions"><button id="sizereset" type="button">reset sizes</button></div>
+      </section>
+
+      <section class="ap-block">
+        <h2>Saved themes</h2>
+        <div class="ap-saved-row">
+          <input type="text" id="palname" placeholder="name this theme" spellcheck="false">
+          <button id="palsave" type="button">save</button>
+        </div>
+        <div class="ap-saved-row" style="margin-top:8px">
           <select id="palload"><option value="">— load a saved theme —</option></select>
           <button id="palapply" type="button">load</button>
           <button id="paldel" type="button" title="delete the selected theme">✕</button>
         </div>
-      </div>
+      </section>
     </div>
   </div>
 
@@ -2559,8 +2597,8 @@ function buildFontRows(){
   for(const [label, key, chosen] of rows){
     const opts = FONT_OPTS.map(([name, stack]) =>
       `<option value="${esc(stack)}"${stack===chosen?' selected':''}>${esc(name)}</option>`).join('');
-    const row = document.createElement('div'); row.className = 'arow slotrow';
-    row.innerHTML = `<span class="vname slabel">${esc(label)}</span>` +
+    const row = document.createElement('div'); row.className = 'ap-form-row';
+    row.innerHTML = `<span class="lbl">${esc(label)}</span>` +
       `<select data-fontkey="${key}">${opts}</select>`;
     box.appendChild(row);
   }
@@ -2578,13 +2616,15 @@ function buildColorRows(){
   const box = $('colorrows'); box.innerHTML = '';
   const c = SETTINGS.colors || {};
   for(const [name, def, label] of PALETTE){
+    const idx = name.replace('--ansi-', '');
     const cur = isHex(c[name]) ? c[name]
       : (getComputedStyle(document.documentElement).getPropertyValue(name).trim() || def);
-    const row = document.createElement('div'); row.className = 'arow crow';
+    const row = document.createElement('tr');
     row.innerHTML =
-      `<span class="vname cname">${esc(label || name)}</span>` +
-      `<input type="color" data-var="${esc(name)}" value="${esc(isHex(cur)?cur:def)}">` +
-      `<input type="text" class="hex" data-var="${esc(name)}" value="${esc(cur)}" spellcheck="false">`;
+      `<td class="ap-idx">${esc(idx)}</td>` +
+      `<td class="ap-cname">${esc(label || name)}</td>` +
+      `<td><input type="color" data-var="${esc(name)}" value="${esc(isHex(cur)?cur:def)}"></td>` +
+      `<td><input type="text" class="hex" data-var="${esc(name)}" value="${esc(cur)}" spellcheck="false"></td>`;
     box.appendChild(row);
   }
   box.querySelectorAll('input[type=color]').forEach(inp =>
@@ -2668,8 +2708,8 @@ function buildAssignRows(boxId, defs, sKey, varPrefix, applyFn){
   for(const [key, label, def] of defs){
     const chosen = PAL_NAMES.includes(s[key]) ? s[key]
       : (PAL_NAMES.includes(presetMap[key]) ? presetMap[key] : def);
-    const row = document.createElement('div'); row.className = 'arow slotrow';
-    row.innerHTML = `<span class="vname slabel">${esc(label)}</span>` +
+    const row = document.createElement('div'); row.className = 'ap-role-row';
+    row.innerHTML = `<span class="ap-role-name">${esc(label)}</span>` +
       `<span class="swatch" style="background:var(${chosen})"></span>` +
       `<select data-slot="${key}">${palOpts(chosen)}</select>`;
     box.appendChild(row);
@@ -2744,7 +2784,7 @@ function buildSizeRows(){
     ['default col · right', 'right', (w.right??COLW_DEFAULTS.right), 240, 720, 1],
   ];
   for(const [label, key, val, min, max, step] of rows){
-    const row = document.createElement('div'); row.className = 'arow';
+    const row = document.createElement('div'); row.className = 'ap-form-row';
     row.innerHTML = `<span class="lbl">${esc(label)}</span>` +
       `<input type="number" data-key="${esc(key)}" value="${esc(val)}" min="${min}" max="${max}" step="${step}">`;
     box.appendChild(row);
@@ -2952,6 +2992,7 @@ function setAdminTab(name){
   });
   document.querySelectorAll('#admin .asec').forEach(s =>
     s.classList.toggle('show', s.dataset.tab === name));
+  $('admin').dataset.activeTab = name;
   SETTINGS.adminTab = name;
   saveSettings({adminTab: name});
 }
