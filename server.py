@@ -348,8 +348,22 @@ EMPTY_QUEUE = {"curated": "empty — entries are filed by curating agents", "ent
 
 # ---------- projects ----------
 
+def read_projects_registry() -> dict:
+    """Load the on-disk registry; missing or invalid file → empty projects list."""
+    try:
+        if not PROJECTS_PATH.exists():
+            return {"projects": []}
+        data = json.loads(PROJECTS_PATH.read_text())
+    except (OSError, json.JSONDecodeError):
+        return {"projects": []}
+    if not isinstance(data, dict):
+        return {"projects": []}
+    data.setdefault("projects", [])
+    return data
+
+
 def load_projects() -> list[dict]:
-    data = json.loads(PROJECTS_PATH.read_text())
+    data = read_projects_registry()
     # presented alphabetically by name (case-insensitive); write paths read raw JSON,
     # so the on-disk order/`note` are untouched. No project is pinned to the top.
     return sorted(data["projects"], key=lambda p: p.get("name", "").lower())
@@ -742,11 +756,7 @@ def register_project(name: str, root: str, kit: str | None = None,
     if depth >= 1:                                  # 0 / blank → unlimited (no field stored)
         proj["max_depth"] = depth
     with PROJECTS_LOCK:
-        try:
-            data = json.loads(PROJECTS_PATH.read_text())
-        except (OSError, json.JSONDecodeError):
-            data = {"projects": []}            # first run: no registry yet
-        data.setdefault("projects", [])
+        data = read_projects_registry()
         if any(p["id"] == pid for p in data["projects"]):
             raise ValueError(f"duplicate project id: {pid}")
         data["projects"].append(proj)
@@ -1499,7 +1509,7 @@ class Handler(BaseHTTPRequestHandler):
     def delete_project(self, d):
         pid = str(d.get("id", "")).strip()
         with PROJECTS_LOCK:
-            data = json.loads(PROJECTS_PATH.read_text())
+            data = read_projects_registry()
             before = len(data["projects"])
             data["projects"] = [p for p in data["projects"] if p["id"] != pid]
             if len(data["projects"]) == before:
@@ -1533,7 +1543,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         root_clean = root_raw.rstrip("/") or root_raw
         with PROJECTS_LOCK:
-            data = json.loads(PROJECTS_PATH.read_text())
+            data = read_projects_registry()
             proj = next((p for p in data["projects"] if p["id"] == pid), None)
             if not proj:
                 self.send_json({"error": f"no such project: {pid}"}, 400)
