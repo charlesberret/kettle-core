@@ -24,13 +24,14 @@
     --ansi-8:#7f7f7f; --ansi-9:#ff0000; --ansi-10:#00ff00; --ansi-11:#ffff00;
     --ansi-12:#5c5cff; --ansi-13:#ff00ff; --ansi-14:#00ffff; --ansi-15:#ffffff;
     /* ---- interface roles: each picks an ANSI colour (overridable in settings) ---- */
-    --bg:var(--ansi-0); --fg:var(--ansi-7);
-    --panel:var(--ansi-8); --panel2:var(--ansi-0); --line:var(--ansi-8);
-    --acc:var(--ansi-3); --good:var(--ansi-2); --warn:var(--ansi-1);
-    --selection:var(--ansi-4); --qtag:var(--ansi-8); --activebg:var(--ansi-8);
+    --bg:var(--ansi-0); --fg:var(--ansi-7); --muted:var(--ansi-8);
+    --panel:var(--ansi-0); --panel2:var(--ansi-0); --line:var(--ansi-8);
+    --acc:var(--ansi-3); --link:var(--ansi-4);
+    --activebg:var(--ansi-8); --selection:var(--ansi-4);
+    --good:var(--ansi-2); --warn:var(--ansi-1);
     --urghigh:var(--ansi-1); --urgmed:var(--ansi-3); --urglow:var(--ansi-8);
-    /* ---- helper aliases used by text rules (not directly user-editable) ---- */
-    --dim:var(--ansi-8); --blue:var(--ansi-4); --teal:var(--ansi-6); --burnt:var(--ansi-1);
+    /* ---- legacy aliases (derived from interface roles above) ---- */
+    --dim:var(--muted); --blue:var(--link); --burnt:var(--warn);
     /* ---- fonts: mono interface, sans body (overridable in admin) ---- */
     --ui-font:'IBM Plex Mono', "SF Mono", Menlo, monospace;
     --body-font:'IBM Plex Sans', -apple-system, system-ui, "Helvetica Neue", sans-serif;
@@ -42,6 +43,24 @@
          grid-template-columns:300px 5px 1fr 5px 400px; grid-template-rows:100dvh;
          background:var(--bg); color:var(--fg);
          font:14px/1.45 var(--ui-font); }
+  /* Electron desktop shell: hidden title bar — panels extend to window edge */
+  body.desktop-shell { --titlebar-h:28px; --traffic-w:74px; }
+  body.desktop-shell #left { padding-top:var(--titlebar-h); padding-left:var(--traffic-w); }
+  body.desktop-shell #mid,
+  body.desktop-shell #right { padding-top:var(--titlebar-h); }
+  body.desktop-shell #queue h1,
+  body.desktop-shell #meta h1,
+  body.desktop-shell #right h1,
+  body.desktop-shell #midbar,
+  body.desktop-shell #ivhead { -webkit-app-region:drag; }
+  body.desktop-shell .btn,
+  body.desktop-shell select,
+  body.desktop-shell input,
+  body.desktop-shell textarea,
+  body.desktop-shell button,
+  body.desktop-shell a,
+  body.desktop-shell .divider,
+  body.desktop-shell .hdivider { -webkit-app-region:no-drag; }
   #left, #mid, #right { min-height:0; height:100%; overflow:hidden; }
 
   /* scrollbars: transparent tracks inherit each panel's background; thumbs stay quiet */
@@ -55,7 +74,7 @@
 
   /* draggable column dividers */
   .divider { cursor:col-resize; background:transparent; }
-  .divider:hover, .divider.dragging { background:var(--acc); opacity:.45; }
+  .divider:hover, .divider.dragging { background:var(--line); }
 
   /* left */
   #left { display:flex; flex-direction:column; border-right:1px solid var(--line); min-width:0; }
@@ -119,19 +138,19 @@
   .dot { width:8px; height:8px; border-radius:2px; flex:none; align-self:center; }
   .dot.high { background:var(--urghigh); } .dot.medium { background:var(--urgmed); } .dot.low { background:var(--urglow); }
   .qname { flex:1 1 auto; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .qtag { flex:none; font-size:9.5px; color:var(--qtag); border:1px solid var(--line);
+  .qtag { flex:none; font-size:9.5px; color:var(--muted); border:1px solid var(--line);
           border-radius:4px; padding:0 5px; letter-spacing:.06em; }
   .qsum { color:var(--dim); font-size:12px; margin-left:16px; white-space:nowrap;
           overflow:hidden; text-overflow:ellipsis; }
-  .qitem.approved { opacity:.38; } .qitem.approved .qname { text-decoration:line-through; }
-  .qitem.rework .qname { color:var(--warn); }
+  .qitem.approved, .qitem.rework { opacity:.38; }
+  .qitem.approved .qname, .qitem.rework .qname { text-decoration:line-through; }
   /* this-sitting change badge on the queue entry's first line */
   .qitem .qdiff { margin-left:auto; flex:none; font-size:10.5px; font-variant-numeric:tabular-nums;
                   white-space:nowrap; padding-left:8px; }
   .qitem .qdiff .add { color:var(--good); }
-  .qitem .qdiff .del { color:var(--burnt); margin-left:5px; }
+  .qitem .qdiff .del { color:var(--warn); margin-left:5px; }
   /* info-panel: view-diff peek + small inline link */
-  .minilink { font-size:11px; color:var(--acc); cursor:pointer; text-decoration:none; margin-left:6px; }
+  .minilink { font-size:11px; color:var(--link); cursor:pointer; text-decoration:none; margin-left:6px; }
   .minilink:hover { text-decoration:underline; }
   .diffview { margin:6px 0 2px; padding:8px 10px; background:var(--panel2); border:1px solid var(--line);
               border-radius:6px; font:11.5px/1.5 var(--ui-font); white-space:pre-wrap; word-break:break-word;
@@ -153,14 +172,14 @@
   #meta dd { margin:2px 0 0; word-break:break-word; color:var(--dim); }
   #meta .brief { white-space:pre-wrap; color:var(--dim); }
   /* inbox: the source item a drafted response answers (paired with the draft's path) */
-  #meta .src { color:var(--slot-ctxpath, var(--teal)); }
+  #meta .src { color:var(--link); }
 
   /* middle */
   #mid { display:flex; flex-direction:column; min-width:0; }
   #midbar { flex:none; display:flex; align-items:center; gap:10px; padding:8px 14px;
             border-bottom:1px solid var(--line); background:var(--panel); }
   #fname { flex:1; color:var(--dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  #fname .fbase { color:var(--blue); }
+  #fname .fbase { color:var(--link); }
   #dirty { color:var(--warn); display:none; }
 
   /* find/replace bar */
@@ -175,8 +194,6 @@
   #midfoot { flex:none; display:flex; align-items:center; gap:10px; padding:8px 14px;
              border-top:1px solid var(--line); background:var(--panel); }
   #rework { color:var(--warn); }
-  #comment { color:var(--blue); }
-  #comment.has { color:var(--blue); }
   #commentpanel { display:none; flex:none; flex-direction:column; gap:8px; padding:10px 14px;
                   border-top:1px solid var(--line); background:var(--panel2); }
   #commentpanel.open { display:flex; }
@@ -221,8 +238,9 @@
   #gutter { flex:none; width:var(--gutter-w,56px); overflow:hidden; background:var(--panel); color:var(--dim);
             text-align:right; padding:18px 10px 18px 0; border-right:1px solid var(--line);
             font:var(--ed-font,13.5px)/1.55 var(--ui-font); user-select:none; }
-  #hlband { position:absolute; left:var(--gutter-w,56px); right:0; display:none; background:rgba(125,159,200,.13);
-            pointer-events:none; z-index:0; }
+  #hlband { position:absolute; left:var(--gutter-w,56px); right:0; display:none;
+            background:color-mix(in srgb, var(--ansi-8) 28%, var(--bg));
+            pointer-events:none; z-index:0; will-change:top,height; }
   #editor { flex:1; min-height:0; width:100%; overflow-y:auto; background:transparent;
             color:transparent; caret-color:var(--fg);
             position:relative; z-index:2;
@@ -234,8 +252,8 @@
             padding:18px 22px 18px 14px; pointer-events:none; color:var(--fg);
             white-space:pre-wrap; overflow-wrap:break-word; word-break:normal;
             font:var(--ed-font,13.5px)/1.55 var(--ui-font); tab-size:4; }
-  #edback .mdhead { color:var(--acc); }
-  #edback .mdsyn { color:var(--dim); }
+  #edback .mdhead { color:var(--slot-mdhead, var(--acc)); }
+  #edback .mdsyn { color:var(--muted); }
   #mirror { position:absolute; visibility:hidden; left:-99999px; top:0; white-space:pre-wrap;
             overflow-wrap:break-word; word-break:normal; padding:0; border:0;
             font:var(--ed-font,13.5px)/1.55 var(--ui-font); tab-size:4; }
@@ -245,7 +263,8 @@
             font:15px/1.65 var(--body-font); }
   body.reading #render { display:block; }
   body.reading #edwrap { display:none; }
-  #render h1, #render h2, #render h3, #render h4 { color:var(--acc); line-height:1.25; }
+  #render h1, #render h2, #render h3, #render h4 { color:var(--fg); line-height:1.25; }
+  #render h1, #render h2 { font-weight:600; }
   #render h1 { font-size:21px; border-bottom:1px solid var(--line); padding-bottom:6px; }
   #render h2 { font-size:17px; } #render h3 { font-size:15px; }
   #render table { border-collapse:collapse; margin:12px 0; font-size:13px; }
@@ -256,7 +275,7 @@
   #render pre { background:var(--panel2); padding:10px 14px; border-radius:6px; overflow-x:auto; }
   #render pre code { background:none; padding:0; }
   #render blockquote { border-left:3px solid var(--acc); margin:10px 0; padding:2px 14px; color:var(--dim); }
-  #render a { color:var(--acc); }
+  #render a { color:var(--link); }
   #render hr { border:0; border-top:1px solid var(--line); }
   #render li { margin:3px 0; }
   #render input[type=checkbox] { accent-color:var(--acc); transform:scale(1.18); margin-right:7px; cursor:pointer; }
@@ -282,16 +301,13 @@
   #right h1 { flex:none; display:flex; align-items:center; gap:6px; font-size:12px; letter-spacing:.18em; color:var(--acc); margin:0;
               padding:12px 14px 8px; text-transform:uppercase; }
   #chat { flex:1; min-height:0; overflow-y:auto; padding:6px 14px; }
-  .msg { margin:10px 0; white-space:pre-wrap; word-break:break-word; color:var(--dim); }
+  .msg { margin:10px 0; white-space:pre-wrap; word-break:break-word; color:var(--muted); }
   .msg.agent strong { color:var(--fg); font-weight:600; }
-  .msg.user { color:var(--acc); }
-  .msg.tool { color:var(--dim); font-style:italic; font-size:12px; margin:4px 0; }
+  .msg.tool { color:var(--muted); font-style:italic; font-size:12px; margin:4px 0; }
   .msg.err { color:var(--warn); }
-  .msg.sys { color:var(--dim); font-size:12px; }
+  .msg.sys { color:var(--muted); font-size:12px; }
   .msg.ctx .ctxhead { color:var(--slot-ctxhead, var(--fg)); font-size:12px; margin-bottom:4px; }
-  .msg.ctx .ctxhead .fpath { color:var(--blue); }
-  .msg.ctx .ctxbody { color:var(--fg); }
-  .msg.sys .blabel { color:var(--dim); }
+  .msg.sys .blabel { color:var(--muted); }
   .msg.sys .bbody { color:var(--fg); font-size:13px; white-space:pre-wrap; }
   /* founding interview — takes over the center panel until the desk is founded */
   #interview { display:none; flex:1; min-height:0; flex-direction:column; background:var(--bg); }
@@ -302,7 +318,7 @@
             display:flex; align-items:center; justify-content:space-between; gap:10px; }
   #ivhead .ivacts { display:flex; gap:7px; flex:none; }
   #ivchat { flex:1; min-height:0; overflow-y:auto; padding:6px 18px; }
-  #ivthink { display:none; flex:none; padding:4px 18px; color:var(--burnt); font-style:italic; font-size:12px; }
+  #ivthink { display:none; flex:none; padding:4px 18px; color:var(--warn); font-style:italic; font-size:12px; }
   #ivbar { flex:none; display:flex; gap:8px; padding:10px 14px; border-top:1px solid var(--line); align-items:flex-end; }
   #ivin { flex:1; background:var(--panel2); color:var(--fg); border:1px solid var(--line); border-radius:5px;
           padding:8px 10px; font:inherit; resize:none; min-height:40px; overflow-y:hidden; }
@@ -332,83 +348,70 @@
   #queue h1 { flex:none; position:sticky; top:0; z-index:5; background:var(--bg); }
   #chatin { flex:1; background:var(--panel2); color:var(--fg); border:1px solid var(--line); border-radius:5px;
             padding:8px 10px; font:inherit; resize:none; min-height:40px; overflow-y:hidden; }
-  #spin { display:none; color:var(--burnt); padding:4px 14px 10px; font-size:12px; font-style:italic; }
+  #spin { display:none; color:var(--warn); padding:4px 14px 10px; font-size:12px; font-style:italic; }
 
-  /* settings panel — neutral system-menu chrome (independent of app accent colours) */
+  /* settings panel — follows the active app theme */
   #admin { position:fixed; z-index:50; display:none;
            top:48px; right:24px; width:640px; max-width:calc(100vw - 32px);
            height:78vh; min-width:320px; min-height:200px; overflow:auto; resize:both;
-           padding:0 0 16px; border:1px solid var(--adm-border); border-radius:10px;
-           box-shadow:0 12px 40px rgba(0,0,0,.18);
-           font:13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-           background:var(--adm-bg); color:var(--adm-fg); }
-  #admin[data-adm-tone="dark"] {
-    --adm-bg:#2b2b2b; --adm-bg2:#383838; --adm-fg:#f5f5f7; --adm-muted:#98989d;
-    --adm-border:#484848; --adm-hover:#404040; --adm-focus:#0a84ff; --adm-sep:#3a3a3a;
-  }
-  #admin[data-adm-tone="light"] {
-    --adm-bg:#ececec; --adm-bg2:#ffffff; --adm-fg:#1d1d1f; --adm-muted:#6e6e73;
-    --adm-border:#c6c6c8; --adm-hover:#e0e0e0; --adm-focus:#007aff; --adm-sep:#d8d8dc;
-  }
+           padding:0 0 16px; border:1px solid var(--line); border-radius:10px;
+           box-shadow:0 12px 40px color-mix(in srgb, var(--bg) 55%, transparent);
+           font:13px/1.45 var(--ui-font);
+           background:var(--panel); color:var(--fg); }
   #admin.open { display:block; }
-  #adminstick { position:sticky; top:0; z-index:2; background:var(--adm-bg2);
-                border-radius:10px 10px 0 0; border-bottom:1px solid var(--adm-sep); }
+  body.desktop-shell #admin { top:calc(var(--titlebar-h) + 20px); }
+  #adminstick { position:sticky; top:0; z-index:2; background:var(--panel2);
+                border-radius:10px 10px 0 0; border-bottom:1px solid var(--line); }
   #adminhead { display:flex; align-items:center; gap:12px; padding:12px 16px;
                cursor:move; user-select:none; }
   #adminhead h1 { margin:0; font-size:13px; font-weight:600; letter-spacing:-0.01em;
-                  text-transform:none; color:var(--adm-fg); }
+                  text-transform:none; color:var(--fg); }
   #adminhead .spacer { flex:1; }
   #admintabs { display:flex; flex-wrap:wrap; gap:0; padding:0 12px; overflow-x:auto;
-               background:var(--adm-bg2); }
+               background:var(--panel2); }
   #admin .atab { background:none; border:none; border-bottom:2px solid transparent;
                  padding:9px 12px; font:inherit; font-size:12px; font-weight:500;
-                 letter-spacing:0; text-transform:none; color:var(--adm-muted); cursor:pointer;
+                 letter-spacing:0; text-transform:none; color:var(--dim); cursor:pointer;
                  margin-bottom:-1px; border-radius:0; }
-  #admin .atab:hover { color:var(--adm-fg); background:var(--adm-hover); }
-  #admin .atab.active { color:var(--adm-fg); border-bottom-color:var(--adm-focus); background:transparent; }
-  #admin .asec { display:none; border-bottom:1px solid var(--adm-sep); padding:14px 16px; max-width:none; }
+  #admin .atab:hover { color:var(--fg); background:color-mix(in srgb, var(--fg) 8%, var(--panel2)); }
+  #admin .atab.active { color:var(--fg); border-bottom-color:var(--acc); background:transparent; }
+  #admin .asec { display:none; border-bottom:1px solid var(--line); padding:14px 16px; max-width:none; }
   #admin .asec.show { display:block; }
   #admin .asec.show + .asec:not(.show) { border-top:0; }
   #admin .asec h2 { margin:0 0 10px; font-size:11px; font-weight:600; letter-spacing:.04em;
-                    text-transform:uppercase; color:var(--adm-muted); }
+                    text-transform:uppercase; color:var(--dim); }
   #admin .arow { display:flex; align-items:center; gap:10px; margin:6px 0; flex-wrap:wrap; }
-  #admin .arow label.lbl { width:120px; color:var(--adm-muted); flex:none; font-size:12px; }
-  #admin .arow .vname { width:120px; color:var(--adm-fg); flex:none; font-size:12px; }
-  #admin input[type=color] { width:32px; height:22px; padding:0; border:1px solid var(--adm-border);
-                             border-radius:4px; background:var(--adm-bg2); cursor:pointer; }
+  #admin .arow label.lbl { width:120px; color:var(--dim); flex:none; font-size:12px; }
+  #admin .arow .vname { width:120px; color:var(--fg); flex:none; font-size:12px; }
+  #admin input[type=color] { width:32px; height:22px; padding:0; border:1px solid var(--line);
+                             border-radius:4px; background:var(--panel2); cursor:pointer; }
   #admin input[type=text].hex, #admin input[type=number] {
-    background:var(--adm-bg2); color:var(--adm-fg); border:1px solid var(--adm-border); border-radius:6px;
+    background:var(--panel2); color:var(--fg); border:1px solid var(--line); border-radius:6px;
     padding:4px 8px; font:12px/1.4 ui-monospace, "SF Mono", Menlo, monospace; }
   #admin input[type=text].hex { width:74px; }
   #admin input[type=number] { width:80px; }
-  #admin input:focus, #admin select:focus { outline:none; border-color:var(--adm-focus);
-    box-shadow:0 0 0 2px color-mix(in srgb, var(--adm-focus) 25%, transparent); }
+  #admin input:focus, #admin select:focus { outline:none; border-color:var(--acc);
+    box-shadow:0 0 0 2px color-mix(in srgb, var(--acc) 25%, transparent); }
   #admin .achk { display:flex; align-items:flex-start; gap:8px; margin:8px 0; }
-  #admin .achk input { margin-top:3px; accent-color:var(--adm-focus); }
+  #admin .achk input { margin-top:3px; accent-color:var(--acc); }
   #admin .achk .ctext { display:flex; flex-direction:column; gap:2px; }
-  #admin .achk .ctext .ctitle { color:var(--adm-fg); font-size:13px; }
-  #admin .achk .ctext .cdesc { color:var(--adm-muted); font-size:12px; }
-  #admin .btn-default { background:var(--adm-bg2); color:var(--adm-fg); border-color:var(--adm-border); }
-  #admin .btn-default:hover { background:var(--adm-hover); border-color:var(--adm-border); }
-  #admin .btn-primary { background:var(--adm-fg); color:var(--adm-bg); border-color:var(--adm-fg); }
-  #admin .btn-primary:hover { filter: brightness(1.04); }
-  #admin .btn-ghost { background:transparent; color:var(--adm-muted); border-color:transparent; }
-  #admin .btn-ghost:hover { background:var(--adm-hover); color:var(--adm-fg); border-color:transparent; }
-  #admin pre.adump { background:var(--adm-bg); border:1px solid var(--adm-border); border-radius:6px;
+  #admin .achk .ctext .ctitle { color:var(--fg); font-size:13px; }
+  #admin .achk .ctext .cdesc { color:var(--dim); font-size:12px; }
+  #admin pre.adump { background:var(--panel); border:1px solid var(--line); border-radius:6px;
                      padding:10px 12px; white-space:pre-wrap; word-break:break-word;
-                     max-height:300px; overflow:auto; font-size:12px; color:var(--adm-fg); margin:0; }
+                     max-height:300px; overflow:auto; font-size:12px; color:var(--fg); margin:0; }
   #admin .kv { display:grid; grid-template-columns:170px 1fr; gap:3px 12px; align-items:baseline; }
-  #admin .kv .k { color:var(--adm-muted); }
-  #admin .kv .v { color:var(--adm-fg); word-break:break-word; }
+  #admin .kv .k { color:var(--dim); }
+  #admin .kv .v { color:var(--fg); word-break:break-word; }
   #admin .v.ok { color:var(--good); } #admin .v.bad { color:var(--warn); }
-  #admin .v.warnv { color:var(--adm-fg); }
+  #admin .v.warnv { color:var(--fg); }
   #admin .ptable { width:100%; border-collapse:collapse; font-size:12px; margin-top:4px; }
-  #admin .ptable th, #admin .ptable td { border:1px solid var(--adm-sep); padding:4px 9px; text-align:left; }
-  #admin .ptable th { background:var(--adm-bg); color:var(--adm-muted); font-weight:600; }
+  #admin .ptable th, #admin .ptable td { border:1px solid var(--line); padding:4px 9px; text-align:left; }
+  #admin .ptable th { background:var(--panel); color:var(--dim); font-weight:600; }
   #admin .errlist { display:flex; flex-direction:column; gap:6px; max-height:280px; overflow-y:auto; }
   #admin .errlist .eitem { border-left:2px solid var(--warn); padding-left:8px; }
   #admin .errlist .emsg { color:var(--warn); white-space:pre-wrap; word-break:break-word; }
-  #admin .errlist .emeta, #admin .errlist .enone, #admin .mono-dim, #admin .evlog { color:var(--adm-muted); }
+  #admin .errlist .emeta, #admin .errlist .enone, #admin .mono-dim, #admin .evlog { color:var(--dim); }
   #admin .asec.wide { max-width:none; }
   /* appearance tab — single-column sections, table for ANSI colors */
   #admin[data-active-tab="appearance"] { width:880px; min-width:720px; }
@@ -416,57 +419,60 @@
   #admin .ap-block { margin:0 0 20px; }
   #admin .ap-block:last-child { margin-bottom:0; }
   #admin .ap-block > h2 { margin:16px 0 8px; font-size:11px; font-weight:600; letter-spacing:.04em;
-                           text-transform:uppercase; color:var(--adm-muted); }
+                           text-transform:uppercase; color:var(--dim); }
   #admin .ap-block > h2:first-child { margin-top:12px; }
   #admin .ap-form-row { display:grid; grid-template-columns:minmax(88px, 120px) 1fr;
                         gap:10px 14px; align-items:center; max-width:420px; margin:6px 0; }
-  #admin .ap-form-row .lbl { color:var(--adm-muted); font-size:12px; }
+  #admin .ap-form-row .lbl { color:var(--dim); font-size:12px; }
   #admin .ap-form-stack { display:flex; flex-direction:column; gap:2px; max-width:420px; }
-  #admin .ap-scroll { max-height:220px; overflow:auto; border:1px solid var(--adm-sep);
-                      border-radius:6px; background:var(--adm-bg2); }
+  #admin .ap-scroll { max-height:220px; overflow:auto; border:1px solid var(--line);
+                      border-radius:6px; background:var(--panel2); }
   #admin .ap-table { width:100%; border-collapse:collapse; font-size:12px; }
-  #admin .ap-table th { position:sticky; top:0; z-index:1; background:var(--adm-bg2);
-                         color:var(--adm-muted); font-weight:600; text-align:left;
-                         padding:6px 10px; border-bottom:1px solid var(--adm-sep); }
-  #admin .ap-table td { padding:4px 10px; border-bottom:1px solid var(--adm-sep); vertical-align:middle; }
+  #admin .ap-table th { position:sticky; top:0; z-index:1; background:var(--panel2);
+                         color:var(--dim); font-weight:600; text-align:left;
+                         padding:6px 10px; border-bottom:1px solid var(--line); }
+  #admin .ap-table td { padding:4px 10px; border-bottom:1px solid var(--line); vertical-align:middle; }
   #admin .ap-table tr:last-child td { border-bottom:0; }
-  #admin .ap-table .ap-idx { width:28px; color:var(--adm-muted); font-variant-numeric:tabular-nums; }
+  #admin .ap-table .ap-idx { width:28px; color:var(--dim); font-variant-numeric:tabular-nums; }
   #admin .ap-table .ap-cname { white-space:nowrap; }
   #admin .ap-table input[type=color] { display:block; }
   #admin .ap-table input.hex { width:100%; min-width:68px; box-sizing:border-box; }
   #admin .ap-rolelist { display:flex; flex-direction:column; gap:0; max-width:480px; }
   #admin .ap-role-row { display:grid; grid-template-columns:1fr 16px minmax(120px, 160px);
                         gap:8px 10px; align-items:center; padding:5px 0;
-                        border-bottom:1px solid var(--adm-sep); font-size:12px; }
+                        border-bottom:1px solid var(--line); font-size:12px; }
   #admin .ap-iface-row { grid-template-columns:1fr 16px minmax(96px, 118px) 44px; }
   #admin .ap-iface-head { display:grid; grid-template-columns:1fr 16px minmax(96px, 118px) 44px;
                           gap:8px 10px; padding:0 0 4px; font-size:10px; font-weight:600;
-                          letter-spacing:.04em; text-transform:uppercase; color:var(--adm-muted);
-                          border-bottom:1px solid var(--adm-sep); }
+                          letter-spacing:.04em; text-transform:uppercase; color:var(--dim);
+                          border-bottom:1px solid var(--line); }
+  #admin .ap-iface-group { margin:10px 0 2px; font-size:10px; font-weight:600;
+    letter-spacing:.04em; text-transform:uppercase; color:var(--dim); }
+  #admin .ap-iface-group:first-child { margin-top:0; }
   #admin .ap-iface-head span:last-child { text-align:right; }
-  #admin .ap-hint { margin:-2px 0 10px; font-size:11px; color:var(--adm-muted); line-height:1.45; max-width:480px; }
+  #admin .ap-hint { margin:-2px 0 10px; font-size:11px; color:var(--dim); line-height:1.45; max-width:480px; }
   #admin .ap-role-row:last-child { border-bottom:0; }
-  #admin .ap-role-name { color:var(--adm-fg); min-width:0; }
+  #admin .ap-role-name { color:var(--fg); min-width:0; }
   #admin .ap-role-row .swatch { width:14px; height:14px; border-radius:3px; justify-self:center;
-    background:repeating-conic-gradient(var(--adm-border) 0 25%, transparent 0 50%) 0 0/8px 8px; }
+    background:repeating-conic-gradient(var(--line) 0 25%, transparent 0 50%) 0 0/8px 8px; }
   #admin .ap-role-row .swatch-inner { display:block; width:14px; height:14px; border-radius:3px;
-    border:1px solid var(--adm-border); box-sizing:border-box; }
+    border:1px solid var(--line); box-sizing:border-box; }
   #admin .ap-role-row select { width:100%; font-size:12px; padding:3px 6px; }
   #admin .ap-iface-opacity { width:100%; padding:3px 4px; font-size:11px; text-align:right;
-    background:var(--adm-bg2); color:var(--adm-fg); border:1px solid var(--adm-border); border-radius:6px; }
+    background:var(--panel2); color:var(--fg); border:1px solid var(--line); border-radius:6px; }
   #admin .ap-actions { margin-top:8px; }
   #admin .ap-saved-row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; max-width:520px; }
   #admin .ap-saved-row input[type=text] { flex:1 1 140px; min-width:100px; padding:4px 8px;
-    background:var(--adm-bg2); color:var(--adm-fg); border:1px solid var(--adm-border); border-radius:6px; }
+    background:var(--panel2); color:var(--fg); border:1px solid var(--line); border-radius:6px; }
   #admin .ap-saved-row select { flex:1 1 160px; min-width:120px; font-size:12px; padding:4px 6px; }
   #admin #kitpick, #admin .projrow .pkit, #admin .projrow .pdepth, #admin .projrow .pname,
   #admin .projrow .proot, #admin .agentrow .amodel, #admin .agentrow .amodel-custom,
   #admin .ap-form-row select, #admin .ap-form-stack select {
-    background:var(--adm-bg2); color:var(--adm-fg); border:1px solid var(--adm-border); border-radius:6px; }
+    background:var(--panel2); color:var(--fg); border:1px solid var(--line); border-radius:6px; }
   #admin #kitpick { font:12px var(--ui-font); padding:4px 7px; min-width:220px; }
-  #admin .kitf { display:block; margin:8px 0 0; font-size:11px; letter-spacing:.04em; color:var(--adm-muted); }
+  #admin .kitf { display:block; margin:8px 0 0; font-size:11px; letter-spacing:.04em; color:var(--dim); }
   #admin .kitf input, #admin .kitf textarea { display:block; width:100%; box-sizing:border-box; margin-top:3px;
-    background:var(--adm-bg2); color:var(--adm-fg); border:1px solid var(--adm-border); border-radius:6px;
+    background:var(--panel2); color:var(--fg); border:1px solid var(--line); border-radius:6px;
     font:12px/1.45 var(--ui-font); padding:5px 7px; }
   #admin .kitf textarea { min-height:46px; resize:vertical; line-height:1.5; }
   #admin #kf_lens, #admin #kf_urgency, #admin #kf_firstQueue { min-height:54px; }
@@ -477,13 +483,13 @@
   #admin .agentrow .amodel-custom { flex:1 1 140px; min-width:120px; padding:4px 8px; font:inherit; }
   #admin .projrow { gap:6px; }
   #admin .projrow .pname { flex:0 0 130px; padding:4px 7px; font:inherit; }
-  #admin .projrow .proot { flex:1 1 220px; min-width:160px; color:var(--adm-muted); padding:4px 7px; font:inherit; }
-  #admin .projrow .pdel, #admin .projrow .prefound { color:var(--adm-muted); }
+  #admin .projrow .proot { flex:1 1 220px; min-width:160px; color:var(--dim); padding:4px 7px; font:inherit; }
+  #admin .projrow .pdel, #admin .projrow .prefound { color:var(--dim); }
   #admin .projrow .prefound { flex:none; font-size:11px; }
 
   /* horizontal (row) divider between queue and info panes */
   .hdivider { cursor:row-resize; height:5px; flex:none; background:transparent; }
-  .hdivider:hover, .hdivider.dragging { background:var(--acc); opacity:.45; }
+  .hdivider:hover, .hdivider.dragging { background:var(--line); }
 
   /* info-pane edit mode */
   #meta .metaedit { display:flex; flex-direction:column; gap:2px; margin-top:2px; }
@@ -496,29 +502,29 @@
   #metabar { display:flex; gap:8px; align-items:center; }
 
   /* clickable [[wikilinks]] */
-  .wikilink { color:var(--slot-wikilink, var(--blue)); cursor:pointer; text-decoration:none;
+  .wikilink { color:var(--link); cursor:pointer; text-decoration:none;
               border-bottom:1px dotted currentColor; }
   .wikilink:hover { opacity:.8; }
 
   /* the auto-glance reaction reads dimmer than a full agent turn, with a
      scannable "comment" heading mirroring the context block's "context ·" head */
-  .msg.glance { color:var(--slot-glance, var(--dim)); font-style:italic; }
+  .msg.glance { color:var(--slot-glance, var(--muted)); font-style:italic; }
   .msg.glance::before { content:'comment'; display:block; font-style:normal;
                         color:var(--slot-cmthead, var(--fg)); font-size:12px; margin-bottom:4px; }
 
   /* semantic colour slots (overridable element colours; fall back to palette) */
-  #comment { color:var(--slot-comment, var(--blue)); }
+  #comment { color:var(--slot-comment, var(--link)); }
   .notedot { display:inline-block; width:8px; height:8px; border-radius:50%;
-             background:var(--slot-comment, var(--blue)); flex:none; align-self:center; }
+             background:var(--slot-comment, var(--link)); flex:none; align-self:center; }
   #comment.has::after { content:''; display:inline-block; width:7px; height:7px;
-    border-radius:50%; background:var(--slot-comment, var(--blue));
+    border-radius:50%; background:var(--slot-comment, var(--link));
     margin-left:7px; vertical-align:middle; }
-  #fnote { color:var(--slot-comment, var(--blue)); display:none; }
+  #fnote { color:var(--slot-comment, var(--link)); display:none; }
   .msg.ctx .ctxbody { color:var(--slot-ctxbody, var(--fg)); }
-  .msg.ctx .ctxhead .fpath { color:var(--slot-ctxpath, var(--blue)); }
-  .msg.agent { color:var(--slot-agent, var(--dim)); }
-  .msg.user { color:var(--slot-user, var(--acc)); }
-  #queue h1, #meta h1, #right h1 { color:var(--slot-header, var(--acc)); }
+  .msg.ctx .ctxhead .fpath { color:var(--link); }
+  .msg.agent { color:var(--slot-agent, var(--muted)); }
+  .msg.user { color:var(--slot-user, var(--link)); }
+  #queue h1, #meta h1, #right h1 { color:var(--acc); }
 </style>
 </head>
 <body>
@@ -679,7 +685,7 @@
   </div>
 </div>
 
-<div id="admin" data-adm-tone="dark">
+<div id="admin">
   <div id="adminstick">
     <div id="adminhead">
       <h1>settings</h1>
@@ -731,13 +737,14 @@
 
       <section class="ap-block">
         <h2>Text colors</h2>
+        <p class="ap-hint">Chat voice colors — your messages default to link blue for scanability in the agent stream. Editor · section head tints markdown heading lines in source view; inline markers (**, #, etc.) follow secondary text.</p>
         <div class="ap-rolelist" id="slotrows"></div>
         <div class="ap-actions"><button id="slotreset" type="button" class="btn btn-sm btn-default">reset text colors</button></div>
       </section>
 
       <section class="ap-block">
         <h2>Interface colors</h2>
-        <p class="ap-hint">Each role picks an ANSI color and an opacity. Values below 100% blend over the layer behind — useful when two roles share the same base color but need contrast (e.g. panel over background).</p>
+        <p class="ap-hint">Roles grouped by job: surfaces establish depth, text roles set legibility tiers, emphasis draws the eye to chrome and links, state signals selection and feedback. Solid % tints toward white (dark) or black (light).</p>
         <div class="ap-rolelist" id="ifacerows"></div>
         <div class="ap-actions"><button id="ifacereset" type="button" class="btn btn-sm btn-default">reset interface colors</button></div>
       </section>
@@ -965,8 +972,9 @@ function diffBadge(d){
 }
 function renderQueue(){
   const order = {high:0, medium:1, low:2};
+  const queueHandled = e => (e.status === 'approved' || e.status === 'rework') ? 1 : 0;
   const list = [...Q.entries].sort((a,b) =>
-    (a.status==='approved')-(b.status==='approved') || (order[a.urgency]??9)-(order[b.urgency]??9));
+    queueHandled(a) - queueHandled(b) || (order[a.urgency]??9)-(order[b.urgency]??9));
   $('qlist').innerHTML = '';
   for(const e of list){
     const d = document.createElement('div');
@@ -1029,7 +1037,7 @@ function diffLine(d){
   if(!d) return '<span style="color:var(--dim)">no baseline yet</span>';
   if(!d.added && !d.removed) return '<span style="color:var(--dim)">unchanged this sitting</span>';
   const a = d.added ? `<span style="color:var(--good)">+${d.added}</span>` : '';
-  const r = d.removed ? `<span style="color:var(--burnt)">−${d.removed}</span>` : '';
+  const r = d.removed ? `<span style="color:var(--warn)">−${d.removed}</span>` : '';
   return `${a} ${r} <a href="#" id="viewdiff" class="minilink">view diff</a>`;
 }
 async function toggleDiffView(e){
@@ -1131,9 +1139,9 @@ async function select(id){
   refreshMetaWords();   // the file is loaded now — correct the word count in the Info panel
   clearBand();
   $('editor').scrollTop = 0;
+  cachedLineCount = editorLineCount($('editor').value);
   setMode('reading');
-  renderGutter();
-  renderBack();
+  refreshEditorChrome();
   pendingMsgs = [];
   // the transcript persists across file switches — append this file's context entry
   // (skip only if it would duplicate the transcript's latest entry, e.g. on reload)
@@ -1176,7 +1184,8 @@ function setMode(m){
   document.body.classList.toggle('reading', m === 'reading');
   $('viewmode').textContent = m === 'reading' ? 'edit' : 'view';
   $('findtoggle').style.display = m === 'reading' ? 'none' : '';
-  if(m === 'reading'){ closeFind(); renderMd(); } else { renderGutter(); renderBack(); $('editor').focus(); }
+  if(m === 'reading'){ closeFind(); renderMd(); }
+  else { refreshEditorChrome(); $('editor').focus(); }
 }
 
 function sanitizeRender(el){
@@ -1257,28 +1266,83 @@ function toggleBox(pos){
   renderMd();
 }
 
-/* line-number gutter: heights measured per logical line via the hidden mirror,
-   so numbers stay aligned under soft wrap */
-let gutterTimer = null;
+/* line-number gutter + syntax backdrop — batched mirror measurement; input only
+   rebuilds gutter when line count changes (soft-wrap heights refresh on idle) */
+let gutterTimer = null, backTimer = null, bandRaf = null, cachedLineCount = 0;
+
+function editorLineCount(v){ return (v.match(/\n/g) || []).length + 1; }
+
+function mirrorInnerWidth(ed){
+  const cs = getComputedStyle(ed);
+  return ed.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+}
+
+function scheduleCaretBand(){
+  if(!hlLineEnabled || mode !== 'source' || !cur) return;
+  if(bandRaf) cancelAnimationFrame(bandRaf);
+  bandRaf = requestAnimationFrame(() => {
+    bandRaf = null;
+    caretLineHighlight();
+  });
+}
+
+function scheduleRenderBack(){
+  clearTimeout(backTimer);
+  backTimer = setTimeout(() => {
+    if(SETTINGS.mdHighlight !== false && mode === 'source') renderBack();
+    scheduleCaretBand();
+  }, 200);
+}
+
+function refreshEditorChrome(opts){
+  opts = opts || {};
+  const ed = $('editor');
+  if(!ed.clientWidth) return;
+  if(opts.gutter !== false){
+    cachedLineCount = editorLineCount(ed.value);
+    renderGutter();
+  }
+  if(opts.back !== false && SETTINGS.mdHighlight !== false && mode === 'source') renderBack();
+  scheduleCaretBand();
+}
+
+function scheduleGutter(){
+  clearTimeout(gutterTimer);
+  gutterTimer = setTimeout(() => refreshEditorChrome(), 120);
+}
+
+function onEditorInput(){
+  setDirty(true);
+  scheduleAutosave();
+  scheduleRenderBack();
+  const lc = editorLineCount($('editor').value);
+  clearTimeout(gutterTimer);
+  if(lc !== cachedLineCount){
+    cachedLineCount = lc;
+    gutterTimer = setTimeout(() => { renderGutter(); scheduleCaretBand(); }, 80);
+  } else {
+    scheduleCaretBand();
+    gutterTimer = setTimeout(() => { renderGutter(); scheduleCaretBand(); }, 350);
+  }
+}
+
 function renderGutter(){
   const ed = $('editor'), mirror = $('mirror');
-  const cs = getComputedStyle(ed);
-  mirror.style.width = (ed.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)) + 'px';
+  const innerW = mirrorInnerWidth(ed);
+  mirror.style.width = innerW + 'px';
   const lines = ed.value.split('\n');
-  // size the gutter to the widest line number: ~8.5px/digit + 10px each side, so the
-  // numbers sit with equal left/right margins instead of hugging the right of a fixed column.
   document.documentElement.style.setProperty(
     '--gutter-w', Math.max(34, String(lines.length).length * 8.5 + 20) + 'px');
+  mirror.innerHTML = lines.map(l => `<div>${esc(l) || ' '}</div>`).join('');
+  const divs = mirror.children;
   let html = '';
-  for(let i = 0; i < lines.length; i++){
-    mirror.textContent = lines[i] || ' ';
-    html += `<div style="height:${mirror.offsetHeight}px">${i+1}</div>`;
-  }
+  for(let i = 0; i < lines.length; i++)
+    html += `<div style="height:${divs[i].offsetHeight}px">${i + 1}</div>`;
   $('gutter').innerHTML = html;
   syncGutter();
 }
-/* syntax layer behind the transparent textarea: heading lines gold (matching the
-   reading view), markdown formatting characters dimmed; body text unchanged */
+/* syntax layer behind the transparent textarea: heading text stands out for
+   scanning; markdown marker characters stay muted so body prose reads cleanly */
 function renderBack(){
   const w = $('editor').clientWidth;
   if(!w) return;  // editor not laid out (reading mode) — renders on source entry
@@ -1305,7 +1369,7 @@ function renderBack(){
   syncBack();
 }
 function syncBack(){ $('edback').scrollTop = $('editor').scrollTop; }
-function scheduleGutter(){ clearTimeout(gutterTimer); gutterTimer = setTimeout(() => { renderGutter(); renderBack(); }, 120); }
+
 function syncGutter(){ $('gutter').scrollTop = $('editor').scrollTop; }
 
 async function save(){
@@ -1483,7 +1547,7 @@ async function refreshOpenFile(){
     }
     $('editor').value = f.content;
     clearBand();
-    if(mode === 'reading') renderMd(); else { renderGutter(); renderBack(); }
+    if(mode === 'reading') renderMd(); else refreshEditorChrome({back: true, gutter: true});
     addMsg('sys', '(file updated on disk — reloaded)');
   } catch(e){ /* file may be unreadable mid-edit; next turn will catch it */ }
 }
@@ -1572,7 +1636,7 @@ async function sweep(thrust){
     } else if(cur && !dirty){  // the sweep may have edited the open file (e.g. the ledger)
       const f = await jget('/api/file?path=' + encodeURIComponent(cur.path) + '&project=' + encodeURIComponent(PROJECT));
       $('editor').value = f.content;
-      if(mode === 'reading') renderMd(); else renderGutter();
+      if(mode === 'reading') renderMd(); else refreshEditorChrome();
     }
     renderQueue();
     const pending = Q.entries.filter(e => e.status !== 'approved');
@@ -1611,7 +1675,7 @@ async function reloadQueue(){
           try {
             const f = await jget('/api/file?path=' + encodeURIComponent(cur.path) + '&project=' + encodeURIComponent(PROJECT));
             $('editor').value = f.content;
-            if(mode === 'reading') renderMd(); else renderGutter();
+            if(mode === 'reading') renderMd(); else refreshEditorChrome();
           } catch(e){ /* file may be gone; leave the buffer as-is */ }
         }
         renderMeta(cur);
@@ -1688,7 +1752,7 @@ function lineHighlightAt(charIdx){
   const v = ed.value;
   const lineStart = v.lastIndexOf('\n', Math.max(0, charIdx - 1)) + 1;
   let lineEnd = v.indexOf('\n', charIdx); if(lineEnd < 0) lineEnd = v.length;
-  mirror.style.width = (ed.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)) + 'px';
+  mirror.style.width = mirrorInnerWidth(ed) + 'px';
   mirror.textContent = v.slice(0, lineStart) || ' ';
   const top = (v.slice(0, lineStart) ? mirror.offsetHeight : 0) + parseFloat(cs.paddingTop);
   mirror.textContent = v.slice(lineStart, lineEnd) || ' ';
@@ -1725,8 +1789,8 @@ function locateInEditor(block){
 }
 
 function scrollEditorTo(charIdx){
-  const ed = $('editor'), mirror = $('mirror'), cs = getComputedStyle(ed);
-  mirror.style.width = (ed.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)) + 'px';
+  const ed = $('editor'), mirror = $('mirror');
+  mirror.style.width = mirrorInnerWidth(ed) + 'px';
   mirror.textContent = ed.value.slice(0, charIdx) || ' ';
   ed.scrollTop = Math.max(0, mirror.offsetHeight - ed.clientHeight / 3);
   syncGutter();
@@ -2219,7 +2283,7 @@ function growTextarea(el, maxLines = 10){
 function autoGrow(){ growTextarea($('chatin'), 10); }      // right-panel chat input
 function autoGrowIv(){ growTextarea($('ivin'), 10); }      // founding-interview answer box
 
-$('editor').addEventListener('input', () => { setDirty(true); scheduleGutter(); clearBand(); scheduleAutosave(); });
+$('editor').addEventListener('input', onEditorInput);
 $('editor').addEventListener('scroll', () => { syncGutter(); repositionBand(); syncBack(); });
 $('editor').addEventListener('blur', () => { if(!busy) save().catch(()=>{}); });
 window.addEventListener('resize', scheduleGutter);
@@ -2488,10 +2552,18 @@ function migrateRoleMap(map) {
   return out;
 }
 
+function migrateIfaceMap(map) {
+  if (!map || typeof map !== 'object') return {};
+  const out = migrateRoleMap(map);
+  if (out.qtag && !out.muted) out.muted = out.qtag;
+  delete out.qtag;
+  return out;
+}
+
 function migrateThemeSettings() {
   SETTINGS.colors = migrateRoleMap(SETTINGS.colors);
   SETTINGS.slots = migrateRoleMap(SETTINGS.slots);
-  SETTINGS.iface = migrateRoleMap(SETTINGS.iface);
+  SETTINGS.iface = migrateIfaceMap(SETTINGS.iface);
   if (!SETTINGS.themeMode) SETTINGS.themeMode = 'dark';
   if (!SETTINGS.builtinTheme || !BUILTIN_THEMES[SETTINGS.builtinTheme]) SETTINGS.builtinTheme = 'setsweep';
   if (SETTINGS.palettes) {
@@ -2500,8 +2572,9 @@ function migrateThemeSettings() {
       pals[name] = {
         colors: migrateRoleMap(snap.colors),
         slots: migrateRoleMap(snap.slots),
-        iface: migrateRoleMap(snap.iface || {}),
+        iface: migrateIfaceMap(snap.iface || {}),
         ifaceOpacity: Object.assign({}, snap.ifaceOpacity || {}),
+        slotOpacity: Object.assign({}, snap.slotOpacity || {}),
         themeMode: snap.themeMode,
         builtinTheme: snap.builtinTheme,
       };
@@ -2537,8 +2610,6 @@ function clearPaletteVars() {
 function applyTheme() {
   const mode = resolvedThemeMode();
   document.documentElement.dataset.themeMode = mode;
-  const admin = $('admin');
-  if (admin) admin.dataset.admTone = mode;
 
   const preset = builtinThemePreset();
   const mergedColors = Object.assign({}, preset.colors, SETTINGS.colors || {});
@@ -2593,7 +2664,8 @@ function buildThemeControls(){
       SETTINGS.slots = {};
       SETTINGS.iface = {};
       SETTINGS.ifaceOpacity = {};
-      saveSettings({builtinTheme: SETTINGS.builtinTheme, colors: {}, slots: {}, iface: {}, ifaceOpacity: {}});
+      SETTINGS.slotOpacity = {};
+      saveSettings({builtinTheme: SETTINGS.builtinTheme, colors: {}, slots: {}, iface: {}, ifaceOpacity: {}, slotOpacity: {}});
       applyTheme();
       buildColorRows(); buildSlotRows(); buildIfaceRows();
     });
@@ -2698,140 +2770,171 @@ function resetColors(){
 
 /* ---- colour assignment: each role picks one of the 16 ANSI colours ---- */
 const TEXT_SLOTS = [
-  ['header', 'section headers', '--ansi-3'],
-  ['ctxhead', 'context heading', '--ansi-7'],
-  ['ctxbody', 'context text (chat)', '--ansi-7'],
-  ['ctxpath', 'context file-path', '--ansi-4'],
-  ['cmthead', 'comment heading', '--ansi-7'],
-  ['comment', 'comment button', '--ansi-4'],
-  ['wikilink', 'wiki-links', '--ansi-4'],
-  ['agent', 'agent text', '--ansi-8'],
-  ['user', 'your text', '--ansi-3'],
-  ['glance', 'glance reaction', '--ansi-8'],
+  ['mdhead', 'editor · section head', '--ansi-3'],
+  ['ctxhead', 'context · label', '--ansi-7'],
+  ['ctxbody', 'context · body', '--ansi-7'],
+  ['cmthead', 'glance · label', '--ansi-7'],
+  ['comment', 'comment affordance', '--ansi-4'],
+  ['agent', 'agent prose', '--ansi-8'],
+  ['user', 'chat · your messages', '--ansi-4'],
+  ['glance', 'glance prose', '--ansi-8'],
 ];
 const IFACE_SLOTS = [
-  ['bg', 'background', '--ansi-0'],
-  ['fg', 'foreground text', '--ansi-7'],
-  ['panel', 'panel', '--ansi-8'],
-  ['panel2', 'panel · raised', '--ansi-0'],
-  ['line', 'lines / borders', '--ansi-8'],
+  ['bg', 'canvas', '--ansi-0'],
+  ['panel', 'surface', '--ansi-0'],
+  ['panel2', 'inset surface', '--ansi-0'],
+  ['line', 'border', '--ansi-8'],
+  ['fg', 'primary text', '--ansi-7'],
+  ['muted', 'secondary text', '--ansi-8'],
   ['acc', 'accent', '--ansi-3'],
-  ['good', 'good / success', '--ansi-2'],
-  ['warn', 'warn / error', '--ansi-1'],
+  ['link', 'link', '--ansi-4'],
+  ['activebg', 'selected item', '--ansi-8'],
   ['selection', 'text selection', '--ansi-4'],
-  ['qtag', 'queue tags', '--ansi-8'],
-  ['activebg', 'active file bg', '--ansi-8'],
+  ['good', 'success', '--ansi-2'],
+  ['warn', 'danger / alert', '--ansi-1'],
   ['urghigh', 'urgency · high', '--ansi-1'],
   ['urgmed', 'urgency · medium', '--ansi-3'],
   ['urglow', 'urgency · low', '--ansi-8'],
+];
+const IFACE_GROUPS = [
+  { label: 'Surfaces', keys: ['bg', 'panel', 'panel2', 'line'] },
+  { label: 'Text', keys: ['fg', 'muted'] },
+  { label: 'Emphasis', keys: ['acc', 'link'] },
+  { label: 'State', keys: ['activebg', 'selection', 'good', 'warn'] },
+  { label: 'Queue urgency', keys: ['urghigh', 'urgmed', 'urglow'] },
 ];
 const PAL_NAMES = PALETTE.map(([n]) => n);
 const palOpts = chosen => PALETTE.map(([n,,l]) =>
   `<option value="${n}"${n===chosen?' selected':''}>${esc(l)}</option>`).join('');
 
+function slotRolePick(key, def){
+  const preset = builtinThemePreset();
+  const s = SETTINGS.slots || {};
+  return PAL_NAMES.includes(s[key]) ? s[key]
+    : (PAL_NAMES.includes((preset.slots || {})[key]) ? preset.slots[key] : def);
+}
 function ifaceRolePick(key, def){
   const preset = builtinThemePreset();
   const s = SETTINGS.iface || {};
   return PAL_NAMES.includes(s[key]) ? s[key]
     : (PAL_NAMES.includes((preset.iface || {})[key]) ? preset.iface[key] : def);
 }
-function ifaceOpacityPct(key){
-  const v = (SETTINGS.ifaceOpacity || {})[key];
-  return (typeof v === 'number' && isFinite(v)) ? Math.max(0, Math.min(100, Math.round(v))) : 100;
+function roleOpacityPct(settingsKey, presetKey, key){
+  const v = (SETTINGS[settingsKey] || {})[key];
+  if(typeof v === 'number' && isFinite(v)) return Math.max(0, Math.min(100, Math.round(v)));
+  const pv = (builtinThemePreset()[presetKey] || {})[key];
+  if(typeof pv === 'number' && isFinite(pv)) return Math.max(0, Math.min(100, Math.round(pv)));
+  return 100;
 }
-function ifaceColorCss(pick, alphaPct){
-  const a = (typeof alphaPct === 'number' && isFinite(alphaPct)) ? Math.max(0, Math.min(100, alphaPct)) : 100;
+function slotOpacityPct(key){ return roleOpacityPct('slotOpacity', 'slotOpacity', key); }
+function ifaceOpacityPct(key){ return roleOpacityPct('ifaceOpacity', 'ifaceOpacity', key); }
+function roleBlendTarget(){
+  return resolvedThemeMode() === 'dark' ? '--ansi-15' : '--ansi-0';
+}
+function roleColorCss(pick, solidPct){
+  const a = (typeof solidPct === 'number' && isFinite(solidPct)) ? Math.max(0, Math.min(100, solidPct)) : 100;
   if(a >= 100) return `var(${pick})`;
-  return `color-mix(in srgb, var(${pick}) ${a}%, transparent)`;
+  return `color-mix(in srgb, var(${pick}) ${a}%, var(${roleBlendTarget()}))`;
 }
 function applySlots(){
-  const preset = builtinThemePreset();
-  const s = SETTINGS.slots || {};
   for(const [key,, def] of TEXT_SLOTS){
-    const pick = PAL_NAMES.includes(s[key]) ? s[key]
-      : (PAL_NAMES.includes((preset.slots || {})[key]) ? preset.slots[key] : def);
-    document.documentElement.style.setProperty('--slot-' + key, `var(${pick})`);
+    const pick = slotRolePick(key, def);
+    document.documentElement.style.setProperty('--slot-' + key, roleColorCss(pick, slotOpacityPct(key)));
   }
 }
 function applyIface(){
   for(const [key,, def] of IFACE_SLOTS){
     const pick = ifaceRolePick(key, def);
-    document.documentElement.style.setProperty('--' + key, ifaceColorCss(pick, ifaceOpacityPct(key)));
+    document.documentElement.style.setProperty('--' + key, roleColorCss(pick, ifaceOpacityPct(key)));
   }
 }
-function updateIfaceSwatch(row, key){
-  const def = IFACE_SLOTS.find(x => x[0] === key)?.[2];
+function updateTintSwatch(row, key, def, pickFn, opacityFn, checkerboardKey){
   const inner = row.querySelector('.swatch-inner');
+  const outer = row.querySelector('.swatch');
   if(!inner) return;
-  inner.style.background = ifaceColorCss(ifaceRolePick(key, def), ifaceOpacityPct(key));
+  inner.style.background = roleColorCss(pickFn(key, def), opacityFn(key));
+  if(!outer) return;
+  if(key === checkerboardKey){
+    outer.style.background = 'repeating-conic-gradient(var(--line) 0 25%, transparent 0 50%) 0 0/8px 8px';
+  } else {
+    outer.style.background = roleColorCss(ifaceRolePick('bg', '--ansi-0'), ifaceOpacityPct('bg'));
+  }
 }
-function setIfaceOpacity(key, raw){
+function setRoleOpacity(settingsKey, key, raw){
   const val = Math.round(Number(raw));
   if(!isFinite(val)) return;
   const clamped = Math.max(0, Math.min(100, val));
-  const op = Object.assign({}, SETTINGS.ifaceOpacity || {});
+  const op = Object.assign({}, SETTINGS[settingsKey] || {});
   if(clamped >= 100) delete op[key];
   else op[key] = clamped;
-  SETTINGS.ifaceOpacity = op;
-  saveSettings({ifaceOpacity: op});
+  SETTINGS[settingsKey] = op;
+  saveSettings({[settingsKey]: op});
   applyTheme();
 }
-/* one builder for both categories: SLOTDEF + settings-key + var-prefix + apply fn */
-function buildAssignRows(boxId, defs, sKey, varPrefix, applyFn){
-  const box = $(boxId); box.innerHTML = '';
-  const s = SETTINGS[sKey] || {};
-  const presetMap = sKey === 'slots'
-    ? (builtinThemePreset().slots || {})
-    : (builtinThemePreset().iface || {});
-  for(const [key, label, def] of defs){
-    const chosen = PAL_NAMES.includes(s[key]) ? s[key]
-      : (PAL_NAMES.includes(presetMap[key]) ? presetMap[key] : def);
-    const row = document.createElement('div'); row.className = 'ap-role-row';
-    row.innerHTML = `<span class="ap-role-name">${esc(label)}</span>` +
-      `<span class="swatch" style="background:var(${chosen})"></span>` +
-      `<select data-slot="${key}">${palOpts(chosen)}</select>`;
-    box.appendChild(row);
-  }
-  box.querySelectorAll('select[data-slot]').forEach(sel =>
-    sel.addEventListener('change', () => {
-      const next = Object.assign({}, SETTINGS[sKey], {[sel.dataset.slot]: sel.value});
-      SETTINGS[sKey] = next; saveSettings({[sKey]: next}); applyTheme();
-      const sw = sel.previousElementSibling;
-      if(sw) sw.style.background = `var(${sel.value})`;
-    }));
-}
-function buildSlotRows(){ buildAssignRows('slotrows', TEXT_SLOTS, 'slots', '--slot-', applySlots); }
-function buildIfaceRows(){
-  const box = $('ifacerows'); if(!box) return;
+function setIfaceOpacity(key, raw){ setRoleOpacity('ifaceOpacity', key, raw); }
+function setSlotOpacity(key, raw){ setRoleOpacity('slotOpacity', key, raw); }
+function buildTintRows(boxId, defs, cfg){
+  const { pickFn, opacityFn, settingsKey, dataKey, setOpacityFn, checkerboardKey, groups } = cfg;
+  const box = $(boxId); if(!box) return;
   box.innerHTML = '';
   const head = document.createElement('div'); head.className = 'ap-iface-head';
   head.innerHTML = '<span>role</span><span></span><span>color</span><span>%</span>';
   box.appendChild(head);
-  for(const [key, label, def] of IFACE_SLOTS){
-    const chosen = ifaceRolePick(key, def);
-    const op = ifaceOpacityPct(key);
+  const defByKey = Object.fromEntries(defs.map(d => [d[0], d]));
+  function appendRow(key){
+    const def = defByKey[key]; if(!def) return;
+    const [,, dflt] = def;
+    const label = def[1];
+    const chosen = pickFn(key, dflt);
+    const op = opacityFn(key);
     const row = document.createElement('div'); row.className = 'ap-role-row ap-iface-row';
     row.innerHTML = `<span class="ap-role-name">${esc(label)}</span>` +
       `<span class="swatch"><span class="swatch-inner"></span></span>` +
-      `<select data-iface="${esc(key)}">${palOpts(chosen)}</select>` +
-      `<input type="number" class="ap-iface-opacity" data-iface="${esc(key)}" value="${op}" min="0" max="100" step="1" title="opacity — 100 is solid">`;
+      `<select data-${dataKey}="${esc(key)}">${palOpts(chosen)}</select>` +
+      `<input type="number" class="ap-iface-opacity" data-${dataKey}="${esc(key)}" value="${op}" min="0" max="100" step="1" title="solid % — 100 is untinted">`;
     box.appendChild(row);
-    updateIfaceSwatch(row, key);
+    updateTintSwatch(row, key, dflt, pickFn, opacityFn, checkerboardKey);
   }
-  box.querySelectorAll('select[data-iface]').forEach(sel =>
+  if(groups){
+    for(const g of groups){
+      const gl = document.createElement('div'); gl.className = 'ap-iface-group'; gl.textContent = g.label;
+      box.appendChild(gl);
+      g.keys.forEach(appendRow);
+    }
+  } else {
+    defs.forEach(([key]) => appendRow(key));
+  }
+  box.querySelectorAll(`select[data-${dataKey}]`).forEach(sel =>
     sel.addEventListener('change', () => {
-      const k = sel.dataset.iface;
-      const next = Object.assign({}, SETTINGS.iface, {[k]: sel.value});
-      SETTINGS.iface = next; saveSettings({iface: next}); applyTheme();
-      updateIfaceSwatch(sel.closest('.ap-iface-row'), k);
+      const k = sel.dataset[dataKey];
+      const next = Object.assign({}, SETTINGS[settingsKey], {[k]: sel.value});
+      SETTINGS[settingsKey] = next; saveSettings({[settingsKey]: next}); applyTheme();
+      updateTintSwatch(sel.closest('.ap-iface-row'), k, defByKey[k]?.[2], pickFn, opacityFn, checkerboardKey);
     }));
-  box.querySelectorAll('input.ap-iface-opacity').forEach(inp =>
+  box.querySelectorAll(`input.ap-iface-opacity[data-${dataKey}]`).forEach(inp =>
     inp.addEventListener('change', () => {
-      setIfaceOpacity(inp.dataset.iface, inp.value);
-      updateIfaceSwatch(inp.closest('.ap-iface-row'), inp.dataset.iface);
+      setOpacityFn(inp.dataset[dataKey], inp.value);
+      updateTintSwatch(inp.closest('.ap-iface-row'), inp.dataset[dataKey],
+        defByKey[inp.dataset[dataKey]]?.[2], pickFn, opacityFn, checkerboardKey);
     }));
 }
-function resetSlots(){ SETTINGS.slots = {}; saveSettings({slots: {}}); applyTheme(); buildSlotRows(); }
+function buildSlotRows(){
+  buildTintRows('slotrows', TEXT_SLOTS, {
+    pickFn: slotRolePick, opacityFn: slotOpacityPct, settingsKey: 'slots',
+    dataKey: 'slot', setOpacityFn: setSlotOpacity, checkerboardKey: null,
+  });
+}
+function buildIfaceRows(){
+  buildTintRows('ifacerows', IFACE_SLOTS, {
+    pickFn: ifaceRolePick, opacityFn: ifaceOpacityPct, settingsKey: 'iface',
+    dataKey: 'iface', setOpacityFn: setIfaceOpacity, checkerboardKey: 'bg',
+    groups: IFACE_GROUPS,
+  });
+}
+function resetSlots(){
+  SETTINGS.slots = {}; SETTINGS.slotOpacity = {};
+  saveSettings({slots: {}, slotOpacity: {}}); applyTheme(); buildSlotRows();
+}
 function resetIface(){
   SETTINGS.iface = {}; SETTINGS.ifaceOpacity = {};
   saveSettings({iface: {}, ifaceOpacity: {}}); applyTheme(); buildIfaceRows();
@@ -2853,6 +2956,7 @@ function savePalette(){
     slots:  Object.assign({}, SETTINGS.slots),
     iface:  Object.assign({}, SETTINGS.iface),
     ifaceOpacity: Object.assign({}, SETTINGS.ifaceOpacity || {}),
+    slotOpacity: Object.assign({}, SETTINGS.slotOpacity || {}),
   };
   SETTINGS.palettes = Object.assign({}, SETTINGS.palettes, {[name]: snapshot});
   saveSettings({palettes: SETTINGS.palettes});
@@ -2869,6 +2973,7 @@ function applyPalette(){
   SETTINGS.slots = Object.assign({}, p.slots);
   SETTINGS.iface = Object.assign({}, p.iface || {});
   SETTINGS.ifaceOpacity = Object.assign({}, p.ifaceOpacity || {});
+  SETTINGS.slotOpacity = Object.assign({}, p.slotOpacity || {});
   saveSettings({
     themeMode: SETTINGS.themeMode,
     builtinTheme: SETTINGS.builtinTheme,
@@ -2876,6 +2981,7 @@ function applyPalette(){
     slots: SETTINGS.slots,
     iface: SETTINGS.iface,
     ifaceOpacity: SETTINGS.ifaceOpacity,
+    slotOpacity: SETTINGS.slotOpacity,
   });
   applyTheme();
   buildThemeControls(); buildColorRows(); buildSlotRows(); buildIfaceRows();
@@ -2925,15 +3031,14 @@ function resetSizes(){
 let hlLineEnabled = false;
 function caretLineHighlight(){
   if(!hlLineEnabled || mode !== 'source' || !cur) return;
-  const ed = $('editor');
-  if(typeof lineHighlightAt === 'function') lineHighlightAt(ed.selectionStart);
+  lineHighlightAt($('editor').selectionStart);
 }
 function applyMdToggle(){
   const on = SETTINGS.mdHighlight !== false;  // default on
   if(on){
     $('editor').style.color = 'transparent';
     $('edback').style.display = '';
-    if(mode === 'source' && typeof renderBack === 'function') renderBack();
+    if(mode === 'source') refreshEditorChrome({gutter: false});
   } else {
     $('editor').style.color = 'var(--fg)';
     $('edback').style.display = 'none';
@@ -3193,9 +3298,9 @@ function wireAdmin(){
     if(!isFinite(v) || v < 3) v = 30;
     $('optAutosave').value = v; saveSettings({autosaveSecs: v});
   };
-  // caret-tracking for the current-line highlight
+  // caret-tracking for the current-line highlight (input uses rAF via scheduleCaretBand)
   const ed = $('editor');
-  ['keyup','click','select'].forEach(ev => ed.addEventListener(ev, caretLineHighlight));
+  ['keyup','click','select'].forEach(ev => ed.addEventListener(ev, scheduleCaretBand));
   ed.addEventListener('blur', () => { if(hlLineEnabled && document.activeElement !== ed) clearBand(); });
   // ⌘, (standard preferences) and ⌘⇧A — both open/close settings; ⌘⇧A predates ⌘,
   document.addEventListener('keydown', e => {
