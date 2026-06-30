@@ -4,9 +4,10 @@
 Multi-project: the registry at projects.json maps project ids to a root (the agent's
 working directory) and a queue file (<root>/.setsweep/queue.json by convention). The
 right-pane agent is Claude Code in headless mode (-p, stream-json), run in the active
-project's root with project-write tools (Read/Glob/Grep/Edit/Write + a fenced shell
-allowlist, acceptEdits); each queue entry's curatorial brief is injected
-as system-prompt context so the agent starts aligned without re-reading the file.
+project's root with read-only tools (Read/Glob/Grep + a fenced shell allowlist); the
+patron edits in the center pane. Sweep and founding carry write tools. Each queue entry's
+curatorial brief is injected as system-prompt context so the agent starts aligned without
+re-reading the file.
 
 Run standalone (web mode):  python3 server.py [--port 4242] [--no-open]
 Bundled (Electron .app):     PyInstaller sidecar; set DESK_PROJECTS for the registry path.
@@ -97,6 +98,16 @@ AGENT_TOOLS = [
     "--disallowedTools", "NotebookEdit",
 ]
 
+# the right-pane review agent: read-only — the patron edits in the center pane;
+# the sweep and founding steps carry write tools when files must change on disk
+CHAT_TOOLS = [
+    "--allowedTools",
+    "Read", "Glob", "Grep",
+    "Bash(ls:*)", "Bash(cat:*)", "Bash(head:*)", "Bash(tail:*)",
+    "Bash(rg:*)", "Bash(fd:*)", "Bash(find:*)", "Bash(wc:*)",
+    "--disallowedTools", "NotebookEdit", "Edit", "Write",
+]
+
 # the sweep applies rulings to canonical files, so it carries write tools —
 # confined by cwd + acceptEdits to the project tree
 SWEEP_TOOLS = [
@@ -138,11 +149,15 @@ SWEEP_PROMPT = (
     "desk: raise it as a memo to {root}/Characters/inbox/ (and record it) — do NOT recast the "
     "persona BODY/SOURCES from the desk (the standing guardrail). Either way, learn the standing "
     "casting preference into MEMORY so the question is not re-asked.\n"
-    "2. DIFF — for each entry in {queue_path} (approved and pending alike): diff the file "
-    "against {runtime_dir}/snapshots/<id>.orig (the cached original; `diff -u` is available). "
-    "Where no snapshot exists, say so and assess from the file and its brief. Also read each "
-    "entry's `comment` (the note the patron left while reading) — they direct what follows.\n"
-    "2a. NO-OP CHECK — if EVERY entry is byte-identical to its snapshot, carries no new comment, "
+    "2. DIFF — load {queue_path}. Read the PATRON COMMENTS block below (parsed from "
+    "{comments_log_path}; one row per note, tab-separated date/entry-id/text). For each "
+    "entry in the queue (approved and pending alike): surface every matching patron comment "
+    "as binding direction BEFORE you diff that file — same weight as inline edits to the "
+    "file. Then diff against {runtime_dir}/snapshots/<id>.orig (the cached original; "
+    "`diff -u` is available). Where no snapshot exists, say so and assess from the file "
+    "and its brief.\n"
+    "2a. NO-OP CHECK — if EVERY entry is byte-identical to its snapshot, carries no patron "
+    "comment (in the PATRON COMMENTS block or the entry's `comment` field in queue.json), "
     "and the ledger shows no fresh ruling, then a prior sweep already processed this batch and "
     "nothing has changed since: report 'nothing to sweep since the last pass' in one line and STOP "
     "(do not re-archive, re-restock, or re-log). A re-fire over an unchanged state is a clean no-op, "
@@ -227,7 +242,7 @@ BOOTSTRAP_PROMPT = (
     "Name the document families you found, which need the patron's reading or judgment and why, "
     "a batch plan if volume warrants batching, and the desk conventions (one batch in the queue "
     "at a time; the patron's in-editor emendations are themselves the tuning; approve = done "
-    "with this document; rework sends a memo to the curator). Create no speculative empty "
+    "with this document). Create no speculative empty "
     "directories.\n"
     "5. THE FIRST QUEUE — populate {queue_path} (JSON; schema below) with the first batch: "
     "5–10 entries, the documents that most need the patron's attention first, urgency-ranked. "
@@ -301,8 +316,7 @@ FOUND_PROMPT = (
     "STATED in this interview and any attested in the project's own files. Nothing invented.\n"
     "3. THE PROGRAM — write {desk_dir}/review-program.md: document families, what needs their "
     "reading or judgment and why, a batch plan if volume warrants, desk conventions (one "
-    "batch at a time; in-editor emendations are the tuning; approve = done; rework sends a "
-    "memo).\n"
+    "batch at a time; in-editor emendations are the tuning; approve = done).\n"
     "4. THE FIRST QUEUE — populate {queue_path} (JSON; schema below): 5–10 entries, "
     "urgency-ranked by what the interview said matters most. Read enough of each document "
     "to write an HONEST brief to the BRIEF STANDARD in the schema below (plain human-usable "
@@ -317,12 +331,12 @@ FOUND_PROMPT = (
 DEFAULT_ROLE = (
     "You are the desk assistant in the patron's document-review sitting (project: {project}). "
     "Their first message opens with the active file's path and its curatorial brief — context "
-    "prepared in advance so neither of you must re-derive it. Help them understand, "
-    "troubleshoot, and revise that file; read any project files you need. You CAN edit files "
-    "directly — do so when they ask for changes, with minimal, surgical diffs; their app reloads "
-    "the open file after your turn. When DISCUSSING a passage rather than changing it, quote "
-    "it in a fenced code block (their app turns those into jump-to-line buttons). Never touch "
-    "append-only records or logs unless they explicitly direct it. Be concise and direct; they "
+    "prepared in advance so neither of you must re-derive it. Help them understand and revise "
+    "that file; read any project files you need. You do NOT write to disk — the patron edits "
+    "in the center pane. Propose changes in fenced code blocks (their app turns those into "
+    "jump-to-line and apply-to-editor buttons). When DISCUSSING a passage rather than changing "
+    "it, quote it in a fenced code block. Never touch append-only records or logs. Be concise "
+    "and direct; they "
     "are mid-sitting and mental gear-shifts are the enemy."
 )
 
@@ -424,6 +438,57 @@ def runtime_dir(proj: dict) -> Path:
 def queue_path(proj: dict) -> Path:
     rd = runtime_dir(proj)
     return rd / "queue.json"
+
+
+def comments_log_path(proj: dict) -> Path:
+    return runtime_dir(proj) / "comments.log"
+
+
+def parse_comments_log(path: Path) -> dict[str, list[dict[str, str]]]:
+    """Parse runtime/comments.log → entry-id → [{date, text}, …] (append order preserved)."""
+    out: dict[str, list[dict[str, str]]] = {}
+    if not path.is_file():
+        return out
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split("\t", 2)
+        if len(parts) < 3:
+            continue
+        entry_id, text = parts[1].strip(), parts[2].strip()
+        if entry_id and text:
+            out.setdefault(entry_id, []).append({"date": parts[0].strip(), "text": text})
+    return out
+
+
+def enrich_queue_comments(proj: dict, q: dict) -> None:
+    """Attach comment_history from comments.log to each queue entry (API response only)."""
+    hist = parse_comments_log(comments_log_path(proj))
+    for e in q.get("entries", []):
+        eid = e.get("id")
+        e["comment_history"] = list(hist.get(eid, [])) if eid else []
+
+
+def sweep_patron_comments_block(comments_map: dict[str, list[dict[str, str]]], entries: list[dict]) -> str:
+    """Format patron notes for queue entries — injected into the sweep prompt verbatim."""
+    lines: list[str] = []
+    for e in entries:
+        eid = e.get("id")
+        if not eid:
+            continue
+        texts = [r["text"] for r in comments_map.get(eid, [])]
+        cur = str(e.get("comment") or "").strip()
+        if cur and cur not in texts:
+            texts.append(cur)
+        if not texts:
+            continue
+        title = e.get("title") or Path(str(e.get("path") or eid)).name
+        lines.append(f"Entry `{eid}` ({title}):")
+        for t in texts:
+            lines.append(f"- Patron comment for this entry: {t}")
+        lines.append("")
+    return "\n".join(lines).rstrip()
 
 
 def allowed_roots() -> list[Path]:
@@ -745,7 +810,6 @@ def register_project(name: str, root: str, kit: str | None = None,
         "id": pid,
         "name": name,
         "root": root_raw.rstrip("/") or root_raw,  # ~-form preserved as given
-        "rework_agents": [{"id": "curator", "name": f"the {name} curator — queue & sweep"}],
     }
     if kit in kits.KINDS:                          # the patron's pick (no auto-detection)
         proj["kit"] = kit
@@ -1037,6 +1101,7 @@ class Handler(BaseHTTPRequestHandler):
                 proj = get_project(qs.get("project", [None])[0])
                 q = load_queue(proj)
                 ensure_snapshots(proj, q)
+                enrich_queue_comments(proj, q)
                 for e in q.get("entries", []):
                     e["diff"] = entry_diffstat(proj, e)   # {added, removed} vs snapshot, or None
                 self.send_json(q)
@@ -1116,8 +1181,6 @@ class Handler(BaseHTTPRequestHandler):
                     self.send_json({"error": "messages must be a list"}, 400)
                 else:
                     self.send_json({"ok": True, "count": save_chatlog(proj, msgs)})
-            elif url.path == "/api/rework":
-                self.rework(d)
             elif url.path == "/api/comment":
                 proj = get_project(d.get("project"))
                 text = str(d.get("text", "")).strip()
@@ -1197,43 +1260,6 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({"error": f"missing/unknown: {e}"}, 400)
         except Exception as e:  # noqa: BLE001
             self.send_json({"error": repr(e)}, 500)
-
-    # ---- rework: send an entry back with a memo ----
-    def rework(self, d):
-        proj = get_project(d.get("project"))
-        agent_id = str(d["agent"])
-        memo = str(d.get("memo", "")).strip()
-        agent_name = next(
-            (a["name"] for a in proj.get("rework_agents", []) if a["id"] == agent_id),
-            agent_id,
-        )
-        today = date.today().isoformat()
-
-        def mark(q):
-            e = find_entry(q, d["id"])
-            e["status"] = "rework"
-            e["rework"] = today
-
-        q = mutate_queue(proj, mark)
-        e = find_entry(q, d["id"])
-        rd = runtime_dir(proj)
-        rework_dir = rd / "rework"
-        rework_dir.mkdir(parents=True, exist_ok=True)
-        memo_path = rework_dir / f"{today}-{slug(e['id'])}-to-{slug(agent_id)}.md"
-        atomic_write(memo_path, (
-            f"# Rework memo — {e.get('title', e['id'])}\n\n"
-            f"- recipient: {agent_name} (`{agent_id}`)\n"
-            f"- entry: {e['id']}\n"
-            f"- title: {e.get('title', '—')}\n"
-            f"- path: {e['path']}\n"
-            f"- filed: {today}\n\n"
-            f"## Memo from the patron\n\n{memo}\n\n"
-            f"---\nFiled from setsweep (rework), project {proj['name']}.\n"
-        ))
-        log = rd / "approvals.log"
-        with log.open("a") as f:
-            f.write(f"{today}\trework\t{e['id']}\t{e['path']}\tto={agent_id}\n")
-        self.send_json({"ok": True, "memo_file": str(memo_path)})
 
     # ---- the right-pane agent ----
     # ---- info-pane field edits (whitelist; never touches path/id/session) ----
@@ -1359,7 +1385,7 @@ class Handler(BaseHTTPRequestHandler):
             if sc:
                 sysprompt += "\n\n" + sc
             cmd += ["--append-system-prompt", sysprompt, "--name", session_name(proj)]
-        cmd += AGENT_TOOLS
+        cmd += CHAT_TOOLS
 
         # record the active file (only when an entry is in play) so a same-file follow-up
         # won't re-inject context; the session_id is persisted by run_claude's init hook below
@@ -1389,20 +1415,32 @@ class Handler(BaseHTTPRequestHandler):
         model = d.get("model")
         if model and model != "default":
             cmd += ["--model", model]
-        cmd += AGENT_TOOLS
+        cmd += CHAT_TOOLS
         self.run_claude(cmd, str(project_root(proj)), prior_sid=sid)
 
     def sweep(self, d):
         proj = get_project(d.get("project"))
         ledger = proj.get("ledger") or "(no ledger configured — queue/approvals only)"
+        rd = runtime_dir(proj)
+        cl_path = comments_log_path(proj)
+        queue_entries = load_queue(proj).get("entries", [])
+        patron_comments = sweep_patron_comments_block(parse_comments_log(cl_path), queue_entries)
         prompt = SWEEP_PROMPT.format(
             name=proj["name"], root=str(project_root(proj)),
             ledger=str(Path(ledger).expanduser()) if ledger.startswith("~") or ledger.startswith("/") else ledger,
-            desk_dir=str(desk_dir(proj)), runtime_dir=str(runtime_dir(proj)),
+            desk_dir=str(desk_dir(proj)), runtime_dir=str(rd),
             today=date.today().isoformat(),
             stamp=datetime.now().strftime("%Y-%m-%d-%H%M%S"),
             queue_path=str(queue_path(proj)),
+            comments_log_path=str(cl_path),
         )
+        prompt += (
+            "\n\n---\nPATRON COMMENTS (from "
+            + str(cl_path)
+            + " — treat each line as mandatory review input for that entry):\n\n"
+        )
+        prompt += patron_comments if patron_comments else "(no comments on file for current queue entries)"
+        prompt += "\n---\n"
         handbook = base_handbook()
         if handbook:
             prompt += "\n\n" + handbook
@@ -1426,7 +1464,7 @@ class Handler(BaseHTTPRequestHandler):
                 "'exhausted' or empty the queue. Instead, for each APPROVED entry: STAGE its draft "
                 f"(the entry's `path`) to the outbound folder {outbound} (create it on first use) by "
                 "copying the file there so an out-of-band tool can pick it up to send, then archive "
-                "that entry to the batch file and delete its snapshot. LEAVE all pending and rework "
+                "that entry to the batch file and delete its snapshot. LEAVE all pending "
                 "entries in the queue untouched — intake keeps refilling around them. NEVER transmit "
                 "anything yourself — staging only (localhost is the fence). Record in the session log "
                 "which drafts you staged. The `source` items are read-only and never moved.")

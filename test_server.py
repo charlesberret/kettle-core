@@ -425,6 +425,49 @@ class EndpointTests(Base):
         self.assertEqual(self._entry("alpha").get("comment"), "only alpha")
         self.assertIsNone(self._entry("beta").get("comment"))           # the bug we fixed
 
+    def test_parse_comments_log(self):
+        p = self.tmp / "comments.log"
+        p.write_text(
+            "2026-06-29\talpha\tnote one\n"
+            "2026-06-29\talpha\tnote two\n"
+            "2026-06-28\tbeta\tother note\n"
+        )
+        m = server.parse_comments_log(p)
+        self.assertEqual(m["alpha"], [{"date": "2026-06-29", "text": "note one"},
+                                       {"date": "2026-06-29", "text": "note two"}])
+        self.assertEqual(m["beta"], [{"date": "2026-06-28", "text": "other note"}])
+
+    def test_comment_appends_to_comments_log(self):
+        _http("POST", f"{self.base}/api/comment", {"project": "t", "id": "alpha", "text": "fix TKs"})
+        log = server.comments_log_path(self.proj())
+        self.assertTrue(log.exists())
+        self.assertIn("fix TKs", log.read_text())
+        self.assertIn("\talpha\t", log.read_text())
+
+    def test_queue_includes_comment_history(self):
+        server.comments_log_path(self.proj()).write_text(
+            "2026-06-29\talpha\tfix the TKs\n"
+            "2026-06-29\talpha\talso check tone\n"
+        )
+        s, j = _http("GET", f"{self.base}/api/queue?project=t")
+        self.assertEqual(s, 200)
+        alpha = next(e for e in j["entries"] if e["id"] == "alpha")
+        self.assertEqual(len(alpha["comment_history"]), 2)
+        self.assertEqual(alpha["comment_history"][0]["text"], "fix the TKs")
+
+    def test_sweep_injects_patron_comments_from_log(self):
+        server.comments_log_path(self.proj()).write_text(
+            "2026-06-29\talpha\tfix the TKs\n"
+            "2026-06-29\talpha\talso check tone\n"
+        )
+        cmds = self._capture_cmds()
+        self._post_stream("/api/sweep", {"project": "t"})
+        prompt = cmds[-1][cmds[-1].index("-p") + 1]
+        self.assertIn("PATRON COMMENTS", prompt)
+        self.assertIn("Patron comment for this entry: fix the TKs", prompt)
+        self.assertIn("Patron comment for this entry: also check tone", prompt)
+        self.assertIn("comments.log", prompt)
+
     def test_approve_marks_and_logs(self):
         s, _ = _http("POST", f"{self.base}/api/approve", {"project": "t", "id": "beta"})
         self.assertEqual(s, 200)
@@ -764,7 +807,7 @@ class EndpointTests(Base):
         self.assertIn(str(self.root / "outbox"), prompt)        # the resolved outbound path
         self.assertIn("NEVER transmit", prompt)                 # staging only, localhost fence
         self.assertIn("review-program.md", prompt)              # restock override: intake refills, not the program
-        self.assertIn("pending and rework entries", prompt)     # pending entries survive the sweep
+        self.assertIn("pending entries", prompt)     # pending entries survive the sweep
 
     def test_sweep_omits_intake_outbound_for_normal_project(self):
         # a project with no intake block must not carry the inbox-only instruction

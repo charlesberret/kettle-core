@@ -24,7 +24,7 @@
     --ansi-8:#7f7f7f; --ansi-9:#ff0000; --ansi-10:#00ff00; --ansi-11:#ffff00;
     --ansi-12:#5c5cff; --ansi-13:#ff00ff; --ansi-14:#00ffff; --ansi-15:#ffffff;
     /* ---- interface roles: each picks an ANSI colour (overridable in settings) ---- */
-    --bg:var(--ansi-0); --fg:var(--ansi-7); --muted:var(--ansi-8);
+    --bg:var(--ansi-0); --fg:var(--ansi-7); --muted:var(--ansi-7);
     --panel:var(--ansi-0); --panel2:var(--ansi-0); --line:var(--ansi-8);
     --acc:var(--ansi-3); --link:var(--ansi-4);
     --activebg:var(--ansi-8); --selection:var(--ansi-4);
@@ -43,24 +43,23 @@
          grid-template-columns:300px 5px 1fr 5px 400px; grid-template-rows:100dvh;
          background:var(--bg); color:var(--fg);
          font:14px/1.45 var(--ui-font); }
-  /* Electron desktop shell: hidden title bar — panels extend to window edge */
-  body.desktop-shell { --titlebar-h:28px; --traffic-w:74px; }
-  body.desktop-shell #left { padding-top:var(--titlebar-h); padding-left:var(--traffic-w); }
-  body.desktop-shell #mid,
-  body.desktop-shell #right { padding-top:var(--titlebar-h); }
-  body.desktop-shell #queue h1,
-  body.desktop-shell #meta h1,
-  body.desktop-shell #right h1,
-  body.desktop-shell #midbar,
-  body.desktop-shell #ivhead { -webkit-app-region:drag; }
-  body.desktop-shell .btn,
-  body.desktop-shell select,
-  body.desktop-shell input,
-  body.desktop-shell textarea,
-  body.desktop-shell button,
-  body.desktop-shell a,
-  body.desktop-shell .divider,
-  body.desktop-shell .hdivider { -webkit-app-region:no-drag; }
+  /* Electron desktop shell: hidden-inset title bar — content to window edges */
+  body.desktop-shell {
+    --titlebar-h:28px; --win-resize-inset:12px;
+  }
+  /* Drag strip inset from corners so top-left/right resize handles stay live */
+  body.desktop-shell::before {
+    content:''; position:fixed; top:0;
+    left:var(--win-resize-inset); right:var(--win-resize-inset);
+    height:var(--titlebar-h); -webkit-app-region:drag; z-index:10000;
+  }
+  /* Titlebar clearance on header rows only — traffic lights sit in the top band */
+  body.desktop-shell #queue h1 {
+    padding:calc(var(--titlebar-h) + 12px) 14px 8px;
+  }
+  body.desktop-shell #midbar { padding-top:calc(var(--titlebar-h) + 8px); }
+  body.desktop-shell #right > h1 { padding-top:calc(var(--titlebar-h) + 12px); }
+  body.desktop-shell #ivhead { padding-top:calc(var(--titlebar-h) + 9px); }
   #left, #mid, #right { min-height:0; height:100%; overflow:hidden; }
 
   /* scrollbars: transparent tracks inherit each panel's background; thumbs stay quiet */
@@ -118,16 +117,14 @@
   .btn.arm { color: var(--warn); font-weight: 600; }
   .btn-signature {
     margin-left: auto; font-size: 11px; font-weight: 600; letter-spacing: .16em;
-    text-transform: uppercase; color: var(--sweep-fg); background: transparent;
+    text-transform: uppercase; color: var(--sweep-fg); background: var(--panel2);
     border-color: var(--sweep-border); padding: 3px 12px; border-radius: 4px;
   }
-  .btn-signature:hover { background: color-mix(in srgb, var(--sweep-border) 14%, transparent); }
+  .btn-signature:hover { border-color: var(--acc); background: var(--panel); }
   .btn-signature.arming { color: var(--warn); border-color: var(--warn); animation: sweepfade 5s linear forwards; }
   @keyframes sweepfade { from { opacity:1; } to { opacity:.25; } }
-  #reloadbtn { margin-left: 8px; }
-  #reloadbtn span { display: inline-block; font-size: 17px; font-weight: 600; line-height: 1; }
-  #reloadbtn.spinning { color: var(--acc); border-color: var(--acc); }
-  #reloadbtn.spinning span { animation: spin360 .7s linear infinite; }
+  #reloadbtn { margin-left: 8px; font-size: 15px; line-height: 1; padding: 0; }
+  #reloadbtn.spinning { color: var(--acc); border-color: var(--acc); animation: spin360 .7s linear infinite; }
   @keyframes spin360 { to { transform: rotate(360deg); } }
 
   /* founding form: kit dropdown + the customization (additional notes) note */
@@ -138,12 +135,14 @@
   .dot { width:8px; height:8px; border-radius:2px; flex:none; align-self:center; }
   .dot.high { background:var(--urghigh); } .dot.medium { background:var(--urgmed); } .dot.low { background:var(--urglow); }
   .qname { flex:1 1 auto; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .qtag { flex:none; font-size:9.5px; color:var(--muted); border:1px solid var(--line);
+  .qtag { flex:none; font-size:9.5px; color:var(--muted); border:1px solid var(--muted);
           border-radius:4px; padding:0 5px; letter-spacing:.06em; }
   .qsum { color:var(--dim); font-size:12px; margin-left:16px; white-space:nowrap;
           overflow:hidden; text-overflow:ellipsis; }
-  .qitem.approved, .qitem.rework { opacity:.38; }
-  .qitem.approved .qname, .qitem.rework .qname { text-decoration:line-through; }
+  .qitem.approved { opacity:.38; }
+  .qitem.approved .qname { text-decoration:line-through; }
+  .qitem.rework { opacity:.38; }
+  .qitem.rework .qname { text-decoration:line-through; }
   /* this-sitting change badge on the queue entry's first line */
   .qitem .qdiff { margin-left:auto; flex:none; font-size:10.5px; font-variant-numeric:tabular-nums;
                   white-space:nowrap; padding-left:8px; }
@@ -162,6 +161,7 @@
      file; sweep needs a project; everything stands down during a running sweep. Kept in lockstep
      so the lower bar reads consistently at every transitional point (launch, project switch, sweep). */
   body.sweeping #midfoot button, body.sweeping #viewmode, body.sweeping #findtoggle, body.sweeping #sweepbtn,
+  body.sweeping #patronnote,
   body.nofile  #midfoot button, body.nofile  #viewmode, body.nofile  #findtoggle,
   body.noproj  #sweepbtn { opacity:.35; pointer-events:none; }
   body.founding #sweepbtn, body.founding #metaedit { opacity:.35; pointer-events:none; }
@@ -169,8 +169,12 @@
           padding:0 14px 12px; font-size:13px; }
   #meta h1 { padding:12px 0 8px; }
   #meta dt { color:var(--fg); font-size:11px; text-transform:uppercase; letter-spacing:.1em; margin-top:9px; }
+  #meta dt.brieflabel { margin-top:0; color:var(--acc); font-size:11px; }
   #meta dd { margin:2px 0 0; word-break:break-word; color:var(--dim); }
   #meta .brief { white-space:pre-wrap; color:var(--dim); }
+  #meta .brief.hero { color:var(--fg); font-size:14px; line-height:1.5; }
+  #meta .ask { color:var(--fg); font-style:italic; }
+  #meta dt.meta2, #meta dd.meta2 { font-size:12px; margin-top:6px; }
   /* inbox: the source item a drafted response answers (paired with the draft's path) */
   #meta .src { color:var(--link); }
 
@@ -178,8 +182,17 @@
   #mid { display:flex; flex-direction:column; min-width:0; }
   #midbar { flex:none; display:flex; align-items:center; gap:10px; padding:8px 14px;
             border-bottom:1px solid var(--line); background:var(--panel); }
+  #patronnote { flex:none; display:none; padding:8px 14px; border-bottom:1px solid var(--line);
+                background:var(--panel2); font-size:12.5px; line-height:1.45; }
+  #patronnote.open { display:block; }
+  #patronnote .pnlabel { color:var(--slot-comment, var(--link)); font-size:11px; letter-spacing:.12em;
+                         text-transform:uppercase; margin-bottom:4px; }
+  #patronnote .pntext { color:var(--fg); white-space:pre-wrap; word-break:break-word; }
   #fname { flex:1; color:var(--dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   #fname .fbase { color:var(--link); }
+  #sittingdiff { flex:none; display:flex; align-items:center; gap:6px; font-size:12px; }
+  #sittingdiff:empty { display:none; }
+  #sittingdiff .qdiff { font-variant-numeric:tabular-nums; }
   #dirty { color:var(--warn); display:none; }
 
   /* find/replace bar */
@@ -193,7 +206,6 @@
   /* middle bottom bar */
   #midfoot { flex:none; display:flex; align-items:center; gap:10px; padding:8px 14px;
              border-top:1px solid var(--line); background:var(--panel); }
-  #rework { color:var(--warn); }
   #commentpanel { display:none; flex:none; flex-direction:column; gap:8px; padding:10px 14px;
                   border-top:1px solid var(--line); background:var(--panel2); }
   #commentpanel.open { display:flex; }
@@ -208,25 +220,19 @@
   #commentpanel .crow { display:flex; align-items:center; gap:8px; }
   #commenthint { color:var(--dim); font-size:11px; }
 
-  /* modals (rework, add project) */
-  #modalbg, #addbg, #setupbg { position:fixed; inset:0; background:rgba(0,0,0,.55); display:none;
+  /* modals (add project) */
+  #addbg, #setupbg { position:fixed; inset:0; background:rgba(0,0,0,.55); display:none;
              align-items:center; justify-content:center; z-index:20; }
-  #modalbg.open, #addbg.open, #setupbg.open { display:flex; }
-  #reworkmodal, #addmodal, #setupmodal { background:var(--panel); border:1px solid var(--line); border-radius:8px;
+  #addbg.open, #setupbg.open { display:flex; }
+  #addmodal, #setupmodal { background:var(--panel); border:1px solid var(--line); border-radius:8px;
                  width:min(560px, 90vw); padding:18px 20px; display:flex;
                  flex-direction:column; gap:12px; }
-  #reworkmodal h2, #addmodal h2 { margin:0; font-size:13px; letter-spacing:.14em; text-transform:uppercase;
-                    color:var(--warn); }
-  #addmodal h2 { color:var(--acc); }
-  #reworkmemo { background:var(--bg); color:var(--fg); border:1px solid var(--line);
-                border-radius:5px; padding:8px 10px; font:inherit; resize:vertical;
-                min-height:110px; }
-  #reworkmodal .mrow, #addmodal .mrow { display:flex; align-items:center; gap:10px; }
+  #addmodal h2 { margin:0; font-size:13px; letter-spacing:.14em; text-transform:uppercase;
+                    color:var(--acc); }
+  #addmodal .mrow { display:flex; align-items:center; gap:10px; }
   #addmodal input { background:var(--bg); color:var(--fg); border:1px solid var(--line);
                     border-radius:5px; padding:8px 10px; font:inherit; }
   #addmodal .mnote { color:var(--dim); font-size:12px; }
-  #reworkagent { flex:1; background:var(--panel2); color:var(--fg); border:1px solid var(--line);
-                 border-radius:4px; font:12px var(--ui-font); padding:4px 6px; }
   .kitsel { display:block; width:100%; box-sizing:border-box; margin:6px 0 0;
             background:var(--panel2); color:var(--fg); border:1px solid var(--line);
             border-radius:4px; font:13px var(--ui-font); padding:6px 8px; }
@@ -274,7 +280,7 @@
                  font:12.5px var(--ui-font); }
   #render pre { background:var(--panel2); padding:10px 14px; border-radius:6px; overflow-x:auto; }
   #render pre code { background:none; padding:0; }
-  #render blockquote { border-left:3px solid var(--acc); margin:10px 0; padding:2px 14px; color:var(--dim); }
+  #render blockquote { margin:10px 0; padding:2px 0; color:var(--dim); }
   #render a { color:var(--link); }
   #render hr { border:0; border-top:1px solid var(--line); }
   #render li { margin:3px 0; }
@@ -313,7 +319,8 @@
   #interview { display:none; flex:1; min-height:0; flex-direction:column; background:var(--bg); }
   #mid.interviewing #interview { display:flex; }
   #mid.interviewing #midbar, #mid.interviewing #findbar, #mid.interviewing #edwrap,
-  #mid.interviewing #render, #mid.interviewing #commentpanel, #mid.interviewing #midfoot { display:none !important; }
+  #mid.interviewing #render, #mid.interviewing #commentpanel, #mid.interviewing #midfoot,
+  #mid.interviewing #patronnote { display:none !important; }
   #ivhead { flex:none; padding:9px 14px; border-bottom:1px solid var(--line); color:var(--acc); font-size:13px;
             display:flex; align-items:center; justify-content:space-between; gap:10px; }
   #ivhead .ivacts { display:flex; gap:7px; flex:none; }
@@ -531,7 +538,7 @@
 
 <div id="left">
   <div id="queue">
-    <h1>queue <select id="proj"></select><button id="reloadbtn" class="btn btn-sm btn-icon btn-ghost" title="reload the queue"><span>⟳</span></button><button id="sweepbtn" class="btn btn-sm btn-signature" title="close the sitting — apply rulings, diff &amp; assess the batch, fix/flag ripples, log the session, restock the queue">sweep</button></h1>
+    <h1>queue <select id="proj"></select><button id="reloadbtn" class="btn btn-sm btn-icon btn-ghost" title="reload the queue">↻</button><button id="sweepbtn" class="btn btn-sm btn-signature" title="close the sitting — apply rulings, diff &amp; assess the batch, fix/flag ripples, log the session, restock the queue">sweep</button></h1>
     <div id="qlist"></div>
   </div>
   <div id="divQ" class="hdivider" title="drag to resize"></div>
@@ -546,9 +553,13 @@
 
 <div id="mid">
   <div id="midbar">
-    <span id="fname">—</span><span id="dirty">●</span><span id="fnote" title="this file has a note">●</span>
+    <span id="fname">—</span><span id="sittingdiff"></span><span id="dirty">●</span><span id="fnote" title="this file has a note">●</span>
     <button id="findtoggle" class="btn btn-sm btn-default" title="find/replace in source">find</button>
     <button id="viewmode" class="btn btn-sm btn-default" title="⌘E — toggle view/edit">edit</button>
+  </div>
+  <div id="patronnote">
+    <div class="pnlabel">patron note · for sweep</div>
+    <div id="patronnotetext" class="pntext"></div>
   </div>
   <div id="findbar">
     <input id="findin" placeholder="find" spellcheck="false">
@@ -568,14 +579,14 @@
   </div>
   <div id="render"></div>
   <div id="commentpanel">
+    <div id="commentlist"></div>
     <textarea id="commentin" spellcheck="false" placeholder="a note for the sweep, tied to this file — Enter saves · Shift+Enter newline · Esc cancels"></textarea>
     <div class="crow"><span id="commenthint">tied to this file; the sweep reads it when it closes the sitting</span><span style="flex:1"></span><button id="commentsave" class="btn btn-sm btn-primary">save</button></div>
   </div>
   <div id="midfoot">
     <button id="comment" class="btn btn-sm btn-default" title="leave a note on this file for the agent to address during the sweep">comment</button>
     <span style="flex:1"></span>
-    <button id="reworkbtn" class="btn btn-sm btn-default btn-emphasis" title="send back for a full rework — opens a note for the reworking agent">rework</button>
-    <button id="approve" class="btn btn-sm btn-default btn-emphasis" title="mark as finished/reviewed">approve</button>
+    <button id="approve" class="btn btn-sm btn-default btn-emphasis" title="mark as finished/reviewed — your pass on this file is complete">approve</button>
   </div>
   <div id="interview">
     <div id="ivhead"><span class="ivtitle">founding interview · <span id="ivpname"></span></span><span class="ivacts"><button id="ivquick" type="button" class="btn btn-sm btn-ghost" title="skip the interview — the curator surveys the existing files and founds the desk (charter, memory, first queue) in one pass">found from files</button><button id="ivskip" type="button" class="btn btn-sm btn-ghost" title="leave founding for later — open the project as-is (no charter or queue yet); reselect it to resume founding">skip for now</button></span></div>
@@ -616,23 +627,11 @@
     <option value="opus">Opus</option>
     <option value="fable">Fable</option>
   </select>
-  <span id="ctxbar" title="context used — click to clear this session"><span id="ctxfill"></span><span class="ctxlabel">clear</span></span></h1>
+  <span id="ctxbar" title="context used — click to clear this session"><span id="ctxfill"></span><span class="ctxlabel">context</span></span></h1>
   <div id="chat"></div>
   <div id="spin">thinking…</div>
   <div id="chatbar">
     <textarea id="chatin" placeholder=""></textarea>
-  </div>
-</div>
-
-<div id="modalbg">
-  <div id="reworkmodal">
-    <h2>rework memo</h2>
-    <textarea id="reworkmemo" placeholder="memo to the reworking agent… (⌘Enter sends, Esc cancels)"></textarea>
-    <div class="mrow">
-      <select id="reworkagent"></select>
-      <button id="reworkcancel" class="btn btn-md btn-ghost" title="Esc">cancel</button>
-      <button id="reworksend" class="btn btn-md btn-primary" title="⌘Enter">send ↺</button>
-    </div>
   </div>
 </div>
 
@@ -744,7 +743,7 @@
 
       <section class="ap-block">
         <h2>Interface colors</h2>
-        <p class="ap-hint">Roles grouped by job: surfaces establish depth, text roles set legibility tiers, emphasis draws the eye to chrome and links, state signals selection and feedback. Solid % tints toward white (dark) or black (light).</p>
+        <p class="ap-hint">Roles grouped by job: surfaces establish depth, text roles set legibility tiers, emphasis draws the eye to chrome and links, state signals selection and feedback. Solid % tints toward white (dark) or black (light). Text roles are contrast-checked against canvas and surfaces at apply time.</p>
         <div class="ap-rolelist" id="ifacerows"></div>
         <div class="ap-actions"><button id="ifacereset" type="button" class="btn btn-sm btn-default">reset interface colors</button></div>
       </section>
@@ -788,6 +787,9 @@
     <label class="achk"><input type="checkbox" id="optSweepConfirm">
       <span class="ctext"><span class="ctitle">sweep confirmation</span>
       <span class="cdesc">ask before sweeping; off turns the button into a 5-second undo</span></span></label>
+    <label class="achk"><input type="checkbox" id="optAutoSweep">
+      <span class="ctext"><span class="ctitle">auto-sweep when queue is done</span>
+      <span class="cdesc">when every entry is approved, open the sweep flow automatically; off keeps sweep manual (recommended)</span></span></label>
     <label class="achk"><input type="checkbox" id="optGlance">
       <span class="ctext"><span class="ctitle">glance on open</span>
       <span class="cdesc">the agent reacts in a sentence or two to each file's brief as it loads (fast, haiku)</span></span></label>
@@ -910,14 +912,14 @@ function fillModelSelect(sel, current){
   sel.value = m;
 }
 
-/* per-task agents. setup = founding survey / sweep / rework (agentic, edits files);
+/* per-task agents. setup = founding survey / sweep (agentic, edits files);
    chat = the per-file review conversation (also the top-bar selector); glance = the
    tool-less reaction on open. Model is a free string — any id the agent CLI accepts,
    not just the four standards. (CLI backends beyond Claude Code are a flagged future
    project — see DESIGN.md.) */
 const AGENT_TASKS = [
-  ['setup',  'curatorial setup', 'founding survey · sweep · rework — agentic, edits files'],
-  ['chat',   'session chat',     'the per-file review conversation (mirrors the top-bar selector)'],
+  ['setup',  'curatorial setup', 'founding survey · sweep — agentic, edits files'],
+  ['chat',   'session chat',     'the per-file review conversation — read-only; patron edits in the center pane'],
   ['glance', 'context glance',   'the quick reaction on file open — tool-less, so any model fits'],
 ];
 const AGENT_DEFAULTS = {setup: 'sonnet', chat: 'sonnet', glance: 'haiku'};
@@ -990,7 +992,7 @@ function renderQueue(){
       ? (dash > 0 ? e.title.slice(dash + 3) : (e.title || e.ask || ''))
       : (e.note || e.ask || '');
     d.innerHTML = `<div class="t"><span class="dot ${esc(e.urgency || '')}"></span>
-        <span class="qname" title="${esc(e.path || e.title || '')}">${esc(fname)}</span>${e.comment ? '<span class="notedot" title="has a note"></span>' : ''}${diffBadge(e.diff)}</div>
+        <span class="qname" title="${esc(e.path || e.title || '')}">${esc(fname)}</span>${e.comment ? `<span class="notedot" title="${esc(e.comment)}"></span>` : ''}${diffBadge(e.diff)}</div>
         <div class="qsum" title="${esc(e.title || '')}">${e.ask_type ? `<span class="qtag">${esc(e.ask_type)}</span> ` : ''}${esc(tsum)}${e.desk_item ? ' · desk #' + esc(e.desk_item) : ''}</div>`;
     d.onclick = () => select(e.id);
     $('qlist').appendChild(d);
@@ -1006,29 +1008,72 @@ function syncChrome(){
   document.body.classList.toggle('noproj', !PROJECT);
 }
 
-let metaEditing = false;
+function refreshPatronNote(e){
+  const bar = $('patronnote');
+  const text = $('patronnotetext');
+  const note = e && e.comment ? String(e.comment).trim() : '';
+  if(!note){
+    bar.classList.remove('open');
+    text.textContent = '';
+    $('fnote').style.display = 'none';
+    $('fnote').title = 'this file has a note';
+    return;
+  }
+  bar.classList.add('open');
+  text.textContent = note;
+  $('fnote').style.display = 'inline';
+  $('fnote').title = note;
+}
+
+function renderCommentHistory(e){
+  const list = $('commentlist');
+  if(!list) return;
+  const hist = (e && e.comment_history) || [];
+  if(!hist.length){
+    list.innerHTML = '<div class="cnone">no prior notes logged for this entry</div>';
+    return;
+  }
+  list.innerHTML = hist.map(h =>
+    `<div class="citem">${h.date ? `<div class="cdate">${esc(h.date)}</div>` : ''}${esc(h.text)}</div>`
+  ).join('');
+}
+
 const META_OPTS = {
-  status: ['pending', 'approved', 'rework'],
+  status: ['pending', 'approved'],
   urgency: ['high', 'medium', 'low'],
   ask_type: ['input', 'tuning', 'judgment', 'fill'],
 };
 function renderMeta(e){
   $('metaedit').style.display = e ? '' : 'none';
-  if(!e){ $('metadl').innerHTML = '<dd style="color:var(--dim)">select a file</dd>'; return; }
+  if(!e){ $('metadl').innerHTML = '<dd style="color:var(--dim)">select a file</dd>'; renderSittingDiff(null); return; }
   if(metaEditing){ renderMetaEdit(e); return; }
   $('metadl').innerHTML =
-    `<dt>path</dt><dd>${esc(e.path)}</dd>` +
-    (e.source ? `<dt>source</dt><dd class="src">${esc(e.source)}</dd>` : '') +
-    `<dt>title</dt><dd>${esc(e.title||'—')}</dd>` +
-    `<dt>status · urgency</dt><dd>${esc(e.status)} · ${esc(e.urgency)}</dd>` +
+    `<dt class="brieflabel">curatorial brief</dt><dd class="brief hero">${esc(e.brief||'—')}</dd>` +
+    (e.ask ? `<dt class="brieflabel">what is wanted</dt><dd class="ask">${esc(e.ask)}</dd>` : '') +
+    (e.comment ? `<dt>patron note</dt><dd class="brief">${esc(e.comment)}</dd>` : '') +
     `<dt>changes this sitting</dt><dd id="metachanges">${diffLine(e.diff)}</dd>` +
-    `<dt>words</dt><dd id="metawords">${wordCount()}</dd>` +
-    `<dt>ask type</dt><dd>${esc(e.ask_type||'—')}</dd>` +
-    `<dt>ask</dt><dd>${esc(e.ask||'—')}</dd>` +
-    (e.unblocks ? `<dt>unblocks</dt><dd>${esc(e.unblocks)}</dd>` : '') +
-    `<dt>curatorial brief</dt><dd class="brief">${esc(e.brief||'—')}</dd>`;
+    `<dt class="meta2">path</dt><dd class="meta2">${esc(e.path)}</dd>` +
+    (e.source ? `<dt class="meta2">source</dt><dd class="meta2 src">${esc(e.source)}</dd>` : '') +
+    `<dt class="meta2">title</dt><dd class="meta2">${esc(e.title||'—')}</dd>` +
+    `<dt class="meta2">status · urgency</dt><dd class="meta2">${esc(e.status)} · ${esc(e.urgency)}</dd>` +
+    `<dt class="meta2">words</dt><dd class="meta2" id="metawords">${wordCount()}</dd>` +
+    `<dt class="meta2">ask type</dt><dd class="meta2">${esc(e.ask_type||'—')}</dd>` +
+    (e.unblocks ? `<dt class="meta2">unblocks</dt><dd class="meta2">${esc(e.unblocks)}</dd>` : '');
+  renderSittingDiff(e);
   linkifyWikilinks($('metadl'));
   const vd = $('viewdiff'); if(vd) vd.onclick = (ev) => { ev.preventDefault(); toggleDiffView(e); };
+}
+function renderSittingDiff(e){
+  const el = $('sittingdiff');
+  if(!el) return;
+  if(!e || !e.diff || (!e.diff.added && !e.diff.removed)){
+    el.innerHTML = '';
+    return;
+  }
+  el.innerHTML = diffBadge(e.diff) +
+    ` <button type="button" id="midviewdiff" class="btn btn-sm btn-ghost" title="view diff vs snapshot">diff</button>`;
+  const btn = $('midviewdiff');
+  if(btn) btn.onclick = (ev) => { ev.preventDefault(); toggleDiffView(e); };
 }
 /* Info-panel helpers: this-sitting change line, live word count, and the view-diff peek */
 function wordCount(){ const t = ($('editor').value || '').trim(); return t ? t.split(/\s+/).length : 0; }
@@ -1127,7 +1172,7 @@ async function select(id){
   cur = Q.entries.find(e => e.id===id);
   renderQueue(); renderMeta(cur);
   commentMark();
-  $('fnote').style.display = (cur && cur.comment) ? 'inline' : 'none';
+  refreshPatronNote(cur);
   setFname(cur.path);
   closeFind();
   $('editor').value = 'loading…';
@@ -1159,7 +1204,7 @@ async function select(id){
 let glanceCtl = null;
 async function glance(entry){
   if(glanceCtl) glanceCtl.abort();
-  if(SETTINGS.glance === false) return;          // admin kill-switch
+  if(SETTINGS.glance !== true) return;          // off by default; enable in admin
   const ctl = new AbortController(); glanceCtl = ctl;
   const eid = entry.id;
   showSpin();                                    // the agent is reading the note context
@@ -1178,14 +1223,70 @@ async function glance(entry){
 function setDirty(v){ dirty = v; $('dirty').style.display = v ? 'inline' : 'none'; }
 
 /* reading view: rendered markdown, checkboxes live-wired to the source */
+function charIndexForLine(src, lineIdx){
+  let i = 0;
+  for(let L = 0; L < lineIdx; L++){
+    const nl = src.indexOf('\n', i);
+    if(nl < 0) return src.length;
+    i = nl + 1;
+  }
+  return i;
+}
+
+/** Map the reading pane's scroll position to a source character index. */
+function readingViewportCharIdx(){
+  const render = $('render');
+  const src = $('editor').value;
+  if(!src) return 0;
+
+  const rect = render.getBoundingClientRect();
+  const probeX = rect.left + rect.width / 2;
+  const probeY = rect.top + Math.min(56, Math.max(20, rect.height * 0.12));
+  let el = document.elementFromPoint(probeX, probeY);
+  if(el && render.contains(el)){
+    const block = el.closest('h1,h2,h3,h4,h5,h6,p,li,pre,blockquote,td,th') || el;
+    const chunk = (block.textContent || '').replace(/\s+/g, ' ').trim();
+    if(chunk.length >= 4){
+      const tag = block.tagName || '';
+      if(/^H[1-6]$/.test(tag)){
+        const lvl = parseInt(tag[1], 10);
+        const escChunk = chunk.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const m = src.match(new RegExp('^#{1,' + lvl + '}\\s+' + escChunk, 'm'));
+        if(m) return m.index;
+      }
+      for(const len of [Math.min(chunk.length, 100), 60, 36, 20]){
+        if(len < 4) continue;
+        const idx = src.indexOf(chunk.slice(0, len));
+        if(idx >= 0) return idx;
+      }
+    }
+  }
+
+  const maxScroll = render.scrollHeight - render.clientHeight;
+  if(maxScroll <= 0) return 0;
+  const ratio = render.scrollTop / maxScroll;
+  const lines = editorLineCount(src);
+  return charIndexForLine(src, Math.round(ratio * (lines - 1)));
+}
+
 function setMode(m){
   if(!cur) return;   // no open file: the edit/view toggle is deactivated (matches the dimmed button)
+  const anchor = (mode === 'reading' && m === 'source') ? readingViewportCharIdx() : null;
   mode = m;
   document.body.classList.toggle('reading', m === 'reading');
   $('viewmode').textContent = m === 'reading' ? 'edit' : 'view';
   $('findtoggle').style.display = m === 'reading' ? 'none' : '';
   if(m === 'reading'){ closeFind(); renderMd(); }
-  else { refreshEditorChrome(); $('editor').focus(); }
+  else {
+    refreshEditorChrome();
+    const ed = $('editor');
+    const idx = anchor != null ? anchor : (ed.selectionStart || 0);
+    scrollEditorTo(idx);
+    ed.setSelectionRange(idx, idx);
+    ed.focus({preventScroll: true});
+    syncBack();
+    repositionBand();
+  }
 }
 
 function sanitizeRender(el){
@@ -1410,6 +1511,7 @@ function commentMark(){
 }
 function openComment(){
   if(!cur) return;
+  renderCommentHistory(cur);
   $('commentin').value = cur.comment || '';   // edit the file's existing note
   $('commentpanel').classList.add('open');
   $('commentin').focus();
@@ -1422,7 +1524,19 @@ async function saveComment(){
   try { await jpost('/api/comment', {project: PROJECT, id: cur.id, text}); }
   catch(err){ addMsg('err', 'comment failed: ' + err); return; }
   if(text) cur.comment = text; else delete cur.comment;   // strictly this entry
-  commentMark(); $('fnote').style.display = (cur && cur.comment) ? 'inline' : 'none'; renderQueue(); closeComment();
+  const fresh = Q.entries.find(x => x.id === cur.id);
+  if(fresh){
+    if(text) fresh.comment = text; else delete fresh.comment;
+  }
+  if(text){
+    const today = new Date().toISOString().slice(0, 10);
+    const hist = cur.comment_history = cur.comment_history || [];
+    if(!hist.length || hist[hist.length - 1].text !== text){
+      hist.push({date: today, text});
+      if(fresh) fresh.comment_history = hist;
+    }
+  }
+  commentMark(); refreshPatronNote(cur); renderQueue(); renderMeta(cur); closeComment();
 }
 
 async function approve(){
@@ -1509,7 +1623,7 @@ function addCtx(path, brief){
 
 async function pipeStream(r, out, opts){
   const say = out || addMsg;  // default sink: the right chat pane; the interview passes ivMsg
-  const trackCtx = !!(opts && opts.trackCtx);  // only genuine chat/rework turns drive the context bar; glance must not stomp it
+  const trackCtx = !!(opts && opts.trackCtx);  // only genuine chat turns drive the context bar; glance must not stomp it
   const reader = r.body.getReader();
   const dec = new TextDecoder();
   let buf = '';
@@ -1537,19 +1651,7 @@ async function pipeStream(r, out, opts){
 
 let pendingMsgs = [];
 async function refreshOpenFile(){
-  if(!cur) return;
-  try {
-    const f = await jget('/api/file?path=' + encodeURIComponent(cur.path) + '&project=' + encodeURIComponent(PROJECT));
-    if(f.content === $('editor').value) return;
-    if(dirty){
-      addMsg('err', 'the agent changed this file on disk while you have unsaved edits — saving now would overwrite its work; copy your changes, then re-select the file to reload.');
-      return;
-    }
-    $('editor').value = f.content;
-    clearBand();
-    if(mode === 'reading') renderMd(); else refreshEditorChrome({back: true, gutter: true});
-    addMsg('sys', '(file updated on disk — reloaded)');
-  } catch(e){ /* file may be unreadable mid-edit; next turn will catch it */ }
+  // chat agent is read-only; skip disk reload after review turns
 }
 /* show/hide the "thinking…" indicator. Showing it shrinks #chat (it's a flex
    sibling below), so pin the scroll to the bottom or the last line gets clipped
@@ -1603,6 +1705,7 @@ async function sweep(thrust){
   cur = null;
   $('qlist').innerHTML = '<div class="qsweep">agent is building a new file queue…</div>';
   renderMeta(null); $('metadl').innerHTML = '';   // no "select a file" during sweep
+  refreshPatronNote(null);
   // fully clear the editor panel — value AND the syntax backdrop/gutter/filename, or the
   // old file's highlighted text lingers behind the empty textarea until a resize re-syncs it.
   // readOnly stops the user editing a file mid-sweep.
@@ -1669,6 +1772,7 @@ async function reloadQueue(){
         $('editor').value = ''; $('fname').textContent = '—';
         $('gutter').innerHTML = ''; $('render').innerHTML = '';
         $('metadl').innerHTML = '<dd style="color:var(--dim)">select a file</dd>';
+        refreshPatronNote(null);
       } else {
         cur = fresh;                       // refresh status/brief/urgency/source on the open entry
         if(!dirty){                        // reload its file in case it changed on disk
@@ -1679,6 +1783,7 @@ async function reloadQueue(){
           } catch(e){ /* file may be gone; leave the buffer as-is */ }
         }
         renderMeta(cur);
+        refreshPatronNote(cur);
       }
     }
     renderQueue();
@@ -1834,34 +1939,6 @@ function openFind(){
 function closeFind(){
   $('findbar').classList.remove('open');
   findIdx = -1;
-}
-
-/* ---- rework modal ---- */
-function openRework(){
-  if(!cur) return;
-  const proj = PROJECTS.find(x => x.id === PROJECT);
-  const agents = (proj && proj.rework_agents) || [];
-  $('reworkagent').innerHTML = agents.length
-    ? agents.map(a => `<option value="${esc(a.id)}">${esc(a.name)}</option>`).join('')
-    : '<option value="">— no rework agents configured —</option>';
-  $('reworkagent').selectedIndex = 0;   // first entry = the project's default
-  $('reworkmemo').value = '';
-  $('modalbg').classList.add('open');
-  $('reworkmemo').focus();
-}
-function closeRework(){ $('modalbg').classList.remove('open'); }
-async function submitRework(){
-  if(!cur) return;
-  const agent = $('reworkagent').value;
-  if(!agent){ addMsg('err', 'no rework agent configured for this project'); return; }
-  try {
-    await jpost('/api/rework', {project: PROJECT, id: cur.id, agent, memo: $('reworkmemo').value});
-  } catch(err){ addMsg('err', 'rework failed: ' + err); return; }
-  closeRework();
-  cur.status = 'rework';
-  renderQueue(); renderMeta(cur);
-  addMsg('sys', `— sent back for rework (memo filed to ${agent}) —`);
-  maybeAutoSweep();
 }
 
 /* ---- add-project modal + founding curation ---- */
@@ -2319,7 +2396,7 @@ $('ivbegin').onclick = async () => {
 };
 let sweepArm = null;
 function maybeAutoSweep(){
-  // Auto-open the sweep flow once every queued file is handled (approved or reworked).
+  if(SETTINGS.autoSweep !== true) return;             // off by default
   if(!Q.entries.length) return;                       // nothing to sweep
   if(Q.entries.some(e => e.status !== 'approved' && e.status !== 'rework')) return;  // unhandled remain
   if(sweepArm) return;                                // confirm-off undo already armed
@@ -2371,13 +2448,6 @@ $('findin').addEventListener('input', () => { findIdx = -1; updateFindCount(find
 $('findin').addEventListener('keydown', e => {
   if(e.key === 'Enter'){ e.preventDefault(); gotoMatch(e.shiftKey ? -1 : 1); }
 });
-$('reworkbtn').onclick = openRework;
-$('reworkcancel').onclick = closeRework;
-$('reworksend').onclick = submitRework;
-$('modalbg').addEventListener('mousedown', e => { if(e.target === $('modalbg')) closeRework(); });
-$('reworkmemo').addEventListener('keydown', e => {
-  if((e.metaKey||e.ctrlKey) && e.key === 'Enter'){ e.preventDefault(); submitRework(); }
-});
 $('addcancel').onclick = closeAddProj;
 $('addgo').onclick = submitAddProj;
 $('addbg').addEventListener('mousedown', e => { if(e.target === $('addbg')) closeAddProj(); });
@@ -2393,7 +2463,6 @@ document.addEventListener('keydown', e => {
   if((e.metaKey||e.ctrlKey) && e.key==='e'){ e.preventDefault(); setMode(mode === 'reading' ? 'source' : 'reading'); }
   if(e.key === 'Escape'){
     if($('addbg').classList.contains('open')) closeAddProj();
-    else if($('modalbg').classList.contains('open')) closeRework();
     else if($('findbar').classList.contains('open')) closeFind();
   }
 });
@@ -2416,7 +2485,7 @@ function setCtxBar(used){
   $('ctxfill').style.width = (frac * 100).toFixed(1) + '%';
   $('ctxfill').style.background = `hsl(${hue}, 55%, 48%)`;
   const lab = $('ctxbar').querySelector('.ctxlabel');
-  if(lab) lab.textContent = fmtK(CTX_USED) + ' / ' + fmtK(CTX_WINDOW);
+  if(lab) lab.textContent = 'context';
   const act = (SETTINGS.ctxClick === 'clear') ? 'clear' : 'compact';
   $('ctxbar').title = 'context: ' + CTX_USED.toLocaleString() + ' / ' + CTX_WINDOW.toLocaleString()
     + ' tokens — click to ' + act + " this file's session";
@@ -2627,8 +2696,8 @@ function applyTheme() {
   const ifaceHold = SETTINGS.iface;
   SETTINGS.slots = mergedSlots;
   SETTINGS.iface = mergedIface;
-  applySlots();
   applyIface();
+  applySlots();
   SETTINGS.slots = slotsHold;
   SETTINGS.iface = ifaceHold;
 }
@@ -2775,9 +2844,9 @@ const TEXT_SLOTS = [
   ['ctxbody', 'context · body', '--ansi-7'],
   ['cmthead', 'glance · label', '--ansi-7'],
   ['comment', 'comment affordance', '--ansi-4'],
-  ['agent', 'agent prose', '--ansi-8'],
+  ['agent', 'agent prose', '--ansi-7'],
   ['user', 'chat · your messages', '--ansi-4'],
-  ['glance', 'glance prose', '--ansi-8'],
+  ['glance', 'glance prose', '--ansi-7'],
 ];
 const IFACE_SLOTS = [
   ['bg', 'canvas', '--ansi-0'],
@@ -2785,7 +2854,7 @@ const IFACE_SLOTS = [
   ['panel2', 'inset surface', '--ansi-0'],
   ['line', 'border', '--ansi-8'],
   ['fg', 'primary text', '--ansi-7'],
-  ['muted', 'secondary text', '--ansi-8'],
+  ['muted', 'secondary text', '--ansi-7'],
   ['acc', 'accent', '--ansi-3'],
   ['link', 'link', '--ansi-4'],
   ['activebg', 'selected item', '--ansi-8'],
@@ -2828,6 +2897,54 @@ function roleOpacityPct(settingsKey, presetKey, key){
 }
 function slotOpacityPct(key){ return roleOpacityPct('slotOpacity', 'slotOpacity', key); }
 function ifaceOpacityPct(key){ return roleOpacityPct('ifaceOpacity', 'ifaceOpacity', key); }
+const IFACE_TEXT_KEYS = new Set(['fg', 'muted', 'acc', 'link', 'good', 'warn']);
+let _themeSurfaces = null;
+
+function hexToRgb(hex) {
+  const h = hex.replace('#', '');
+  return [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16));
+}
+function rgbToHex([r, g, b]) {
+  return '#' + [r, g, b].map(c => Math.max(0, Math.min(255, c)).toString(16).padStart(2, '0')).join('');
+}
+function paletteHex(pick) {
+  const v = getComputedStyle(document.documentElement).getPropertyValue(pick).trim();
+  return isHex(v) ? v : '#808080';
+}
+function blendRoleHex(pick, solidPct) {
+  const base = paletteHex(pick);
+  const a = (typeof solidPct === 'number' && isFinite(solidPct)) ? Math.max(0, Math.min(100, solidPct)) : 100;
+  if (a >= 100) return base;
+  const target = paletteHex(roleBlendTarget());
+  const t = a / 100;
+  const f = hexToRgb(base), o = hexToRgb(target);
+  return rgbToHex(f.map((c, i) => Math.round(c * t + o[i] * (1 - t))));
+}
+function relLuminance(hex) {
+  const lin = hexToRgb(hex).map(c => {
+    c /= 255;
+    return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  });
+  return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2];
+}
+function contrastRatio(hexA, hexB) {
+  const l1 = relLuminance(hexA), l2 = relLuminance(hexB);
+  const hi = Math.max(l1, l2), lo = Math.min(l1, l2);
+  return (hi + 0.05) / (lo + 0.05);
+}
+function ensureContrastOnSurfaces(textHex, surfaces, minRatio) {
+  let worst = Math.min(...surfaces.map(bg => contrastRatio(textHex, bg)));
+  if (worst >= minRatio) return textHex;
+  const lift = paletteHex(roleBlendTarget());
+  for (let step = 1; step <= 20; step++) {
+    const t = step / 20;
+    const f = hexToRgb(textHex), o = hexToRgb(lift);
+    const candidate = rgbToHex(f.map((c, i) => Math.round(c + (o[i] - c) * t)));
+    worst = Math.min(...surfaces.map(bg => contrastRatio(candidate, bg)));
+    if (worst >= minRatio) return candidate;
+  }
+  return lift;
+}
 function roleBlendTarget(){
   return resolvedThemeMode() === 'dark' ? '--ansi-15' : '--ansi-0';
 }
@@ -2836,28 +2953,45 @@ function roleColorCss(pick, solidPct){
   if(a >= 100) return `var(${pick})`;
   return `color-mix(in srgb, var(${pick}) ${a}%, var(${roleBlendTarget()}))`;
 }
+function resolvedRoleCss(varName, pick, solidPct){
+  const cur = getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+  if (isHex(cur)) return cur;
+  return roleColorCss(pick, solidPct);
+}
 function applySlots(){
+  const surfaces = _themeSurfaces || [paletteHex('--ansi-0')];
   for(const [key,, def] of TEXT_SLOTS){
     const pick = slotRolePick(key, def);
-    document.documentElement.style.setProperty('--slot-' + key, roleColorCss(pick, slotOpacityPct(key)));
+    let hex = blendRoleHex(pick, slotOpacityPct(key));
+    hex = ensureContrastOnSurfaces(hex, surfaces, 3.0);
+    document.documentElement.style.setProperty('--slot-' + key, hex);
   }
 }
 function applyIface(){
-  for(const [key,, def] of IFACE_SLOTS){
-    const pick = ifaceRolePick(key, def);
-    document.documentElement.style.setProperty('--' + key, roleColorCss(pick, ifaceOpacityPct(key)));
+  const resolved = {};
+  for (const [key,, def] of IFACE_SLOTS) {
+    resolved[key] = blendRoleHex(ifaceRolePick(key, def), ifaceOpacityPct(key));
+  }
+  _themeSurfaces = ['bg', 'panel', 'panel2'].map(k => resolved[k]);
+  for (const [key,, def] of IFACE_SLOTS) {
+    let hex = resolved[key];
+    if (IFACE_TEXT_KEYS.has(key)) {
+      hex = ensureContrastOnSurfaces(hex, _themeSurfaces, key === 'fg' ? 4.5 : 3.0);
+    }
+    document.documentElement.style.setProperty('--' + key, hex);
   }
 }
-function updateTintSwatch(row, key, def, pickFn, opacityFn, checkerboardKey){
+function updateTintSwatch(row, key, def, pickFn, opacityFn, checkerboardKey, cssVarName){
   const inner = row.querySelector('.swatch-inner');
   const outer = row.querySelector('.swatch');
   if(!inner) return;
-  inner.style.background = roleColorCss(pickFn(key, def), opacityFn(key));
+  const varName = cssVarName || ('--' + key);
+  inner.style.background = resolvedRoleCss(varName, pickFn(key, def), opacityFn(key));
   if(!outer) return;
   if(key === checkerboardKey){
     outer.style.background = 'repeating-conic-gradient(var(--line) 0 25%, transparent 0 50%) 0 0/8px 8px';
   } else {
-    outer.style.background = roleColorCss(ifaceRolePick('bg', '--ansi-0'), ifaceOpacityPct('bg'));
+    outer.style.background = resolvedRoleCss('--bg', ifaceRolePick('bg', '--ansi-0'), ifaceOpacityPct('bg'));
   }
 }
 function setRoleOpacity(settingsKey, key, raw){
@@ -2874,7 +3008,7 @@ function setRoleOpacity(settingsKey, key, raw){
 function setIfaceOpacity(key, raw){ setRoleOpacity('ifaceOpacity', key, raw); }
 function setSlotOpacity(key, raw){ setRoleOpacity('slotOpacity', key, raw); }
 function buildTintRows(boxId, defs, cfg){
-  const { pickFn, opacityFn, settingsKey, dataKey, setOpacityFn, checkerboardKey, groups } = cfg;
+  const { pickFn, opacityFn, settingsKey, dataKey, setOpacityFn, checkerboardKey, groups, cssVarPrefix } = cfg;
   const box = $(boxId); if(!box) return;
   box.innerHTML = '';
   const head = document.createElement('div'); head.className = 'ap-iface-head';
@@ -2893,7 +3027,7 @@ function buildTintRows(boxId, defs, cfg){
       `<select data-${dataKey}="${esc(key)}">${palOpts(chosen)}</select>` +
       `<input type="number" class="ap-iface-opacity" data-${dataKey}="${esc(key)}" value="${op}" min="0" max="100" step="1" title="solid % — 100 is untinted">`;
     box.appendChild(row);
-    updateTintSwatch(row, key, dflt, pickFn, opacityFn, checkerboardKey);
+    updateTintSwatch(row, key, dflt, pickFn, opacityFn, checkerboardKey, (cssVarPrefix || '--') + key);
   }
   if(groups){
     for(const g of groups){
@@ -2909,26 +3043,27 @@ function buildTintRows(boxId, defs, cfg){
       const k = sel.dataset[dataKey];
       const next = Object.assign({}, SETTINGS[settingsKey], {[k]: sel.value});
       SETTINGS[settingsKey] = next; saveSettings({[settingsKey]: next}); applyTheme();
-      updateTintSwatch(sel.closest('.ap-iface-row'), k, defByKey[k]?.[2], pickFn, opacityFn, checkerboardKey);
+      updateTintSwatch(sel.closest('.ap-iface-row'), k, defByKey[k]?.[2], pickFn, opacityFn, checkerboardKey, (cssVarPrefix || '--') + k);
     }));
   box.querySelectorAll(`input.ap-iface-opacity[data-${dataKey}]`).forEach(inp =>
     inp.addEventListener('change', () => {
       setOpacityFn(inp.dataset[dataKey], inp.value);
-      updateTintSwatch(inp.closest('.ap-iface-row'), inp.dataset[dataKey],
-        defByKey[inp.dataset[dataKey]]?.[2], pickFn, opacityFn, checkerboardKey);
+      const k = inp.dataset[dataKey];
+      updateTintSwatch(inp.closest('.ap-iface-row'), k,
+        defByKey[k]?.[2], pickFn, opacityFn, checkerboardKey, (cssVarPrefix || '--') + k);
     }));
 }
 function buildSlotRows(){
   buildTintRows('slotrows', TEXT_SLOTS, {
     pickFn: slotRolePick, opacityFn: slotOpacityPct, settingsKey: 'slots',
-    dataKey: 'slot', setOpacityFn: setSlotOpacity, checkerboardKey: null,
+    dataKey: 'slot', setOpacityFn: setSlotOpacity, checkerboardKey: null, cssVarPrefix: '--slot-',
   });
 }
 function buildIfaceRows(){
   buildTintRows('ifacerows', IFACE_SLOTS, {
     pickFn: ifaceRolePick, opacityFn: ifaceOpacityPct, settingsKey: 'iface',
     dataKey: 'iface', setOpacityFn: setIfaceOpacity, checkerboardKey: 'bg',
-    groups: IFACE_GROUPS,
+    groups: IFACE_GROUPS, cssVarPrefix: '--',
   });
 }
 function resetSlots(){
@@ -3044,12 +3179,18 @@ function applyMdToggle(){
     $('edback').style.display = 'none';
   }
 }
+function applySettingsDefaults(){
+  if(SETTINGS.glance == null) SETTINGS.glance = false;
+  if(SETTINGS.autoCompact == null) SETTINGS.autoCompact = true;
+  if(SETTINGS.autoSweep == null) SETTINGS.autoSweep = false;
+}
 function syncBehaviorInputs(){
   hlLineEnabled = SETTINGS.hlLine === true;
   $('optHlLine').checked = hlLineEnabled;
   $('optMd').checked = SETTINGS.mdHighlight !== false;
   $('optSweepConfirm').checked = SETTINGS.sweepConfirm !== false;
-  if($('optGlance')) $('optGlance').checked = SETTINGS.glance !== false;
+  if($('optAutoSweep')) $('optAutoSweep').checked = SETTINGS.autoSweep === true;
+  if($('optGlance')) $('optGlance').checked = SETTINGS.glance === true;
   if($('optUnwrap')) $('optUnwrap').checked = SETTINGS.unwrap === true;
   if($('optCtxCompact')) $('optCtxCompact').checked = (SETTINGS.ctxClick || 'compact') !== 'clear';
   if($('optAutoCompact')) $('optAutoCompact').checked = SETTINGS.autoCompact !== false;
@@ -3274,6 +3415,7 @@ function wireAdmin(){
   $('palsave').onclick = savePalette;
   $('palapply').onclick = applyPalette;
   $('paldel').onclick = deletePalette;
+  $('optAutoSweep') && ($('optAutoSweep').onchange = () => saveSettings({autoSweep: $('optAutoSweep').checked}));
   $('optGlance') && ($('optGlance').onchange = () => saveSettings({glance: $('optGlance').checked}));
   $('optUnwrap') && ($('optUnwrap').onchange = () => saveSettings({unwrap: $('optUnwrap').checked}));
   $('optCtxCompact') && ($('optCtxCompact').onchange = () => { saveSettings({ctxClick: $('optCtxCompact').checked ? 'compact' : 'clear'}); setCtxBar(CTX_USED); });
@@ -3329,6 +3471,7 @@ function wireAdmin(){
 
 (async function init(){
   try { SETTINGS = await jget('/api/settings'); } catch(e){ SETTINGS = {}; }
+  applySettingsDefaults();
   SETTINGS.colWidths = Object.assign({left:300, right:400}, SETTINGS.colWidths || {});
   migrateThemeSettings();
   applyTheme(); applySizes(); applyFonts();

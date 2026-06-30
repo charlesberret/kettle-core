@@ -63,7 +63,7 @@ when it contradicts the charter itself, amend `PROJECT.md` minimally.
 ## The lifecycle
 
 **Approve is a bookmark; the sweep is the commit.** A sitting runs: the patron reviews and edits the
-queued files by hand, converses with you, approves or sends back for rework. The sweep then closes
+queued files by hand, converses with you, and approves each finished pass. The sweep then closes
 the round — diff each entry against its snapshot, assess what changed and why, ripple the
 consequences, learn what generalizes into memory, log the sitting, and restock the next batch.
 Identity persists in these files; sessions stay short-lived.

@@ -51,7 +51,7 @@ A foreign occupant of the port → graceful fallback to an ephemeral one.
   and loads it in a BrowserWindow. See `~/Repos/setsweep-desktop/`.
 - **`projects.json`** — the registry (self-creates; see [`projects.example.json`](./projects.example.json)).
   One stanza per project: `id`, `name`, `root` (the agent's working directory), `kit` (the curator
-  playbook — see below), `rework_agents` (recipients for the rework button), an optional `role`
+  playbook — see below), an optional `role`
   (per-project system prompt for the review agent), and — for the inbox kind — an optional `intake`
   block. Add a project by hand, with `setsweep add`, or via the in-app **＋ add project** flow.
 - **`kits/`** — curator **playbooks**, one per kind of project (`writing`, `code`, `records`,
@@ -91,17 +91,16 @@ no interview) and **skip for now** (open the project as-is, found later).
 - **Info pane** — the active entry's fields, editable in place through a whitelisted endpoint
   (never path/id). For an inbox entry it also shows the **`source`** — the incoming item the draft
   answers.
-- **Glance** — when a file loads, the agent fires a one-breath reaction to its *brief only* (no
+- **Glance** — optional: when a file loads, the agent fires a one-breath reaction to its *brief only* (no
   tools, no session) to surface anything unclear. Non-blocking; superseded the instant another file
-  opens. Toggle in Admin.
+  opens. Off by default; enable in Admin.
 - **Review agent** — each turn spawns `claude -p` (stream-json) in the project root with
-  `Read/Glob/Grep/Edit/Write` + a fenced shell allowlist (`acceptEdits`, confined to the project
-  tree). The agent edits project files directly; the app reloads the open file after each turn with
-  a dirty-buffer guard. Fenced code blocks in agent replies render with **copy** and **→ editor**
-  buttons — **your hand stays the only write path into the editor surface** (the agent's own writes
-  to disk are a separate, intended tier). Sessions persist per entry.
-- **Approve / rework** — **approve** marks the entry approved and logs it; **rework** files a memo to
-  the chosen recipient and flags the entry. Approve is a bookmark; the sweep is the commit.
+  read-only tools (`Read/Glob/Grep` + a fenced shell allowlist). The agent proposes changes in
+  fenced code blocks; **→ editor** and **copy** buttons let you apply them in the center pane.
+  The sweep and founding steps carry write tools when files must change on disk. Sessions persist
+  per project.
+- **Approve** — marks the entry approved and logs it. Approve is a bookmark; the sweep is the
+  commit. Leave an entry pending if your pass is not done; use **comment** for sweep instructions.
 
 ## The resident curator
 
