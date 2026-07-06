@@ -15,6 +15,7 @@ env/
 .DS_Store
 *.swp
 *~
+.cursor/
 
 # ── Seafile sync conflicts (never commit) ──
 *SFConflict*

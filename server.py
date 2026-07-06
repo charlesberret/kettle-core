@@ -1099,6 +1099,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(lineage.status(project_root(proj), max_depth=proj.get("max_depth")))
             elif url.path == "/api/queue":
                 proj = get_project(qs.get("project", [None])[0])
+                mark_founded_if_filed(proj)   # queue entries ⇒ founded (heals stale interviewing status)
                 q = load_queue(proj)
                 ensure_snapshots(proj, q)
                 enrich_queue_comments(proj, q)
@@ -1122,6 +1123,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json({"messages": load_chatlog(proj)})
             elif url.path == "/api/interview":
                 proj = get_project(qs.get("project", [None])[0])
+                mark_founded_if_filed(proj)
                 iv = load_interview(proj)
                 self.send_json({"status": iv.get("status", "none"),
                                 "has_session": bool(iv.get("session_id"))})

@@ -501,16 +501,25 @@ class EndpointTests(Base):
         self.assertEqual(s4, 400)
 
     def test_interview_status_lifecycle(self):
+        # a desk with queue entries is founded on read even if session was never written
         s, j = _http("GET", f"{self.base}/api/interview?project=t")
-        self.assertEqual((s, j["status"]), (200, "none"))            # never started
+        self.assertEqual((s, j["status"]), (200, "founded"))
         server.save_interview(self.proj(), {"session_id": "abc", "status": "interviewing"})
         _, j2 = _http("GET", f"{self.base}/api/interview?project=t")
-        self.assertEqual(j2["status"], "interviewing")
+        # queue entries on disk ⇒ founded (heals stale interviewing on read)
+        self.assertEqual(j2["status"], "founded")
         iv = server.load_interview(self.proj())
         self.assertEqual(iv["session_id"], "abc")                    # roundtrip
         server.save_interview(self.proj(), {**iv, "status": "founded"})
         _, j3 = _http("GET", f"{self.base}/api/interview?project=t")
         self.assertEqual(j3["status"], "founded")
+
+    def test_interviewing_persists_while_queue_empty(self):
+        server.save_interview(self.proj(), {"session_id": "abc", "status": "interviewing"})
+        json.dump({"curated": "awaiting founding curation", "entries": []},
+                  open(server.queue_path(self.proj()), "w"))
+        _, j = _http("GET", f"{self.base}/api/interview?project=t")
+        self.assertEqual(j["status"], "interviewing")
 
     def test_load_interview_survives_corrupt_file(self):
         server.interview_path(self.proj()).parent.mkdir(parents=True, exist_ok=True)
