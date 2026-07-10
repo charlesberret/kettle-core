@@ -1,8 +1,12 @@
-# setsweep
+# setsweep-core
 
 **A review instrument for working *with* coding/writing agents instead of around them.**
 
-setsweep is a three-pane app — an agent-curated **queue** (left) feeds documents into a
+This repo is the **canonical product**: Python server, kits, runtime, CLI, and the reference
+three-pane web UI. The desk (`.setsweep/` under each project) is the application; every UI is a
+viewport over the same localhost API.
+
+setsweep is a three-pane sitting — an agent-curated **queue** (left) feeds documents into a
 plaintext **editor** (middle) beside a project-aware **review agent** (right). Its premise:
 **agents prepare and propagate; you read and rule.** Context is paid for once — by a
 per-project *curator* agent that writes a short brief for each item — and delivered pre-packed;
@@ -10,7 +14,13 @@ your edits and approvals are then applied outward mechanically by a *sweep*. Not
 re-derive what an agent already knows, and nothing lets an agent commit what is yours to decide.
 
 The agent runtime is **Claude Code headless** (the `claude` CLI). The server and CLI are
-Python-stdlib-only; the native macOS window is the separate setsweep-desktop Electron shell.
+Python-stdlib-only. Host chrome lives in sibling repos:
+
+| Repo | Role |
+|------|------|
+| **setsweep-core** (this tree) | Desk + API + reference web UI + CLI |
+| [`setsweep-desktop`](../setsweep-desktop/) | macOS Electron shell (`.app`) |
+| [`setsweep-plugin`](../setsweep-plugin/) | Host adapters — VS Code/Cursor first; Obsidian & Sublime planned |
 
 > **Vocabulary.** Two words recur in this project. **You** are the reviewer (the docs sometimes
 > call you *the patron*). The **curator** is a per-project agent *identity carried in files*
@@ -47,8 +57,10 @@ A foreign occupant of the port → graceful fallback to an ephemeral one.
   (resolve-then-`is_relative_to`) to registered project roots plus a configurable base; registered
   roots extend the fence, so registration is the gate (a folder must exist, be a directory, and
   live under your home).
-- **`setsweep-desktop`** — the native macOS shell: an Electron app that bundles this server
-  and loads it in a BrowserWindow. See `~/Repos/setsweep-desktop/`.
+- **Viewports** — browser (`setsweep --web`), CLI (`setsweep queue|open|chat`), macOS
+  [`setsweep-desktop`](../setsweep-desktop/), and editor plugins in
+  [`setsweep-plugin`](../setsweep-plugin/) (VS Code/Cursor now; Obsidian/Sublime later). All talk to
+  this server; none own the desk.
 - **`projects.json`** — the registry (self-creates; see [`projects.example.json`](./projects.example.json)).
   One stanza per project: `id`, `name`, `root` (the agent's working directory), `kit` (the curator
   playbook — see below), an optional `role`

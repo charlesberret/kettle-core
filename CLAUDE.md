@@ -1,10 +1,19 @@
-# Setsweep — Agent Orientation
+# Setsweep-core — Agent Orientation
+
+Canonical path: `~/Repos/setsweep-core` (moved from Seafile `Code/_archive/setsweep`).
 
 ## Architecture
 
 Python backend (`server.py`, `runtime.py`, `lineage.py`, `kits.py`, `cli.py`) plus a folder-watcher entry point (`setsweep_watch.py`) and a launcher shim (`setsweep_main.py`). No third-party runtime dependencies — the server and CLI viewport are stdlib-only. Single-file frontend at `static/index.html`. Three-pane layout: agent-curated queue · patron's editor · project-aware review agent.
 
-**Electron desktop shell** lives at `~/Repos/setsweep-desktop` and wraps the Python server as a native app. It is a separate repo. Changes to the Python layer do not require touching the desktop shell unless the HTTP API surface changes.
+**Sibling viewports** (separate repos; host-specific code stays out of this tree):
+
+| Path | Role |
+|------|------|
+| `~/Repos/setsweep-desktop` | Electron macOS shell — bundles this server as a sidecar |
+| `~/Repos/setsweep-plugin` | Host adapters; `packages/vscode` first (Cursor too); Obsidian/Sublime later |
+
+Changes to the Python layer do not require touching desktop/plugin unless the HTTP API surface changes.
 
 Server listens on `http://127.0.0.1:4242/` (`DEFAULT_PORT = 4242` in `server.py`; moved from 8765 on 2026-06-13). A second launch defers if the current instance is healthy; pass `--replace` or use `Setsweep.app` to force a restart.
 
