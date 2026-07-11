@@ -20,6 +20,7 @@ The test suite is 36 green, including a `LaunchTests` class added on 2026-06-13 
 
 ## Known gaps
 
-- No real `/api/ping` test — the launch beacon is load-bearing but only stubbed in the current suite
-- No settings shallow-merge clobber guard — top-level groups have grown (colors, slots, iface, palettes, adminBox) and a bad merge can silently drop keys
+- Chat writes are always-on via `acceptEdits` (interim). A fuller chat-window redesign with real permission UX may replace this later.
+- HTTP response envelopes are not yet uniform across routes (see `API.md` stability notes)
+- No settings shallow-merge clobber guard for non-`curator` top-level groups — colors/slots/iface/palettes/adminBox can still be dropped by a bad patch
 - Frontend has zero tests — the palette-save bug that was found lived in `static/index.html`; a JS error there produces a blank window with no app left to repair it

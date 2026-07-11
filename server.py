@@ -4,8 +4,8 @@
 Multi-project: the registry at projects.json maps project ids to a root (the agent's
 working directory) and a queue file (<root>/.setsweep/queue.json by convention). The
 right-pane agent is Claude Code in headless mode (-p, stream-json), run in the active
-project's root with read-only tools (Read/Glob/Grep + a fenced shell allowlist); the
-patron edits in the center pane. Sweep and founding carry write tools. Each queue entry's
+project's root with Read/Glob/Grep/Edit/Write under acceptEdits (project-fenced);
+interview stays read-only until Finish/Found. Each queue entry's
 curatorial brief is injected as system-prompt context so the agent starts aligned without
 re-reading the file.
 
@@ -33,6 +33,7 @@ from urllib.parse import parse_qs, urlparse
 import kits     # curator kits: the per-kind playbook (lens · urgency · first-queue · sweep checks)
 import lineage  # who-edited-what: agent edits self-record to the desk's working record
 import runtime  # viewport-neutral agent adapter: spawn · usage normalizer · session ledger
+import curator as curator_mod  # pluggable curator backends (claude CLI default)
 
 HOME = Path.home()
 
@@ -46,8 +47,40 @@ def _app_dir() -> Path:
 
 APPDIR = _app_dir()
 STATIC = APPDIR / "static"
-PROJECTS_PATH = Path(os.environ.get("DESK_PROJECTS", APPDIR / "projects.json"))
+
+
+def user_projects_path() -> Path:
+    """Platform user-data registry — same location desktop uses on macOS."""
+    if sys.platform == "darwin":
+        return HOME / "Library/Application Support/Setsweep/projects.json"
+    xdg = os.environ.get("XDG_CONFIG_HOME")
+    base = Path(xdg).expanduser() if xdg else HOME / ".config"
+    return base / "setsweep" / "projects.json"
+
+
+def resolve_projects_path() -> Path:
+    """Choose the live projects.json so CLI and desktop can share one desk.
+
+    1. `$DESK_PROJECTS` — explicit override (tests, desktop sidecar, power users)
+    2. User registry if it already exists (Application Support / XDG)
+    3. Repo-local `APPDIR/projects.json` if present (dev checkout)
+    4. Otherwise the user path (first write creates the shared registry)
+    """
+    env = os.environ.get("DESK_PROJECTS")
+    if env:
+        return Path(env).expanduser()
+    user = user_projects_path()
+    if user.exists():
+        return user
+    repo = APPDIR / "projects.json"
+    if repo.exists():
+        return repo
+    return user
+
+
+PROJECTS_PATH = resolve_projects_path()
 SETTINGS_PATH = PROJECTS_PATH.parent / "settings.json"
+# Legacy constant — prefer current_curator().resolved_command() for new code.
 CLAUDE = shutil.which("claude") or str(HOME / ".local/bin/claude")
 SERVER_PORT = None  # bound port, recorded at startup for the admin report
 SERVER_STARTED = None  # ISO timestamp, set at bind
@@ -57,8 +90,35 @@ RUNTIME_PATH = HOME / ".cache/setsweep/server.json"  # informational record of t
 QUEUE_LOCK = threading.Lock()
 SETTINGS_LOCK = threading.Lock()
 PROJECTS_LOCK = threading.Lock()
+
+
+def current_curator() -> curator_mod.CuratorConfig:
+    return curator_mod.resolve_curator(load_settings())
+
+
+def agent_bin() -> str:
+    """Executable for the active curator provider (default: claude on PATH).
+
+    When settings still name the bare `claude` command, honor the module-level
+    `CLAUDE` path so tests can stub it and so the import-time `which()` result
+    stays authoritative until the user sets a custom curator.command.
+    """
+    cfg = current_curator()
+    cmd = (cfg.command or "claude").strip() or "claude"
+    if cmd == "claude":
+        return CLAUDE
+    return cfg.resolved_command()
+
+
+def with_model(cmd: list, task: str, request_model=None) -> list:
+    """Append --model from request override or settings.curator.models[task]."""
+    m = current_curator().model_for(task, request_model)
+    if m:
+        cmd += ["--model", m]
+    return cmd
 CHATLOG_LOCK = threading.Lock()
 CHATLOG_CAP = 500  # server-side cap: most recent N messages kept per project
+
 
 def _env_allowed_roots() -> list[Path]:
     """Extra base roots for the file fence, from $SETSWEEP_ALLOWED_ROOTS (os.pathsep-separated).
@@ -98,14 +158,16 @@ AGENT_TOOLS = [
     "--disallowedTools", "NotebookEdit",
 ]
 
-# the right-pane review agent: read-only — the patron edits in the center pane;
-# the sweep and founding steps carry write tools when files must change on disk
+# Interim: review chat may Edit/Write under acceptEdits (project cwd).
+# Future: may reengineer the chat window for full agent capabilities / permission UX.
+# Founding interview stays read-only until Finish/Found (SWEEP_TOOLS).
 CHAT_TOOLS = [
+    "--permission-mode", "acceptEdits",
     "--allowedTools",
-    "Read", "Glob", "Grep",
+    "Read", "Glob", "Grep", "Edit", "Write",
     "Bash(ls:*)", "Bash(cat:*)", "Bash(head:*)", "Bash(tail:*)",
     "Bash(rg:*)", "Bash(fd:*)", "Bash(find:*)", "Bash(wc:*)",
-    "--disallowedTools", "NotebookEdit", "Edit", "Write",
+    "--disallowedTools", "NotebookEdit",
 ]
 
 # the sweep applies rulings to canonical files, so it carries write tools —
@@ -332,11 +394,12 @@ DEFAULT_ROLE = (
     "You are the desk assistant in the patron's document-review sitting (project: {project}). "
     "Their first message opens with the active file's path and its curatorial brief — context "
     "prepared in advance so neither of you must re-derive it. Help them understand and revise "
-    "that file; read any project files you need. You do NOT write to disk — the patron edits "
-    "in the center pane. Propose changes in fenced code blocks (their app turns those into "
-    "jump-to-line and apply-to-editor buttons). When DISCUSSING a passage rather than changing "
-    "it, quote it in a fenced code block. Never touch append-only records or logs. Be concise "
-    "and direct; they "
+    "that file; read any project files you need. You MAY Edit/Write project files when the "
+    "patron asks you to implement or change something (writes are fenced to the project root). "
+    "For small emendations they want to apply themselves, prefer proposing in fenced code "
+    "blocks (their app turns those into jump-to-line and apply-to-editor buttons). When "
+    "DISCUSSING a passage rather than changing it, quote it in a fenced code block. Never "
+    "touch append-only records or logs. Be concise and direct; they "
     "are mid-sitting and mental gear-shifts are the enemy."
 )
 
@@ -384,13 +447,27 @@ def load_projects() -> list[dict]:
 
 
 def get_project(pid: str | None) -> dict:
-    projects = load_projects()
-    if pid:
-        for pr in projects:
-            if pr["id"] == pid:
-                return pr
-        raise KeyError(f"unknown project: {pid}")
-    return projects[0]
+    """Resolve a registered project by id.
+
+    `project` is required on project-scoped HTTP routes — omitting it used to
+    silently target the first registry entry (dangerous for multi-project
+    viewports). Pass an explicit id; raise KeyError if missing or unknown.
+    """
+    if not pid:
+        raise KeyError("missing project")
+    for pr in load_projects():
+        if pr["id"] == pid:
+            return pr
+    raise KeyError(f"unknown project: {pid}")
+
+
+def want_mutate(qs: dict) -> bool:
+    """Whether a GET may run healing/snapshot side effects (default: yes).
+
+    Pass `?mutate=0` (or false/no) for a pure read — useful for plugin polling.
+    """
+    raw = (qs.get("mutate", ["1"])[0] or "1").strip().lower()
+    return raw not in ("0", "false", "no", "off")
 
 
 def project_root(proj: dict) -> Path:
@@ -762,13 +839,14 @@ def load_settings() -> dict:
 
 
 def save_settings(patch: dict) -> dict:
-    """Shallow-merge patch into settings.json; returns the merged dict."""
+    """Merge patch into settings.json (deep-merge for curator/agents); returns merged dict."""
     with SETTINGS_LOCK:
         try:
             cur = json.loads(SETTINGS_PATH.read_text()) if SETTINGS_PATH.exists() else {}
         except json.JSONDecodeError:
             cur = {}
-        cur.update(patch)
+        cur = curator_mod.deep_merge_settings(cur, patch)
+        cur = curator_mod.ensure_curator_settings(cur)
         atomic_write(SETTINGS_PATH, json.dumps(cur, indent=2, ensure_ascii=False))
         return cur
 
@@ -891,6 +969,11 @@ def mark_founded_if_filed(proj: dict) -> bool:
     return False
 
 
+def desk_is_founded(proj: dict) -> bool:
+    """True when session status is founded (entries-alone is healed via mark_founded_if_filed)."""
+    return load_session(proj).get("status") == "founded"
+
+
 # ---------- admin / debug ----------
 
 CACHE = HOME / ".cache" / "claude"
@@ -1002,11 +1085,13 @@ def admin_report(active_pid: str | None) -> dict:
         projects = []
     health = _read_json(CACHE / "inventory-health.json")
     watch = health.get("setsweep-watch") if isinstance(health, dict) else None
+    cfg = current_curator()
     return {
         "server": {
             "port": SERVER_PORT,
-            "claude_path": CLAUDE,
-            "claude_exists": Path(CLAUDE).exists() if CLAUDE else False,
+            "claude_path": cfg.resolved_command(),  # back-compat alias
+            "claude_exists": cfg.command_exists(),
+            "curator": cfg.as_public_dict(),
             "project_count": len(projects),
             "active": active_pid,
         },
@@ -1046,6 +1131,15 @@ class Handler(BaseHTTPRequestHandler):
         except (BrokenPipeError, ConnectionResetError):
             return False
 
+    def stream_idle(self, message: str) -> None:
+        """NDJSON notice without spawning a curator (idempotent short-circuit)."""
+        self.send_response(200)
+        self.send_header("Content-Type", "application/x-ndjson; charset=utf-8")
+        self.send_header("Cache-Control", "no-cache")
+        self.end_headers()
+        self.stream_line({"t": "text", "s": message})
+        self.stream_line({"t": "done"})
+
     def do_GET(self):
         url = urlparse(self.path)
         qs = parse_qs(url.query)
@@ -1083,15 +1177,28 @@ class Handler(BaseHTTPRequestHandler):
                 # identity beacon: lets a new instance recognize (and retire) an
                 # old setsweep holding the port — and lets anyone tell us apart
                 # from a foreign service
-                self.send_json({"app": "setsweep", "pid": os.getpid(),
-                                "port": SERVER_PORT, "started": SERVER_STARTED})
+                cfg = current_curator()
+                self.send_json({
+                    "app": "setsweep",
+                    "pid": os.getpid(),
+                    "port": SERVER_PORT,
+                    "started": SERVER_STARTED,
+                    "projects": str(PROJECTS_PATH),
+                    "settings": str(SETTINGS_PATH),
+                    "curator": cfg.as_public_dict(),
+                })
             elif url.path == "/api/projects":
-                self.send_json({"projects": load_projects(), "home": str(HOME)})
+                self.send_json({
+                    "projects": load_projects(),
+                    "home": str(HOME),
+                    "registry": str(PROJECTS_PATH),
+                })
             elif url.path == "/api/kits":
                 self.send_json({"kits": kits.list_kits(APPDIR / "kits", load_settings()),
                                 "kinds": kits.KINDS})
             elif url.path == "/api/settings":
-                self.send_json(load_settings())
+                # Always surface a normalized curator block (migration is read-side)
+                self.send_json(curator_mod.ensure_curator_settings(load_settings()))
             elif url.path == "/api/admin":
                 self.send_json(admin_report(qs.get("project", [None])[0]))
             elif url.path == "/api/lineage":
@@ -1099,9 +1206,12 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(lineage.status(project_root(proj), max_depth=proj.get("max_depth")))
             elif url.path == "/api/queue":
                 proj = get_project(qs.get("project", [None])[0])
-                mark_founded_if_filed(proj)   # queue entries ⇒ founded (heals stale interviewing status)
-                q = load_queue(proj)
-                ensure_snapshots(proj, q)
+                if want_mutate(qs):
+                    mark_founded_if_filed(proj)   # queue entries ⇒ founded (heals stale interviewing)
+                    q = load_queue(proj)
+                    ensure_snapshots(proj, q)
+                else:
+                    q = load_queue(proj)
                 enrich_queue_comments(proj, q)
                 for e in q.get("entries", []):
                     e["diff"] = entry_diffstat(proj, e)   # {added, removed} vs snapshot, or None
@@ -1111,22 +1221,35 @@ class Handler(BaseHTTPRequestHandler):
                 eid = qs.get("id", [None])[0]
                 ent = next((x for x in load_queue(proj).get("entries", [])
                             if str(x.get("id")) == str(eid)), None)
-                self.send_json({"diff": entry_diff_text(proj, ent) if ent else ""})
+                text = entry_diff_text(proj, ent) if ent else ""
+                # `text` is canonical; `diff` kept for older clients
+                self.send_json({"text": text, "diff": text})
             elif url.path == "/api/diffstat":
                 proj = get_project(qs.get("project", [None])[0])
                 eid = qs.get("id", [None])[0]
                 ent = next((x for x in load_queue(proj).get("entries", [])
                             if str(x.get("id")) == str(eid)), None)
-                self.send_json({"diff": entry_diffstat(proj, ent) if ent else None})
+                stat = entry_diffstat(proj, ent) if ent else None
+                # `stat` is canonical; `diff` kept for older clients (same key, different type — avoid)
+                self.send_json({"stat": stat, "diff": stat})
             elif url.path == "/api/chatlog":
                 proj = get_project(qs.get("project", [None])[0])
                 self.send_json({"messages": load_chatlog(proj)})
             elif url.path == "/api/interview":
                 proj = get_project(qs.get("project", [None])[0])
-                mark_founded_if_filed(proj)
+                q = load_queue(proj)
+                entries = q.get("entries") or []
+                if want_mutate(qs):
+                    mark_founded_if_filed(proj)
                 iv = load_interview(proj)
-                self.send_json({"status": iv.get("status", "none"),
-                                "has_session": bool(iv.get("session_id"))})
+                # status may still be "interviewing" under mutate=0 even when entries exist;
+                # has_entries lets viewports treat the desk as founded without healing.
+                self.send_json({
+                    "status": iv.get("status", "none"),
+                    "has_session": bool(iv.get("session_id")),
+                    "has_entries": bool(entries),
+                    "entry_count": len(entries),
+                })
             elif url.path == "/api/file":
                 proj = get_project(qs.get("project", [None])[0])
                 p = safe_path(qs["path"][0], project_root(proj) if proj else None)
@@ -1312,7 +1435,7 @@ class Handler(BaseHTTPRequestHandler):
                     break
             target = best
         if target is None:
-            self.send_json({"ok": False, "error": f"no file matching [[{name}]]"}, 404)
+            self.send_json({"error": f"no file matching [[{name}]]"}, 404)
             return
         try:
             safe = safe_path(str(target))  # fence to allowed roots
@@ -1328,10 +1451,10 @@ class Handler(BaseHTTPRequestHandler):
         brief = str(d.get("brief", "")).strip() or "(no brief prepared)"
         path = str(d.get("path", ""))
         prompt = GLANCE_PROMPT.format(path=path, brief=brief, project=proj["name"])
-        cmd = [CLAUDE, "-p", prompt, "--output-format", "stream-json", "--verbose",
-               "--model", d.get("model") or "haiku"]
+        cmd = [agent_bin(), "-p", prompt, "--output-format", "stream-json", "--verbose"]
+        with_model(cmd, "glance", d.get("model"))
         # no tools, no resume: a throwaway reaction read only from the brief
-        self.run_claude(cmd, str(project_root(proj)))
+        self.run_curator(cmd, str(project_root(proj)))
 
     def chat(self, d):
         proj = get_project(d.get("project"))
@@ -1359,10 +1482,8 @@ class Handler(BaseHTTPRequestHandler):
                     ask=entry.get("ask", "general review"),
                 ) + message
 
-        cmd = [CLAUDE, "-p", message, "--output-format", "stream-json", "--verbose"]
-        model = d.get("model")
-        if model and model != "default":
-            cmd += ["--model", model]
+        cmd = [agent_bin(), "-p", message, "--output-format", "stream-json", "--verbose"]
+        with_model(cmd, "chat", d.get("model"))
         if sid:
             cmd += ["--resume", sid]
         else:  # first-ever turn on this project: create the named project session
@@ -1390,7 +1511,7 @@ class Handler(BaseHTTPRequestHandler):
         cmd += CHAT_TOOLS
 
         # record the active file (only when an entry is in play) so a same-file follow-up
-        # won't re-inject context; the session_id is persisted by run_claude's init hook below
+        # won't re-inject context; the session_id is persisted by run_curator's init hook below
         if entry:
             save_session(proj, last_entry=entry["id"], name=session_name(proj))
         else:
@@ -1399,8 +1520,8 @@ class Handler(BaseHTTPRequestHandler):
         def persist(new_sid):
             save_session(proj, session_id=new_sid)
 
-        self.run_claude(cmd, str(project_root(proj)), prior_sid=sid, persist=persist,
-                        record_user_message=d["message"], role="review-agent")
+        self.run_curator(cmd, str(project_root(proj)), prior_sid=sid, persist=persist,
+                         record_user_message=d["message"], role="review-agent")
 
     def compact(self, d):
         """Run /compact on the project session: summarize-and-continue in place. The
@@ -1410,15 +1531,13 @@ class Handler(BaseHTTPRequestHandler):
         proj = get_project(d.get("project"))
         sid = load_session(proj).get("session_id")
         if not sid:
-            self.run_claude(["true"], str(project_root(proj)))  # no session: emit clean stream, no-op
+            self.run_curator(["true"], str(project_root(proj)))  # no session: emit clean stream, no-op
             return
-        cmd = [CLAUDE, "-p", "/compact", "--output-format", "stream-json", "--verbose",
+        cmd = [agent_bin(), "-p", "/compact", "--output-format", "stream-json", "--verbose",
                "--resume", sid]
-        model = d.get("model")
-        if model and model != "default":
-            cmd += ["--model", model]
+        with_model(cmd, "chat", d.get("model"))
         cmd += CHAT_TOOLS
-        self.run_claude(cmd, str(project_root(proj)), prior_sid=sid)
+        self.run_curator(cmd, str(project_root(proj)), prior_sid=sid)
 
     def sweep(self, d):
         proj = get_project(d.get("project"))
@@ -1481,10 +1600,8 @@ class Handler(BaseHTTPRequestHandler):
             quoted = "\n".join("> " + ln for ln in thrust.splitlines())
             prompt = ("The curator's steer for this sitting — read it first; let it shape where "
                       "you press hardest as you close the desk:\n\n" + quoted + "\n\n— · —\n\n" + prompt)
-        cmd = [CLAUDE, "-p", prompt, "--output-format", "stream-json", "--verbose"]
-        model = d.get("model")
-        if model and model != "default":
-            cmd += ["--model", model]
+        cmd = [agent_bin(), "-p", prompt, "--output-format", "stream-json", "--verbose"]
+        with_model(cmd, "setup", d.get("model"))
         # resume the project session for continuity across the sitting; if none exists
         # yet, run fresh under the project name and persist the session it creates
         sid = load_session(proj).get("session_id")
@@ -1497,7 +1614,7 @@ class Handler(BaseHTTPRequestHandler):
         def persist(new_sid):
             save_session(proj, session_id=new_sid, name=session_name(proj))
 
-        self.run_claude(cmd, str(project_root(proj)), prior_sid=sid, persist=persist,
+        self.run_curator(cmd, str(project_root(proj)), prior_sid=sid, persist=persist,
                         role="sweep")
 
     # ---- add project: registry append + desk seed ----
@@ -1513,7 +1630,8 @@ class Handler(BaseHTTPRequestHandler):
         note = str(d.get("note") or "").strip()
         if note:                       # the patron's founding steer → woven into the charter at found
             save_session(proj, founding_note=note)
-        self.send_json({**proj, "home": str(HOME)})
+        # Flat fields kept for the web UI (`added.id`); `project` + `ok` for typed clients.
+        self.send_json({"ok": True, "project": proj, "home": str(HOME), **proj})
 
     # ---- reset a desk to its founding seed so the interview reruns ----
     def refound_project(self, d):
@@ -1613,27 +1731,32 @@ class Handler(BaseHTTPRequestHandler):
     # ---- bootstrap: the founding curator surveys, programs, and fills the first queue ----
     def bootstrap(self, d):
         proj = get_project(d.get("project"))
+        if desk_is_founded(proj):
+            self.stream_idle("Desk already founded. Use refound to start over.")
+            return
+        if mark_founded_if_filed(proj):
+            self.stream_idle("Queue already has entries — marked founded.")
+            return
         prompt = BOOTSTRAP_PROMPT.format(
             name=proj["name"], root=str(project_root(proj)),
             desk_dir=str(desk_dir(proj)), queue_path=str(queue_path(proj)),
         )
-        cmd = [CLAUDE, "-p", prompt, "--output-format", "stream-json", "--verbose"]
-        model = d.get("model")
-        if model and model != "default":
-            cmd += ["--model", model]
+        cmd = [agent_bin(), "-p", prompt, "--output-format", "stream-json", "--verbose"]
+        with_model(cmd, "setup", d.get("model"))
         cmd += SWEEP_TOOLS  # write powers, confined by cwd + acceptEdits to the project tree
-        self.run_claude(cmd, str(project_root(proj)))
+        self.run_curator(cmd, str(project_root(proj)))
         mark_founded_if_filed(proj)  # founded iff the curator filed entries (shared rule, as in found())
 
     # ---- the founding interview: read-only survey + conversation (center panel) ----
     def interview(self, d):
         proj = get_project(d.get("project"))
+        if desk_is_founded(proj):
+            self.stream_idle("Desk already founded. Use refound to interview again.")
+            return
         sid = load_session(proj).get("session_id")
         message = str(d.get("message") or "").strip() or INTERVIEW_KICKOFF
-        cmd = [CLAUDE, "-p", message, "--output-format", "stream-json", "--verbose"]
-        model = d.get("model")
-        if model and model != "default":
-            cmd += ["--model", model]
+        cmd = [agent_bin(), "-p", message, "--output-format", "stream-json", "--verbose"]
+        with_model(cmd, "chat", d.get("model"))
         if sid:
             cmd += ["--resume", sid]
         else:  # first turn creates the named project session (read-only this phase)
@@ -1652,11 +1775,18 @@ class Handler(BaseHTTPRequestHandler):
             save_session(proj, session_id=new_sid, status="interviewing",
                          name=session_name(proj))
 
-        self.run_claude(cmd, str(project_root(proj)), prior_sid=sid, persist=persist)
+        self.run_curator(cmd, str(project_root(proj)), prior_sid=sid, persist=persist)
 
     # ---- finish: the curator founds the desk with write tools, in the same session ----
     def found(self, d):
         proj = get_project(d.get("project"))
+        if desk_is_founded(proj):
+            self.stream_idle("Desk already founded. Use refound to start over.")
+            return
+        if mark_founded_if_filed(proj):
+            # Entries already filed (prior partial found / test fixtures) — heal without re-run.
+            self.stream_idle("Queue already has entries — marked founded.")
+            return
         sid = load_session(proj).get("session_id")
         if sid:  # continue the SAME interview session, now with write tools
             prompt = FOUND_PROMPT.format(
@@ -1677,10 +1807,8 @@ class Handler(BaseHTTPRequestHandler):
         sc = scope_note(proj)
         if sc:
             prompt += "\n\n" + sc
-        cmd = [CLAUDE, "-p", prompt, "--output-format", "stream-json", "--verbose"]
-        model = d.get("model")
-        if model and model != "default":
-            cmd += ["--model", model]
+        cmd = [agent_bin(), "-p", prompt, "--output-format", "stream-json", "--verbose"]
+        with_model(cmd, "setup", d.get("model"))
         if sid:
             cmd += ["--resume", sid]
         else:
@@ -1691,13 +1819,13 @@ class Handler(BaseHTTPRequestHandler):
             save_session(proj, session_id=new_sid, status="interviewing",
                          name=session_name(proj))
 
-        self.run_claude(cmd, str(project_root(proj)), prior_sid=sid, persist=persist,
-                        role="founding-curator")
+        self.run_curator(cmd, str(project_root(proj)), prior_sid=sid, persist=persist,
+                         role="founding-curator")
         mark_founded_if_filed(proj)  # founded iff the curator filed entries (shared rule)
 
-    def run_claude(self, cmd, cwd, prior_sid=None, persist=None, record_user_message=None,
-                   role="agent"):
-        """Spawn claude headless; forward normalized events as ndjson to the client.
+    def run_curator(self, cmd, cwd, prior_sid=None, persist=None, record_user_message=None,
+                    role="agent"):
+        """Spawn the active curator CLI; forward normalized events as ndjson to the client.
 
         Stream parsing, usage accounting, and transcript capture live in `runtime.py` —
         the viewport-neutral adapter any future CLI viewport drives too. This method is the
@@ -1712,7 +1840,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-cache")
         self.end_headers()
 
-        # stderr merged into stdout: a second unread pipe can deadlock claude mid-stream
+        # stderr merged into stdout: a second unread pipe can deadlock the CLI mid-stream
         proc = subprocess.Popen(
             cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
         )
@@ -1738,7 +1866,7 @@ class Handler(BaseHTTPRequestHandler):
                     break
             proc.wait(timeout=10)
             if proc.returncode not in (0, None, -9):
-                self.stream_line({"t": "error", "s": f"claude exited {proc.returncode}"})
+                self.stream_line({"t": "error", "s": f"curator exited {proc.returncode}"})
         except Exception as e:  # noqa: BLE001
             proc.kill()
             self.stream_line({"t": "error", "s": repr(e)})
@@ -1760,22 +1888,42 @@ class Handler(BaseHTTPRequestHandler):
             if proc.poll() is None:
                 proc.kill()
 
+    # Back-compat alias for tests / older call sites
+    run_claude = run_curator
+
 
 # ---------- entry points ----------
 
-def start_server(port: int = 0) -> tuple[ThreadingHTTPServer, int]:
-    """Start in a daemon thread; returns (server, bound_port)."""
+def _record_bind(port: int) -> None:
+    """Stamp identity globals + ~/.cache/setsweep/server.json after a successful bind.
+
+    Shared by `start_server` (tests / daemon) and `main` (blocking sidecar / CLI web).
+    `/api/ping` is the authority; the cache file is informational for discovery.
+    """
     global SERVER_PORT, SERVER_STARTED
-    srv = ThreadingHTTPServer(("127.0.0.1", port), Handler)
-    SERVER_PORT = srv.server_address[1]
-    SERVER_STARTED = subprocess.run(["date", "+%Y-%m-%dT%H:%M:%S%z"],
-                                    capture_output=True, text=True).stdout.strip()
-    try:  # informational record of the bind (the ping is the authority)
+    SERVER_PORT = port
+    SERVER_STARTED = subprocess.run(
+        ["date", "+%Y-%m-%dT%H:%M:%S%z"],
+        capture_output=True, text=True,
+    ).stdout.strip()
+    try:
         RUNTIME_PATH.parent.mkdir(parents=True, exist_ok=True)
-        RUNTIME_PATH.write_text(json.dumps(
-            {"pid": os.getpid(), "port": SERVER_PORT, "started": SERVER_STARTED}))
+        RUNTIME_PATH.write_text(json.dumps({
+            "pid": os.getpid(),
+            "port": SERVER_PORT,
+            "started": SERVER_STARTED,
+            "url": f"http://127.0.0.1:{SERVER_PORT}/",
+            "projects": str(PROJECTS_PATH),
+            "settings": str(SETTINGS_PATH),
+        }))
     except OSError:
         pass
+
+
+def start_server(port: int = 0) -> tuple[ThreadingHTTPServer, int]:
+    """Start in a daemon thread; returns (server, bound_port)."""
+    srv = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    _record_bind(srv.server_address[1])
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     return srv, SERVER_PORT
 
@@ -1833,9 +1981,29 @@ def _retire(pid: int) -> None:
         pass
 
 
+def prepare_bind(port: int = DEFAULT_PORT, replace: bool = False) -> int | None:
+    """Decide which port to bind under the circuit-breaker.
+
+    Returns:
+      port to bind (may equal the preferred port), or
+      None if a healthy current setsweep already holds the port (caller should defer).
+
+    Retires a predecessor only when stale or `replace` is True. Does not fall back to
+    an ephemeral port — callers that hit OSError on bind may try port 0 themselves.
+    """
+    info = _ping_setsweep(port)
+    pid = info.get("pid") if info else None
+    if pid and pid != os.getpid():
+        if replace or _predecessor_is_stale(info or {}):
+            _retire(pid)
+        else:
+            return None
+    return port
+
+
 def start_server_preferred(port: int = DEFAULT_PORT,
                            replace: bool = False) -> tuple[ThreadingHTTPServer, int] | None:
-    """Claim the fixed port.
+    """Claim the fixed port (daemon thread).
 
     Circuit-breaker (2026-06-13): a bare launch must NEVER kill a healthy, CURRENT
     predecessor — that turned every stray relaunch into the patron's window vanishing
@@ -1849,28 +2017,43 @@ def start_server_preferred(port: int = DEFAULT_PORT,
     A foreign (non-setsweep) occupant → fall back to an ephemeral port (returns a tuple).
     We kill only a pid that ANSWERED our ping — never on the say-so of a stale state file.
     """
-    info = _ping_setsweep(port)
-    pid = info.get("pid") if info else None
-    if pid and pid != os.getpid():
-        if replace or _predecessor_is_stale(info or {}):
-            _retire(pid)
-        else:
-            return None  # healthy current instance — defer, leave the live window alone
+    claimed = prepare_bind(port, replace=replace)
+    if claimed is None:
+        return None
     try:
-        return start_server(port)
+        return start_server(claimed)
     except OSError:
         return start_server(0)
 
 
 def main():
-    global SERVER_PORT
-    port = DEFAULT_PORT
+    """Blocking web entry (CLI `setsweep --web`, desktop sidecar).
+
+    Same identity recording as `start_server`. On the default port (no `--port`),
+    applies the circuit-breaker via `prepare_bind` so `--replace` actually works
+    and a healthy live window is not killed by a stray relaunch.
+    """
     args = sys.argv[1:]
-    if "--port" in args:
+    replace = "--replace" in args
+    explicit_port = "--port" in args
+    port = DEFAULT_PORT
+    if explicit_port:
         port = int(args[args.index("--port") + 1])
-    srv = ThreadingHTTPServer(("127.0.0.1", port), Handler)
-    SERVER_PORT = srv.server_address[1]
-    url = f"http://127.0.0.1:{port}/"
+    elif prepare_bind(port, replace=replace) is None:
+        url = f"http://127.0.0.1:{port}/"
+        print(f"setsweep already running at {url} — deferring (pass --replace to restart)")
+        return 0
+
+    try:
+        srv = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    except OSError:
+        if explicit_port:
+            raise
+        # Foreign occupant or race on the default port → ephemeral fallback
+        srv = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+
+    _record_bind(srv.server_address[1])
+    url = f"http://127.0.0.1:{SERVER_PORT}/"
     print(f"desk · {url}\nprojects: {PROJECTS_PATH}")
     if "--no-open" not in args:
         threading.Timer(0.4, lambda: webbrowser.open(url)).start()
@@ -1878,7 +2061,8 @@ def main():
         srv.serve_forever()
     except KeyboardInterrupt:
         print("\nbye")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main() or 0)

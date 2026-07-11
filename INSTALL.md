@@ -52,13 +52,16 @@ ever entered into Setsweep.
 
 ## Registering a desk
 
-The project registry is `projects.json` (override its location with `DESK_PROJECTS`; see
-`projects.example.json` for the format). Each project points at a directory; its desk state lives
-in `<root>/.setsweep/`. Add a project with `setsweep add <dir>`, by editing `projects.json` by
-hand, or via the app's admin panel. The bundled Electron `.app` stores its registry at
-`~/Library/Application Support/Setsweep/projects.json`. On first launch the shell copies
-`projects.json` from your setsweep source tree if the userData file does not exist yet
-(override the source with `SETSWEEP_PROJECTS_SRC`).
+The project registry is `projects.json` (see `projects.example.json`). Override with
+`DESK_PROJECTS`. Resolution without an override prefers the shared user registry when it
+exists (`~/Library/Application Support/Setsweep/projects.json` on macOS), else a
+repo-local `projects.json` in a source checkout — see [`API.md`](./API.md).
+
+Each project points at a directory; desk state lives in `<root>/.setsweep/`. Add a project
+with `setsweep add <dir>`, by editing the registry, or via the app's admin panel. The
+bundled Electron `.app` always uses Application Support (sets `DESK_PROJECTS`). On first
+launch the shell copies `projects.json` from your setsweep source tree if the userData
+file does not exist yet (override the source with `SETSWEEP_PROJECTS_SRC`).
 
 ## Notes for the maintainer
 

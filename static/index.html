@@ -912,7 +912,7 @@ function fillModelSelect(sel, current){
    project — see DESIGN.md.) */
 const AGENT_TASKS = [
   ['setup',  'curatorial setup', 'founding survey · sweep — agentic, edits files'],
-  ['chat',   'session chat',     'the per-file review conversation — read-only; patron edits in the center pane'],
+  ['chat',   'session chat',     'per-file review — may Edit/Write under acceptEdits; prefer fences for small emendations'],
   ['glance', 'context glance',   'the quick reaction on file open — tool-less, so any model fits'],
 ];
 const AGENT_DEFAULTS = {setup: 'sonnet', chat: 'sonnet', glance: 'haiku'};
@@ -1069,7 +1069,7 @@ async function toggleDiffView(e){
     const r = await jget(`/api/diff?project=${encodeURIComponent(PROJECT)}&id=${encodeURIComponent(e.id)}`);
     const pre = document.createElement('pre');
     pre.id = 'diffview'; pre.className = 'diffview';
-    pre.textContent = r.diff || '(no differences vs the original)';
+    pre.textContent = (r.text != null ? r.text : r.diff) || '(no differences vs the original)';
     $('metadl').appendChild(pre);
   } catch(err){}
 }
@@ -1468,7 +1468,7 @@ async function refreshDiff(){
   const e = cur; if(!e || !PROJECT) return;
   try {
     const r = await jget(`/api/diffstat?project=${encodeURIComponent(PROJECT)}&id=${encodeURIComponent(e.id)}`);
-    e.diff = r.diff;                 // e is a reference into Q.entries → the queue badge updates too
+    e.diff = (r.stat !== undefined) ? r.stat : r.diff;  // e is a reference into Q.entries → badge updates too
   } catch(err){ return; }
   renderQueue();
   if(cur === e){                     // panel still shows this entry: refresh its changes line
@@ -1597,6 +1597,7 @@ async function pipeStream(r, out, opts){
   const reader = r.body.getReader();
   const dec = new TextDecoder();
   let buf = '';
+  const wrote = [];
   while(true){
     const {done, value} = await reader.read();
     if(done) break;
@@ -1607,7 +1608,10 @@ async function pipeStream(r, out, opts){
       if(!line.trim()) continue;
       let ev; try { ev = JSON.parse(line); } catch { continue; }
       if(ev.t === 'text') say('agent', ev.s);
-      else if(ev.t === 'tool') say('tool', '⚙ ' + ev.s);
+      else if(ev.t === 'tool'){
+        say('tool', '⚙ ' + ev.s);
+        if((ev.tool === 'Edit' || ev.tool === 'Write') && ev.path) wrote.push(ev.path);
+      }
       else if(ev.t === 'model'){ if(trackCtx){ CTX_WINDOW = windowFor(ev.s); setCtxBar(CTX_USED); } }
       else if(ev.t === 'usage'){ if(trackCtx && ev.context != null) setCtxBar(ev.context); }  // live, per message
       else if(ev.t === 'done'){
@@ -1617,11 +1621,31 @@ async function pipeStream(r, out, opts){
       else if(ev.t === 'error') say('err', ev.s);
     }
   }
+  return { wrote };
 }
 
 let pendingMsgs = [];
-async function refreshOpenFile(){
-  // chat agent is read-only; skip disk reload after review turns
+async function refreshOpenFile(wrotePaths){
+  // Reload the center editor when chat Edit/Write touched the open file (don't clobber dirty).
+  if(!cur || dirty || !wrotePaths || !wrotePaths.length) return;
+  const open = String(cur.path || '').replace(/\\/g, '/');
+  const hit = wrotePaths.some(p => {
+    const wp = String(p || '').replace(/\\/g, '/');
+    if(!wp || !open) return false;
+    return wp === open || wp.endsWith('/' + open) || open.endsWith('/' + wp) ||
+      wp.endsWith('/' + open.split('/').pop());
+  });
+  if(!hit) return;
+  try {
+    const f = await jget('/api/file?path=' + encodeURIComponent(cur.path) + '&project=' + encodeURIComponent(PROJECT));
+    const content = SETTINGS.unwrap ? unwrapParagraphs(f.content) : f.content;
+    if($('editor').value === content) return;
+    $('editor').value = content;
+    setDirty(false);
+    refreshMetaWords();
+    cachedLineCount = editorLineCount($('editor').value);
+    refreshEditorChrome();
+  } catch(err){ addMsg('err', 'reload after agent edit failed: ' + err); }
 }
 /* show/hide the "thinking…" indicator. Showing it shrinks #chat (it's a flex
    sibling below), so pin the scroll to the bottom or the last line gets clipped
@@ -1650,9 +1674,9 @@ async function runTurn(m){
   try {
     const r = await fetch('/api/chat', {method:'POST',
       body: JSON.stringify({id: cur ? cur.id : null, message: m, project: PROJECT, model: agentModel('chat')})});
-    await pipeStream(r, null, {trackCtx:true});
+    const stream = await pipeStream(r, null, {trackCtx:true});
     PROJECT_SESSION = true;  // a live project session now exists (server persisted its id)
-    await refreshOpenFile();
+    await refreshOpenFile(stream && stream.wrote);
   } catch(err){ addMsg('err', String(err)); }
   busy = false; hideSpin();
   if(pendingMsgs.length){   // dispatch queued interjections even with no file open

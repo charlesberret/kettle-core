@@ -33,7 +33,7 @@ class Base(unittest.TestCase):
     """Redirect server globals into a tempdir under a fake HOME, with one project."""
 
     def setUp(self):
-        self.tmp = Path(tempfile.mkdtemp(prefix="dav-test-"))
+        self.tmp = Path(tempfile.mkdtemp(prefix="setsweep-test-"))
         self.root = self.tmp / "proj"
         (self.root / ".setsweep").mkdir(parents=True)
         registry = self.tmp / "projects.json"
@@ -66,6 +66,45 @@ class Base(unittest.TestCase):
 
 
 class HelperTests(Base):
+
+    def test_get_project_requires_id(self):
+        with self.assertRaises(KeyError) as cm:
+            server.get_project(None)
+        self.assertIn("missing project", str(cm.exception))
+        with self.assertRaises(KeyError):
+            server.get_project("")
+        self.assertEqual(server.get_project("t")["id"], "t")
+
+    def test_resolve_projects_path_env_wins(self):
+        explicit = self.tmp / "explicit-projects.json"
+        prev = os.environ.get("DESK_PROJECTS")
+        os.environ["DESK_PROJECTS"] = str(explicit)
+        try:
+            self.assertEqual(server.resolve_projects_path(), explicit)
+        finally:
+            if prev is None:
+                os.environ.pop("DESK_PROJECTS", None)
+            else:
+                os.environ["DESK_PROJECTS"] = prev
+
+    def test_resolve_projects_path_prefers_existing_user_registry(self):
+        saved_home = server.HOME
+        prev = os.environ.pop("DESK_PROJECTS", None)
+        try:
+            server.HOME = self.tmp
+            user = server.user_projects_path()
+            user.parent.mkdir(parents=True, exist_ok=True)
+            user.write_text('{"projects":[]}')
+            # Hide repo registry so user wins
+            saved_appdir = server.APPDIR
+            server.APPDIR = self.tmp / "empty-appdir"
+            server.APPDIR.mkdir()
+            self.assertEqual(server.resolve_projects_path(), user)
+            server.APPDIR = saved_appdir
+        finally:
+            server.HOME = saved_home
+            if prev is not None:
+                os.environ["DESK_PROJECTS"] = prev
 
     def test_slug(self):
         self.assertEqual(server.slug("Hello World!"), "Hello_World")
@@ -388,11 +427,22 @@ class EndpointTests(Base):
         self.assertEqual(len(j["entries"]), 2)
         self.assertTrue((server.runtime_dir(self.proj()) / "snapshots" / "alpha.orig").exists())
 
+    def test_queue_mutate_zero_skips_snapshots(self):
+        snap = server.runtime_dir(self.proj()) / "snapshots" / "alpha.orig"
+        self.assertFalse(snap.exists())
+        s, j = _http("GET", f"{self.base}/api/queue?project=t&mutate=0")
+        self.assertEqual(s, 200)
+        self.assertEqual(len(j["entries"]), 2)
+        self.assertFalse(snap.exists(), "pure read must not create snapshots")
+
     def test_file_get_fenced(self):
-        s, j = _http("GET", f"{self.base}/api/file?path={self.root}/alpha.md")
+        s, j = _http("GET", f"{self.base}/api/file?path={self.root}/alpha.md&project=t")
         self.assertEqual((s, j["content"]), (200, "alpha body"))
-        s2, _ = _http("GET", f"{self.base}/api/file?path=/etc/passwd")
+        s2, _ = _http("GET", f"{self.base}/api/file?path=/etc/passwd&project=t")
         self.assertEqual(s2, 403)
+        s3, j3 = _http("GET", f"{self.base}/api/file?path={self.root}/alpha.md")
+        self.assertEqual(s3, 400)
+        self.assertIn("missing project", j3["error"])
 
     def test_save_fenced_and_atomic(self):
         s, _ = _http("POST", f"{self.base}/api/save",
@@ -404,12 +454,23 @@ class EndpointTests(Base):
         self.assertEqual(s2, 403)
 
     def test_settings_roundtrip(self):
-        self.assertEqual(_http("GET", f"{self.base}/api/settings"), (200, {}))
+        s0, j0 = _http("GET", f"{self.base}/api/settings")
+        self.assertEqual(s0, 200)
+        self.assertIn("curator", j0)  # normalized block even on empty settings
+        self.assertEqual(j0["curator"]["provider"], "claude")
         _http("POST", f"{self.base}/api/settings", {"model": "opus"})
         _http("POST", f"{self.base}/api/settings", {"colors": {"--bg": "#000"}})
         s, j = _http("GET", f"{self.base}/api/settings")
         self.assertEqual(j["model"], "opus")
         self.assertEqual(j["colors"], {"--bg": "#000"})
+        self.assertEqual(j["curator"]["models"]["chat"], "opus")
+
+    def test_ping_exposes_curator(self):
+        s, j = _http("GET", f"{self.base}/api/ping")
+        self.assertEqual(s, 200)
+        self.assertIn("curator", j)
+        self.assertEqual(j["curator"]["provider"], "claude")
+        self.assertIn("models", j["curator"])
 
     def test_comment_set_overwrite_clear(self):
         _http("POST", f"{self.base}/api/comment", {"project": "t", "id": "alpha", "text": "note one"})
@@ -488,6 +549,8 @@ class EndpointTests(Base):
         s, j = _http("POST", f"{self.base}/api/projects/add", {"name": "New One", "root": str(good)})
         self.assertEqual(s, 200)
         self.assertEqual(j["id"], "new_one")
+        self.assertTrue(j.get("ok"))
+        self.assertEqual(j["project"]["id"], "new_one")
         self.assertTrue((good / ".setsweep" / "runtime" / "queue.json").exists())
         # duplicate id
         s2, _ = _http("POST", f"{self.base}/api/projects/add", {"name": "New One", "root": str(good)})
@@ -505,6 +568,10 @@ class EndpointTests(Base):
         s, j = _http("GET", f"{self.base}/api/interview?project=t")
         self.assertEqual((s, j["status"]), (200, "founded"))
         server.save_interview(self.proj(), {"session_id": "abc", "status": "interviewing"})
+        _, j_pure = _http("GET", f"{self.base}/api/interview?project=t&mutate=0")
+        self.assertEqual(j_pure["status"], "interviewing")  # pure read: no heal
+        self.assertTrue(j_pure["has_entries"])
+        self.assertGreaterEqual(j_pure["entry_count"], 1)
         _, j2 = _http("GET", f"{self.base}/api/interview?project=t")
         # queue entries on disk ⇒ founded (heals stale interviewing on read)
         self.assertEqual(j2["status"], "founded")
@@ -556,6 +623,19 @@ class EndpointTests(Base):
             self.assertEqual(server.load_interview(self.proj())["status"], "founded")
         finally:
             server.CLAUDE = saved
+
+    def test_found_and_bootstrap_idempotent_when_already_founded(self):
+        server.save_session(self.proj(), status="founded", session_id="done")
+        s, body = self._post_stream("/api/found", {"project": "t"})
+        self.assertEqual(s, 200)
+        self.assertIn("already founded", body.lower())
+        self.assertEqual(server.load_session(self.proj())["status"], "founded")
+        s2, body2 = self._post_stream("/api/bootstrap", {"project": "t"})
+        self.assertEqual(s2, 200)
+        self.assertIn("already founded", body2.lower())
+        s3, body3 = self._post_stream("/api/interview", {"project": "t", "message": "hi"})
+        self.assertEqual(s3, 200)
+        self.assertIn("already founded", body3.lower())
 
     def test_bootstrap_marks_founded_unsticking_interviewing(self):
         # regression: a desk stuck at 'interviewing' (interrupted founding) must become 'founded'
@@ -610,7 +690,8 @@ class EndpointTests(Base):
             s2, j2 = _http("POST", f"{self.base}/api/open-link",
                            {"project": "t", "name": "no-such-note"})
             self.assertEqual(s2, 404)
-            self.assertFalse(j2["ok"])
+            self.assertIn("error", j2)
+            self.assertNotIn("ok", j2)  # uniform error envelope: {error} only
         finally:
             server.subprocess.Popen = real
 
@@ -623,6 +704,14 @@ class EndpointTests(Base):
     def test_unknown_project_400(self):
         s, _ = _http("GET", f"{self.base}/api/queue?project=bogus")
         self.assertEqual(s, 400)
+
+    def test_missing_project_400(self):
+        s, j = _http("GET", f"{self.base}/api/queue")
+        self.assertEqual(s, 400)
+        self.assertIn("missing project", j["error"])
+        s2, j2 = _http("POST", f"{self.base}/api/approve", {"id": "alpha"})
+        self.assertEqual(s2, 400)
+        self.assertIn("missing project", j2["error"])
 
     # ---- streaming harness: a fake `claude` emitting stream-json ----
     def _stub_claude(self, *lines, exit_code=0):
@@ -839,7 +928,7 @@ class EndpointTests(Base):
                                     {"project": "t", "id": "alpha", "message": "x"})
         self.assertEqual(s, 200)
         self.assertIn("partial", body)            # what streamed before the failure survives
-        self.assertTrue(any(e.get("t") == "error" and "exited 3" in str(e.get("s"))
+        self.assertTrue(any(e.get("t") == "error" and "curator exited 3" in str(e.get("s"))
                             for e in self._events(body)))
 
     def test_missing_claude_binary_does_not_kill_server(self):
@@ -860,7 +949,44 @@ class EndpointTests(Base):
         self.assertEqual(j["app"], "setsweep")
         self.assertEqual(j["port"], self.port)
         self.assertEqual(j["pid"], os.getpid())   # server rides in-process here
-        self.assertIn("started", j)
+        self.assertTrue(j.get("started"), "started must be set on every bind path")
+        self.assertIn("curator", j)
+        self.assertEqual(j["projects"], str(server.PROJECTS_PATH))
+        self.assertEqual(j["settings"], str(server.SETTINGS_PATH))
+
+    def test_diff_and_diffstat_canonical_keys(self):
+        _http("GET", f"{self.base}/api/queue?project=t")  # create snapshots
+        (self.root / "alpha.md").write_text("alpha body\nchanged\n")
+        s, j = _http("GET", f"{self.base}/api/diffstat?project=t&id=alpha")
+        self.assertEqual(s, 200)
+        self.assertIn("stat", j)
+        self.assertEqual(j["stat"], j["diff"])  # back-compat alias
+        self.assertGreater((j["stat"] or {}).get("added", 0) + (j["stat"] or {}).get("removed", 0), 0)
+        s2, j2 = _http("GET", f"{self.base}/api/diff?project=t&id=alpha")
+        self.assertEqual(s2, 200)
+        self.assertIn("text", j2)
+        self.assertEqual(j2["text"], j2["diff"])
+        self.assertTrue(j2["text"])
+
+    def test_record_bind_writes_runtime(self):
+        """main() and start_server() share _record_bind — cache file matches ping."""
+        runtime = self.tmp / "cache" / "server.json"
+        saved_path = server.RUNTIME_PATH
+        saved_port, saved_started = server.SERVER_PORT, server.SERVER_STARTED
+        server.RUNTIME_PATH = runtime
+        try:
+            server._record_bind(4242)
+            self.assertEqual(server.SERVER_PORT, 4242)
+            self.assertTrue(server.SERVER_STARTED)
+            data = json.loads(runtime.read_text())
+            self.assertEqual(data["port"], 4242)
+            self.assertEqual(data["started"], server.SERVER_STARTED)
+            self.assertEqual(data["url"], "http://127.0.0.1:4242/")
+            self.assertEqual(data["projects"], str(server.PROJECTS_PATH))
+        finally:
+            server.RUNTIME_PATH = saved_path
+            server.SERVER_PORT = saved_port
+            server.SERVER_STARTED = saved_started
 
     def test_settings_multi_group_no_clobber(self):
         for patch in ({"colors": {"--c-red": "#f00"}}, {"slots": {"agent": "--c-gray5"}},

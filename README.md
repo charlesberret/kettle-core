@@ -51,6 +51,8 @@ beacon) and retires a previous setsweep still holding it — but only on a verif
 never on a stale pidfile — so a bookmarked tab can't talk to an orphaned server running old code.
 A foreign occupant of the port → graceful fallback to an ephemeral one.
 
+HTTP contract for viewports (tiers, streaming, `project` required): [`API.md`](./API.md).
+
 ## Concepts
 
 - **`server.py`** — Python 3 stdlib server. Binds `127.0.0.1` only. File I/O is fenced
@@ -107,10 +109,9 @@ no interview) and **skip for now** (open the project as-is, found later).
   tools, no session) to surface anything unclear. Non-blocking; superseded the instant another file
   opens. Off by default; enable in Admin.
 - **Review agent** — each turn spawns `claude -p` (stream-json) in the project root with
-  read-only tools (`Read/Glob/Grep` + a fenced shell allowlist). The agent proposes changes in
-  fenced code blocks; **→ editor** and **copy** buttons let you apply them in the center pane.
-  The sweep and founding steps carry write tools when files must change on disk. Sessions persist
-  per project.
+  Read/Glob/Grep/Edit/Write under `acceptEdits` (project-fenced). Prefer fenced proposals for
+  small emendations (**→ editor** / **copy**); implement on disk when the patron asks. Interview
+  stays read-only until Finish/Found. Sessions persist per project.
 - **Approve** — marks the entry approved and logs it. Approve is a bookmark; the sweep is the
   commit. Leave an entry pending if your pass is not done; use **comment** for sweep instructions.
 
@@ -190,9 +191,10 @@ live-applied and persisted.
   exactly your **registered project roots** (each gated under `$HOME` at registration) — nothing
   else by default. To widen it (e.g. a notes vault whose `[[wikilinks]]` cross project boundaries),
   set `SETSWEEP_ALLOWED_ROOTS` to an `os.pathsep`-separated list of extra base roots.
-- **Two tool tiers.** The interview and discussion-mode chat are read-only; edit-mode chat, the
-  sweep, and founding get project-write tools fenced to the project root (`acceptEdits`). Append-only
-  records are never auto-mutated.
+- **Two tool tiers.** The founding interview is read-only; review chat, the sweep, and founding
+  finish/bootstrap get project-write tools fenced to the project root (`acceptEdits`). Append-only
+  records are never auto-mutated. (Chat writes are interim always-on; a future chat-window
+  redesign may add real permission UX.)
 - **No API keys stored** — `claude`'s ambient auth only.
 
 ## Status

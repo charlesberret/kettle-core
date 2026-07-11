@@ -23,7 +23,7 @@ setsweep-watch = "setsweep_watch:main"   # the inbox folder-watch — run on a s
 # test_*.py siblings). Install editable (`pip install -e`) so APPDIR resolves to the repo
 # and static/ + projects.json are found in place. A non-editable wheel would need the
 # tree restructured under a package + package-data for static/ — deferred (see INSTALL.md).
-py-modules = ["setsweep_main", "server", "runtime", "lineage", "cli", "kits", "setsweep_watch"]
+py-modules = ["setsweep_main", "server", "runtime", "lineage", "cli", "kits", "curator", "setsweep_watch"]
 
 [tool.ruff]
 line-length = 100

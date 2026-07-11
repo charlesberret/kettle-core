@@ -4,7 +4,9 @@ Canonical path: `~/Repos/setsweep-core` (moved from Seafile `Code/_archive/setsw
 
 ## Architecture
 
-Python backend (`server.py`, `runtime.py`, `lineage.py`, `kits.py`, `cli.py`) plus a folder-watcher entry point (`setsweep_watch.py`) and a launcher shim (`setsweep_main.py`). No third-party runtime dependencies — the server and CLI viewport are stdlib-only. Single-file frontend at `static/index.html`. Three-pane layout: agent-curated queue · patron's editor · project-aware review agent.
+Python backend (`server.py`, `runtime.py`, `lineage.py`, `kits.py`, `cli.py`, `curator.py`) plus a folder-watcher entry point (`setsweep_watch.py`) and a launcher shim (`setsweep_main.py`). No third-party runtime dependencies — the server and CLI viewport are stdlib-only. Single-file frontend at `static/index.html`. Three-pane layout: agent-curated queue · patron's editor · project-aware review agent.
+
+**Viewport vs curator:** Desktop, VS Code, and MCP are *viewports* onto the desk. Agentic turns (interview, found, sweep, chat, glance) run through the **curator provider** configured in `settings.json` (`curator.provider` / `curator.command` / `curator.models`) — default is the Claude Code CLI. `/api/ping` exposes the active curator so viewports can label it honestly.
 
 **Sibling viewports** (separate repos; host-specific code stays out of this tree):
 
@@ -13,11 +15,13 @@ Python backend (`server.py`, `runtime.py`, `lineage.py`, `kits.py`, `cli.py`) pl
 | `~/Repos/setsweep-desktop` | Electron macOS shell — bundles this server as a sidecar |
 | `~/Repos/setsweep-plugin` | Host adapters; `packages/vscode` first (Cursor too); Obsidian/Sublime later |
 
-Changes to the Python layer do not require touching desktop/plugin unless the HTTP API surface changes.
+Changes to the Python layer do not require touching desktop/plugin unless the HTTP API surface changes. Wire contract: [`API.md`](./API.md).
+
+**Chat write tools (interim):** `/api/chat` grants Edit/Write under `--permission-mode acceptEdits`, fenced to the project root — same write tier as sweep for always-on implementation when the patron asks. Founding interview stays read-only until Finish/Found. A future reengineering of the chat/desk window may replace this with a fuller agent surface (permission UX, broader tools). → editor buttons remain useful for proposed fences.
 
 Server listens on `http://127.0.0.1:4242/` (`DEFAULT_PORT = 4242` in `server.py`; moved from 8765 on 2026-06-13). A second launch defers if the current instance is healthy; pass `--replace` or use `Setsweep.app` to force a restart.
 
-Five test files at root: `test_server.py`, `test_runtime.py`, `test_lineage.py`, `test_kits.py`, `test_watch.py`. Run with `pytest`.
+Five test files at root plus `test_curator.py`: `test_server.py`, `test_runtime.py`, `test_lineage.py`, `test_kits.py`, `test_watch.py`. Run with `pytest`.
 
 The `.setsweep/` directory holds the curator's desk files (memos, handoffs, memory). It is gitignored and therefore invisible to dashboards — `_Status.md` and this file are the external face.
 
@@ -31,7 +35,7 @@ These files, if broken, take the app offline while the patron is in it. **Handof
 | `static/index.html` | Entire single-file frontend — a JS error produces a blank window on reload with no app left to repair it |
 | `setsweep_main.py` | Launcher shim — the entry point the desktop shell / `Setsweep.app` invoke |
 | `projects.json` | Live-read registry; sentinel and cron re-read it on every cycle |
-| `settings.json` | Live-read settings; a shallow-merge clobber silently drops key groups |
+| `settings.json` | Live-read settings; a shallow-merge clobber silently drops key groups. Prefer deep-merge for `curator` / `agents` via `curator.deep_merge_settings` |
 
 **Never bind or signal port 4242 from agent tooling** — that is the live window's port.
 

@@ -1,0 +1,184 @@
+# Setsweep HTTP API
+
+Localhost contract for viewports (web UI, desktop sidecar, VS Code/Cursor plugin, future hosts).
+Authoritative implementation: `server.py`. Contract tests: `test_server.py`.
+
+**Base:** `http://127.0.0.1:<port>/` — default port **4242**. Desktop may use an ephemeral port; see Discovery.
+
+**Conventions**
+
+| Rule | Detail |
+|------|--------|
+| Bind | `127.0.0.1` only |
+| JSON keys | `snake_case` |
+| Mutations | **POST** only (no PUT/PATCH/DELETE) |
+| Errors | `{ "error": "<string>" }` with 400 / 403 / 404 / 500 |
+| Project scope | **`project` is required** on every project-scoped route (query or body). Omitting it returns 400 — it no longer defaults to the first registry entry. |
+| File fence | `safe_path()` — registered roots (+ optional `SETSWEEP_ALLOWED_ROOTS`) |
+
+---
+
+## Discovery & identity
+
+### `GET /api/ping`
+
+```json
+{
+  "app": "setsweep",
+  "pid": 12345,
+  "port": 4242,
+  "started": "2026-07-11T14:00:00-0400",
+  "projects": "/path/to/projects.json",
+  "settings": "/path/to/settings.json",
+  "curator": { "provider": "claude", "command": "claude", "command_resolved": "...", "command_exists": true, "models": {} }
+}
+```
+
+- Set on **every** bind path (`start_server` and `main` / sidecar) via `_record_bind`.
+- Informational cache: `~/.cache/setsweep/server.json` — `{ pid, port, started, url, projects, settings }`. Ping is authoritative.
+- Circuit-breaker: a second launch on 4242 defers unless the predecessor is stale or `--replace` is passed.
+
+### Registry paths (which desk am I talking to?)
+
+Resolution order (`resolve_projects_path`):
+
+1. `$DESK_PROJECTS` — explicit (desktop sidecar always sets this)
+2. User registry if it exists — macOS `~/Library/Application Support/Setsweep/projects.json`, else `~/.config/setsweep/projects.json`
+3. Repo-local `<setsweep-core>/projects.json` if present (dev checkout)
+4. Otherwise the user path (first write creates the shared registry)
+
+Desktop always points `DESK_PROJECTS` at Application Support. After the `.app` has run once, CLI `setsweep` without an override prefers that same file when present — one desk across viewports.
+
+`GET /api/ping` and `GET /api/projects` expose the live path (`projects` / `registry`).
+
+### Port discovery (multi-viewport)
+
+| Viewport | Port behavior |
+|----------|---------------|
+| CLI `setsweep --web` | Prefers **4242** (circuit-breaker / `--replace`) |
+| Desktop `.app` | Prefers **4242** when free; otherwise ephemeral |
+| Plugin | Tries `setsweep.baseUrl` → `server.json` → `:4242`, each validated by ping |
+
+When desktop falls back to an ephemeral port, the plugin finds it via `server.json` (last successful bind). Prefer one live core when possible — two desks (repo registry vs Application Support) can diverge.
+
+### Side-effecting GETs
+
+`GET /api/queue` and `GET /api/interview` heal founding status and (queue) create snapshots by default. Pass **`?mutate=0`** for a pure read (plugin polling).
+
+### Founding state machine
+
+| `status` | Meaning |
+|----------|---------|
+| `none` | No session / not started |
+| `interviewing` | Founding interview in progress |
+| `founded` | Curator filed ≥1 queue entry (or healed because entries exist) |
+
+`GET /api/interview` also returns:
+
+- `has_session` — project session id present
+- `has_entries` / `entry_count` — queue has items (**available under `mutate=0`**)
+
+Rule: **entries on disk ⇒ desk is founded**, even if `status` still says `interviewing` under a pure read. Prefer `has_entries || status === "founded"` in viewports.
+
+Idempotency: `POST /api/interview`, `/api/found`, and `/api/bootstrap` short-circuit with an NDJSON notice (no curator spawn) when the desk is already `founded`, or when `/api/found`/`/api/bootstrap` can heal from existing queue entries. Use `POST /api/projects/refound` to start over.
+
+### Diff responses
+
+| Route | Canonical key | Legacy alias |
+|-------|---------------|--------------|
+| `GET /api/diff` | `text` (string) | `diff` (same string) |
+| `GET /api/diffstat` | `stat` (`{added,removed}\|null`) | `diff` (same object) |
+
+Prefer `text` / `stat` in new clients.
+
+---
+
+## Response modes
+
+### JSON
+
+Most routes return `application/json`.
+
+Success shapes vary today (see Stability notes). Prefer:
+
+- Mutations: `{ "ok": true, ... }`
+- Resources: bare object or `{ "projects": [...] }` as documented per route
+
+### NDJSON streams
+
+`Content-Type: application/x-ndjson` — **not** a single JSON object. Clients must read line-by-line.
+
+| Event `t` | Fields | Meaning |
+|-----------|--------|---------|
+| `model` | `s`, `session?` | Model / session id |
+| `text` | `s` | Assistant text chunk |
+| `tool` | `s`, `tool?`, `path?` | Tool use hint |
+| `usage` | `context`, `peak`, `window`, … | Live context meter |
+| `done` | `cost?`, `ctx?`, `usage?`, `error?` | Turn finished |
+| `error` | `s` | Process / parse failure |
+
+**Streaming routes:** `POST /api/chat`, `/api/compact`, `/api/sweep`, `/api/bootstrap`, `/api/interview`, `/api/found`, `/api/glance`.
+
+---
+
+## Route tiers
+
+### Tier 0 — lifecycle
+
+| Method | Path | Notes |
+|--------|------|-------|
+| GET | `/api/ping` | Identity beacon |
+
+### Tier 1 — plugin MVP
+
+| Method | Path | `project` | Notes |
+|--------|------|-----------|-------|
+| GET | `/api/projects` | — | `{ projects, home, registry }` |
+| GET | `/api/queue` | required | Side effects: snapshots, founded healing |
+| POST | `/api/approve` | required | Bookmark only — not the commit |
+| POST | `/api/comment` | required | |
+| POST | `/api/sweep` | required | **NDJSON** |
+
+### Tier 2 — full sitting
+
+| Method | Path | Mode |
+|--------|------|------|
+| GET | `/api/file` | JSON — `path` + `project` required |
+| POST | `/api/save` | JSON — `path`/`content` required; `project` optional (lineage only) |
+| GET/POST | `/api/chatlog` | JSON |
+| POST | `/api/chat` | **NDJSON** |
+| POST | `/api/compact` | **NDJSON** |
+| POST | `/api/clear-session` | JSON |
+| GET/POST | `/api/settings` | JSON — POST deep-merges `curator` / `agents` |
+
+### Tier 3 — founding
+
+| Method | Path | Mode |
+|--------|------|------|
+| GET | `/api/interview` | JSON status |
+| POST | `/api/interview` | **NDJSON** (read-only phase) |
+| POST | `/api/found` | **NDJSON** |
+| POST | `/api/bootstrap` | **NDJSON** |
+| POST | `/api/projects/add` | JSON |
+
+### Tier 4 — desk admin
+
+Kits, lineage (`/api/lineage`, resolve/accept/bind), projects edit/delete/refound, `/api/entry`, `/api/diff`, `/api/diffstat`, `/api/admin`.
+
+**Diff caveat:** `/api/diff` returns `{ "diff": "<unified text>" }`; `/api/diffstat` returns `{ "diff": { "added", "removed" } | null }` — same key, different types.
+
+### Tier 5 — host-specific / experimental
+
+| Path | Notes |
+|------|-------|
+| `/api/open-link` | macOS `open -t`; 404 uses `{ ok: false, error }` |
+| `/api/glance` | Tool-less brief reaction; settings-gated |
+
+---
+
+## Stability notes (consistency backlog)
+
+1. Success envelopes still vary (`{ok}` vs bare resource). `POST /api/projects/add` returns `{ ok, project, home, …flat fields }`.
+2. Legacy `diff` key on both `/api/diff` and `/api/diffstat` remains for back-compat; new clients should use `text` / `stat`.
+3. Errors are uniformly `{ "error": string }`.
+4. Two cores with different registries remain possible if `$DESK_PROJECTS` differs — check `ping.projects` before assuming a shared desk. Legacy `diff` aliases on `/api/diff` and `/api/diffstat` remain for back-compat; prefer `text` / `stat`.
