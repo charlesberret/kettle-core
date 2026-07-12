@@ -10,6 +10,7 @@
     "no append-only record touched",
     "doc/code drift fixed or flagged",
     "duplication noted against existing code",
-    "MEMORY kept under ~80 lines"
+    "MEMORY kept under ~80 lines",
+    "FAMILIARITY deepened or left intact when nothing new about the project"
   ]
 }

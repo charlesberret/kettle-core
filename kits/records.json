@@ -10,6 +10,7 @@
     "no append-only record touched",
     "schema/format conformance checked",
     "duplicates flagged, never auto-merged",
-    "MEMORY kept under ~80 lines"
+    "MEMORY kept under ~80 lines",
+    "FAMILIARITY deepened or left intact when nothing new about the project"
   ]
 }

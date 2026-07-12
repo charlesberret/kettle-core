@@ -137,7 +137,7 @@ Success shapes vary today (see Stability notes). Prefer:
 | GET | `/api/queue` | required | Side effects: snapshots, founded healing |
 | POST | `/api/approve` | required | Bookmark only — not the commit |
 | POST | `/api/comment` | required | |
-| POST | `/api/sweep` | required | **NDJSON** |
+| POST | `/api/sweep` | required | **NDJSON** — mechanical close-kit first when quiet; accrue-only or full judgment prompt otherwise |
 
 ### Tier 2 — full sitting
 

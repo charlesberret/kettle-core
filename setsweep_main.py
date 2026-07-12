@@ -10,7 +10,8 @@ One command, two viewports onto the same desk:
   setsweep init                     register the current folder │  the CLI viewport
   setsweep queue   <project>        show a desk's queue         │  (stdlib only)
   setsweep open    <project> <id>   open the file in $EDITOR    │
-  setsweep chat    <project> [id]   talk to the resident curator┘
+  setsweep chat    <project> [id]   talk to the resident curator│
+  setsweep sweep-status|close|archive   mechanical CLOSE helpers┘
   setsweep --help                   this message
 
 The native macOS window lives in the separate setsweep-desktop Electron shell.
@@ -18,7 +19,8 @@ Routing keeps web/server as the default; the CLI subcommands go through `cli.py`
 """
 import sys
 
-CLI_CMDS = {"projects", "add", "init", "found", "queue", "open", "lineage", "bind", "chat"}
+CLI_CMDS = {"projects", "add", "init", "found", "queue", "open", "lineage", "bind", "chat",
+            "sweep-status", "sweep-close", "sweep-archive"}
 
 
 def main(argv=None) -> int:

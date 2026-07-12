@@ -34,6 +34,7 @@ import kits     # curator kits: the per-kind playbook (lens · urgency · first-
 import lineage  # who-edited-what: agent edits self-record to the desk's working record
 import runtime  # viewport-neutral agent adapter: spawn · usage normalizer · session ledger
 import curator as curator_mod  # pluggable curator backends (claude CLI default)
+import sweepkit  # mechanical sweep close-kit (status · archive · stage · thin log)
 
 HOME = Path.home()
 
@@ -191,13 +192,43 @@ INTERVIEW_TOOLS = [
     "--disallowedTools", "NotebookEdit",
 ]
 
+ACCRUE_PROMPT = (
+    "You are the resident curator of the {name} project (root: {root}). CLOSE already ran "
+    "mechanically (see CLOSE KIT RESULT below) — do NOT re-diff, re-archive, or re-stage. "
+    "Your job is ACCRUE + RESTOCK only:\n"
+    "1. Read {desk_dir}/FAMILIARITY.md (create on first use if missing — project-centered map: "
+    "families, roles, paths, relationships, pitfalls; under ~120 lines).\n"
+    "2. Load the NEXT batch into {queue_path} per {desk_dir}/review-program.md with real "
+    "curatorial briefs (read enough of each document; honor the queue entry schema already "
+    "in the file). Mark the loaded batch in review-program.md. If the program is exhausted, "
+    "leave the queue empty with a note.\n"
+    "3. While reading for briefs, UPDATE FAMILIARITY.md with durable project knowledge you "
+    "newly earned (or correct what went stale). Briefs MUST use familiarity — do not rediscover "
+    "settled structure.\n"
+    "4. Update {desk_dir}/MEMORY.md ONLY if this sitting produced a standing preference; else "
+    "leave it untouched.\n"
+    "5. Append a short note to the existing session log at {session_log} (or write "
+    "{runtime_dir}/sessions/{stamp}-session.md if missing): what you restocked, any familiarity "
+    "updates — no per-entry essays.\n"
+    "6. Report tersely as you go."
+)
+
 SWEEP_PROMPT = (
     "You are reviewing a round of work on the {name} project (root: {root}) — the sweep is the "
     "iteration's turn: fired whenever a round of work reaches a review point (day's end is only "
     "the degenerate case). A sweep is NOT a daily event — it may fire several times in one day, and "
     "finding the queue already stocked or a session log already present from an earlier pass today "
     "is normal, not an error or a sign the work is done. Each sweep is its own pass over the current "
-    "queue state. All of this happens in one pass, visibly:\n"
+    "queue state.\n"
+    "\n"
+    "DESIGN OF THIS PASS — two jobs with different costs:\n"
+    "  CLOSE  — commit the sitting (rulings, comments, ripples). Keep this cheap when little changed.\n"
+    "  ACCRUE — deepen project familiarity and restock the next batch. This is where time should go:\n"
+    "           honest briefs and a better map of the project for future sittings.\n"
+    "All of this happens in one pass, visibly, but do NOT perform ceremony when there is nothing to "
+    "close. Prefer tool calls that serve ACCRUE over re-deriving diffs the desk already computed.\n"
+    "\n"
+    "=== CLOSE ===\n"
     "1. RULINGS — if a ruling ledger is configured ({ledger}): apply every ticked/filled/struck "
     "ruling to its canonical documents exactly as written; annotate each applied row "
     "'— swept {today}'; never infer rulings; launch-type rulings (a 'go', a grant, an "
@@ -211,50 +242,60 @@ SWEEP_PROMPT = (
     "desk: raise it as a memo to {root}/Characters/inbox/ (and record it) — do NOT recast the "
     "persona BODY/SOURCES from the desk (the standing guardrail). Either way, learn the standing "
     "casting preference into MEMORY so the question is not re-asked.\n"
-    "2. DIFF — load {queue_path}. Read the PATRON COMMENTS block below (parsed from "
-    "{comments_log_path}; one row per note, tab-separated date/entry-id/text). For each "
-    "entry in the queue (approved and pending alike): surface every matching patron comment "
-    "as binding direction BEFORE you diff that file — same weight as inline edits to the "
-    "file. Then diff against {runtime_dir}/snapshots/<id>.orig (the cached original; "
-    "`diff -u` is available). Where no snapshot exists, say so and assess from the file "
-    "and its brief.\n"
-    "2a. NO-OP CHECK — if EVERY entry is byte-identical to its snapshot, carries no patron "
-    "comment (in the PATRON COMMENTS block or the entry's `comment` field in queue.json), "
-    "and the ledger shows no fresh ruling, then a prior sweep already processed this batch and "
-    "nothing has changed since: report 'nothing to sweep since the last pass' in one line and STOP "
-    "(do not re-archive, re-restock, or re-log). A re-fire over an unchanged state is a clean no-op, "
-    "not a problem. Proceed through the steps below only when there is a real change to process.\n"
-    "3. ASSESS — characterize each change in a sentence or two: what the patron (or their "
-    "co-editing agent) did, and the apparent intent.\n"
-    "4. RIPPLE — check the changes against the rest of the project for consistency and broader "
-    "implications: stale cross-references, contradicted statements, renamed terms. FIX in place "
-    "what is mechanical; FLAG in the log what needs judgment. A patron comment naming a renamed "
-    "term or a change-that-needs-propagation makes that propagation a REQUIRED ripple: find "
-    "every other file carrying the old form and fix it. Never touch append-only records.\n"
-    "5. LEARN — update {desk_dir}/MEMORY.md (create on first use): compare what the briefs "
-    "anticipated against what the patron actually did — the diffs, comments, and rulings are "
-    "the evidence. Record ONLY what generalizes to future sittings: standing preferences, "
-    "rulings that must never be re-asked, corrections to the curator's own predictions. Terse "
-    "dated bullets; revise or strike entries today's evidence contradicts; keep the file under "
-    "~80 lines — memory, not a log (the session log holds the particulars). If the evidence "
-    "contradicts PROJECT.md itself, amend that file minimally and note the amendment here.\n"
-    "6. LOG — write {runtime_dir}/sessions/{stamp}-session.md (create dir on first use; the {stamp} "
-    "is unique per sweep — each sweep gets its OWN log, so several may sit under one date; never "
-    "overwrite an earlier pass's log): entries "
-    "reviewed, per-entry assessment, ripples fixed, ripples flagged, directives raised, AND each "
-    "patron comment verbatim under its file with how you acted on it (propagated / recorded / "
-    "deferred). The log is the sitting's record; MEMORY.md is its distillation.\n"
-    "7. RESTOCK — archive the processed entries to {desk_dir}/archive/{today}-batch.json, "
-    "delete their snapshots from {runtime_dir}/snapshots/, then load the NEXT batch into {queue_path} per "
+    "2. DIFF — use the PRECOMPUTED DIFFS block below (already computed against "
+    "{runtime_dir}/snapshots/<id>.orig). Do NOT re-run `diff -u` unless a listed entry says "
+    "the precompute is missing. Read the PATRON COMMENTS block: for each entry, surface matching "
+    "comments as binding direction BEFORE you assess that file — same weight as inline edits.\n"
+    "2a. QUIET CLOSE — if EVERY entry is byte-identical to its snapshot (or has no snapshot and "
+    "no file change to assess), carries no patron comment (PATRON COMMENTS block or entry "
+    "`comment` field), and the ledger shows no fresh ruling: skip assess/ripple/preference-write "
+    "for those entries. Still proceed to ACCRUE+RESTOCK unless this is an inbox project whose "
+    "override says otherwise. A full STOP ('nothing to sweep since the last pass') applies only "
+    "when the queue was already archived and there is also nothing to restock — not when approved "
+    "entries still need archive+restock after a quiet sitting.\n"
+    "3. ASSESS — only for entries with a non-empty diff, a patron comment, or a ledger ruling: "
+    "1–2 sentences on what changed and apparent intent. Skip 'unchanged, approved as-is' essays.\n"
+    "4. RIPPLE — only when assess found something that could propagate: check the project for "
+    "stale cross-references, contradicted statements, renamed terms. FIX mechanical issues in "
+    "place; FLAG judgment in the log. A patron comment naming a rename makes propagation "
+    "REQUIRED. Never touch append-only records.\n"
+    "5. PREFERENCES — update {desk_dir}/MEMORY.md ONLY if this sitting produced a standing "
+    "preference or ruling that must not be re-asked (compare briefs' predictions to what the "
+    "patron did). If nothing generalizes, leave MEMORY.md untouched — do not invent thin "
+    "process notes. Terse dated bullets when you do write; keep under ~80 lines; revise/strike "
+    "contradicted entries; if evidence contradicts PROJECT.md, amend it minimally and note that "
+    "in MEMORY.\n"
+    "6. LOG — write {runtime_dir}/sessions/{stamp}-session.md (unique stamp; never overwrite an "
+    "earlier pass). Default shape is THIN: one line per entry "
+    "(id — unchanged-approved | comment acted | ripple fixed | flagged: …). Expand to a short "
+    "paragraph only for judgment flags, multi-file ripples, or memos raised. If a domain memo "
+    "already carries the substance (e.g. Characters/inbox), point at it — do not restate it. "
+    "Include each patron comment verbatim only when you acted on or deferred it.\n"
+    "\n"
+    "=== ACCRUE + RESTOCK (load-bearing; spend the sitting's intelligence here) ===\n"
+    "7. FAMILIARITY + NEXT BATCH — the point of expensive curator time is a desk that knows this "
+    "project better next sitting.\n"
+    "   a. Read {desk_dir}/FAMILIARITY.md (create on first use if missing — see seed purpose "
+    "below). It is the project's accrued map: document families and roles, key paths, "
+    "relationships, pitfalls that improve briefs, what 'good review' looks like here. Not a "
+    "transcript of sittings; not patron prefs (those live in MEMORY.md).\n"
+    "   b. Archive processed entries to {desk_dir}/archive/{today}-batch.json, delete their "
+    "snapshots under {runtime_dir}/snapshots/, then load the NEXT batch into {queue_path} per "
     "{desk_dir}/review-program.md (entries with real curatorial briefs — read enough of each "
     "new document to write them; honor the entry schema already in the queue file). When a batch "
     "is persona pairs (BODY+SOURCES), also load any sibling `QUESTIONS.md` as a companion "
-    "`ask_type: fill` entry (id `<persona>-questions`, a brief naming the open casting question) so "
-    "the patron can tick the ballot in the same sitting. Mark the "
-    "loaded batch in review-program.md. If the program is exhausted, leave the queue empty "
-    "with a note saying so.\n"
-    "8. Report tersely as you go — every step narrated in a line or two, since the patron "
-    "watches this stream live."
+    "`ask_type: fill` entry (id `<persona>-questions`). Mark the loaded batch in "
+    "review-program.md. If the program is exhausted, leave the queue empty with a note.\n"
+    "   c. While reading for briefs, UPDATE FAMILIARITY.md with durable project knowledge you "
+    "newly earned (or correct what went stale). Keep it under ~120 lines. Briefs MUST use "
+    "familiarity: do not rediscover settled structure; spend reading effort on what is new or "
+    "uncertain. Prefer ask_type judgment/tuning when the file may be edited; pure familiarity "
+    "reads can note that in the brief.\n"
+    "   d. Seed purpose if creating FAMILIARITY.md: header naming it as the curator's "
+    "project-centered expertise — what this corpus is, how pieces relate, what to watch — "
+    "compounded by every restock so future briefs start informed.\n"
+    "8. Report tersely as you go — every substantive step in a line or two (patron watches live). "
+    "Do not narrate no-ops."
 )
 
 # shared by the one-shot bootstrap and the interview's found step
@@ -300,6 +341,10 @@ BOOTSTRAP_PROMPT = (
     "EVIDENCE in the project's own files (a CLAUDE.md's stated conventions, style notes, an "
     "existing editorial standard). Record only what the files attest; never invent or assume "
     "preferences — an honest near-empty memory beats a speculative full one.\n"
+    "3b. THE FAMILIARITY — seed {desk_dir}/FAMILIARITY.md: the curator's project-centered "
+    "expertise (what this corpus is, document families and roles, key paths, relationships, "
+    "pitfalls that improve future briefs). Seed only what the survey already showed — a thin "
+    "honest map beats a speculative encyclopedia. Sweeps deepen this file when restocking.\n"
     "4. THE TRACKING SYSTEM — write {desk_dir}/review-program.md: the project's review program. "
     "Name the document families you found, which need the patron's reading or judgment and why, "
     "a batch plan if volume warrants batching, and the desk conventions (one batch in the queue "
@@ -334,7 +379,7 @@ INTERVIEW_ROLE = (
     "short conversation now buys context you'd otherwise make them re-explain at every sitting "
     "— what this project is to THEM, what they want watched, what is off-limits. You are "
     "gathering just enough to found a desk that fits, NOT extracting a full specification. And "
-    "the desk is amendable: every sweep refines the charter and memory, so this is a strong "
+    "the desk is amendable: every sweep refines the charter, memory, and familiarity, so this is a strong "
     "start, never a last word. The interview serves the patron — they can click finish ✓ the "
     "moment they're satisfied, and you should make that feel available throughout, not earned "
     "at the end.\n"
@@ -376,6 +421,9 @@ FOUND_PROMPT = (
     "curator's accrued judgment — rulings made and patron preferences learned, distilled by "
     "every sweep; honored by every agent without re-asking), then the preferences the patron "
     "STATED in this interview and any attested in the project's own files. Nothing invented.\n"
+    "2b. THE FAMILIARITY — seed {desk_dir}/FAMILIARITY.md: project-centered expertise (corpus "
+    "map, document families/roles, key paths, relationships). Seed from interview + survey "
+    "only; sweeps deepen it. Keep under ~120 lines.\n"
     "3. THE PROGRAM — write {desk_dir}/review-program.md: document families, what needs their "
     "reading or judgment and why, a batch plan if volume warrants, desk conventions (one "
     "batch at a time; in-editor emendations are the tuning; approve = done).\n"
@@ -598,18 +646,34 @@ def safe_path(p: str, base: Path | None = None) -> Path:
 # ---------- queue io ----------
 
 def load_queue(proj: dict) -> dict:
+    """Read queue.json. Retries once on FileNotFoundError — the curator Write tool
+    may briefly unlink/truncate the file while restocking after a sweep, and a
+    concurrent /api/queue (viewport refresh) must not 404 the patron for that race."""
     qp = queue_path(proj)
     with QUEUE_LOCK:
-        if not qp.exists():
-            qp.parent.mkdir(parents=True, exist_ok=True)
-            qp.write_text(json.dumps(EMPTY_QUEUE, indent=2))
-        return json.loads(qp.read_text())
+        for attempt in (0, 1):
+            try:
+                if not qp.exists():
+                    qp.parent.mkdir(parents=True, exist_ok=True)
+                    qp.write_text(json.dumps(EMPTY_QUEUE, indent=2))
+                return json.loads(qp.read_text())
+            except FileNotFoundError:
+                if attempt == 0:
+                    continue
+                qp.parent.mkdir(parents=True, exist_ok=True)
+                qp.write_text(json.dumps(EMPTY_QUEUE, indent=2))
+                return json.loads(qp.read_text())
+    return dict(EMPTY_QUEUE)
 
 
 def mutate_queue(proj: dict, fn) -> dict:
     qp = queue_path(proj)
     with QUEUE_LOCK:
-        q = json.loads(qp.read_text())
+        try:
+            q = json.loads(qp.read_text())
+        except FileNotFoundError:
+            qp.parent.mkdir(parents=True, exist_ok=True)
+            q = dict(EMPTY_QUEUE)
         fn(q)
         tmp = qp.with_suffix(".json.tmp")
         tmp.write_text(json.dumps(q, indent=2, ensure_ascii=False))
@@ -619,15 +683,17 @@ def mutate_queue(proj: dict, fn) -> dict:
 
 def project_orientation(proj: dict) -> str:
     """The curator's standing context, injected into every agent the app spawns:
-    PROJECT.md (the charter — what this project is and how the patron reads it) and
-    MEMORY.md (accrued judgment — rulings made, preferences learned across sittings).
-    Identity lives in these files, not in any one session: any fresh agent that reads
-    them IS the curator."""
+    PROJECT.md (charter), MEMORY.md (patron prefs / rulings), FAMILIARITY.md
+    (project-centered expertise that compounds across restocks). Identity lives in
+    these files, not in any one session: any fresh agent that reads them IS the curator."""
     desk = desk_dir(proj)
     sections = (
         ("PROJECT.md", 2500, "Project orientation (PROJECT.md, curator-maintained)"),
         ("MEMORY.md", 2000, "Curator memory (MEMORY.md — rulings already made and patron "
                             "preferences already learned; honor these without re-asking)"),
+        ("FAMILIARITY.md", 3000, "Project familiarity (FAMILIARITY.md — accrued map of this "
+                                 "corpus: families, roles, paths, relationships, pitfalls; "
+                                 "use it to write better briefs and deepen it when restocking)"),
     )
     parts = []
     for fname, cap, label in sections:
@@ -638,6 +704,43 @@ def project_orientation(proj: dict) -> str:
         if text:
             parts.append(f"{label}:\n{text[:cap]}")
     return "\n\n".join(parts)
+
+
+def sweep_precomputed_context(proj: dict, entries: list) -> str:
+    """Queue summary + unified diffs so the sweep curator skips N serial `diff -u` rounds."""
+    if not entries:
+        return "QUEUE + PRECOMPUTED DIFFS:\n(empty queue)\n"
+    lines = ["QUEUE + PRECOMPUTED DIFFS (do not re-diff unless marked missing):\n"]
+    for e in entries:
+        eid = e.get("id", "?")
+        path = e.get("path", "")
+        status = e.get("status", "pending")
+        ask = e.get("ask_type", "")
+        comment = (e.get("comment") or "").strip()
+        lines.append(f"### entry {eid}")
+        lines.append(f"path: {path}")
+        lines.append(f"status: {status}" + (f"  ask_type: {ask}" if ask else ""))
+        if e.get("brief"):
+            brief = str(e["brief"]).strip().replace("\n", " ")
+            if len(brief) > 240:
+                brief = brief[:237] + "…"
+            lines.append(f"brief: {brief}")
+        if comment:
+            lines.append(f"queue.comment: {comment}")
+        text = entry_diff_text(proj, e)
+        if text:
+            if len(text) > 4000:
+                text = text[:4000] + "\n… [diff truncated]\n"
+            lines.append("diff:")
+            lines.append(text)
+        else:
+            sp = runtime_dir(proj) / "snapshots" / f"{eid}.orig"
+            if sp.exists():
+                lines.append("diff: (identical to snapshot)")
+            else:
+                lines.append("diff: (no snapshot — assess from file + brief if needed)")
+        lines.append("")
+    return "\n".join(lines)
 
 
 def base_handbook() -> str:
@@ -1544,57 +1647,97 @@ class Handler(BaseHTTPRequestHandler):
         ledger = proj.get("ledger") or "(no ledger configured — queue/approvals only)"
         rd = runtime_dir(proj)
         cl_path = comments_log_path(proj)
+        stamp = datetime.now().strftime("%Y-%m-%d-%H%M%S")
+        status = sweepkit.assess_close(proj)
+        close: dict = {"ok": False, "action": "skipped", "status": status}
+        if status.get("can_mechanical_close"):
+            close = sweepkit.mechanical_close(proj)
+
+        # Fully idle, or quiet inbox close with nothing left to accrue → no curator spawn
+        st = close.get("status") or status
+        if st.get("fully_idle"):
+            self.stream_idle("Nothing to sweep — queue empty and quiet.")
+            return
+        if close.get("ok") and close.get("action") == "mechanical_close" and not close.get("needs_accrue"):
+            n = len((close.get("archived") or {}).get("archived") or [])
+            self.stream_idle(
+                f"Quiet close complete ({n} entr{'y' if n == 1 else 'ies'} archived"
+                + ("; inbox drafts staged" if (close.get("staged") or {}).get("staged") else "")
+                + "). No accrue/restock for this desk kind."
+            )
+            return
+
+        accrue_only = bool(close.get("ok") and close.get("needs_accrue"))
         queue_entries = load_queue(proj).get("entries", [])
         patron_comments = sweep_patron_comments_block(parse_comments_log(cl_path), queue_entries)
-        prompt = SWEEP_PROMPT.format(
-            name=proj["name"], root=str(project_root(proj)),
-            ledger=str(Path(ledger).expanduser()) if ledger.startswith("~") or ledger.startswith("/") else ledger,
-            desk_dir=str(desk_dir(proj)), runtime_dir=str(rd),
-            today=date.today().isoformat(),
-            stamp=datetime.now().strftime("%Y-%m-%d-%H%M%S"),
-            queue_path=str(queue_path(proj)),
-            comments_log_path=str(cl_path),
-        )
-        prompt += (
-            "\n\n---\nPATRON COMMENTS (from "
-            + str(cl_path)
-            + " — treat each line as mandatory review input for that entry):\n\n"
-        )
-        prompt += patron_comments if patron_comments else "(no comments on file for current queue entries)"
-        prompt += "\n---\n"
+
+        if accrue_only:
+            prompt = ACCRUE_PROMPT.format(
+                name=proj["name"], root=str(project_root(proj)),
+                desk_dir=str(desk_dir(proj)), runtime_dir=str(rd),
+                stamp=stamp, queue_path=str(queue_path(proj)),
+                session_log=close.get("session_log") or "",
+            )
+            prompt += "\n\n---\nCLOSE KIT RESULT:\n" + json.dumps(
+                {k: close[k] for k in ("action", "archived", "staged", "session_log", "needs_accrue")
+                 if k in close}, indent=2)
+            prompt += "\n---\n"
+        else:
+            prompt = SWEEP_PROMPT.format(
+                name=proj["name"], root=str(project_root(proj)),
+                ledger=str(Path(ledger).expanduser()) if str(ledger).startswith(("~", "/")) else ledger,
+                desk_dir=str(desk_dir(proj)), runtime_dir=str(rd),
+                today=date.today().isoformat(),
+                stamp=stamp,
+                queue_path=str(queue_path(proj)),
+                comments_log_path=str(cl_path),
+            )
+            prompt += (
+                "\n\n---\nPATRON COMMENTS (from "
+                + str(cl_path)
+                + " — treat each line as mandatory review input for that entry):\n\n"
+            )
+            prompt += patron_comments if patron_comments else "(no comments on file for current queue entries)"
+            prompt += "\n---\n"
+            prompt += "\n" + sweep_precomputed_context(proj, queue_entries)
+            prompt += "\n" + sweepkit.status_for_prompt(proj)
+            prompt += (
+                "\n\nCLOSE KIT: prefer `setsweep sweep-close <project>` / mechanical helpers when "
+                "quiet; after judgment, archive via the close-kit rather than hand-rolled mv/rm.\n"
+            )
+            intake = intake_paths(proj)
+            if intake:
+                _, _, outbound = intake
+                prompt += (
+                    "\n\nINTAKE OUTBOUND — inbox project: stage approved drafts to "
+                    f"{outbound}, archive approved only, leave pending entries. "
+                    "NEVER transmit.\n"
+                )
+
         handbook = base_handbook()
         if handbook:
             prompt += "\n\n" + handbook
         orientation = project_orientation(proj)
         if orientation:
             prompt += "\n\n" + orientation
+        # Accrue frameworks (brief + familiarity scaffolds)
+        for fname, label in (
+            ("frameworks/brief.md", "Brief framework"),
+            ("frameworks/familiarity.md", "Familiarity framework"),
+        ):
+            try:
+                text = (APPDIR / "kits" / fname).read_text(encoding="utf-8").strip()
+            except OSError:
+                text = ""
+            if text:
+                prompt += f"\n\n{label}:\n{text[:2500]}"
         kit_ctx = kits.as_context(
             kits.for_project(proj, APPDIR / "kits", load_settings()), "sweep")
         if kit_ctx:
             prompt += "\n\n" + kit_ctx
-        intake = intake_paths(proj)
-        if intake:
-            _, _, outbound = intake
-            prompt += (
-                "\n\nINTAKE OUTBOUND — this is an inbox project; its queue is refilled by the live "
-                "intake pass (a folder-watch), NOT by review-program.md. An APPROVED entry is itself "
-                "a reason to sweep: do NOT apply the step-2a no-op stop while any approved entry still "
-                "awaits staging, even if its draft is byte-identical to its snapshot (the patron may "
-                "approve a draft as written). Override step 7 RESTOCK "
-                "accordingly: do NOT load any next batch and do NOT treat a missing review program as "
-                "'exhausted' or empty the queue. Instead, for each APPROVED entry: STAGE its draft "
-                f"(the entry's `path`) to the outbound folder {outbound} (create it on first use) by "
-                "copying the file there so an out-of-band tool can pick it up to send, then archive "
-                "that entry to the batch file and delete its snapshot. LEAVE all pending "
-                "entries in the queue untouched — intake keeps refilling around them. NEVER transmit "
-                "anything yourself — staging only (localhost is the fence). Record in the session log "
-                "which drafts you staged. The `source` items are read-only and never moved.")
         sc = scope_note(proj)
         if sc:
             prompt += "\n\n" + sc
-        # the curator's steer: the last thing they entered before starting the sweep, so the
-        # thing most on their mind. It leads the prompt — the first thing the agent reads —
-        # and sets the emphasis of the whole pass.
         thrust = str(d.get("thrust") or "").strip()
         if thrust:
             quoted = "\n".join("> " + ln for ln in thrust.splitlines())
@@ -1602,8 +1745,6 @@ class Handler(BaseHTTPRequestHandler):
                       "you press hardest as you close the desk:\n\n" + quoted + "\n\n— · —\n\n" + prompt)
         cmd = [agent_bin(), "-p", prompt, "--output-format", "stream-json", "--verbose"]
         with_model(cmd, "setup", d.get("model"))
-        # resume the project session for continuity across the sitting; if none exists
-        # yet, run fresh under the project name and persist the session it creates
         sid = load_session(proj).get("session_id")
         if sid:
             cmd += ["--resume", sid]
@@ -1615,7 +1756,7 @@ class Handler(BaseHTTPRequestHandler):
             save_session(proj, session_id=new_sid, name=session_name(proj))
 
         self.run_curator(cmd, str(project_root(proj)), prior_sid=sid, persist=persist,
-                        role="sweep")
+                         role="sweep")
 
     # ---- add project: registry append + desk seed ----
     def add_project(self, d):

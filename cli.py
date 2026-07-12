@@ -19,12 +19,16 @@ your edits where the lineage reconciler can see them.
   setsweep chat    <project> [id]  converse with the resident curator — resumes the
                                     project session, shows the corrected token meter
                                     after each turn, records turns to the desk ledger
+  setsweep sweep-status <project>  mechanical CLOSE readiness (quiet / judgment / accrue)
+  setsweep sweep-close  <project>  quiet CLOSE: stage · archive · thin session log
+  setsweep sweep-archive <project>  archive queue entries (after judgment)
 
 Run: python3 cli.py <command> …    (PROJECTS via DESK_PROJECTS env, same as the server)
 """
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import subprocess
 import sys
@@ -33,6 +37,7 @@ from pathlib import Path
 import lineage
 import runtime
 import server
+import sweepkit
 
 
 def _k(n) -> str:
@@ -301,6 +306,29 @@ def cmd_chat(args) -> int:
     return 0
 
 
+# ---------- sweep close-kit ----------
+
+def cmd_sweep_status(args) -> int:
+    st = sweepkit.assess_close(server.get_project(args.project))
+    print(json.dumps(st, indent=2, default=str))
+    return 0
+
+
+def cmd_sweep_close(args) -> int:
+    result = sweepkit.mechanical_close(server.get_project(args.project))
+    print(json.dumps(result, indent=2, default=str))
+    return 0 if result.get("ok") else 1
+
+
+def cmd_sweep_archive(args) -> int:
+    proj = server.get_project(args.project)
+    ids = list(args.id) if args.id else None
+    result = sweepkit.archive_queue(
+        proj, only_approved=bool(args.approved_only), entry_ids=ids)
+    print(json.dumps(result, indent=2, default=str))
+    return 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
         prog="setsweep", description="CLI viewport over the desk.",
@@ -312,10 +340,14 @@ def main(argv=None) -> int:
                "  setsweep queue   setsweep\n"
                "  setsweep open    setsweep refounding-merge\n"
                "  setsweep chat    setsweep               # talk to the desk\n"
-               "  setsweep chat    setsweep <entry-id>    # about one file\n")
+               "  setsweep chat    setsweep <entry-id>    # about one file\n"
+               "  setsweep sweep-status setsweep\n"
+               "  setsweep sweep-close  setsweep\n")
     # not required: a bare `setsweep` should greet with the menu, not error out
-    sub = ap.add_subparsers(dest="cmd",
-                            metavar="{projects,add,init,found,queue,open,lineage,bind,chat}")
+    sub = ap.add_subparsers(
+        dest="cmd",
+        metavar="{projects,add,init,found,queue,open,lineage,bind,chat,"
+                "sweep-status,sweep-close,sweep-archive}")
     sub.add_parser("projects", help="list registered desks").set_defaults(fn=cmd_projects)
     a = sub.add_parser("add", help="register a folder as a desk")
     a.add_argument("path"); a.add_argument("--name", default=None); a.set_defaults(fn=cmd_add)
@@ -335,6 +367,16 @@ def main(argv=None) -> int:
     c = sub.add_parser("chat", help="converse with the resident curator")
     c.add_argument("project"); c.add_argument("id", nargs="?")
     c.add_argument("--model", default=None); c.set_defaults(fn=cmd_chat)
+    ss = sub.add_parser("sweep-status", help="CLOSE readiness (quiet / judgment / accrue)")
+    ss.add_argument("project"); ss.set_defaults(fn=cmd_sweep_status)
+    sc = sub.add_parser("sweep-close", help="quiet mechanical CLOSE when safe")
+    sc.add_argument("project"); sc.set_defaults(fn=cmd_sweep_close)
+    sa = sub.add_parser("sweep-archive", help="archive queue entries (after judgment)")
+    sa.add_argument("project")
+    sa.add_argument("id", nargs="*", help="optional entry ids; default: whole queue")
+    sa.add_argument("--approved-only", action="store_true",
+                    help="archive approved entries only (inbox close)")
+    sa.set_defaults(fn=cmd_sweep_archive)
     args = ap.parse_args(argv)
     if not getattr(args, "fn", None):   # bare `setsweep` → show the menu, exit clean
         ap.print_help()

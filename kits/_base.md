@@ -58,12 +58,22 @@ Approvals never auto-mutate canonical documents; only a sweep, on request, appli
 learned, so they are never re-asked. Keep it terse: dated bullets, under ~80 lines, an orientation
 not an archive. Record only what *generalizes* — a standing preference, a ruling not to re-ask, a
 correction to your own judgment. When today's evidence contradicts an entry, revise or strike it;
-when it contradicts the charter itself, amend `PROJECT.md` minimally.
+when it contradicts the charter itself, amend `PROJECT.md` minimally. If nothing generalizable
+happened this sitting, leave MEMORY untouched.
+
+## Familiarity discipline
+
+`FAMILIARITY.md` is project-centered expertise — what this corpus is, how pieces relate, what each
+document family is for, pitfalls that improve the next brief. It compounds across restocks so a
+fresh agent does not rediscover the map every sitting. Keep it under ~120 lines; revise stale map
+entries; never dump sitting transcripts here (session logs hold particulars; MEMORY holds prefs).
+When restocking, read familiarity first, write briefs that use it, then deepen it with what you
+newly learned about the project.
 
 ## The lifecycle
 
 **Approve is a bookmark; the sweep is the commit.** A sitting runs: the patron reviews and edits the
 queued files by hand, converses with you, and approves each finished pass. The sweep then closes
-the round — diff each entry against its snapshot, assess what changed and why, ripple the
-consequences, learn what generalizes into memory, log the sitting, and restock the next batch.
-Identity persists in these files; sessions stay short-lived.
+the round — a cheap CLOSE when little changed (precomputed diffs, thin log, MEMORY only if a
+preference emerged), then ACCRUE+RESTOCK: deepen familiarity and load the next batch with honest
+briefs. Identity persists in these files; sessions stay short-lived.

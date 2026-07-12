@@ -82,7 +82,8 @@ reader for, what must never be touched. From the interview and the files it foun
 1. **Charter** (`PROJECT.md`) — what the project is, the review lens, the conventions. Your answers
    beat the files where they disagree, quoted where your words were exact.
 2. **Memory seed** (`MEMORY.md`) — only interview-stated and file-attested preferences, never invented.
-3. **Review program** + the first urgency-ranked **queue batch**, each entry with a real brief.
+3. **Familiarity seed** (`FAMILIARITY.md`) — thin project map from the survey; sweeps deepen it.
+4. **Review program** + the first urgency-ranked **queue batch**, each entry with a real brief.
 
 Founding is marked complete only when entries actually land; an interrupted founding never *traps*
 the project — the interview header offers **found from files** (one-shot survey → charter + queue,
@@ -121,30 +122,31 @@ Each project's `.setsweep/` directory *is* its curator — a persistent identity
 sessions**:
 
 1. **Charter** — `PROJECT.md`, amendable when evidence contradicts it.
-2. **Memory** — `MEMORY.md`, accrued by the sweep's *learn* step: rulings and preferences already
-   learned, never re-asked. Bounded (~80 lines), revised against new evidence.
-3. **Record** — the append-only history: `approvals.log`, `comments.log`, `sweep.log`, `sessions/`,
+2. **Memory** — `MEMORY.md`: rulings and preferences already learned, never re-asked. Bounded
+   (~80 lines); leave untouched when a sitting produced nothing generalizable.
+3. **Familiarity** — `FAMILIARITY.md`: accrued project-centered expertise (families, roles, paths,
+   relationships, pitfalls). Deepened on restock so briefs improve over time (~120 lines).
+4. **Record** — the append-only history: `approvals.log`, `comments.log`, `sweep.log`, `sessions/`,
    `archive/`.
 
-Charter and memory are injected into every agent the app spawns. Any fresh agent that reads these
-files *is* the curator; sync the directory and the curator exists on any machine. The desk is the
-application; the app is a viewport — `PROJECT.md` and the logs read as plain documents even with no
-app installed.
+Charter, memory, and familiarity are injected into every agent the app spawns. Any fresh agent that
+reads these files *is* the curator; sync the directory and the curator exists on any machine. The
+desk is the application; the app is a viewport — `PROJECT.md` and the logs read as plain documents
+even with no app installed.
 
 ## The sweep cycle
 
 **Sweep is the iteration's turn** — fired whenever a round of work reaches a review point (not only
-at day's end). One streamed pass, watched live: **diff → assess → ripple → learn → log → restock.**
+at day's end). One pass, watched live: **close (cheap when quiet) → accrue familiarity → restock.**
 
-1. **Diff** each queue entry against its cached snapshot.
-2. **Assess** what changed and the apparent intent.
-3. **Ripple** — check the changes against the rest of the project: mechanical inconsistencies (stale
-   cross-references, renamed terms) are fixed in place; judgment calls are flagged; append-only
-   records are never auto-mutated.
-4. **Learn** — compare the briefs' predictions against what you actually did; record only what
-   generalizes into `MEMORY.md`.
-5. **Log** the sitting to `sessions/`.
-6. **Restock** — archive processed entries, delete their snapshots, load the next batch.
+**Close** — the server runs a mechanical close-kit (`sweepkit` / `setsweep sweep-status|close`) when
+the sitting is quiet and ready: stage inbox drafts, archive, thin session log. When judgment is
+needed (diffs, comments, ledger), the curator still closes by hand, then archives via the kit.
+Precomputed diffs stay in the prompt so the agent does not re-derive them.
+
+**Accrue + restock** — deepen `FAMILIARITY.md` (project-centered expertise) while reading the next
+batch, then load honest briefs into the queue (`kits/frameworks/` scaffolds the brief and familiarity
+shapes; `kits/skills/setsweep-sweep` is the thin conductor). This is where curator time should go.
 
 If the project configures a rulings `ledger`, ticked/filled/struck rows are applied to the canonical
 documents exactly as written; "launch"-type rulings are never executed, only logged as directives.

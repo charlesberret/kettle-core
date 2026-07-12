@@ -22,5 +22,6 @@ The test suite is 36 green, including a `LaunchTests` class added on 2026-06-13 
 
 - Chat writes are always-on via `acceptEdits` (interim). A fuller chat-window redesign with real permission UX may replace this later.
 - HTTP response envelopes are not yet uniform across routes (see `API.md` stability notes)
+- Sweep quiet CLOSE is mechanical (`sweepkit` / CLI); judgment CLOSE and ACCRUE still need curator coverage tests beyond the unit suite
 - No settings shallow-merge clobber guard for non-`curator` top-level groups — colors/slots/iface/palettes/adminBox can still be dropped by a bad patch
 - Frontend has zero tests — the palette-save bug that was found lived in `static/index.html`; a JS error there produces a blank window with no app left to repair it

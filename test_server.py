@@ -319,6 +319,32 @@ class HelperTests(Base):
         (desk / "MEMORY.md").write_text("   \n")               # whitespace-only → omitted
         self.assertNotIn("MEMORY.md", server.project_orientation(self.proj()))
 
+    def test_project_orientation_includes_familiarity(self):
+        desk = self.root / ".setsweep"
+        (desk / "PROJECT.md").write_text("charter")
+        (desk / "FAMILIARITY.md").write_text("## Map\n- `src/content` is the content collections root")
+        out = server.project_orientation(self.proj())
+        self.assertIn("FAMILIARITY.md", out)
+        self.assertIn("content collections", out)
+        self.assertLess(out.index("charter"), out.index("content collections"))
+
+    def test_sweep_precomputed_context_includes_diffs(self):
+        (self.root / "alpha.md").write_text("alpha body\n")
+        (self.root / "beta.md").write_text("beta body\n")
+        self.write_queue([
+            {"id": "alpha", "path": str(self.root / "alpha.md"), "status": "pending"},
+            {"id": "beta", "path": str(self.root / "beta.md"), "status": "pending"},
+        ])
+        proj = self.proj()
+        q = server.load_queue(proj)
+        server.ensure_snapshots(proj, q)
+        (self.root / "alpha.md").write_text("alpha body\nchanged\n")
+        block = server.sweep_precomputed_context(proj, q.get("entries", []))
+        self.assertIn("### entry alpha", block)
+        self.assertIn("diff:", block)
+        self.assertIn("changed", block)
+        self.assertIn("beta", block)
+
     # ---- register_project: shared by the HTTP handler and the CLI (first-run) ----
 
     def test_register_project_valid_seeds_desk(self):
@@ -912,6 +938,19 @@ class EndpointTests(Base):
         cmds = self._capture_cmds()
         self._post_stream("/api/sweep", {"project": "t"})
         self.assertNotIn("INTAKE OUTBOUND", cmds[-1][cmds[-1].index("-p") + 1])
+
+    def test_sweep_prompt_precomputes_diffs_and_asks_for_familiarity(self):
+        desk = self.root / ".setsweep"
+        (desk / "FAMILIARITY.md").write_text("## Map\n- alpha.md is the lead essay")
+        server.ensure_snapshots(self.proj(), server.load_queue(self.proj()))
+        cmds = self._capture_cmds()
+        self._post_stream("/api/sweep", {"project": "t"})
+        prompt = cmds[-1][cmds[-1].index("-p") + 1]
+        self.assertIn("PRECOMPUTED DIFFS", prompt)
+        self.assertIn("ACCRUE", prompt)
+        self.assertIn("FAMILIARITY.md", prompt)
+        self.assertIn("alpha.md is the lead essay", prompt)  # orientation injects familiarity
+        self.assertIn("(identical to snapshot)", prompt)
 
     def test_run_claude_skips_malformed_ndjson(self):
         self._stub_claude(self._init(), "this is not json",
