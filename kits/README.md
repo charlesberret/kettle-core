@@ -45,10 +45,11 @@ configured on the **project stanza** (not the kit — intake paths are personal 
 | Field | Meaning |
 |---|---|
 | `name` | display name (e.g. "Writing") |
-| `kind` | the project-kind this is the default for: `writing · code · records · knowledge` |
+| `kind` | the project-kind this is the default for: `writing · code · records · knowledge · inbox` |
 | `lens` | the review lens — what this curator looks for (injected into the review agent) |
 | `urgency` | the high/medium/low rubric for this kind |
 | `firstQueue` | founding heuristic — which documents to surface first |
+| `interview` | kit-specific founding stems (merged with shared base stems: status, horizon, direction, fences, sweep_actions, fleet) |
 | `sweepChecks` | self-check assertions appended to every sweep |
 | `tools` | **extra** capabilities beyond the always-on builtins — empty in shipped defaults |
 

@@ -243,6 +243,67 @@ def write_session_log_stub(
     return path
 
 
+def publish_approval_egress(proj: dict, entries: list[dict] | None = None) -> dict[str, Any]:
+    """Stage a kind:approval egress memo so fleet/other agents see patron gates.
+
+    Lists approved entries (cleared) and remaining pending entries (still blocked).
+    No-op (returns published=False) when there is nothing useful to say.
+    """
+    import egress as _egress
+
+    q = server.load_queue(proj)
+    all_entries = list(entries if entries is not None else (q.get("entries") or []))
+    approved = [e for e in all_entries if e.get("status") == "approved"]
+    pending = [e for e in all_entries if e.get("status") != "approved"]
+    if not approved and not pending:
+        return {"published": False, "reason": "empty queue"}
+
+    day = date.today().isoformat()
+    lines = [
+        f"Patron sitting closed via Setsweep for project `{proj.get('id')}` ({proj.get('name')}).",
+        "",
+        "## Approved this sitting (peers may treat these as cleared)",
+    ]
+    if approved:
+        for e in approved:
+            lines.append(
+                f"- **{e.get('id')}** · `{e.get('path')}` · "
+                f"{e.get('ask') or '—'} · approved {e.get('approved') or day}"
+            )
+            if e.get("unblocks") and str(e.get("unblocks")).strip() not in ("", "—"):
+                lines.append(f"  - unblocks: {e['unblocks']}")
+    else:
+        lines.append("- (none)")
+
+    lines.extend(["", "## Still pending in queue (peers must not assume cleared)"])
+    if pending:
+        for e in pending:
+            lines.append(
+                f"- **{e.get('id')}** · `{e.get('path')}` · "
+                f"{e.get('ask') or '—'} · status={e.get('status') or 'pending'}"
+            )
+            if e.get("unblocks") and str(e.get("unblocks")).strip() not in ("", "—"):
+                lines.append(f"  - still blocks: {e['unblocks']}")
+    else:
+        lines.append("- (none — queue empty of pending work)")
+
+    lines.extend([
+        "",
+        "Source of truth on the desk: `.setsweep/runtime/queue.json` and "
+        "`.setsweep/runtime/approvals.log`. This memo is the fleet-readable summary "
+        "after approve+sweep.",
+    ])
+    body = "\n".join(lines)
+    result = _egress.stage_egress(
+        proj,
+        kind="approval",
+        topic="sitting-approvals",
+        body=body,
+        day=day,
+    )
+    return {"published": True, **result}
+
+
 def mechanical_close(proj: dict) -> dict[str, Any]:
     """Run quiet CLOSE when safe: stage inbox, archive, thin log.
 
@@ -259,25 +320,35 @@ def mechanical_close(proj: dict) -> dict[str, Any]:
             "status": status,
         }
 
+    # Capture entries before archive so the approval memo can list them.
+    pre_entries = list(server.load_queue(proj).get("entries") or [])
     staged = stage_inbox_approved(proj) if status.get("is_inbox") else {"staged": []}
+    approval_pub: dict[str, Any] = {"published": False}
+    try:
+        approval_pub = publish_approval_egress(proj, pre_entries)
+    except Exception as exc:  # noqa: BLE001 — never fail close on egress
+        approval_pub = {"published": False, "error": str(exc)}
+
     archived = archive_queue(
         proj,
         only_approved=True if status.get("is_inbox") else False,
     )
+    extra = []
+    if staged.get("staged"):
+        extra.extend(f"- staged: {s['id']} → {s['to']}" for s in staged["staged"])
+    if approval_pub.get("published") and approval_pub.get("path"):
+        extra.append(f"- approval egress: {approval_pub['path']}")
     log_path = write_session_log_stub(
         proj,
         status,
-        extra_lines=(
-            [f"- staged: {s['id']} → {s['to']}" for s in staged.get("staged") or []]
-            if staged.get("staged")
-            else None
-        ),
+        extra_lines=extra or None,
     )
     return {
         "ok": True,
         "action": "mechanical_close",
         "status": status,
         "staged": staged,
+        "approval_egress": approval_pub,
         "archived": archived,
         "session_log": str(log_path),
         "needs_accrue": status.get("needs_accrue") and not status.get("is_inbox"),

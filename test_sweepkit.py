@@ -116,6 +116,30 @@ class CloseTests(SweepkitBase):
         self.assertTrue(Path(result["session_log"]).exists())
         snap = server._snapshot_path(self.proj(), "e1")
         self.assertFalse(snap.exists())
+        # Peer-facing approval egress staged for fleet
+        self.assertTrue(result.get("approval_egress", {}).get("published"))
+        ap = Path(result["approval_egress"]["path"])
+        self.assertTrue(ap.exists())
+        text = ap.read_text(encoding="utf-8")
+        self.assertIn("**Kind:** approval", text)
+        self.assertIn("e1", text)
+        self.assertIn("doc.md", text)
+
+    def test_publish_approval_egress_lists_pending_blocks(self):
+        self.write_queue([
+            {"id": "ok", "path": "doc.md", "status": "approved", "ask": "done",
+             "approved": "2026-07-16", "unblocks": "ship feature"},
+            {"id": "wait", "path": "ROADMAP.md", "status": "pending", "ask": "gate",
+             "unblocks": "agent-B may resume"},
+        ])
+        pub = sweepkit.publish_approval_egress(self.proj())
+        self.assertTrue(pub["published"])
+        body = Path(pub["path"]).read_text(encoding="utf-8")
+        self.assertIn("ok", body)
+        self.assertIn("ship feature", body)
+        self.assertIn("ROADMAP.md", body)
+        self.assertIn("agent-B may resume", body)
+        self.assertIn("Still pending", body)
 
     def test_mechanical_close_refuses_when_dirty(self):
         self.seed_quiet_approved()

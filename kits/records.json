@@ -5,12 +5,26 @@
   "urgency": "high = a schema/format violation or a record contradicting its source of truth; medium = staleness, gaps, or likely duplicates; low = formatting.",
   "firstQueue": "Surface the records most likely to be stale, malformed, or duplicated, and any whose source of truth has changed.",
   "tools": [],
+  "interview": [
+    {
+      "id": "priority",
+      "stem": "What is the biggest risk to these records?",
+      "multi": true,
+      "options": [
+        "Drifting out of date with the source of truth",
+        "Missing or malformed fields",
+        "Duplicate entries",
+        "Gaps in coverage"
+      ]
+    }
+  ],
   "sweepChecks": [
     "every entry assessed",
     "no append-only record touched",
     "schema/format conformance checked",
     "duplicates flagged, never auto-merged",
     "MEMORY kept under ~80 lines",
-    "FAMILIARITY deepened or left intact when nothing new about the project"
+    "FAMILIARITY deepened or left intact when nothing new about the project",
+    "listed SWEEP-ACTIONS carried out or egressed (never transmit external systems from the desk)"
   ]
 }

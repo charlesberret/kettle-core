@@ -5,12 +5,26 @@
   "urgency": "high = a correctness or security risk; medium = duplication, unclear structure, or stale docs; low = naming and style.",
   "firstQueue": "Surface the files with the most recent or most consequential changes, plus any docs whose code has moved underneath them.",
   "tools": [],
+  "interview": [
+    {
+      "id": "priority",
+      "stem": "What should reviews watch most closely?",
+      "multi": true,
+      "options": [
+        "Recent changes and hot spots",
+        "Docs drifting away from the code",
+        "Correctness risks",
+        "Duplication and missed reuse"
+      ]
+    }
+  ],
   "sweepChecks": [
     "every entry assessed",
     "no append-only record touched",
     "doc/code drift fixed or flagged",
     "duplication noted against existing code",
     "MEMORY kept under ~80 lines",
-    "FAMILIARITY deepened or left intact when nothing new about the project"
+    "FAMILIARITY deepened or left intact when nothing new about the project",
+    "listed SWEEP-ACTIONS carried out or egressed (never transmit external systems from the desk)"
   ]
 }

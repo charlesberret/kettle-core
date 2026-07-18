@@ -3,11 +3,12 @@
 
 Multi-project: the registry at projects.json maps project ids to a root (the agent's
 working directory) and a queue file (<root>/.setsweep/queue.json by convention). The
-right-pane agent is Claude Code in headless mode (-p, stream-json), run in the active
-project's root with Read/Glob/Grep/Edit/Write under acceptEdits (project-fenced);
-interview stays read-only until Finish/Found. Each queue entry's
-curatorial brief is injected as system-prompt context so the agent starts aligned without
-re-reading the file.
+right-pane agent is the active curator CLI in headless mode (Claude: stream-json;
+Grok Build CLI: streaming-json), run in the active project's root with
+Read/Glob/Grep/Edit/Write under acceptEdits (project-fenced);
+interview stays read-only until finish drafts DESK-PROPOSAL.md; approve of that
+entry runs the write-armed found. Each queue entry's curatorial brief is injected as
+system-prompt context so the agent starts aligned without re-reading the file.
 
 Run standalone (web mode):  python3 server.py [--port 4242] [--no-open]
 Bundled (Electron .app):     PyInstaller sidecar; set DESK_PROJECTS for the registry path.
@@ -105,7 +106,8 @@ def agent_bin() -> str:
     stays authoritative until the user sets a custom curator.command.
     """
     cfg = current_curator()
-    cmd = (cfg.command or "claude").strip() or "claude"
+    fallback = curator_mod.DEFAULT_COMMAND.get(cfg.provider, "claude")
+    cmd = (cfg.command or fallback).strip() or fallback
     if cmd == "claude":
         return CLAUDE
     return cfg.resolved_command()
@@ -117,6 +119,42 @@ def with_model(cmd: list, task: str, request_model=None) -> list:
     if m:
         cmd += ["--model", m]
     return cmd
+
+
+def build_turn_cmd(
+    prompt: str,
+    *,
+    task: str,
+    request_model=None,
+    session_id: str | None = None,
+    system_append: str | None = None,
+    name: str | None = None,
+    tools_tier: str | None = None,
+    extra: list | None = None,
+) -> list:
+    """Dialect-aware headless argv for Claude / Grok / ChatGPT(Codex) / Gemini."""
+    cfg = current_curator()
+    model = cfg.model_for(task, request_model)
+    effort = cfg.effort_for(task)
+
+    class _Bin:
+        provider = cfg.provider
+        effort = cfg.effort
+        def resolved_command(self):
+            return agent_bin()
+
+    return runtime.build_argv(
+        _Bin(), prompt,
+        session_id=session_id,
+        system_append=system_append,
+        session_name=name,
+        tools_tier=tools_tier,
+        model=model,
+        effort=effort,
+        extra=extra,
+    )
+
+
 CHATLOG_LOCK = threading.Lock()
 CHATLOG_CAP = 500  # server-side cap: most recent N messages kept per project
 
@@ -182,8 +220,8 @@ SWEEP_TOOLS = [
     "--disallowedTools", "NotebookEdit",
 ]
 
-# the founding interview is read-only: the curator surveys and converses; all
-# writing waits for the found step (patron clicks finish), which carries SWEEP_TOOLS
+# the founding interview is read-only: the curator surveys and converses; finish
+# writes a single DESK-PROPOSAL.md; approve of that entry runs the write-armed found.
 INTERVIEW_TOOLS = [
     "--allowedTools",
     "Read", "Glob", "Grep",
@@ -207,10 +245,14 @@ ACCRUE_PROMPT = (
     "settled structure.\n"
     "4. Update {desk_dir}/MEMORY.md ONLY if this sitting produced a standing preference; else "
     "leave it untouched.\n"
-    "5. Append a short note to the existing session log at {session_log} (or write "
+    "5. CROSS-AGENT — when restocking, if a document is a gate for other agents (roadmap, "
+    "spec, interface contract), say so in the brief first line and set `unblocks` to what peer "
+    "work may resume after the patron approves. Lightly re-scan AGENTS.md / CLAUDE.md / fleet "
+    "paths if present; correct FAMILIARITY's peer map only when evidence changed.\n"
+    "6. Append a short note to the existing session log at {session_log} (or write "
     "{runtime_dir}/sessions/{stamp}-session.md if missing): what you restocked, any familiarity "
-    "updates — no per-entry essays.\n"
-    "6. Report tersely as you go."
+    "updates, any peer gates filed — no per-entry essays.\n"
+    "7. Follow the LIVE REPORTING block at the end of this prompt (patron watches the stream)."
 )
 
 SWEEP_PROMPT = (
@@ -233,13 +275,16 @@ SWEEP_PROMPT = (
     "ruling to its canonical documents exactly as written; annotate each applied row "
     "'— swept {today}'; never infer rulings; launch-type rulings (a 'go', a grant, an "
     "acquisition, a schedule) are NOT executed — append 'LAUNCH DIRECTIVE: <what>' to "
-    "{runtime_dir}/sweep.log.\n"
+    "{runtime_dir}/sweep.log AND stage a desk egress memo "
+    "(`setsweep egress <project> --kind launch --topic <slug>` or write under "
+    "{desk_dir}/outbound/) so pickup has one folder to drain.\n"
     "1b. BALLOTS — a persona's `QUESTIONS.md` (an `ask_type: fill` entry) carries the "
     "Dramaturge's casting questions as checkboxes; a ticked box is the patron's ruling. For each "
     "tick: if it CONFIRMS the persona's current chief/cast, mark it resolved, clear that question "
     "from the file, annotate '— swept {today}'. If it CHANGES the cast (a different chief, a figure "
     "kept/cut/re-weighted, a write-in), that is a RECAST that belongs to the Dramaturge, never the "
-    "desk: raise it as a memo to {root}/Characters/inbox/ (and record it) — do NOT recast the "
+    "desk: raise it as a memo to {root}/Characters/inbox/ (and record it) AND stage a short "
+    "`kind: domain` egress pointer under {desk_dir}/outbound/ — do NOT recast the "
     "persona BODY/SOURCES from the desk (the standing guardrail). Either way, learn the standing "
     "casting preference into MEMORY so the question is not re-asked.\n"
     "2. DIFF — use the PRECOMPUTED DIFFS block below (already computed against "
@@ -269,7 +314,8 @@ SWEEP_PROMPT = (
     "earlier pass). Default shape is THIN: one line per entry "
     "(id — unchanged-approved | comment acted | ripple fixed | flagged: …). Expand to a short "
     "paragraph only for judgment flags, multi-file ripples, or memos raised. If a domain memo "
-    "already carries the substance (e.g. Characters/inbox), point at it — do not restate it. "
+    "or desk egress file already carries the substance (e.g. Characters/inbox, "
+    "{desk_dir}/outbound/), point at it — do not restate it. "
     "Include each patron comment verbatim only when you acted on or deferred it.\n"
     "\n"
     "=== ACCRUE + RESTOCK (load-bearing; spend the sitting's intelligence here) ===\n"
@@ -294,9 +340,98 @@ SWEEP_PROMPT = (
     "   d. Seed purpose if creating FAMILIARITY.md: header naming it as the curator's "
     "project-centered expertise — what this corpus is, how pieces relate, what to watch — "
     "compounded by every restock so future briefs start informed.\n"
-    "8. Report tersely as you go — every substantive step in a line or two (patron watches live). "
-    "Do not narrate no-ops."
+    "8. Follow the LIVE REPORTING block at the end of this prompt (patron watches the stream).\n"
+    "\n"
+    "=== CROSS-AGENT / FLEET (approve + sweep is the patron gate) ===\n"
+    "8b. COORDINATION SCAN — briefly re-check multi-agent signals this sitting "
+    "(AGENTS.md, CLAUDE.md, .cursor/, fleet handoff paths, roadmap 'blocked on review' "
+    "language). Update FAMILIARITY or PROJECT.md only if the peer map changed.\n"
+    "8c. PUBLISH APPROVALS — after CLOSE, stage a desk egress memo "
+    "(`setsweep egress <project> --kind approval --topic sitting-approvals` or write under "
+    "{desk_dir}/outbound/) that other agents can read without opening Setsweep:\n"
+    "   - List each entry the patron **approved** this sitting: id, path, ask, date.\n"
+    "   - List **remaining pending** queue items that still block peer work (path + ask + "
+    "unblocks if set) — peers must not treat those as cleared.\n"
+    "   - If PROJECT.md / SWEEP-ACTIONS name peer agents or routes, put them in **Route:**.\n"
+    "   Leave Status: staged for fleet pickup. If nothing was approved and nothing blocks "
+    "peers, one line in the session log is enough (no empty memo required).\n"
+    "\n"
+    "=== SWEEP ACTIONS (extra work armed at founding) ===\n"
+    "9. After CLOSE/ACCRUE mechanics above, honor {desk_dir}/SWEEP-ACTIONS.md if it exists: "
+    "git commit of sitting changes (run `git init` first if the project has no repo yet), "
+    "stage outbound, append the named plaintext sitting log, update the named sheet path, "
+    "file egress memos for mail/Slack/webhook dispatch or reporting systems, approval "
+    "publication if listed, etc. Setsweep NEVER transmits mail/Slack/webhooks itself — "
+    "stage or `.setsweep/outbound/` egress only, and leave Status: staged for fleet pickup. "
+    "If SWEEP-ACTIONS says nothing extra, skip — but still do 8c when approvals or peer "
+    "blocks exist."
 )
+
+# Live stream narration during /api/sweep. Default is normal (more talkative than the
+# historical quiet default). Stored in settings.json as sweepVerbosity.
+SWEEP_VERBOSITY_LEVELS = ("quiet", "normal", "verbose")
+DEFAULT_SWEEP_VERBOSITY = "normal"
+
+SWEEP_VERBOSITY_INSTRUCTIONS = {
+    "quiet": (
+        "LIVE REPORTING — quiet: report only when something substantive changed — one or two "
+        "lines per real step. Skip no-ops, phase banners, and tool narration."
+    ),
+    "normal": (
+        "LIVE REPORTING — normal: the patron watches this stream. Open each major phase "
+        "(CLOSE rulings · DIFF · ASSESS · RIPPLE · LOG · ACCRUE · RESTOCK · SWEEP ACTIONS) "
+        "with a short banner line when you enter it. For every entry you touch, name the id "
+        "and what you did in one line. When restocking, name each new brief as you file it. "
+        "Skip pure no-ops (do not announce 'unchanged, skipping'). End with a 3–6 line recap "
+        "of what closed and what restocked."
+    ),
+    "verbose": (
+        "LIVE REPORTING — verbose: narrate as you work. Phase banners plus, before each "
+        "meaningful tool use, a half-line of intent; after reads/edits that matter, a one-line "
+        "takeaway. Quote patron comments you act on. Give assess live (not only in the session "
+        "log). When rippling, name each file you fix or flag. Restock: for each new entry, say "
+        "the title and why it was chosen. Finish with a structured recap (closed / flagged / "
+        "restocked / familiarity updates)."
+    ),
+}
+
+
+def normalize_sweep_verbosity(raw) -> str:
+    """quiet | normal | verbose — default normal (more talkative than the old terse sweep)."""
+    v = str(raw or "").strip().lower()
+    aliases = {
+        "terse": "quiet",
+        "minimal": "quiet",
+        "min": "quiet",
+        "standard": "normal",
+        "default": "normal",
+        "detailed": "verbose",
+        "full": "verbose",
+        "max": "verbose",
+    }
+    v = aliases.get(v, v)
+    return v if v in SWEEP_VERBOSITY_LEVELS else DEFAULT_SWEEP_VERBOSITY
+
+
+def sweep_verbosity_block(level: str | None = None) -> str:
+    """Instruction block appended to the sweep / accrue prompt."""
+    lvl = normalize_sweep_verbosity(level)
+    return SWEEP_VERBOSITY_INSTRUCTIONS[lvl]
+
+
+# Founding / propose / bootstrap: patrons watch a long agentic turn. Silence looks stuck.
+FOUNDING_LIVE_REPORTING = (
+    "\n\nLIVE REPORTING (required — the patron is watching this stream):\n"
+    "- Never go more than one meaningful tool call without a short chat line.\n"
+    "- Before each major write, announce it in one line "
+    "(e.g. 'Writing PROJECT.md…', 'Seeding MEMORY…', 'Filing queue entry: spine.md…').\n"
+    "- After each write, one half-line confirm (e.g. 'PROJECT.md done · 42 lines').\n"
+    "- If you fix your own mistake (schema, path, ask_type), say so in one line before re-writing.\n"
+    "- Prefer many small status lines over one big plan then silence. Users love output; "
+    "silence reads as a hang.\n"
+    "- End with a short recap of what was written and what they should do next."
+)
+
 
 # shared by the one-shot bootstrap and the interview's found step
 QUEUE_SCHEMA = (
@@ -358,84 +493,182 @@ BOOTSTRAP_PROMPT = (
     "brief is shown to the patron the instant the file loads AND given to the review agent, so "
     "it must orient a human on its own and prime the agent both. Set the top-level \"curated\" "
     "field to today + your role.\n"
+    "5b. SWEEP ACTIONS — write {desk_dir}/SWEEP-ACTIONS.md: for inbox kits default to staging "
+    "approved drafts to outbound (never transmit); for other kits default to 'nothing beyond "
+    "desk close' unless the survey clearly implies an append-only sitting log or egress for "
+    "dispatch. External mail/Slack/webhooks are never executed from the desk — stage or egress "
+    "only.\n"
     "6. If the folder does not look like a reviewable project at all (empty, pure data, etc.), do NOT "
     "invent entries — write a queue note saying what you found and what the patron should "
     "clarify, and say so in your report.\n"
     + QUEUE_SCHEMA +
-    "Finish with a terse report: families found, entries filed, anything odd."
+    "Finish with a terse report: families found, entries filed, sweep actions armed, anything odd."
+    + FOUNDING_LIVE_REPORTING
 )
 
-# ---- the founding interview (center-panel, multi-turn) ----
-# Phase A: read-only survey + conversation with the patron in the middle pane.
-# Phase B (patron clicks finish): FOUND_PROMPT resumes the same session with write
-# tools; the curator founds the desk and "swings over" to the right chat pane.
+# ---- the founding interview (agent chat, multi-turn) ----
+# Phase A (interview): read-only survey + prompt list + open discussion.
+# Phase B (finish → propose): write ONE DESK-PROPOSAL.md and queue it for the editor.
+# Phase C (approve proposal → found): digest the *edited* proposal, write the desk, first batch.
+PROPOSAL_ENTRY_ID = "desk-proposal"
+PROPOSAL_FILENAME = "DESK-PROPOSAL.md"
+
 INTERVIEW_ROLE = (
     "You are the founding curator of the {name} project (root: {root}), conducting the "
-    "FOUNDING INTERVIEW in the center panel of the patron's review app. Nothing is written "
-    "in this phase — your tools are read-only; the desk is founded only when the patron "
-    "clicks finish ✓.\n"
-    "WHAT THIS INTERVIEW IS FOR — hold this yourself, and put it to the patron plainly in your "
-    "own words at the start: you are about to become this project's standing second reader. A "
-    "short conversation now buys context you'd otherwise make them re-explain at every sitting "
-    "— what this project is to THEM, what they want watched, what is off-limits. You are "
-    "gathering just enough to found a desk that fits, NOT extracting a full specification. And "
-    "the desk is amendable: every sweep refines the charter, memory, and familiarity, so this is a strong "
-    "start, never a last word. The interview serves the patron — they can click finish ✓ the "
-    "moment they're satisfied, and you should make that feel available throughout, not earned "
-    "at the end.\n"
-    "SURVEY — map the project briskly: top-level structure, README/CLAUDE/index files, what "
-    "kinds of documents live here. Sample; do not read everything. Form a read of what this "
-    "project is and what 'review' means here, consistent with the kind the patron selected "
-    "(your kit, injected below; if none was chosen, judge it from the survey and the patron).\n"
-    "INTERVIEW — your first reply: a 3–4 line read of what you found, then one or two lines "
-    "framing what this interview is for and that they can finish whenever they like, then your "
-    "opening questions. The strongest signal at founding is the patron themselves; the files "
-    "only attest what they attest. THE CORE you want to come away with (ask in your own words, "
-    "and skip what the survey already answers): what this project is TO THEM; what they want a "
-    "second reader for; what must never be touched. Beyond the core, add only questions the "
-    "survey left genuinely open — at most 3–4 per turn, numbered, so they can answer by number. "
-    "Follow up; clarify; challenge gently where the files contradict them. Workmanlike and "
-    "terse — no flattery, no ceremony.\n"
-    "PACING — close each turn by orienting the patron: a light word on what you've still got in "
-    "mind to cover, and the standing reminder that they can keep going or click finish ✓ now and "
-    "let the desk improve from there. When the core is covered, say so plainly and RECOMMEND "
-    "finishing — stop manufacturing questions. The patron decides when it ends; your job is to "
-    "keep that choice easy and well-informed at every turn, never to interrogate them to "
-    "exhaustion."
+    "FOUNDING INTERVIEW in the patron's agent chat. Tools are read-only. Finish ✓ later "
+    "drafts one proposal file they edit and approve; only that approve founds the desk.\n"
+    "\n"
+    "PURPOSE — become this project's standing second reader. A short human conversation now "
+    "beats re-explaining every sitting. Desk is amendable later; this is a strong start.\n"
+    "\n"
+    "VOICE (critical — first impression):\n"
+    "- Write for a smart person who just opened the folder, not for another agent.\n"
+    "- During SURVEY: if you use more than a couple of tools, emit a one-line progress note "
+    "('Reading README…', 'Scanning top level…') so the stream is not silent.\n"
+    "- OPENING SHAPE — never a single dense paragraph. One short sentence saying what "
+    "this project *is*, in plain English. Then, if the survey earned them, 2–4 short "
+    "bullets — one concrete observation each (what stage it is at, what looks strong, "
+    "what looks unresolved). Then a blank line and the prompt list. No label like "
+    "'Short read.' No status-memo voice.\n"
+    "- Do NOT open with a dense dump of filenames, phase numbers, tool names, internal "
+    "block ids, score lines, or pipe-separated taxonomies. That detail belongs later "
+    "(proposal / deeper turns), not the greeting.\n"
+    "- Warm, brief, workmanlike — no flattery, no ceremony, no jargony self-narration.\n"
+    "\n"
+    "METHOD — survey-then-prompt (not open interrogation):\n"
+    "1. SURVEY — map the project briskly: top-level structure, README/CLAUDE/index, document "
+    "families. Sample; do not read everything. Keep survey notes for yourself; the *spoken* "
+    "opening stays plain.\n"
+    "2. EMPTY / GREENFIELD — if empty or no reviewable substance, open with: this looks "
+    "empty — new project here, or wrong folder? Scaffold only if they want a new project.\n"
+    "3. PROMPT LIST (same first reply, after the opening) — markdown confirmation card "
+    "from the kit stems (### N. [id] headings, GFM - [ ] / - [x]). Copy stems and options "
+    "VERBATIM, keeping the (choose one) tag on single-choice stems; add no other "
+    "per-question instruction text — no '(pick all that apply)', no restating how "
+    "checkboxes work; the card explains itself once. Pre-check what the survey supports. "
+    "Include sweep_actions every time. Leave room for open chat after the list.\n"
+    "   ELABORATE LINES — always emit empty: `Elaborate (optional):` with nothing after the "
+    "colon (or omit filler). NEVER pre-fill elaborate with survey notes, recommendations, "
+    "paraphrases, or 'if you'd rather…' coaching. Only the patron writes free response.\n"
+    "4. DELTAS ONLY — do not re-ask themes survey + kit + founding note already answer.\n"
+    "5. MULTI-AGENT — while surveying, notice whether other agents share this tree "
+    "(AGENTS.md, CLAUDE.md, .cursor/, fleet/handoff folders, 'blocked on review' language). "
+    "Pre-check the fleet stem from evidence; do not invent peers. Approvals later must be "
+    "publishable to those peers via desk egress on sweep.\n"
+    "6. PACING — when the patron returns the confirmation card (or says they are ready), "
+    "the UI advances automatically to draft the desk proposal — do NOT leave them waiting "
+    "on a hidden Finish button. After the card, one short line is enough: the proposal is "
+    "next; they will edit it, then approve. Do not invent more stems."
 )
 
 INTERVIEW_KICKOFF = (
-    "(The patron has opened the founding interview. Survey the project now, then give your "
-    "read and your opening questions.)"
+    "(The patron has opened the founding interview. Survey the project, then reply in "
+    "plain human language: one sentence on what this is, a few short bullet observations "
+    "if earned (never one dense paragraph, no 'Short read' label, no file inventory), "
+    "then the prompt-list confirmation card. If empty, ask new project vs "
+    "wrong folder. Invite discussion; when they return the card the desk will draft the "
+    "proposal automatically.)"
+)
+
+PROPOSE_PROMPT = (
+    "(The patron confirmed the interview (card returned or finish) — write the desk "
+    "PROPOSAL only, not the full desk. You hold write tools for this turn.\n"
+    "1. Write ONE file: {proposal_path}\n"
+    "   This is the editable charter draft the patron will review in the center pane and "
+    "approve when satisfied. Sections (use these headings):\n"
+    "   # Desk proposal — {name}\n"
+    "   ## What this project is — identity and purpose in the patron's terms (quote them "
+    "where their words were exact); kind/kit posture.\n"
+    "   ## What sittings should do — direction, review lens (kit default ± deltas), "
+    "priorities from the interview.\n"
+    "   ## Fences — what the curator must never auto-change; paths if named.\n"
+    "   ## Sweep extras — extra close-of-sitting work (or 'nothing beyond tidy-up and "
+    "restock'). "
+    "Include git commit if they ticked it (and note init-if-missing). If other agents share "
+    "this repo, default-include publishing approvals as desk egress on sweep. Never transmit "
+    "mail/Slack from the desk; stage or egress only.\n"
+    "   ## Other agents / fleet — who else works this tree (or 'desk only'); what they watch; "
+    "that patron approve+sweep is the gate and approvals are staged under "
+    ".setsweep/outbound/ for pickup.\n"
+    "   ## Document families & first batch — for an existing corpus: families, key paths, "
+    "what should surface first and why. For greenfield/empty: scaffold plan — first files to "
+    "CREATE (typically README/overview, then ROADMAP or PLAN, then further drafts along the "
+    "roadmap); say sittings will draft new material, not only review existing files.\n"
+    "   ## Open questions — only genuine unresolved items, or omit.\n"
+    "   Keep it under ~100 lines. Precise enough that approving it is a real signature of "
+    "intent. Prefer the patron's wording over your paraphrase.\n"
+    "2. THE QUEUE — set {queue_path} to JSON with a single pending entry (schema below) for "
+    "that proposal file ONLY:\n"
+    "   id: \"" + PROPOSAL_ENTRY_ID + "\"\n"
+    "   title: \"Desk proposal\"\n"
+    "   path: absolute path to the proposal file\n"
+    "   project / project_root: {name} / {root}\n"
+    "   ask_type: judgment\n"
+    "   ask: Edit this proposal until it matches your intent, then approve to found the desk\n"
+    "   urgency: high\n"
+    "   status: pending\n"
+    "   founding_phase: proposal\n"
+    "   brief: first line plain — this is the Setsweep desk proposal; approve founds the "
+    "desk from this text. Then one sentence on what they should check.\n"
+    "   Set top-level \"curated\" to today + founding proposal.\n"
+    "   Do NOT file other content entries yet. Do NOT write PROJECT.md, MEMORY.md, or the "
+    "rest of the desk apparatus — that waits for approve.\n"
+    + QUEUE_SCHEMA +
+    "3. Final message (one short line only): the UI will highlight next steps — do NOT "
+    "write a long how-to. e.g. 'Desk proposal filed — edit it, then Approve.' Terse."
+    + FOUNDING_LIVE_REPORTING
 )
 
 FOUND_PROMPT = (
-    "(The patron clicked finish — the interview is closed and you now hold write tools. "
-    "Found the desk for {name} ({root}) in one pass. Everything the interview established "
-    "governs; where their answers and the files disagree, THEIR ANSWERS WIN.\n"
-    "1. THE CHARTER — write {desk_dir}/PROJECT.md: what this project IS in the patron's own "
-    "terms (quote them where their words were exact), the kind you named, document families and "
-    "key paths, the review lens they gave you, conventions and what must never be auto-changed, "
-    "key references. Under ~80 lines.\n"
-    "2. THE MEMORY — seed {desk_dir}/MEMORY.md: a short header naming its purpose (the "
-    "curator's accrued judgment — rulings made and patron preferences learned, distilled by "
-    "every sweep; honored by every agent without re-asking), then the preferences the patron "
-    "STATED in this interview and any attested in the project's own files. Nothing invented.\n"
-    "2b. THE FAMILIARITY — seed {desk_dir}/FAMILIARITY.md: project-centered expertise (corpus "
-    "map, document families/roles, key paths, relationships). Seed from interview + survey "
-    "only; sweeps deepen it. Keep under ~120 lines.\n"
-    "3. THE PROGRAM — write {desk_dir}/review-program.md: document families, what needs their "
-    "reading or judgment and why, a batch plan if volume warrants, desk conventions (one "
-    "batch at a time; in-editor emendations are the tuning; approve = done).\n"
-    "4. THE FIRST QUEUE — populate {queue_path} (JSON; schema below): 5–10 entries, "
-    "urgency-ranked by what the interview said matters most. Read enough of each document "
-    "to write an HONEST brief to the BRIEF STANDARD in the schema below (plain human-usable "
-    "first line, then precise detail). Set the top-level \"curated\" field to today + your role.\n"
+    "(The patron APPROVED the desk proposal — you now found the desk for {name} ({root}). "
+    "Read {proposal_path} carefully FIRST. That file (especially any patron edits in the "
+    "editor) is the standing brief. Where the proposal and earlier interview chat disagree, "
+    "THE PROPOSAL WINS. Where the proposal and project files disagree, THE PROPOSAL WINS.\n"
+    "1. THE CHARTER — write {desk_dir}/PROJECT.md from the proposal: identity, kind, "
+    "families/paths, review lens, conventions and fences, key references. Under ~80 lines. "
+    "Quote the patron where their wording is exact. If other agents share this repo, name them "
+    "and that Setsweep approve+sweep is the patron gate (approvals egress on sweep).\n"
+    "2. THE MEMORY — seed {desk_dir}/MEMORY.md: purpose header + preferences stated in the "
+    "proposal/interview and attested in project files. Nothing invented.\n"
+    "2b. THE FAMILIARITY — seed {desk_dir}/FAMILIARITY.md from proposal + survey (corpus map "
+    "or greenfield scaffold map). Under ~120 lines.\n"
+    "2c. FOUNDING ANSWERS — write {desk_dir}/founding-answers.md: compact durable extract of "
+    "the approved proposal (status/direction/fences/priorities/sweep extras/elaborations).\n"
+    "2d. SWEEP ACTIONS — write {desk_dir}/SWEEP-ACTIONS.md from the proposal's sweep extras. "
+    "If nothing extra, one line. Never transmit mail/Slack from the desk.\n"
+    "3. THE PROGRAM — write {desk_dir}/review-program.md from the proposal: families and "
+    "batch plan, OR for greenfield the scaffold/roadmap program (next drafts when queue low). "
+    "Desk conventions: one batch at a time; in-editor emendations are the tuning; approve = done.\n"
+    "4. THE FIRST QUEUE — rewrite {queue_path} (JSON; schema below) with the first content "
+    "batch (typically 3–10 entries), urgency-ranked from the proposal's intent:\n"
+    "   - Existing corpus: real project documents that need attention; honest briefs.\n"
+    "   - Greenfield: CREATE the first files if missing (e.g. README/overview, then "
+    "ROADMAP.md or PLAN.md), then queue them with honest briefs. Do not leave an empty queue "
+    "when the proposal asked for scaffold.\n"
+    "   You may leave the desk-proposal entry approved at the bottom or omit it; do not make "
+    "it the only pending work. Set top-level \"curated\" to today + your role.\n"
     + QUEUE_SCHEMA +
-    "5. Your final message is shown in the RIGHT chat pane, where you live from now on — "
-    "address the patron directly: one line on the kind of desk now standing, the first "
-    "batch they'll find in the queue at left, and that they should select the first entry to "
-    "begin; questions and conversation continue in that pane.)"
+    "5. Final message: one line on the desk now standing, sweep actions if any, the first "
+    "batch, and that they should select the first content entry. Conversation continues here.)"
+    + FOUNDING_LIVE_REPORTING
+)
+
+# CLI / no-proposal fallback: one-shot found from files (legacy bootstrap path shares this shape).
+FOUND_LEGACY_PROMPT = (
+    "(No approved desk proposal is on file — found the desk for {name} ({root}) in one pass "
+    "from the interview session and/or the files. Where patron words and files disagree, "
+    "THEIR WORDS WIN.\n"
+    "1. THE CHARTER — write {desk_dir}/PROJECT.md (~80 lines).\n"
+    "2. THE MEMORY — seed {desk_dir}/MEMORY.md (stated + file-attested only).\n"
+    "2b. THE FAMILIARITY — seed {desk_dir}/FAMILIARITY.md (~120 lines).\n"
+    "2c. FOUNDING ANSWERS — write {desk_dir}/founding-answers.md from the interview if any.\n"
+    "2d. SWEEP ACTIONS — write {desk_dir}/SWEEP-ACTIONS.md.\n"
+    "3. THE PROGRAM — write {desk_dir}/review-program.md.\n"
+    "4. THE FIRST QUEUE — populate {queue_path} with 5–10 content entries (not a proposal "
+    "placeholder). Honest briefs. Set curated field.\n"
+    + QUEUE_SCHEMA +
+    "5. Final message: desk standing, first batch, select first entry.)"
+    + FOUNDING_LIVE_REPORTING
 )
 
 DEFAULT_ROLE = (
@@ -453,19 +686,6 @@ DEFAULT_ROLE = (
 
 CONTEXT_BLOCK = (
     "[Active file: {path}]\n[Curatorial brief] {brief}\n[The ask] {ask}\n\n"
-)
-
-# the glance: a one-breath reaction fired automatically when a file is opened,
-# reading ONLY the brief (not the file). Terse by construction — it keeps the
-# conversation warm and surfaces anything unclear, nothing more.
-GLANCE_PROMPT = (
-    "You are the desk assistant in the patron's review sitting (project: {project}). "
-    "They have just opened a document; they have ALREADY read its brief (shown to them on load), "
-    "so do NOT restate or summarize it. In ONE or TWO sentences — no preamble, no greeting — "
-    "ADD something: a question worth asking, a tension or risk the brief implies, what you'd "
-    "check first, or a connection worth noting. If the brief raises nothing to add, say so in "
-    "a few words rather than padding. Terse and concrete; they read or edit the document "
-    "next.\n\n[Document: {path}]\n[Brief they just read] {brief}"
 )
 
 EMPTY_QUEUE = {"curated": "empty — entries are filed by curating agents", "entries": []}
@@ -684,8 +904,9 @@ def mutate_queue(proj: dict, fn) -> dict:
 def project_orientation(proj: dict) -> str:
     """The curator's standing context, injected into every agent the app spawns:
     PROJECT.md (charter), MEMORY.md (patron prefs / rulings), FAMILIARITY.md
-    (project-centered expertise that compounds across restocks). Identity lives in
-    these files, not in any one session: any fresh agent that reads them IS the curator."""
+    (project-centered expertise), SWEEP-ACTIONS.md (extra close-of-sitting work).
+    Identity lives in these files, not in any one session: any fresh agent that reads
+    them IS the curator."""
     desk = desk_dir(proj)
     sections = (
         ("PROJECT.md", 2500, "Project orientation (PROJECT.md, curator-maintained)"),
@@ -694,6 +915,10 @@ def project_orientation(proj: dict) -> str:
         ("FAMILIARITY.md", 3000, "Project familiarity (FAMILIARITY.md — accrued map of this "
                                  "corpus: families, roles, paths, relationships, pitfalls; "
                                  "use it to write better briefs and deepen it when restocking)"),
+        ("SWEEP-ACTIONS.md", 1500, "Sweep actions (SWEEP-ACTIONS.md — extra work after "
+                                   "archive/restock: outbound stage, egress for dispatch, "
+                                   "plaintext sitting logs, sheets, reporting. Never transmit "
+                                   "mail/Slack/webhooks from the desk; stage or egress only)"),
     )
     parts = []
     for fname, cap, label in sections:
@@ -797,9 +1022,68 @@ def load_session(proj: dict) -> dict:
     return data
 
 
+def session_id_for_curator(
+    sess: dict | None = None,
+    proj: dict | None = None,
+    *,
+    model: str | None = None,
+) -> str | None:
+    """Return session_id only when it is safe to --resume under the active curator.
+
+    Claude / Grok / Codex / Gemini keep separate session stores — never resume a
+    foreign provider's id (Grok 404 → failure).
+
+    Grok (and other non-Claude providers) also bind a session to an agent/model:
+    resuming a composer/`cursor` session with `--model grok-4.5` fails with
+    MODEL_SWITCH_INCOMPATIBLE_AGENT. When `model` is given and does not match the
+    tagged session model (or the tag is missing), start a fresh session.
+    """
+    if sess is None:
+        if proj is None:
+            return None
+        sess = load_session(proj)
+    sid = sess.get("session_id")
+    if not sid:
+        return None
+    cur = current_curator().provider
+    tagged = (sess.get("provider") or "").strip()
+    if tagged:
+        if tagged != cur:
+            return None
+    elif cur not in ("claude", "cli"):
+        # Legacy records predate provider tagging — only Claude-family may resume.
+        return None
+
+    want = (model or "").strip()
+    if want and cur not in ("claude", "cli"):
+        have = (sess.get("model") or "").strip()
+        if have != want:
+            return None
+    return sid
+
+
 def save_session(proj: dict, **fields) -> dict:
-    """Shallow-merge the given fields into the project session record; returns it."""
+    """Shallow-merge the given fields into the project session record; returns it.
+
+    When a session_id is written, also stamp `provider` to the active curator so a
+    later provider switch does not --resume a foreign session. Callers should pass
+    `model=` when known so mid-session model switches can start fresh.
+    """
     cur = load_session(proj)
+    if "session_id" in fields:
+        sid = fields.get("session_id")
+        if sid:
+            if "provider" not in fields:
+                fields = {**fields, "provider": current_curator().provider}
+        else:
+            # Explicit clear — drop id, provider tag, and model binding
+            cur.pop("session_id", None)
+            cur.pop("provider", None)
+            cur.pop("model", None)
+            fields = {
+                k: v for k, v in fields.items()
+                if k not in ("session_id", "provider", "model")
+            }
     cur.update(fields)
     session_path(proj).parent.mkdir(parents=True, exist_ok=True)
     atomic_write(session_path(proj), json.dumps(cur, indent=2))
@@ -1013,6 +1297,8 @@ def register_project(name: str, root: str, kit: str | None = None,
         atomic_write(qp, json.dumps(
             dict(EMPTY_QUEUE, curated="awaiting founding curation"),
             indent=2, ensure_ascii=False))
+    import egress as _egress
+    _egress.ensure_egress(proj)
     return proj
 
 
@@ -1059,12 +1345,37 @@ def project_for_path(p: Path) -> dict | None:
     return best
 
 
-def mark_founded_if_filed(proj: dict) -> bool:
-    """A desk is founded once the curator has filed at least one queue entry; otherwise
-    the session stays resumable and founding can be run again. Returns True if it flipped
-    to founded. Shared by the founding handler and the CLI so both judge 'done' the same."""
+def is_proposal_entry(e: dict | None) -> bool:
+    """True for the founding desk-proposal queue entry (not content work)."""
+    if not isinstance(e, dict):
+        return False
+    if e.get("id") == PROPOSAL_ENTRY_ID or e.get("founding_phase") == "proposal":
+        return True
+    path = str(e.get("path") or "").replace("\\", "/")
+    return path.endswith("/" + PROPOSAL_FILENAME) or path.endswith(PROPOSAL_FILENAME)
+
+
+def content_entries(q: dict | None) -> list:
+    """Queue entries that count as real work (excludes the desk proposal)."""
+    return [e for e in ((q or {}).get("entries") or []) if not is_proposal_entry(e)]
+
+
+def proposal_path(proj: dict) -> Path:
+    return desk_dir(proj) / PROPOSAL_FILENAME
+
+
+def proposal_on_disk(proj: dict) -> bool:
     try:
-        if load_queue(proj).get("entries"):
+        return proposal_path(proj).is_file() and proposal_path(proj).stat().st_size > 0
+    except OSError:
+        return False
+
+
+def mark_founded_if_filed(proj: dict) -> bool:
+    """A desk is founded once the curator has filed at least one *content* queue entry
+    (not the desk-proposal placeholder). Shared by founding handlers and the CLI."""
+    try:
+        if content_entries(load_queue(proj)):
             save_session(proj, status="founded")
             return True
     except Exception:  # noqa: BLE001
@@ -1073,8 +1384,23 @@ def mark_founded_if_filed(proj: dict) -> bool:
 
 
 def desk_is_founded(proj: dict) -> bool:
-    """True when session status is founded (entries-alone is healed via mark_founded_if_filed)."""
+    """True when session status is founded (content entries heal via mark_founded_if_filed)."""
     return load_session(proj).get("status") == "founded"
+
+
+def desk_is_proposing(proj: dict) -> bool:
+    """Proposal phase: session says proposing, or proposal file is the only work on the queue."""
+    st = load_session(proj).get("status")
+    if st == "founded":
+        return False
+    if st == "proposing":
+        return True
+    try:
+        q = load_queue(proj)
+    except Exception:  # noqa: BLE001
+        return False
+    ents = q.get("entries") or []
+    return bool(ents) and not content_entries(q) and any(is_proposal_entry(e) for e in ents)
 
 
 # ---------- admin / debug ----------
@@ -1194,6 +1520,8 @@ def admin_report(active_pid: str | None) -> dict:
             "port": SERVER_PORT,
             "claude_path": cfg.resolved_command(),  # back-compat alias
             "claude_exists": cfg.command_exists(),
+            "curator_path": cfg.resolved_command(),
+            "curator_exists": cfg.command_exists(),
             "curator": cfg.as_public_dict(),
             "project_count": len(projects),
             "active": active_pid,
@@ -1251,6 +1579,9 @@ class Handler(BaseHTTPRequestHandler):
                 body = (STATIC / "index.html").read_bytes()
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
+                # Sitting UI iterates quickly — never let Electron/browser keep a stale shell.
+                self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+                self.send_header("Pragma", "no-cache")
                 self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
                 self.wfile.write(body)
@@ -1258,6 +1589,8 @@ class Handler(BaseHTTPRequestHandler):
                 body = (STATIC / url.path.lstrip("/")).read_bytes()
                 self.send_response(200)
                 self.send_header("Content-Type", "application/javascript")
+                self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+                self.send_header("Pragma", "no-cache")
                 self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
                 self.wfile.write(body)
@@ -1302,6 +1635,8 @@ class Handler(BaseHTTPRequestHandler):
             elif url.path == "/api/settings":
                 # Always surface a normalized curator block (migration is read-side)
                 self.send_json(curator_mod.ensure_curator_settings(load_settings()))
+            elif url.path == "/api/curator/catalog":
+                self.send_json(curator_mod.build_catalog(load_settings()))
             elif url.path == "/api/admin":
                 self.send_json(admin_report(qs.get("project", [None])[0]))
             elif url.path == "/api/lineage":
@@ -1342,16 +1677,27 @@ class Handler(BaseHTTPRequestHandler):
                 proj = get_project(qs.get("project", [None])[0])
                 q = load_queue(proj)
                 entries = q.get("entries") or []
+                content = content_entries(q)
                 if want_mutate(qs):
                     mark_founded_if_filed(proj)
+                    # proposal-only queue ⇒ proposing (not founded)
+                    if not content_entries(load_queue(proj)) and (
+                        proposal_on_disk(proj)
+                        or any(is_proposal_entry(e) for e in entries)
+                    ):
+                        st = load_session(proj).get("status")
+                        if st not in ("founded", "proposing"):
+                            save_session(proj, status="proposing")
                 iv = load_interview(proj)
-                # status may still be "interviewing" under mutate=0 even when entries exist;
-                # has_entries lets viewports treat the desk as founded without healing.
+                # has_entries = content work (viewport founded signal); proposal alone is not.
                 self.send_json({
                     "status": iv.get("status", "none"),
                     "has_session": bool(iv.get("session_id")),
-                    "has_entries": bool(entries),
-                    "entry_count": len(entries),
+                    "has_entries": bool(content),
+                    "entry_count": len(content),
+                    "has_proposal": proposal_on_disk(proj) or any(
+                        is_proposal_entry(e) for e in entries),
+                    "proposal_path": str(proposal_path(proj)),
                 })
             elif url.path == "/api/file":
                 proj = get_project(qs.get("project", [None])[0])
@@ -1399,7 +1745,12 @@ class Handler(BaseHTTPRequestHandler):
                 log = runtime_dir(proj) / "approvals.log"
                 with log.open("a") as f:
                     f.write(f"{e['approved']}\t{e['id']}\t{e['path']}\t{e.get('ask','')}\n")
-                self.send_json({"ok": True})
+                # Proposal approve is only a bookmark here; the client streams POST /api/found
+                # so the curator digests on-disk edits and files the first content batch.
+                self.send_json({
+                    "ok": True,
+                    "founding": is_proposal_entry(e) and not desk_is_founded(proj),
+                })
             elif url.path == "/api/settings":
                 self.send_json(save_settings(d))
             elif url.path == "/api/chatlog":
@@ -1472,14 +1823,14 @@ class Handler(BaseHTTPRequestHandler):
                 self.bootstrap(d)
             elif url.path == "/api/interview":
                 self.interview(d)
+            elif url.path == "/api/propose":
+                self.propose(d)
             elif url.path == "/api/found":
                 self.found(d)
             elif url.path == "/api/entry":
                 self.update_entry(d)
             elif url.path == "/api/open-link":
                 self.open_link(d)
-            elif url.path == "/api/glance":
-                self.glance(d)
             else:
                 self.send_json({"error": "not found"}, 404)
         except PermissionError as e:
@@ -1548,21 +1899,11 @@ class Handler(BaseHTTPRequestHandler):
         subprocess.Popen(["open", "-t", str(safe)])  # macOS: default text editor
         self.send_json({"ok": True, "path": str(safe)})
 
-    # ---- glance: a fast, terse reaction to a just-loaded brief (no tools, no session) ----
-    def glance(self, d):
-        proj = get_project(d.get("project"))
-        brief = str(d.get("brief", "")).strip() or "(no brief prepared)"
-        path = str(d.get("path", ""))
-        prompt = GLANCE_PROMPT.format(path=path, brief=brief, project=proj["name"])
-        cmd = [agent_bin(), "-p", prompt, "--output-format", "stream-json", "--verbose"]
-        with_model(cmd, "glance", d.get("model"))
-        # no tools, no resume: a throwaway reaction read only from the brief
-        self.run_curator(cmd, str(project_root(proj)))
-
     def chat(self, d):
         proj = get_project(d.get("project"))
         sess = load_session(proj)
-        sid = sess.get("session_id")
+        turn_model = current_curator().model_for("chat", d.get("model"))
+        sid = session_id_for_curator(sess, model=turn_model)
         message = d["message"]
 
         # The entry is OPTIONAL: a project-level turn (no file selected — e.g. answering a
@@ -1571,6 +1912,7 @@ class Handler(BaseHTTPRequestHandler):
         # lets the patron reply when nothing is open (the sweep leaves no current file).
         entry = None
         eid = d.get("id")
+        proposing = desk_is_proposing(proj)
         if eid:
             q = load_queue(proj)
             entry = find_entry(q, eid)
@@ -1584,12 +1926,15 @@ class Handler(BaseHTTPRequestHandler):
                     brief=entry.get("brief", "(none prepared)"),
                     ask=entry.get("ask", "general review"),
                 ) + message
+            if proposing and is_proposal_entry(entry) and (not sid or switched):
+                message = (
+                    "[Founding proposal phase] The patron is editing the desk proposal. "
+                    "Revise that file with Edit/Write when they ask. Do NOT write PROJECT.md, "
+                    "MEMORY.md, or found the full desk until they click approve.\n\n"
+                ) + message
 
-        cmd = [agent_bin(), "-p", message, "--output-format", "stream-json", "--verbose"]
-        with_model(cmd, "chat", d.get("model"))
-        if sid:
-            cmd += ["--resume", sid]
-        else:  # first-ever turn on this project: create the named project session
+        sysprompt = None
+        if not sid:  # first-ever turn on this project: create the named project session
             role = proj.get("role") or DEFAULT_ROLE
             sysprompt = role.format(
                 path=(entry["path"] if entry else "(no file selected)"),
@@ -1610,8 +1955,17 @@ class Handler(BaseHTTPRequestHandler):
             sc = scope_note(proj)
             if sc:
                 sysprompt += "\n\n" + sc
-            cmd += ["--append-system-prompt", sysprompt, "--name", session_name(proj)]
-        cmd += CHAT_TOOLS
+            if proposing:
+                sysprompt += (
+                    "\n\nFounding proposal phase: help refine DESK-PROPOSAL.md only until "
+                    "the patron approves it."
+                )
+
+        cmd = build_turn_cmd(
+            message, task="chat", request_model=d.get("model"),
+            session_id=sid, system_append=sysprompt,
+            name=session_name(proj), tools_tier="chat",
+        )
 
         # record the active file (only when an entry is in play) so a same-file follow-up
         # won't re-inject context; the session_id is persisted by run_curator's init hook below
@@ -1621,7 +1975,10 @@ class Handler(BaseHTTPRequestHandler):
             save_session(proj, name=session_name(proj))
 
         def persist(new_sid):
-            save_session(proj, session_id=new_sid)
+            kw = {"session_id": new_sid}
+            if turn_model:
+                kw["model"] = turn_model
+            save_session(proj, **kw)
 
         self.run_curator(cmd, str(project_root(proj)), prior_sid=sid, persist=persist,
                          record_user_message=d["message"], role="review-agent")
@@ -1632,14 +1989,15 @@ class Handler(BaseHTTPRequestHandler):
         compact turn's own usage reflects the pre-compaction size, so the client does not
         drive the context bar from it; the bar refreshes on the next real chat turn."""
         proj = get_project(d.get("project"))
-        sid = load_session(proj).get("session_id")
+        turn_model = current_curator().model_for("chat", d.get("model"))
+        sid = session_id_for_curator(proj=proj, model=turn_model)
         if not sid:
             self.run_curator(["true"], str(project_root(proj)))  # no session: emit clean stream, no-op
             return
-        cmd = [agent_bin(), "-p", "/compact", "--output-format", "stream-json", "--verbose",
-               "--resume", sid]
-        with_model(cmd, "chat", d.get("model"))
-        cmd += CHAT_TOOLS
+        cmd = build_turn_cmd(
+            "/compact", task="chat", request_model=d.get("model"),
+            session_id=sid, tools_tier="chat",
+        )
         self.run_curator(cmd, str(project_root(proj)), prior_sid=sid)
 
     def sweep(self, d):
@@ -1720,10 +2078,11 @@ class Handler(BaseHTTPRequestHandler):
         orientation = project_orientation(proj)
         if orientation:
             prompt += "\n\n" + orientation
-        # Accrue frameworks (brief + familiarity scaffolds)
+        # Accrue / egress frameworks
         for fname, label in (
             ("frameworks/brief.md", "Brief framework"),
             ("frameworks/familiarity.md", "Familiarity framework"),
+            ("frameworks/egress.md", "Egress framework"),
         ):
             try:
                 text = (APPDIR / "kits" / fname).read_text(encoding="utf-8").strip()
@@ -1731,6 +2090,11 @@ class Handler(BaseHTTPRequestHandler):
                 text = ""
             if text:
                 prompt += f"\n\n{label}:\n{text[:2500]}"
+        import egress as _egress
+        try:
+            prompt += "\n\n" + _egress.status_for_prompt(proj)
+        except OSError:
+            pass
         kit_ctx = kits.as_context(
             kits.for_project(proj, APPDIR / "kits", load_settings()), "sweep")
         if kit_ctx:
@@ -1743,17 +2107,24 @@ class Handler(BaseHTTPRequestHandler):
             quoted = "\n".join("> " + ln for ln in thrust.splitlines())
             prompt = ("The curator's steer for this sitting — read it first; let it shape where "
                       "you press hardest as you close the desk:\n\n" + quoted + "\n\n— · —\n\n" + prompt)
-        cmd = [agent_bin(), "-p", prompt, "--output-format", "stream-json", "--verbose"]
-        with_model(cmd, "setup", d.get("model"))
-        sid = load_session(proj).get("session_id")
-        if sid:
-            cmd += ["--resume", sid]
-        else:
-            cmd += ["--name", session_name(proj)]
-        cmd += SWEEP_TOOLS
+        # Live-stream verbosity (settings.sweepVerbosity; request may override for one-shot)
+        verb = d.get("verbosity") if d.get("verbosity") not in (None, "") else \
+            load_settings().get("sweepVerbosity")
+        prompt += "\n\n" + sweep_verbosity_block(verb)
+        sid = session_id_for_curator(
+            proj=proj, model=current_curator().model_for("setup", d.get("model")),
+        )
+        cmd = build_turn_cmd(
+            prompt, task="setup", request_model=d.get("model"),
+            session_id=sid, name=session_name(proj), tools_tier="sweep",
+        )
 
         def persist(new_sid):
-            save_session(proj, session_id=new_sid, name=session_name(proj))
+            kw = {"session_id": new_sid, "name": session_name(proj)}
+            m = current_curator().model_for("setup", d.get("model"))
+            if m:
+                kw["model"] = m
+            save_session(proj, **kw)
 
         self.run_curator(cmd, str(project_root(proj)), prior_sid=sid, persist=persist,
                          role="sweep")
@@ -1869,100 +2240,209 @@ class Handler(BaseHTTPRequestHandler):
             atomic_write(PROJECTS_PATH, json.dumps(data, indent=2, ensure_ascii=False))
         self.send_json({"projects": load_projects(), "home": str(HOME)})
 
-    # ---- bootstrap: the founding curator surveys, programs, and fills the first queue ----
+    # ---- bootstrap: one-shot found from files (CLI / legacy; UI demotes this) ----
     def bootstrap(self, d):
         proj = get_project(d.get("project"))
         if desk_is_founded(proj):
             self.stream_idle("Desk already founded. Use refound to start over.")
             return
         if mark_founded_if_filed(proj):
-            self.stream_idle("Queue already has entries — marked founded.")
+            self.stream_idle("Queue already has content entries — marked founded.")
             return
         prompt = BOOTSTRAP_PROMPT.format(
             name=proj["name"], root=str(project_root(proj)),
             desk_dir=str(desk_dir(proj)), queue_path=str(queue_path(proj)),
         )
-        cmd = [agent_bin(), "-p", prompt, "--output-format", "stream-json", "--verbose"]
-        with_model(cmd, "setup", d.get("model"))
-        cmd += SWEEP_TOOLS  # write powers, confined by cwd + acceptEdits to the project tree
+        cmd = build_turn_cmd(
+            prompt, task="setup", request_model=d.get("model"), tools_tier="sweep",
+        )
         self.run_curator(cmd, str(project_root(proj)))
-        mark_founded_if_filed(proj)  # founded iff the curator filed entries (shared rule, as in found())
+        mark_founded_if_filed(proj)
 
-    # ---- the founding interview: read-only survey + conversation (center panel) ----
+    # ---- the founding interview: read-only survey + conversation (agent chat) ----
     def interview(self, d):
         proj = get_project(d.get("project"))
         if desk_is_founded(proj):
             self.stream_idle("Desk already founded. Use refound to interview again.")
             return
-        sid = load_session(proj).get("session_id")
+        if desk_is_proposing(proj):
+            self.stream_idle(
+                "Desk proposal is ready — edit it in the center pane, talk here to revise, "
+                "approve when it matches your intent.")
+            return
+        sid = session_id_for_curator(
+            proj=proj, model=current_curator().model_for("chat", d.get("model")),
+        )
         message = str(d.get("message") or "").strip() or INTERVIEW_KICKOFF
-        cmd = [agent_bin(), "-p", message, "--output-format", "stream-json", "--verbose"]
-        with_model(cmd, "chat", d.get("model"))
-        if sid:
-            cmd += ["--resume", sid]
-        else:  # first turn creates the named project session (read-only this phase)
+        role = None
+        if not sid:  # first turn creates the named project session (read-only this phase)
             role = INTERVIEW_ROLE.format(name=proj["name"], root=str(project_root(proj)))
             note = (load_session(proj).get("founding_note") or "").strip()
             if note:
                 role += ("\n\nThe patron left a founding note — project-specific quirks and needs "
-                         "to honor; weave them into your questions and into the charter:\n" + note)
+                         "to honor; weave them into the prompt list (as defaults / deltas), "
+                         "not as blank interrogation:\n" + note)
+            kit = kits.for_project(proj, APPDIR / "kits", load_settings())
+            kit_ctx = kits.as_context(kit, "interview")
+            if kit_ctx:
+                role += "\n\n" + kit_ctx
+            else:
+                role += "\n\n" + kits.as_context({"name": "general", "interview": []}, "interview")
             sc = scope_note(proj)
             if sc:
                 role += "\n\n" + sc
-            cmd += ["--append-system-prompt", role, "--name", session_name(proj)]
-        cmd += INTERVIEW_TOOLS
+        cmd = build_turn_cmd(
+            message, task="chat", request_model=d.get("model"),
+            session_id=sid, system_append=role,
+            name=session_name(proj), tools_tier="interview",
+        )
 
         def persist(new_sid):
-            save_session(proj, session_id=new_sid, status="interviewing",
-                         name=session_name(proj))
+            kw = {
+                "session_id": new_sid,
+                "status": "interviewing",
+                "name": session_name(proj),
+            }
+            m = current_curator().model_for("chat", d.get("model"))
+            if m:
+                kw["model"] = m
+            save_session(proj, **kw)
 
         self.run_curator(cmd, str(project_root(proj)), prior_sid=sid, persist=persist)
 
-    # ---- finish: the curator founds the desk with write tools, in the same session ----
+    # ---- finish interview: write DESK-PROPOSAL.md + single queue entry (not full found) ----
+    def propose(self, d):
+        proj = get_project(d.get("project"))
+        if desk_is_founded(proj):
+            self.stream_idle("Desk already founded. Use refound to start over.")
+            return
+        if mark_founded_if_filed(proj):
+            self.stream_idle("Queue already has content entries — marked founded.")
+            return
+        turn_model = current_curator().model_for("setup", d.get("model"))
+        # Prefer setup model, but resume chat-tagged interview session when compatible
+        sid = session_id_for_curator(proj=proj, model=turn_model)
+        if not sid:
+            sid = session_id_for_curator(
+                proj=proj, model=current_curator().model_for("chat", d.get("model")))
+        prop = proposal_path(proj)
+        prop.parent.mkdir(parents=True, exist_ok=True)
+        fields = dict(
+            name=proj["name"], root=str(project_root(proj)),
+            desk_dir=str(desk_dir(proj)), queue_path=str(queue_path(proj)),
+            proposal_path=str(prop),
+        )
+        prompt = PROPOSE_PROMPT.format(**fields)
+        kit_ctx = kits.as_context(
+            kits.for_project(proj, APPDIR / "kits", load_settings()), "found")
+        if kit_ctx:
+            prompt += "\n\n" + kit_ctx
+        iv_kit = kits.for_project(proj, APPDIR / "kits", load_settings())
+        iv_ctx = kits.as_context(iv_kit or {"name": "general", "interview": []}, "interview")
+        if iv_ctx:
+            prompt += ("\n\nHonor the interview prompt list / patron ticks when drafting "
+                       "the proposal:\n" + iv_ctx)
+        note = (load_session(proj).get("founding_note") or "").strip()
+        if note:
+            prompt += ("\n\nPatron's founding note (honor in the proposal):\n" + note)
+        sc = scope_note(proj)
+        if sc:
+            prompt += "\n\n" + sc
+        cmd = build_turn_cmd(
+            prompt, task="setup", request_model=d.get("model"),
+            session_id=sid, name=session_name(proj), tools_tier="sweep",
+        )
+
+        def persist(new_sid):
+            kw = {
+                "session_id": new_sid,
+                "status": "proposing",
+                "name": session_name(proj),
+            }
+            if turn_model:
+                kw["model"] = turn_model
+            save_session(proj, **kw)
+
+        self.run_curator(cmd, str(project_root(proj)), prior_sid=sid, persist=persist,
+                         role="founding-curator")
+        # Ensure proposing even if the agent forgot to set status mid-stream
+        if not mark_founded_if_filed(proj):
+            if proposal_on_disk(proj) or desk_is_proposing(proj):
+                save_session(proj, status="proposing")
+            elif any(is_proposal_entry(e) for e in (load_queue(proj).get("entries") or [])):
+                save_session(proj, status="proposing")
+
+    # ---- approve proposal (or legacy): digest proposal / found desk + first content batch ----
     def found(self, d):
         proj = get_project(d.get("project"))
         if desk_is_founded(proj):
             self.stream_idle("Desk already founded. Use refound to start over.")
             return
         if mark_founded_if_filed(proj):
-            # Entries already filed (prior partial found / test fixtures) — heal without re-run.
-            self.stream_idle("Queue already has entries — marked founded.")
+            self.stream_idle("Queue already has content entries — marked founded.")
             return
-        sid = load_session(proj).get("session_id")
-        if sid:  # continue the SAME interview session, now with write tools
-            prompt = FOUND_PROMPT.format(
-                name=proj["name"], root=str(project_root(proj)),
-                desk_dir=str(desk_dir(proj)), queue_path=str(queue_path(proj)))
-        else:  # no interview happened (API caller / skipped): one-shot founding
+        turn_model = current_curator().model_for("setup", d.get("model"))
+        sid = session_id_for_curator(proj=proj, model=turn_model)
+        if not sid:
+            sid = session_id_for_curator(
+                proj=proj, model=current_curator().model_for("chat", d.get("model")))
+        fields = dict(
+            name=proj["name"], root=str(project_root(proj)),
+            desk_dir=str(desk_dir(proj)), queue_path=str(queue_path(proj)),
+            proposal_path=str(proposal_path(proj)),
+        )
+        has_proposal = proposal_on_disk(proj)
+        if has_proposal:
+            prompt = FOUND_PROMPT.format(**fields)
+        elif sid:
+            prompt = FOUND_LEGACY_PROMPT.format(**fields)
+        else:
             prompt = BOOTSTRAP_PROMPT.format(
                 name=proj["name"], root=str(project_root(proj)),
-                desk_dir=str(desk_dir(proj)), queue_path=str(queue_path(proj)))
+                desk_dir=str(desk_dir(proj)), queue_path=str(queue_path(proj)),
+            )
         kit_ctx = kits.as_context(
             kits.for_project(proj, APPDIR / "kits", load_settings()), "found")
         if kit_ctx:
             prompt += "\n\n" + kit_ctx
+        if has_proposal:
+            prompt += (
+                "\n\nCRITICAL: Re-read the proposal file on disk immediately before writing "
+                "desk files — the patron may have edited it in the center pane after you "
+                "drafted it. Their on-disk text is authoritative."
+            )
+        else:
+            iv_kit = kits.for_project(proj, APPDIR / "kits", load_settings())
+            iv_ctx = kits.as_context(iv_kit or {"name": "general", "interview": []}, "interview")
+            if iv_ctx:
+                prompt += ("\n\nUse the interview confirmation card (and the patron's ticks/"
+                           "elaborations in this session) when writing founding-answers.md and "
+                           "SWEEP-ACTIONS.md:\n" + iv_ctx)
         note = (load_session(proj).get("founding_note") or "").strip()
         if note:
-            prompt += ("\n\nPatron's founding note (project-specific quirks and needs to honor in "
-                       "the charter and the first queue):\n" + note)
+            prompt += ("\n\nPatron's founding note (honor in the charter and first queue):\n"
+                       + note)
         sc = scope_note(proj)
         if sc:
             prompt += "\n\n" + sc
-        cmd = [agent_bin(), "-p", prompt, "--output-format", "stream-json", "--verbose"]
-        with_model(cmd, "setup", d.get("model"))
-        if sid:
-            cmd += ["--resume", sid]
-        else:
-            cmd += ["--name", session_name(proj)]
-        cmd += SWEEP_TOOLS  # write powers, confined by cwd + acceptEdits
+        cmd = build_turn_cmd(
+            prompt, task="setup", request_model=d.get("model"),
+            session_id=sid, name=session_name(proj), tools_tier="sweep",
+        )
 
         def persist(new_sid):
-            save_session(proj, session_id=new_sid, status="interviewing",
-                         name=session_name(proj))
+            kw = {
+                "session_id": new_sid,
+                "status": "proposing" if has_proposal else "interviewing",
+                "name": session_name(proj),
+            }
+            if turn_model:
+                kw["model"] = turn_model
+            save_session(proj, **kw)
 
         self.run_curator(cmd, str(project_root(proj)), prior_sid=sid, persist=persist,
                          role="founding-curator")
-        mark_founded_if_filed(proj)  # founded iff the curator filed entries (shared rule)
+        mark_founded_if_filed(proj)
 
     def run_curator(self, cmd, cwd, prior_sid=None, persist=None, record_user_message=None,
                     role="agent"):
@@ -1988,26 +2468,45 @@ class Handler(BaseHTTPRequestHandler):
         assert proc.stdout is not None
         meter = runtime.UsageMeter()
         cap = {"sid": prior_sid, "text": [], "tools": [], "edits": []}
+        noise: list[str] = []  # non-JSON CLI chatter (e.g. Grok resume 404)
+        saw_error_evt = False
 
         def on_session(new_sid):
             cap["sid"] = new_sid
             if persist and new_sid and new_sid != prior_sid:
                 persist(new_sid)  # immediately, so a fast next turn finds the session
 
+        def iter_lines():
+            for line in proc.stdout:
+                raw = line.rstrip("\n")
+                stripped = raw.strip()
+                if stripped and not stripped.startswith("{"):
+                    noise.append(stripped)
+                yield line
+
         try:
-            for evt in runtime.normalize(proc.stdout, meter, on_session):
+            for evt in runtime.normalize(iter_lines(), meter, on_session):
                 if evt["t"] == "text":
                     cap["text"].append(evt["s"])
                 elif evt["t"] == "tool":
                     cap["tools"].append(evt["s"])
                     if evt.get("tool") in lineage.WRITE_TOOLS and evt.get("path"):
                         cap["edits"].append(evt["path"])
+                elif evt["t"] == "error":
+                    saw_error_evt = True
                 if not self.stream_line(evt):  # client gone
                     proc.kill()
                     break
             proc.wait(timeout=10)
-            if proc.returncode not in (0, None, -9):
-                self.stream_line({"t": "error", "s": f"curator exited {proc.returncode}"})
+            if proc.returncode not in (0, None, -9) and not saw_error_evt:
+                detail = next(
+                    (n for n in reversed(noise)
+                     if n.lower().startswith("error") or "not found" in n.lower()),
+                    noise[-1] if noise else None,
+                )
+                msg = (f"{detail} (exit {proc.returncode})" if detail
+                       else f"curator exited {proc.returncode}")
+                self.stream_line({"t": "error", "s": msg})
         except Exception as e:  # noqa: BLE001
             proc.kill()
             self.stream_line({"t": "error", "s": repr(e)})

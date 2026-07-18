@@ -41,6 +41,28 @@ Rank the queue so the documents that most need them come first.
 Any artifact left awaiting the patron registers a queue entry, with a brief, in the same sitting it
 is filed. Nothing waits for them unannounced.
 
+## Cross-agent coordination
+
+Many projects are shared with **other agents** (coding agents in the same tree, fleet pickup,
+CI). Setsweep is often the **patron gate**: work waits in the queue until approve + sweep.
+
+1. **Know the peers** — founding captures who else works here (`PROJECT.md` / familiarity /
+   `SWEEP-ACTIONS.md`). On every sweep, re-scan lightly for multi-agent signals
+   (`AGENTS.md`, `CLAUDE.md`, `.cursor/`, fleet handoff paths, open "blocked on review"
+   language in roadmaps) and keep the map honest.
+2. **Pending = blocked for peers** — if an entry's ask or `unblocks` field names work other
+   agents must not proceed on, treat that as a hard gate in briefs and session log. Do not
+   imply in egress that peers may proceed while the entry is still pending.
+3. **Approve + sweep publishes** — approve alone is a desk bookmark. When the sitting is
+   swept, **stage a `kind: approval` egress memo** under `.setsweep/outbound/` listing
+   (a) paths the patron approved this sitting and (b) remaining pending items that still
+   block peers. Fleet pickup and other agents read staged egress — they will not re-read
+   `approvals.log` unless told to. Prefer `setsweep egress … --kind approval` or the close
+   kit's mechanical publisher.
+4. **Restock with peers in mind** — when filing the next batch, if a document is a gate for
+   other agents, say so in the brief's first line and fill `unblocks` with what their work
+   may resume after approval.
+
 ## Ripple discipline (during a sweep)
 
 When a change ripples into the rest of the project:
@@ -51,6 +73,32 @@ When a change ripples into the rest of the project:
   `working-record.jsonl`, snapshots — are history. Never rewrite them.
 
 Approvals never auto-mutate canonical documents; only a sweep, on request, applies rulings outward.
+
+## Egress discipline
+
+`.setsweep/outbound/` is the desk's staging queue for signals meant for the broader agent ecosystem
+(handoffs, Majordomo escalations, launch directives, domain memos). Stage with
+`setsweep egress` (or write the same header shape by hand). Leave `Status: staged` — fleet pickup
+drains and routes. Never write into `~/Seafile/System/` from the curator sandbox; never transmit.
+
+This is **not** the inbox kit's `<root>/outbox` (approved mail drafts for an out-of-band sender).
+
+- Launch-type ledger rulings: append `LAUNCH DIRECTIVE:` to `runtime/sweep.log` **and** stage a
+  `kind: launch` egress memo.
+- Domain memos may still land in their project path (e.g. `Characters/inbox`); also stage a short
+  `kind: domain` egress pointer so pickup sees one place.
+- Session logs: point at egress paths; do not restate the body.
+
+See `kits/frameworks/egress.md` for Kind / Route / filename rules.
+
+## Sweep actions
+
+`SWEEP-ACTIONS.md` (seeded at founding from the confirmation card) lists EXTRA work after the
+mechanical close / restock: git commit of sitting changes (init a repo if the project has none),
+stage outbound drafts, append a plaintext sitting log at a named path, update a sheet, file egress
+so another agent can dispatch mail/Slack/webhooks or post a report. Honor it on every sweep.
+Setsweep **never** transmits mail, Slack, or webhooks itself — stage or egress only. If the file
+says nothing extra, skip.
 
 ## Memory discipline
 

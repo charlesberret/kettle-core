@@ -289,6 +289,41 @@ class HelperTests(Base):
         self.assertEqual(s["session_id"], "s1")                       # preserved
         self.assertEqual(s["status"], "interviewing")
         self.assertEqual(s["last_entry"], "alpha")
+        self.assertEqual(s.get("provider"), "claude")                 # stamped on sid write
+
+    def test_session_id_for_curator_skips_foreign_provider(self):
+        # Claude session under Grok must not --resume (Grok 404 → exit 1)
+        server.save_settings({"curator": {"provider": "claude", "command": "claude",
+                                          "models": {"setup": "sonnet", "chat": "sonnet",
+                                                     "glance": "haiku"}}})
+        server.save_session(self.proj(), session_id="claude-sid", status="founded")
+        self.assertEqual(server.session_id_for_curator(proj=self.proj()), "claude-sid")
+
+        server.save_settings({"curator": {"provider": "grok", "command": "grok",
+                                          "models": {"setup": "grok-4.5", "chat": "grok-4.5",
+                                                     "glance": "grok-composer-2.5-fast"}}})
+        self.assertIsNone(server.session_id_for_curator(proj=self.proj()))
+
+        # After a Grok turn lands a new sid, resume works again
+        server.save_session(self.proj(), session_id="grok-sid", model="grok-4.5")
+        self.assertEqual(
+            server.session_id_for_curator(proj=self.proj(), model="grok-4.5"),
+            "grok-sid",
+        )
+        self.assertEqual(server.load_session(self.proj())["provider"], "grok")
+
+        # Different model on Grok → fresh session (agent-incompatible mid-session switch)
+        self.assertIsNone(
+            server.session_id_for_curator(proj=self.proj(), model="grok-composer-2.5-fast"),
+        )
+        # Untagged model under Grok + explicit want → also refuse (legacy chat→sweep case)
+        server.save_session(self.proj(), session_id="grok-untagged")
+        sess = server.load_session(self.proj())
+        sess.pop("model", None)
+        server.session_path(self.proj()).write_text(json.dumps(sess, indent=2))
+        self.assertIsNone(
+            server.session_id_for_curator(proj=self.proj(), model="grok-4.5"),
+        )
 
     def test_session_migrates_legacy_interview_json(self):
         # an in-flight founding written under the old interview.json must survive: the
@@ -328,6 +363,15 @@ class HelperTests(Base):
         self.assertIn("content collections", out)
         self.assertLess(out.index("charter"), out.index("content collections"))
 
+    def test_project_orientation_includes_sweep_actions(self):
+        desk = self.root / ".setsweep"
+        (desk / "SWEEP-ACTIONS.md").write_text(
+            "- Stage approved drafts to outbound\n- Append sitting log to ~/Notes/rounds.md\n")
+        out = server.project_orientation(self.proj())
+        self.assertIn("SWEEP-ACTIONS.md", out)
+        self.assertIn("rounds.md", out)
+        self.assertIn("Never transmit", out)
+
     def test_sweep_precomputed_context_includes_diffs(self):
         (self.root / "alpha.md").write_text("alpha body\n")
         (self.root / "beta.md").write_text("beta body\n")
@@ -356,8 +400,9 @@ class HelperTests(Base):
         # appended to the registry
         ids = [p["id"] for p in json.loads(server.PROJECTS_PATH.read_text())["projects"]]
         self.assertIn("my_notes", ids)
-        # durable desk + seeded queue (awaiting founding)
+        # durable desk + seeded queue (awaiting founding) + egress outbound
         self.assertTrue((folder / ".setsweep").is_dir())
+        self.assertTrue((folder / ".setsweep" / "outbound" / "README.md").is_file())
         q = json.loads(server.queue_path(proj).read_text())
         self.assertEqual(q["curated"], "awaiting founding curation")
 
@@ -497,6 +542,24 @@ class EndpointTests(Base):
         self.assertIn("curator", j)
         self.assertEqual(j["curator"]["provider"], "claude")
         self.assertIn("models", j["curator"])
+
+    def test_curator_catalog(self):
+        s, j = _http("GET", f"{self.base}/api/curator/catalog")
+        self.assertEqual(s, 200)
+        self.assertIn("providers", j)
+        self.assertIn("models", j)
+        self.assertIn("visible", j)
+        self.assertIn("menu", j)
+        self.assertEqual(j["menu"]["claude"], ["sonnet", "opus", "haiku"])
+        # Seeded checkmarks — fable not in default menu
+        visible_ids = {v["id"] for v in j["visible"] if v["provider"] == "claude" and not v.get("forced")}
+        self.assertNotIn("fable", visible_ids)
+        # Persist custom menu
+        _http("POST", f"{self.base}/api/settings", {
+            "curator": {"menu": {"claude": ["opus"]}},
+        })
+        _, j2 = _http("GET", f"{self.base}/api/curator/catalog")
+        self.assertEqual(j2["menu"]["claude"], ["opus"])
 
     def test_comment_set_overwrite_clear(self):
         _http("POST", f"{self.base}/api/comment", {"project": "t", "id": "alpha", "text": "note one"})
@@ -640,7 +703,7 @@ class EndpointTests(Base):
             self.assertIn("hello", body)
             iv = server.load_interview(self.proj())
             self.assertEqual((iv["session_id"], iv["status"]), ("sid-1", "interviewing"))
-            # found: queue already has entries (setUp), so it must mark 'founded'
+            # found: queue already has content entries (setUp), so it must mark 'founded'
             req2 = urllib.request.Request(f"{self.base}/api/found",
                                           data=json.dumps({"project": "t"}).encode(),
                                           method="POST")
@@ -649,6 +712,72 @@ class EndpointTests(Base):
             self.assertEqual(server.load_interview(self.proj())["status"], "founded")
         finally:
             server.CLAUDE = saved
+
+    def test_proposal_entry_does_not_mark_founded(self):
+        # desk-proposal alone must not heal to founded (propose phase ≠ founded)
+        prop = server.proposal_path(self.proj())
+        prop.parent.mkdir(parents=True, exist_ok=True)
+        prop.write_text("# Desk proposal\nidentity here\n")
+        self.write_queue([{
+            "id": server.PROPOSAL_ENTRY_ID,
+            "status": "pending",
+            "path": str(prop),
+            "founding_phase": "proposal",
+            "title": "Desk proposal",
+        }])
+        server.save_session(self.proj(), status="proposing", session_id="s-prop")
+        self.assertFalse(server.mark_founded_if_filed(self.proj()))
+        self.assertEqual(server.load_session(self.proj())["status"], "proposing")
+        self.assertTrue(server.desk_is_proposing(self.proj()))
+        _, j = _http("GET", f"{self.base}/api/interview?project=t&mutate=0")
+        self.assertEqual(j["status"], "proposing")
+        self.assertFalse(j["has_entries"])
+        self.assertTrue(j["has_proposal"])
+
+    def test_propose_sets_proposing_status(self):
+        # empty content queue + stub propose stream ⇒ status proposing
+        json.dump({"curated": "awaiting founding curation", "entries": []},
+                  open(server.queue_path(self.proj()), "w"))
+        server.save_session(self.proj(), status="interviewing", session_id="sid-iv")
+        stub = self.tmp / "claude-stub-propose"
+        stub.write_text(
+            "#!/bin/sh\n"
+            'echo \'{"type":"system","subtype":"init","session_id":"sid-prop","model":"stub"}\'\n'
+            'echo \'{"type":"assistant","message":{"content":[{"type":"text","text":"proposal draft"}]}}\'\n'
+            'echo \'{"type":"result","usage":{"input_tokens":1}}\'\n')
+        stub.chmod(0o755)
+        # Pre-write proposal so propose() can stamp proposing even if the stub writes nothing
+        prop = server.proposal_path(self.proj())
+        prop.parent.mkdir(parents=True, exist_ok=True)
+        prop.write_text("# Desk proposal\n")
+        saved = server.CLAUDE
+        server.CLAUDE = str(stub)
+        try:
+            s, body = self._post_stream("/api/propose", {"project": "t"})
+            self.assertEqual(s, 200)
+            self.assertIn("proposal draft", body)
+            self.assertEqual(server.load_session(self.proj())["status"], "proposing")
+            self.assertFalse(server.desk_is_founded(self.proj()))
+        finally:
+            server.CLAUDE = saved
+
+    def test_approve_proposal_returns_founding_flag(self):
+        prop = server.proposal_path(self.proj())
+        prop.parent.mkdir(parents=True, exist_ok=True)
+        prop.write_text("# Desk proposal\nedited by patron\n")
+        self.write_queue([{
+            "id": server.PROPOSAL_ENTRY_ID,
+            "status": "pending",
+            "path": str(prop),
+            "founding_phase": "proposal",
+            "ask": "approve to found",
+        }])
+        server.save_session(self.proj(), status="proposing")
+        s, j = _http("POST", f"{self.base}/api/approve",
+                     {"project": "t", "id": server.PROPOSAL_ENTRY_ID})
+        self.assertEqual(s, 200)
+        self.assertTrue(j.get("founding"))
+        self.assertEqual(self._entry(server.PROPOSAL_ENTRY_ID)["status"], "approved")
 
     def test_found_and_bootstrap_idempotent_when_already_founded(self):
         server.save_session(self.proj(), status="founded", session_id="done")
@@ -790,6 +919,181 @@ class EndpointTests(Base):
         self.assertEqual(sess["session_id"], "sid-9")   # persisted to the PROJECT session
         self.assertEqual(sess["last_entry"], "alpha")   # active-file marker recorded
 
+    def test_chat_streams_with_stub_grok(self):
+        """Grok provider: same NDJSON to the client; dialect differs only in argv."""
+        stub = self.tmp / "grok-stub"
+        stub.write_text(
+            "#!/bin/sh\n"
+            f"echo '{self._init(sid='sid-g')}'\n"
+            f"echo '{self._say('from grok')}'\n"
+            f"echo '{self._result()}'\n"
+        )
+        stub.chmod(0o755)
+        server.save_settings({
+            "curator": {
+                "provider": "grok",
+                "command": str(stub),
+                "models": {
+                    "setup": "grok-4.5",
+                    "chat": "grok-4.5",
+                    "glance": "grok-composer-2.5-fast",
+                },
+            },
+        })
+        s, body = self._post_stream("/api/chat",
+                                    {"project": "t", "id": "alpha", "message": "hi"})
+        self.assertEqual(s, 200)
+        ev = self._events(body)
+        self.assertTrue(any(e.get("t") == "text" and e.get("s") == "from grok" for e in ev))
+        self.assertTrue(any(e.get("t") == "done" for e in ev))
+        self.assertEqual(server.load_session(self.proj())["session_id"], "sid-g")
+
+    def test_chat_skips_resume_when_provider_mismatches(self):
+        # A Claude-tagged (or legacy) session must not be --resume'd under Grok —
+        # that was the "curator exited 1" / session 404 failure mode.
+        server.save_session(self.proj(), session_id="claude-only-sid", provider="claude",
+                            status="founded", last_entry="alpha")
+        stub = self.tmp / "grok-fresh"
+        stub.write_text(
+            "#!/bin/sh\n"
+            f"echo '{self._init(sid='sid-fresh')}'\n"
+            f"echo '{self._say('fresh')}'\n"
+            f"echo '{self._result()}'\n"
+        )
+        stub.chmod(0o755)
+        server.save_settings({
+            "curator": {
+                "provider": "grok",
+                "command": str(stub),
+                "models": {
+                    "setup": "grok-4.5",
+                    "chat": "grok-4.5",
+                    "glance": "grok-composer-2.5-fast",
+                },
+            },
+        })
+        cmds = self._capture_cmds()
+        # Prefer capture over stub file since _capture_cmds replaces Popen entirely
+        s, body = self._post_stream("/api/chat",
+                                    {"project": "t", "id": "alpha", "message": "hi"})
+        self.assertEqual(s, 200)
+        self.assertTrue(cmds)
+        self.assertNotIn("--resume", cmds[-1])
+        self.assertNotIn("claude-only-sid", cmds[-1])
+
+    def test_sweep_skips_resume_when_grok_model_mismatches(self):
+        # Chat left a composer/cursor session; sweep wants grok-4.5 → must not --resume
+        # (MODEL_SWITCH_INCOMPATIBLE_AGENT).
+        server.save_session(
+            self.proj(), session_id="composer-sid", provider="grok",
+            model="grok-composer-2.5-fast", status="founded",
+        )
+        server.save_settings({
+            "curator": {
+                "provider": "grok",
+                "command": "grok",
+                "models": {
+                    "setup": "grok-4.5",
+                    "chat": "grok-composer-2.5-fast",
+                    "glance": "grok-composer-2.5-fast",
+                },
+            },
+        })
+        cmds = self._capture_cmds()
+        self._post_stream("/api/sweep", {"project": "t"})
+        self.assertTrue(cmds)
+        self.assertNotIn("--resume", cmds[-1])
+        self.assertNotIn("composer-sid", cmds[-1])
+        self.assertIn("--model", cmds[-1])
+        self.assertEqual(cmds[-1][cmds[-1].index("--model") + 1], "grok-4.5")
+
+    def test_build_turn_cmd_grok_dialect(self):
+        server.save_settings({
+            "curator": {
+                "provider": "grok",
+                "command": "grok",
+                "models": {"setup": "grok-4.5", "chat": "grok-4.5", "glance": "fast"},
+            },
+        })
+        cmd = server.build_turn_cmd(
+            "hello", task="chat", system_append="rules here",
+            name="Desk", tools_tier="chat",
+        )
+        self.assertEqual(cmd[0], server.agent_bin())
+        self.assertIn("streaming-json", cmd)
+        self.assertNotIn("--verbose", cmd)
+        self.assertIn("--rules", cmd)
+        self.assertNotIn("--append-system-prompt", cmd)
+        self.assertNotIn("--name", cmd)  # Grok has no session-name flag
+        self.assertIn("--allow", cmd)
+        self.assertNotIn("--allowedTools", cmd)
+
+    def test_build_turn_cmd_gemini_dialect(self):
+        server.save_settings({
+            "curator": {
+                "provider": "gemini",
+                "command": "gemini",
+                "models": {"setup": "gemini-2.5-pro", "chat": "gemini-2.5-pro",
+                           "glance": "gemini-2.5-flash"},
+            },
+        })
+        cmd = server.build_turn_cmd(
+            "hello", task="chat", system_append="be brief",
+            name="Desk", tools_tier="chat",
+        )
+        self.assertIn("stream-json", cmd)
+        self.assertNotIn("--append-system-prompt", cmd)
+        self.assertTrue(any("be brief" in str(a) for a in cmd))  # prompt-prefixed
+        self.assertIn("--approval-mode", cmd)
+        self.assertIn("auto_edit", cmd)
+        self.assertNotIn("--name", cmd)
+
+    def test_build_turn_cmd_chatgpt_dialect(self):
+        server.save_settings({
+            "curator": {
+                "provider": "chatgpt",
+                "command": "codex",
+                "models": {"setup": "gpt-5.1", "chat": "gpt-5.1", "glance": "gpt-5-mini"},
+            },
+        })
+        cmd = server.build_turn_cmd("hello", task="chat", tools_tier="chat")
+        self.assertEqual(cmd[0], server.agent_bin())
+        self.assertIn("exec", cmd)
+        self.assertIn("--json", cmd)
+        self.assertIn("--sandbox", cmd)
+        self.assertIn("workspace-write", cmd)
+        self.assertEqual(cmd[-1], "hello")
+
+    def test_chat_streams_with_stub_gemini(self):
+        stub = self.tmp / "gemini-stub"
+        init = json.dumps({"type": "init", "session_id": "sid-gem", "model": "flash"})
+        msg = json.dumps({"type": "message", "role": "assistant", "content": "gem hi"})
+        done = json.dumps({"type": "result", "stats": {"input_tokens": 1}})
+        stub.write_text(
+            "#!/bin/sh\n"
+            f"echo '{init}'\n"
+            f"echo '{msg}'\n"
+            f"echo '{done}'\n"
+        )
+        stub.chmod(0o755)
+        server.save_settings({
+            "curator": {
+                "provider": "gemini",
+                "command": str(stub),
+                "models": {
+                    "setup": "gemini-2.5-pro",
+                    "chat": "gemini-2.5-pro",
+                    "glance": "gemini-2.5-flash",
+                },
+            },
+        })
+        s, body = self._post_stream("/api/chat",
+                                    {"project": "t", "id": "alpha", "message": "hi"})
+        self.assertEqual(s, 200)
+        ev = self._events(body)
+        self.assertTrue(any(e.get("t") == "text" and e.get("s") == "gem hi" for e in ev))
+        self.assertEqual(server.load_session(self.proj())["session_id"], "sid-gem")
+
     def _capture_cmds(self):
         """Patch subprocess.Popen so each spawned `claude` argv is recorded AND a minimal
         stream-json conversation is replayed back (so run_claude completes normally).
@@ -903,12 +1207,12 @@ class EndpointTests(Base):
         self.assertIn("--name", c)                                # named, fresh
         self.assertEqual(server.load_session(self.proj())["session_id"], "sid-proj")  # persisted
 
-    def test_glance_streams_a_reaction(self):
-        self._stub_claude(self._init(), self._say("a thought"), self._result())
-        s, body = self._post_stream(
-            "/api/glance", {"project": "t", "brief": "b", "path": str(self.root / "alpha.md")})
-        self.assertEqual(s, 200)
-        self.assertIn("a thought", body)
+    def test_glance_endpoint_removed(self):
+        s, body = _http(
+            "POST", f"{self.base}/api/glance",
+            {"project": "t", "brief": "b", "path": str(self.root / "alpha.md")})
+        self.assertEqual(s, 404)
+        self.assertIn("error", body)
 
     def test_sweep_streams_with_null_ledger(self):
         # regression: a project whose `ledger` is None must not crash sweep()
@@ -951,6 +1255,28 @@ class EndpointTests(Base):
         self.assertIn("FAMILIARITY.md", prompt)
         self.assertIn("alpha.md is the lead essay", prompt)  # orientation injects familiarity
         self.assertIn("(identical to snapshot)", prompt)
+
+    def test_sweep_prompt_includes_default_verbosity(self):
+        cmds = self._capture_cmds()
+        self._post_stream("/api/sweep", {"project": "t"})
+        prompt = cmds[-1][cmds[-1].index("-p") + 1]
+        self.assertIn("LIVE REPORTING — normal", prompt)
+
+    def test_sweep_verbosity_setting_and_request_override(self):
+        server.save_settings({"sweepVerbosity": "quiet"})
+        cmds = self._capture_cmds()
+        self._post_stream("/api/sweep", {"project": "t"})
+        prompt = cmds[-1][cmds[-1].index("-p") + 1]
+        self.assertIn("LIVE REPORTING — quiet", prompt)
+        self._post_stream("/api/sweep", {"project": "t", "verbosity": "verbose"})
+        prompt2 = cmds[-1][cmds[-1].index("-p") + 1]
+        self.assertIn("LIVE REPORTING — verbose", prompt2)
+
+    def test_normalize_sweep_verbosity(self):
+        self.assertEqual(server.normalize_sweep_verbosity(None), "normal")
+        self.assertEqual(server.normalize_sweep_verbosity("terse"), "quiet")
+        self.assertEqual(server.normalize_sweep_verbosity("VERBOSE"), "verbose")
+        self.assertEqual(server.normalize_sweep_verbosity("nope"), "normal")
 
     def test_run_claude_skips_malformed_ndjson(self):
         self._stub_claude(self._init(), "this is not json",

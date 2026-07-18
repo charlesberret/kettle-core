@@ -22,6 +22,8 @@ your edits where the lineage reconciler can see them.
   setsweep sweep-status <project>  mechanical CLOSE readiness (quiet / judgment / accrue)
   setsweep sweep-close  <project>  quiet CLOSE: stage · archive · thin session log
   setsweep sweep-archive <project>  archive queue entries (after judgment)
+  setsweep egress <project>        stage a desk egress memo (.setsweep/outbound/)
+  setsweep egress-status <project> list staged egress memos
 
 Run: python3 cli.py <command> …    (PROJECTS via DESK_PROJECTS env, same as the server)
 """
@@ -34,6 +36,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import egress
 import lineage
 import runtime
 import server
@@ -146,14 +149,24 @@ def cmd_bind(args) -> int:
 
 
 def cmd_found(args) -> int:
-    """Found the desk: the curator surveys the project and writes its charter, memory,
-    review program, and first queue. One-shot from the files (BOOTSTRAP), or — if an
-    interview session exists — continues it (FOUND). Mirrors the server's found()."""
+    """Found the desk: digests DESK-PROPOSAL.md when present, else one-shot from files /
+    interview session. Mirrors the server's found()."""
     proj = server.get_project(args.project)
     sid = server.load_session(proj).get("session_id")
-    fields = dict(name=proj["name"], root=str(server.project_root(proj)),
-                  desk_dir=str(server.desk_dir(proj)), queue_path=str(server.queue_path(proj)))
-    prompt = (server.FOUND_PROMPT if sid else server.BOOTSTRAP_PROMPT).format(**fields)
+    fields = dict(
+        name=proj["name"], root=str(server.project_root(proj)),
+        desk_dir=str(server.desk_dir(proj)), queue_path=str(server.queue_path(proj)),
+        proposal_path=str(server.proposal_path(proj)),
+    )
+    if server.proposal_on_disk(proj):
+        prompt = server.FOUND_PROMPT.format(**fields)
+    elif sid:
+        prompt = server.FOUND_LEGACY_PROMPT.format(**fields)
+    else:
+        prompt = server.BOOTSTRAP_PROMPT.format(
+            name=proj["name"], root=str(server.project_root(proj)),
+            desk_dir=str(server.desk_dir(proj)), queue_path=str(server.queue_path(proj)),
+        )
     extra = list(server.SWEEP_TOOLS)            # write powers, confined by cwd + acceptEdits
     if args.model:
         extra += ["--model", args.model]
@@ -329,6 +342,41 @@ def cmd_sweep_archive(args) -> int:
     return 0
 
 
+# ---------- desk egress ----------
+
+def cmd_egress(args) -> int:
+    body = args.body
+    if body is None:
+        if sys.stdin.isatty():
+            print("setsweep egress: pass --body or pipe the memo body on stdin", file=sys.stderr)
+            return 2
+        body = sys.stdin.read()
+    try:
+        result = egress.stage_egress(
+            server.get_project(args.project),
+            kind=args.kind,
+            topic=args.topic,
+            body=body,
+            route=args.route,
+        )
+    except ValueError as e:
+        print(f"egress: {e}", file=sys.stderr)
+        return 2
+    print(json.dumps(result, indent=2))
+    return 0
+
+
+def cmd_egress_status(args) -> int:
+    proj = server.get_project(args.project)
+    egress.ensure_egress(proj)
+    print(json.dumps({
+        "project": proj.get("id"),
+        "dir": str(egress.egress_dir(proj)),
+        "staged": egress.list_staged(proj),
+    }, indent=2))
+    return 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
         prog="setsweep", description="CLI viewport over the desk.",
@@ -342,12 +390,14 @@ def main(argv=None) -> int:
                "  setsweep chat    setsweep               # talk to the desk\n"
                "  setsweep chat    setsweep <entry-id>    # about one file\n"
                "  setsweep sweep-status setsweep\n"
-               "  setsweep sweep-close  setsweep\n")
+               "  setsweep sweep-close  setsweep\n"
+               "  setsweep egress setsweep --kind launch --topic go-ahead --body '…'\n"
+               "  setsweep egress-status setsweep\n")
     # not required: a bare `setsweep` should greet with the menu, not error out
     sub = ap.add_subparsers(
         dest="cmd",
         metavar="{projects,add,init,found,queue,open,lineage,bind,chat,"
-                "sweep-status,sweep-close,sweep-archive}")
+                "sweep-status,sweep-close,sweep-archive,egress,egress-status}")
     sub.add_parser("projects", help="list registered desks").set_defaults(fn=cmd_projects)
     a = sub.add_parser("add", help="register a folder as a desk")
     a.add_argument("path"); a.add_argument("--name", default=None); a.set_defaults(fn=cmd_add)
@@ -377,6 +427,15 @@ def main(argv=None) -> int:
     sa.add_argument("--approved-only", action="store_true",
                     help="archive approved entries only (inbox close)")
     sa.set_defaults(fn=cmd_sweep_archive)
+    eg = sub.add_parser("egress", help="stage a desk egress memo under .setsweep/outbound/")
+    eg.add_argument("project")
+    eg.add_argument("--kind", required=True, choices=sorted(egress.KINDS))
+    eg.add_argument("--topic", required=True)
+    eg.add_argument("--route", default=None, help="routing hint (defaults by kind)")
+    eg.add_argument("--body", default=None, help="memo body; else read stdin")
+    eg.set_defaults(fn=cmd_egress)
+    es = sub.add_parser("egress-status", help="list staged desk egress memos")
+    es.add_argument("project"); es.set_defaults(fn=cmd_egress_status)
     args = ap.parse_args(argv)
     if not getattr(args, "fn", None):   # bare `setsweep` → show the menu, exit clean
         ap.print_help()

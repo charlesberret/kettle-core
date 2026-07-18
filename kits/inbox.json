@@ -1,16 +1,44 @@
 {
   "name": "Inbox",
   "kind": "inbox",
-  "lens": "Read each item for what it actually asks \u2014 the sender, the request, the deadline, the decision it forces. The queued artifact is a drafted RESPONSE, not the incoming item: read the brief as a triage summary, then read and edit the draft reply. The patron's hand is the only authority on what goes out; the draft is a starting point, never a fait accompli.",
+  "lens": "Read each item for what it actually asks — the sender, the request, the deadline, the decision it forces. The queued artifact is a drafted RESPONSE, not the incoming item: read the brief as a triage summary, then read and edit the draft reply. The patron's hand is the only authority on what goes out; the draft is a starting point, never a fait accompli.",
   "urgency": "high = a hard deadline, an upset or important sender, or a request that blocks someone; medium = a normal ask awaiting a reply; low = FYI, acknowledgement, or no-action-needed.",
   "firstQueue": "Surface the items with the nearest deadlines and the highest-stakes senders first; FYIs and acknowledgements last.",
   "tools": [],
+  "interview": [
+    {
+      "id": "priority",
+      "stem": "How should drafted replies behave?",
+      "multi": true,
+      "options": [
+        "Careful and conservative in tone",
+        "Fast triage over polish",
+        "High-stakes senders first",
+        "Never invent facts the message lacks"
+      ]
+    },
+    {
+      "id": "sweep_actions",
+      "stem": "What else should happen when a session closes?",
+      "multi": true,
+      "options": [
+        "Queue approved drafts for sending — I do the sending",
+        "Commit the session's changes to git",
+        "Draft an outgoing update for another channel, held for review",
+        "Append a session summary to a running log",
+        "Update a tracking sheet",
+        "Share approved work with the other agents here",
+        "Nothing else — tidy up and refill the queue"
+      ]
+    }
+  ],
   "sweepChecks": [
     "every entry assessed",
     "each approved draft reflects the patron's edits, not the agent's first draft",
     "approved drafts staged to the configured outbound, never transmitted",
     "the source item is preserved unedited (read-only context)",
     "MEMORY records standing tone/handling preferences, kept under ~80 lines",
-    "FAMILIARITY deepened or left intact when nothing new about the project"
+    "FAMILIARITY deepened or left intact when nothing new about the project",
+    "listed SWEEP-ACTIONS carried out or egressed (dispatch/mail/Slack never done from the desk itself)"
   ]
 }

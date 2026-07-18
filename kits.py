@@ -1,6 +1,6 @@
 """Setsweep curator kits — the per-kind playbook that arms a project's curator: a review
-lens, an urgency rubric, a first-queue heuristic, sweep self-checks, and an (optional)
-extra-tools list layered on the always-on builtins.
+lens, an urgency rubric, a first-queue heuristic, founding-interview stems, sweep self-checks,
+and an (optional) extra-tools list layered on the always-on builtins.
 
   kits/<kind>.json   shipped defaults (read-only baseline, synced via the repo)
   settings["kits"]   user edits / custom kits (local; fork-on-edit)
@@ -14,6 +14,88 @@ import json
 from pathlib import Path
 
 KINDS = ["writing", "code", "records", "knowledge", "inbox"]
+
+# Shared founding stems — every desk asks these. Kit-specific stems merge in by id
+# (kit wins on conflict). Sweep-actions is shared so inbox and non-inbox alike can opt in.
+#
+# Wording discipline: this card is the product's first impression, answered before the
+# patron has learned any Setsweep vocabulary. Stems and options must be self-explanatory —
+# no internal terms (sitting, sweep, egress, corpus), no slash piles, no example dumps.
+# One axis per question; single-choice where the axis must be crisp; every option should
+# change what the desk actually does. Card mechanics are stated once by the UI, never
+# repeated per question.
+BASE_INTERVIEW = [
+    {
+        "id": "status",
+        "stem": "Where does this project stand?",
+        "multi": False,
+        "options": [
+            "Brand new — starting from scratch",
+            "In motion — active work under way",
+            "Established — tend it and keep it coherent",
+            "Backlogged — a pile to work through",
+        ],
+    },
+    {
+        "id": "horizon",
+        "stem": "What would success look like?",
+        "multi": False,
+        "options": [
+            "Something finished, out the door",
+            "A living body of work that stays healthy",
+            "A cleared queue that stays clear",
+            "Too early to say — help me find out",
+        ],
+    },
+    {
+        "id": "direction",
+        "stem": "What should our sessions focus on?",
+        "multi": True,
+        "options": [
+            "Craft — make good work better",
+            "Decisions — surface the calls only I can make",
+            "Consistency — keep everything agreeing with itself",
+            "Throughput — clear incoming work and draft replies",
+        ],
+    },
+    {
+        "id": "fences",
+        "stem": "What should I never change without asking?",
+        "multi": True,
+        "options": [
+            "Nothing in particular — ordinary care is enough",
+            "Records and logs that only ever grow",
+            "Wording that is already published or final",
+            "Secrets, credentials, and personal data",
+            "Anything that leaves the project — prepare it, let me send it",
+        ],
+    },
+    {
+        "id": "sweep_actions",
+        "stem": "What else should happen when a session closes?",
+        "multi": True,
+        "options": [
+            "Nothing else — tidy up and refill the queue",
+            "Commit the session's changes to git",
+            "Share approved work with the other agents here",
+            "Queue approved drafts for sending — I do the sending",
+            "Append a session summary to a running log",
+            "Draft an outgoing update for another channel, held for review",
+            "Update a tracking sheet",
+        ],
+    },
+    {
+        "id": "fleet",
+        "stem": "Who else works on this project?",
+        "multi": True,
+        "options": [
+            "Just me, for now",
+            "Coding agents in this same repository",
+            "Multiple agents that hand work to each other",
+            "Automated jobs that depend on approved files",
+        ],
+    },
+]
 
 
 def load_defaults(kits_dir) -> dict:
@@ -51,13 +133,76 @@ def for_project(proj, kits_dir, settings=None) -> dict | None:
     return resolve((proj or {}).get("kit"), kits_dir, settings)
 
 
+def interview_stems(kit) -> list:
+    """Merged founding-interview stems: BASE_INTERVIEW, then kit.interview overrides by id."""
+    by_id = {s["id"]: dict(s) for s in BASE_INTERVIEW if isinstance(s, dict) and s.get("id")}
+    for s in (kit or {}).get("interview") or []:
+        if isinstance(s, dict) and s.get("id"):
+            by_id[s["id"]] = dict(s)
+    base_ids = {s["id"] for s in BASE_INTERVIEW}
+    order = [s["id"] for s in BASE_INTERVIEW] + [
+        s["id"] for s in ((kit or {}).get("interview") or [])
+        if isinstance(s, dict) and s.get("id") and s["id"] not in base_ids
+    ]
+    seen = set()
+    out = []
+    for i in order:
+        if i in seen or i not in by_id:
+            continue
+        seen.add(i)
+        stem = dict(by_id[i])
+        # Drop legacy "Other (elaborate)" checkboxes — free response is the Elaborate field.
+        if isinstance(stem.get("options"), list):
+            stem["options"] = [
+                o for o in stem["options"] if not _is_other_option(str(o))
+            ]
+        out.append(stem)
+    return out
+
+
+def _is_other_option(label: str) -> bool:
+    """True for the old 'Other (elaborate…)' checkbox rows — free-response is the Elaborate field.
+
+    Only matches labels that *are* the freeform Other row (start with Other and mention
+    elaborate, or are exactly 'Other'). Does not match real options like
+    'Other coding agents in this repo…'.
+    """
+    s = (label or "").strip().lower()
+    if not s.startswith("other"):
+        return False
+    if s == "other" or s.startswith("other ("):
+        return True
+    return "elaborate" in s
+
+
+def _render_stems(stems: list) -> str:
+    lines = []
+    for i, s in enumerate(stems, 1):
+        # Ids stay in GFM for the desk parser; the UI hides the [id] chrome. Checkboxes
+        # already read as multi, so only single-choice stems carry a tag — "(choose one)".
+        one = "" if s.get("multi") else " (choose one)"
+        lines.append(f"{i}. [{s.get('id', '')}] {s.get('stem', '')}{one}")
+        for opt in s.get("options") or []:
+            if _is_other_option(str(opt)):
+                continue
+            lines.append(f"   - [ ] {opt}")
+        lines.append("   Elaborate (optional):")  # leave blank — patron only
+    return "\n".join(lines)
+
+
 def as_context(kit, mode: str) -> str:
     """Render a kit into an injectable context block for an agent mode:
-      'review' → lens + urgency · 'sweep' → self-checks · 'found' → first-queue heuristic.
+      'review' → lens + urgency
+      'sweep' → self-checks
+      'found' → first-queue heuristic
+      'interview' → MCQ stems (base + kit), for survey-then-confirm founding
     Returns '' for no kit or an empty section, so callers can inject unconditionally."""
-    if not kit:
+    if not kit and mode != "interview":
         return ""
+    name = (kit or {}).get("name", "general")
     if mode == "review":
+        if not kit:
+            return ""
         parts = []
         if kit.get("lens"):
             parts.append("Review lens: " + kit["lens"])
@@ -65,14 +210,43 @@ def as_context(kit, mode: str) -> str:
             parts.append("Urgency rubric: " + kit["urgency"])
         body = "\n".join(parts)
     elif mode == "sweep":
+        if not kit:
+            return ""
         checks = kit.get("sweepChecks") or []
         body = ("Sweep self-check (confirm each before closing):\n"
                 + "\n".join(f"- {c}" for c in checks)) if checks else ""
     elif mode == "found":
+        if not kit:
+            return ""
         body = ("First-queue heuristic: " + kit["firstQueue"]) if kit.get("firstQueue") else ""
+    elif mode == "interview":
+        stems = interview_stems(kit)
+        body = (
+            "Founding prompt list — emit these as a GFM markdown checklist in chat "
+            "(### N. [id] stem, then - [ ] / - [x] options, then `Elaborate (optional):` "
+            "with the line left EMPTY). Copy stems and options VERBATIM, keeping the "
+            "(choose one) tag on single-choice stems; add no other per-question "
+            "instruction text — no '(pick all that apply)', no restating how checkboxes "
+            "work. Never pre-fill Elaborate with survey commentary, coaching, or "
+            "paraphrases — only the patron writes free response. "
+            "Do NOT add an 'Other (elaborate)' checkbox option — free response is the "
+            "Elaborate field alone. "
+            "The desk UI turns the checklist into interactive ticks. Pre-check options the "
+            "survey already supports. Leave room for open discussion after the list. "
+            "Finish ✓ later drafts one DESK-PROPOSAL.md for the patron to edit and approve — "
+            "do not write the full desk yet. Do not re-ask core themes the survey already "
+            "answered.\n"
+            + _render_stems(stems)
+        )
+        if kit and kit.get("lens"):
+            body = ("Kit default lens (accept unless they delta it):\n" + kit["lens"]
+                    + "\n\n" + body)
+        if kit and kit.get("firstQueue"):
+            body += "\n\nKit first-queue default (accept unless they delta it):\n" + kit["firstQueue"]
+        return f"Curator kit — {name}:\n{body}"
     else:
         body = ""
-    return f"Curator kit — {kit.get('name', 'kit')}:\n{body}" if body else ""
+    return f"Curator kit — {name}:\n{body}" if body else ""
 
 
 def list_kits(kits_dir, settings=None) -> list:

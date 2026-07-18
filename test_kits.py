@@ -74,6 +74,31 @@ class KitsTest(unittest.TestCase):
         self.assertTrue(swp.count("\n- ") >= 1)
         fnd = kits.as_context(kit, "found")
         self.assertIn("First-queue heuristic:", fnd)
+        iv = kits.as_context(kit, "interview")
+        self.assertIn("Founding prompt list", iv)
+        self.assertIn("[status]", iv)
+        self.assertIn("[sweep_actions]", iv)
+        self.assertIn("[priority]", iv)  # kit-specific stem
+        self.assertIn("Kit default lens", iv)
+
+    def test_interview_stems_merge_base_and_kit(self):
+        stems = kits.interview_stems(kits.resolve("inbox", self.shipped))
+        ids = [s["id"] for s in stems]
+        self.assertEqual(ids[0], "status")
+        self.assertIn("sweep_actions", ids)
+        self.assertIn("fleet", ids)
+        self.assertIn("priority", ids)
+        # inbox overrides sweep_actions options: staging drafts for send leads the list
+        sa = next(s for s in stems if s["id"] == "sweep_actions")
+        self.assertIn("sending", sa["options"][0].lower())
+        fl = next(s for s in stems if s["id"] == "fleet")
+        self.assertTrue(any("coding agents" in o.lower() for o in fl["options"]))
+
+    def test_interview_without_kit_still_has_base(self):
+        iv = kits.as_context({"name": "general", "interview": []}, "interview")
+        self.assertIn("[sweep_actions]", iv)
+        self.assertIn("[fleet]", iv)
+        self.assertNotIn("Kit default lens", iv)
 
     def test_as_context_empty(self):
         self.assertEqual(kits.as_context(None, "review"), "")

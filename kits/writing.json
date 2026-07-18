@@ -1,15 +1,29 @@
 {
   "name": "Writing",
   "kind": "writing",
-  "lens": "Read for argument, evidence, voice, and continuity. Flag where a claim outruns its support, where the structure wanders, where the register slips, and where a later passage contradicts an earlier one. Respect the author's voice \u2014 surface problems, don't rewrite them.",
+  "lens": "Read for argument, evidence, voice, and continuity. Flag where a claim outruns its support, where the structure wanders, where the register slips, and where a later passage contradicts an earlier one. Respect the author's voice — surface problems, don't rewrite them.",
   "urgency": "high = a factual or citation risk, or an unsupported claim presented as settled; medium = structure, sequencing, or continuity; low = line-level polish.",
   "firstQueue": "Surface the documents with the most unresolved argument or the weakest evidentiary footing first; within those, lead with whatever the patron flagged as in progress.",
   "tools": [],
+  "interview": [
+    {
+      "id": "priority",
+      "stem": "What should a second reader watch most closely?",
+      "multi": true,
+      "options": [
+        "Argument and evidence",
+        "Consistency of voice",
+        "Structure and flow",
+        "Citations and factual accuracy"
+      ]
+    }
+  ],
   "sweepChecks": [
     "every entry assessed against its brief's prediction",
     "no append-only record rewritten",
     "cross-references to renamed sections fixed or flagged",
     "MEMORY kept under ~80 lines",
-    "FAMILIARITY deepened or left intact when nothing new about the project"
+    "FAMILIARITY deepened or left intact when nothing new about the project",
+    "listed SWEEP-ACTIONS carried out or egressed (never transmit external systems from the desk)"
   ]
 }
