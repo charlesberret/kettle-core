@@ -46,9 +46,16 @@ setsweep chat    <project> [id]   talk to the curator     ┘
 
 ## Auth — Setsweep stores no key
 
-It uses the `claude` CLI's own login. If `setsweep chat` can't reach the model, run
-`claude` once to log in (or set `ANTHROPIC_API_KEY` in your environment). No API key is
-ever entered into Setsweep.
+It uses the active curator CLI’s own login:
+
+| Provider | CLI | Typical ambient auth |
+|----------|-----|----------------------|
+| Claude (default) | `claude` | Claude login / `ANTHROPIC_API_KEY` |
+| Grok | `grok` | Grok login / `XAI_API_KEY` |
+| ChatGPT | `codex` | ChatGPT login / `OPENAI_API_KEY` or `CODEX_API_KEY` |
+| Gemini | `gemini` | Gemini login / `GEMINI_API_KEY` |
+
+No API key is ever entered into Setsweep.
 
 ## Registering a desk
 

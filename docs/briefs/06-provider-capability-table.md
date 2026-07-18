@@ -1,0 +1,59 @@
+---
+id: 06
+title: Provider capability table
+repo: setsweep-core
+touches: [runtime.py, curator.py, server.py, API.md, test_runtime.py]
+risk: run-critical
+depends-on: [03]
+status: open
+---
+
+## Context
+
+Setsweep's safety story leans on tool tiers, but tiers are only as real as each provider
+makes them. On Grok, the "read-only" interview tier maps to `--allow Bash` +
+`--always-approve` (runtime.py:~546–558) because of documented Grok flag quirks — so a
+founding interview under `provider: grok` can execute arbitrary shell, including writes.
+Grok write tiers use `--permission-mode bypassPermissions` with open Bash
+(runtime.py:~535–544), far broader than the Claude allowlist the docs describe. Nothing
+tells the patron; nothing refuses. The tier table in API.md reads as a guarantee the
+implementation cannot keep on every provider.
+
+## Task
+
+1. Add a per-provider capability table to `runtime.py` (beside TOOL_TIERS):
+   `read_only_tier`, `tool_allowlist`, `resume`, `effort`, `fenced_writes` — honest
+   booleans derived from the argv builders that already encode the quirks.
+2. Surface it: `/api/ping`'s curator block and `/api/curator/catalog` carry the active
+   provider's capabilities.
+3. Enforce the one that is a safety contract: when a turn requires the read-only tier
+   (founding interview, discussion-mode chat) and the active provider cannot guarantee
+   it, **refuse** with a clear error naming the options (switch provider for founding,
+   or acknowledge an explicit settings override `curator.allow_unfenced_readonly:
+   true`). Warn-and-proceed is not enough for founding: the interview is the trust
+   ceremony.
+4. Document per-provider reality in API.md's tier section — a small honest matrix.
+
+## Constraints
+
+- No behavior change for `provider: claude`.
+- The refusal must be a pre-stream JSON 4xx (the stream never starts), so viewports show
+  it as a normal error, not a hung turn.
+- Keep the table beside the argv builders that justify it — same file, so drift between
+  claim and construction is visible in one diff.
+
+## Done when
+
+- `interview` under a stubbed grok config → 4xx with the documented error code, pinned
+  by a test; with the override set → proceeds, and the response notes the downgrade.
+- `/api/ping` shows capabilities; catalog too; API.md matrix matches the code table.
+
+## Verify
+
+`python3 -m pytest test_runtime.py test_server.py -q`; manual `/api/ping` against a
+scratch server with each provider configured (stub commands).
+
+## Afterwards
+
+`status: done`; note in RELEASE.md's security checklist; if the Grok quirks ever get
+fixed upstream, the capability table is the one place to update.

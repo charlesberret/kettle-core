@@ -6,7 +6,7 @@ Canonical path: `~/Repos/setsweep-core` (moved from Seafile `Code/_archive/setsw
 
 Python backend (`server.py`, `runtime.py`, `lineage.py`, `kits.py`, `cli.py`, `curator.py`) plus a folder-watcher entry point (`setsweep_watch.py`) and a launcher shim (`setsweep_main.py`). No third-party runtime dependencies — the server and CLI viewport are stdlib-only. Single-file frontend at `static/index.html`. Three-pane layout: agent-curated queue · patron's editor · project-aware review agent.
 
-**Viewport vs curator:** Desktop, VS Code, and MCP are *viewports* onto the desk. Agentic turns (interview, found, sweep, chat, glance) run through the **curator provider** configured in `settings.json` (`curator.provider` / `curator.command` / `curator.models`) — default is the Claude Code CLI. `/api/ping` exposes the active curator so viewports can label it honestly.
+**Viewport vs curator:** Desktop, VS Code, and MCP are *viewports* onto the desk. Agentic turns (interview, found, sweep, chat) run through the **curator provider** configured in `settings.json` (`curator.provider` / `curator.command` / `curator.models`) — default is the Claude Code CLI. `/api/ping` exposes the active curator so viewports can label it honestly.
 
 **Sibling viewports** (separate repos; host-specific code stays out of this tree):
 
@@ -39,7 +39,9 @@ These files, if broken, take the app offline while the patron is in it. **Handof
 
 **Never bind or signal port 4242 from agent tooling** — that is the live window's port.
 
-Safe to review and edit directly: `README.md`, `.local/DESIGN.md`, `test_*.py` files, `.setsweep/` desk files, `kits/`, `pyproject.toml`, `_Status.md`, this file.
+Safe to review and edit directly: `README.md`, `.local/DESIGN.md`, `test_*.py` files, `.setsweep/` desk files, `kits/`, `pyproject.toml`, `_Status.md`, `ROADMAP.md`, `docs/` (including the agent briefs in `docs/briefs/`), this file.
+
+Planning surface: `ROADMAP.md` is the master plan (phases with exit tests); `docs/briefs/` holds ready-to-run work packages — read the relevant brief before starting roadmap work, and update its `status:` frontmatter when you finish.
 
 ## Conventions
 

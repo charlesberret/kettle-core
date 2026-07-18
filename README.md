@@ -13,14 +13,28 @@ per-project *curator* agent that writes a short brief for each item — and deli
 your edits and approvals are then applied outward mechanically by a *sweep*. Nothing asks you to
 re-derive what an agent already knows, and nothing lets an agent commit what is yours to decide.
 
-The agent runtime is **Claude Code headless** (the `claude` CLI). The server and CLI are
-Python-stdlib-only. Host chrome lives in sibling repos:
+The agent runtime defaults to **Claude Code headless** (the `claude` CLI). Other
+first-class curator providers (Admin → Agents, or `settings.curator.provider`):
+
+| Provider | CLI | Auth (ambient — never stored) |
+|----------|-----|-------------------------------|
+| `claude` (default) | `claude` | Claude login / `ANTHROPIC_API_KEY` |
+| `grok` | `grok` | Grok login / `XAI_API_KEY` |
+| `chatgpt` | `codex` (OpenAI Codex CLI) | ChatGPT login / `OPENAI_API_KEY` |
+| `gemini` | `gemini` | Gemini login / `GEMINI_API_KEY` |
+
+Raw chat-completions HTTP is intentionally out of scope — Setsweep drives **agentic CLIs**
+through the same spawn → normalize → NDJSON path. The server and CLI are Python-stdlib-only.
+Host chrome lives in sibling repos:
 
 | Repo | Role |
 |------|------|
 | **setsweep-core** (this tree) | Desk + API + reference web UI + CLI |
 | [`setsweep-desktop`](../setsweep-desktop/) | macOS Electron shell (`.app`) |
 | [`setsweep-plugin`](../setsweep-plugin/) | Host adapters — VS Code/Cursor first; Obsidian & Sublime planned |
+
+Where this is all going: [`ROADMAP.md`](./ROADMAP.md) — north star, phased plan, and the
+agent-brief work packages under [`docs/briefs/`](./docs/briefs/).
 
 > **Vocabulary.** Two words recur in this project. **You** are the reviewer (the docs sometimes
 > call you *the patron*). The **curator** is a per-project agent *identity carried in files*
@@ -33,8 +47,9 @@ Python-stdlib-only. Host chrome lives in sibling repos:
 pip install -e .            # CLI + web mode — standard library only
 ```
 
-Requirements: **Python 3.11+** and the **`claude` CLI** on your `PATH`. setsweep stores **no API
-key** — it uses `claude`'s ambient auth (its own login or `ANTHROPIC_API_KEY` in the environment).
+Requirements: **Python 3.11+** and a curator CLI on your `PATH` — **`claude`** (default),
+**`grok`**, **`codex`** (ChatGPT / Codex), or **`gemini`**. setsweep stores **no API key** —
+it uses the CLI’s ambient auth.
 See [`INSTALL.md`](./INSTALL.md) for the native `.app` bundle.
 
 ## Run
@@ -75,19 +90,25 @@ HTTP contract for viewports (tiers, streaming, `project` required): [`API.md`](.
 
 ## Founding a project
 
-**Founding is an interview, not a survey.** When you add a project, the curator reads its files,
-then interviews you in the center panel — what the project is *to you*, what you want a second
-reader for, what must never be touched. From the interview and the files it founds the desk:
+**Founding is talk → proposal → approve, not a silent bootstrap.** When you add a project, the
+curator surveys its files and interviews you in the agent chat (kit prompt list + open discussion:
+status, direction, fences, priorities, **sweep actions**). **Finish ✓** drafts one editable
+**desk proposal** (`.setsweep/DESK-PROPOSAL.md`) and loads it in the center pane. You edit freely
+(and can still chat to revise it). **Approve** on that proposal hands it back to the curator, who
+digests *your* text and founds the desk:
 
-1. **Charter** (`PROJECT.md`) — what the project is, the review lens, the conventions. Your answers
-   beat the files where they disagree, quoted where your words were exact.
-2. **Memory seed** (`MEMORY.md`) — only interview-stated and file-attested preferences, never invented.
-3. **Familiarity seed** (`FAMILIARITY.md`) — thin project map from the survey; sweeps deepen it.
-4. **Review program** + the first urgency-ranked **queue batch**, each entry with a real brief.
+1. **Charter** (`PROJECT.md`) — from the approved proposal (your wording wins).
+2. **Memory seed** (`MEMORY.md`) — only stated and file-attested preferences, never invented.
+3. **Familiarity seed** (`FAMILIARITY.md`) — thin project map; sweeps deepen it.
+4. **Founding answers** (`founding-answers.md`) — durable extract of the approved proposal.
+5. **Sweep actions** (`SWEEP-ACTIONS.md`) — extra close-of-sitting work (stage/egress only; never
+   transmit from Setsweep).
+6. **Review program** + **first content queue** — existing corpus, or greenfield drafts
+   (README/overview, roadmap, …) when the folder was empty.
 
-Founding is marked complete only when entries actually land; an interrupted founding never *traps*
-the project — the interview header offers **found from files** (one-shot survey → charter + queue,
-no interview) and **skip for now** (open the project as-is, found later).
+Empty folders get a greenfield opening (new project vs wrong folder). Founding is complete when
+*content* queue entries land (the proposal alone does not count). **Skip for now** leaves the
+desk unfounded until you reselect the project.
 
 ## How it works
 
@@ -109,10 +130,12 @@ no interview) and **skip for now** (open the project as-is, found later).
 - **Glance** — optional: when a file loads, the agent fires a one-breath reaction to its *brief only* (no
   tools, no session) to surface anything unclear. Non-blocking; superseded the instant another file
   opens. Off by default; enable in Admin.
-- **Review agent** — each turn spawns `claude -p` (stream-json) in the project root with
-  Read/Glob/Grep/Edit/Write under `acceptEdits` (project-fenced). Prefer fenced proposals for
-  small emendations (**→ editor** / **copy**); implement on disk when the patron asks. Interview
-  stays read-only until Finish/Found. Sessions persist per project.
+- **Review agent** — each turn spawns the active curator CLI in the project root
+  (Claude `stream-json`, Grok `streaming-json`, Codex `--json`, Gemini `stream-json`) with
+  project-fenced edits when the tier allows. Prefer fenced proposals for small emendations
+  (**→ editor** / **copy**); implement on disk when the patron asks. Interview stays
+  read-only until Finish/Found. Sessions persist per project. Switch provider in Admin →
+  Agents (`curator.provider`: `claude` | `grok` | `chatgpt` | `gemini`).
 - **Approve** — marks the entry approved and logs it. Approve is a bookmark; the sweep is the
   commit. Leave an entry pending if your pass is not done; use **comment** for sweep instructions.
 
@@ -126,10 +149,15 @@ sessions**:
    (~80 lines); leave untouched when a sitting produced nothing generalizable.
 3. **Familiarity** — `FAMILIARITY.md`: accrued project-centered expertise (families, roles, paths,
    relationships, pitfalls). Deepened on restock so briefs improve over time (~120 lines).
-4. **Record** — the append-only history: `approvals.log`, `comments.log`, `sweep.log`, `sessions/`,
-   `archive/`.
+4. **Sweep actions** — `SWEEP-ACTIONS.md`: extra close-of-sitting work armed at founding
+   (outbound stage, egress for dispatch, plaintext sitting logs, sheets, reporting).
+5. **Record** — the append-only history: `approvals.log`, `comments.log`, `sweep.log`, `sessions/`,
+   `archive/`, plus `founding-answers.md` from the confirmation card.
+6. **Egress** — `.setsweep/outbound/`: staged memos for the broader agent ecosystem (handoffs,
+   escalations, launch directives, domain pointers). `setsweep egress` / `egress-status`. Distinct
+   from the inbox kit's `<root>/outbox` (mail drafts). Fleet pickup drains `Status: staged`.
 
-Charter, memory, and familiarity are injected into every agent the app spawns. Any fresh agent that
+Charter, memory, familiarity, and sweep actions are injected into every agent the app spawns. Any fresh agent that
 reads these files *is* the curator; sync the directory and the curator exists on any machine. The
 desk is the application; the app is a viewport — `PROJECT.md` and the logs read as plain documents
 even with no app installed.
@@ -142,14 +170,17 @@ at day's end). One pass, watched live: **close (cheap when quiet) → accrue fam
 **Close** — the server runs a mechanical close-kit (`sweepkit` / `setsweep sweep-status|close`) when
 the sitting is quiet and ready: stage inbox drafts, archive, thin session log. When judgment is
 needed (diffs, comments, ledger), the curator still closes by hand, then archives via the kit.
-Precomputed diffs stay in the prompt so the agent does not re-derive them.
+Precomputed diffs stay in the prompt so the agent does not re-derive them. Then honor
+`SWEEP-ACTIONS.md` for any extra work (egress for dispatch, plaintext sitting logs, sheets,
+reporting) — never transmit from the desk.
 
 **Accrue + restock** — deepen `FAMILIARITY.md` (project-centered expertise) while reading the next
 batch, then load honest briefs into the queue (`kits/frameworks/` scaffolds the brief and familiarity
 shapes; `kits/skills/setsweep-sweep` is the thin conductor). This is where curator time should go.
 
 If the project configures a rulings `ledger`, ticked/filled/struck rows are applied to the canonical
-documents exactly as written; "launch"-type rulings are never executed, only logged as directives.
+documents exactly as written; "launch"-type rulings are never executed — logged as `LAUNCH DIRECTIVE`
+in `sweep.log` **and** staged under `.setsweep/outbound/` for fleet pickup.
 
 ## The inbox kind
 
@@ -181,8 +212,8 @@ only files it hasn't seen before. The in-app sweep handles the outbound staging.
 ## Settings & Admin
 
 `settings.json` self-creates and backs a floating **Admin** panel (native **View › Admin** or
-**⌘⇧A**): per-task agent models (setup / chat / glance), a full color/font/size palette system with
-saved palettes, project editing, behaviour toggles (highlight line, markdown highlighting, glance,
+**⌘⇧A**): per-task agent models (setup / chat), a full color/font/size palette system with
+saved palettes, project editing, behaviour toggles (highlight line, markdown highlighting,
 unwrap, autosave interval, sweep confirmation), and a debug/health view. Every setting is
 live-applied and persisted.
 

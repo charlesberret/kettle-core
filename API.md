@@ -34,6 +34,26 @@ Authoritative implementation: `server.py`. Contract tests: `test_server.py`.
 }
 ```
 
+### `GET /api/curator/catalog`
+
+Single source of truth for desk/settings model UIs:
+
+```json
+{
+  "providers": [{ "id": "claude", "label": "Claude Code", "command": "claude", "command_exists": true, "hint": "…", "stream": "stream-json" }],
+  "models": [{ "id": "sonnet", "provider": "claude", "label": "Sonnet", "blurb": "…", "good_for": ["setup","chat"], "effort_supported": true }],
+  "models_by_provider": { "claude": ["sonnet", "opus", "haiku", "fable"] },
+  "efforts_by_provider": { "claude": [{ "id": "high", "label": "high" }] },
+  "defaults_by_provider": { "claude": { "setup": "sonnet", "chat": "sonnet" } },
+  "menu": { "claude": ["sonnet", "opus", "haiku"] },
+  "visible": [{ "id": "sonnet", "provider": "claude", "ready": true, "forced": false }],
+  "active": { "provider": "claude", "command": "claude", "models": {}, "effort": "default" }
+}
+```
+
+- `menu` = patron checkmarks (`settings.curator.menu`); seeded to Claude sonnet/opus/haiku when missing.
+- `visible` = checked ∩ CLI-on-PATH, always including the active chat model (`forced: true` when needed).
+
 - Set on **every** bind path (`start_server` and `main` / sidecar) via `_record_bind`.
 - Informational cache: `~/.cache/setsweep/server.json` — `{ pid, port, started, url, projects, settings }`. Ping is authoritative.
 - Circuit-breaker: a second launch on 4242 defers unless the predecessor is stale or `--replace` is passed.
@@ -70,17 +90,25 @@ When desktop falls back to an ephemeral port, the plugin finds it via `server.js
 | `status` | Meaning |
 |----------|---------|
 | `none` | No session / not started |
-| `interviewing` | Founding interview in progress |
-| `founded` | Curator filed ≥1 queue entry (or healed because entries exist) |
+| `interviewing` | Founding interview in progress (chat, read-only) |
+| `proposing` | `DESK-PROPOSAL.md` drafted; patron edits/approves |
+| `founded` | Curator filed ≥1 *content* queue entry (proposal alone does not count) |
 
 `GET /api/interview` also returns:
 
 - `has_session` — project session id present
-- `has_entries` / `entry_count` — queue has items (**available under `mutate=0`**)
+- `has_entries` / `entry_count` — **content** queue items only (**available under `mutate=0`**)
+- `has_proposal` / `proposal_path` — desk proposal on disk or queued
 
-Rule: **entries on disk ⇒ desk is founded**, even if `status` still says `interviewing` under a pure read. Prefer `has_entries || status === "founded"` in viewports.
+Rule: **content entries on disk ⇒ desk is founded**. A sole `desk-proposal` entry keeps status
+`proposing`. Prefer `has_entries || status === "founded"` in viewports.
 
-Idempotency: `POST /api/interview`, `/api/found`, and `/api/bootstrap` short-circuit with an NDJSON notice (no curator spawn) when the desk is already `founded`, or when `/api/found`/`/api/bootstrap` can heal from existing queue entries. Use `POST /api/projects/refound` to start over.
+Flow: `POST /api/interview` → `POST /api/propose` (finish) → patron edits → `POST /api/approve`
+on the proposal (`founding: true`) → `POST /api/found` (digest proposal + first batch).
+
+Idempotency: `POST /api/interview`, `/api/propose`, `/api/found`, and `/api/bootstrap` short-circuit
+with an NDJSON notice when the desk is already `founded`, or when `/api/found`/`/api/bootstrap` can
+heal from existing content entries. Use `POST /api/projects/refound` to start over.
 
 ### Diff responses
 
@@ -117,7 +145,7 @@ Success shapes vary today (see Stability notes). Prefer:
 | `done` | `cost?`, `ctx?`, `usage?`, `error?` | Turn finished |
 | `error` | `s` | Process / parse failure |
 
-**Streaming routes:** `POST /api/chat`, `/api/compact`, `/api/sweep`, `/api/bootstrap`, `/api/interview`, `/api/found`, `/api/glance`.
+**Streaming routes:** `POST /api/chat`, `/api/compact`, `/api/sweep`, `/api/bootstrap`, `/api/interview`, `/api/propose`, `/api/found`.
 
 ---
 
@@ -149,16 +177,18 @@ Success shapes vary today (see Stability notes). Prefer:
 | POST | `/api/chat` | **NDJSON** |
 | POST | `/api/compact` | **NDJSON** |
 | POST | `/api/clear-session` | JSON |
-| GET/POST | `/api/settings` | JSON — POST deep-merges `curator` / `agents` |
+| GET/POST | `/api/settings` | JSON — POST deep-merges `curator` / `agents` / `curator.menu` |
+| GET | `/api/curator/catalog` | Canonical model catalog, menu checkmarks, provider readiness, `visible` desk list |
 
 ### Tier 3 — founding
 
 | Method | Path | Mode |
 |--------|------|------|
 | GET | `/api/interview` | JSON status |
-| POST | `/api/interview` | **NDJSON** (read-only phase) |
-| POST | `/api/found` | **NDJSON** |
-| POST | `/api/bootstrap` | **NDJSON** |
+| POST | `/api/interview` | **NDJSON** (read-only chat phase) |
+| POST | `/api/propose` | **NDJSON** (finish → write `DESK-PROPOSAL.md` + queue entry) |
+| POST | `/api/found` | **NDJSON** (after proposal approve: digest + content batch) |
+| POST | `/api/bootstrap` | **NDJSON** (legacy one-shot; CLI / API) |
 | POST | `/api/projects/add` | JSON |
 
 ### Tier 4 — desk admin
@@ -172,7 +202,6 @@ Kits, lineage (`/api/lineage`, resolve/accept/bind), projects edit/delete/refoun
 | Path | Notes |
 |------|-------|
 | `/api/open-link` | macOS `open -t`; 404 uses `{ ok: false, error }` |
-| `/api/glance` | Tool-less brief reaction; settings-gated |
 
 ---
 
