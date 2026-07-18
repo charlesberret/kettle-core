@@ -11,7 +11,7 @@ healthbeacon: ~/.cache/setsweep/watch-health.json
 
 ## Status
 
-The suite is 253 green on Python 3.14.6. Branch `codex/shore-up-system` carries a
+The suite is 256 green on Python 3.14.6. Branch `codex/shore-up-system` carries a
 durable, committed baseline: the provider-neutral runtime, proposal-first founding flow,
 viewport changes, mechanical sweep close, and tracked egress layer are all in history.
 The empty root `package-lock.json` was unreferenced and removed; no experimental hunks
@@ -21,11 +21,16 @@ lifecycle coverage; the measured baseline is 80% total with every shipped Python
 at 62% or higher. CI runs Python 3.11/3.14 on Ubuntu/macOS and publishes coverage. Brief
 07 adds a configurable 300-second curator idle watchdog, terminal `done` on every
 established stream, clean pre-stream spawn failures, and client-disconnect process kills.
+Brief 04 moves all 15 product prompts verbatim to `kits/prompts/`, with import-time
+loading, logged emergency fallbacks, a format smoke test, and founding/sweep sentinel
+coverage. Prompt genericizing remains deliberately deferred to brief 10.
 
 ## Next action
 
-- [ ] Brief 04 — externalize prompt constants without genericizing them
+- [ ] Patron: review and merge `codex/shore-up-system` to `main`; the core branch is green
+      and boots successfully on an ephemeral port
 - [ ] After this core-only chain, brief 02 remains the separate plugin-repo Phase 0 task
+- [ ] Resume core roadmap work with brief 03; keep brief 10's generic-content pass separate
 
 ## Known gaps
 

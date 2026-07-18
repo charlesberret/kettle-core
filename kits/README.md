@@ -14,6 +14,14 @@ The four kinds are cut on one axis — the **review posture** the curator takes:
 
 Leaving a project's kit unset gives a general curator with no specialized lens.
 
+## Product prompts (`prompts/`)
+
+`prompts/*.md` is Setsweep's user-visible curator language: founding, sweep, accrue,
+chat-context, and live-reporting instructions. The server reads each file once at import.
+Prompt files are safe to tune directly; preserve their `{placeholders}` and run the prompt
+format smoke test after editing. A missing file logs a warning and uses a short built-in
+emergency prompt so a prompt-editing mistake cannot stop the server from booting.
+
 ## The inbox kind is special — it has live intake
 
 Every other kind queues an **existing project file** you review (the brief summarizes the file you

@@ -5,7 +5,7 @@ repo: setsweep-core
 touches: [server.py, kits/prompts/ (new), test_server.py, test_kits.py]
 risk: run-critical
 depends-on: [01]
-status: open
+status: done
 ---
 
 ## Context

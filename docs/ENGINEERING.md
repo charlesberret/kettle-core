@@ -116,10 +116,10 @@ Three conventions, one per layer:
 Two monoliths dominate the codebase, and each has a shrink path that preserves what
 makes it work:
 
-- **`server.py` (2,708 lines).** Prompt extraction (brief 04) moves the ~460 lines of
-  inline prompt constants — about 17% of the file — out to `kits/prompts/*.md`, loaded
-  the way `kits/_base.md` already is, turning prompt tuning from a run-critical handoff
-  into a safe edit. Beyond that, the ~40 routes are dispatched through flat if/elif
+- **`server.py` (about 2,470 lines).** Brief 04 moved the product prompt constants to
+  `kits/prompts/*.md`, loaded once at import with logged emergency fallbacks. A format
+  smoke test checks every file and makes prompt tuning a safe edit. Beyond that, the
+  ~40 routes are dispatched through flat if/elif
   chains; a route table (path → handler, needs-project, streaming flag) would give
   uniform envelope handling and a generated route reference in one move. That is a
   documented opportunity, not yet a brief — it waits until the streaming and hardening

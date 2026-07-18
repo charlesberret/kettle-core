@@ -39,7 +39,7 @@ These files, if broken, take the app offline while the patron is in it. **Handof
 
 **Never bind or signal port 4242 from agent tooling** — that is the live window's port.
 
-Safe to review and edit directly: `README.md`, `.local/DESIGN.md`, `test_*.py` files, `.setsweep/` desk files, `kits/`, `pyproject.toml`, `_Status.md`, `ROADMAP.md`, `docs/` (including the agent briefs in `docs/briefs/`), this file.
+Safe to review and edit directly: `README.md`, `.local/DESIGN.md`, `test_*.py` files, `.setsweep/` desk files, `kits/` (including product prompts under `kits/prompts/`), `pyproject.toml`, `_Status.md`, `ROADMAP.md`, `docs/` (including the agent briefs in `docs/briefs/`), this file.
 
 Planning surface: `ROADMAP.md` is the master plan (phases with exit tests); `docs/briefs/` holds ready-to-run work packages — read the relevant brief before starting roadmap work, and update its `status:` frontmatter when you finish.
 

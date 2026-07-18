@@ -11,6 +11,7 @@ Do not run it under pytest-xdist until those seams become instance-scoped.
 """
 
 import http.client
+import io
 import json
 import os
 import socket
@@ -21,6 +22,7 @@ import time
 import unittest
 import urllib.error
 import urllib.request
+from contextlib import redirect_stderr
 from pathlib import Path
 
 import server
@@ -480,6 +482,26 @@ class EndpointTests(Base):
         s, j = _http("GET", f"{self.base}/api/projects")
         self.assertEqual(s, 200)
         self.assertEqual([p["id"] for p in j["projects"]], ["t"])
+
+    def test_missing_prompt_uses_fallback_and_ephemeral_server_stays_healthy(self):
+        saved = server.PROMPTS_DIR
+        server.PROMPTS_DIR = self.tmp / "missing-prompts"
+        self.addCleanup(lambda: setattr(server, "PROMPTS_DIR", saved))
+        warning = io.StringIO()
+        with redirect_stderr(warning):
+            prompt = server._load_prompt("absent.md", "Emergency {name}")
+        self.assertEqual(prompt, "Emergency {name}")
+        self.assertIn("using emergency fallback", warning.getvalue())
+
+        extra_server, extra_port = server.start_server(0)
+        try:
+            status, payload = _http("GET", f"http://127.0.0.1:{extra_port}/api/ping")
+            self.assertEqual(status, 200)
+            self.assertEqual(payload["app"], "setsweep")
+            self.assertEqual(payload["port"], extra_port)
+        finally:
+            extra_server.shutdown()
+            extra_server.server_close()
 
     def test_save_logs_user_edit_to_lineage(self):
         import lineage
@@ -1397,6 +1419,13 @@ class EndpointTests(Base):
         self.addCleanup(lambda: setattr(server.subprocess, "Popen", real))
         return cmds
 
+    def test_founding_prompt_loaded_from_product_prompt_file(self):
+        cmds = self._capture_cmds()
+        self._post_stream("/api/interview", {"project": "t", "message": "begin"})
+        cmd = cmds[-1]
+        role = cmd[cmd.index("--append-system-prompt") + 1]
+        self.assertIn("FOUNDING INTERVIEW", role)
+
     def test_chat_uses_one_project_session_named_for_project(self):
         # first chat turn on a project CREATES the named project session (no --resume),
         # injects the file's context block, and names it setsweep-test
@@ -1513,6 +1542,7 @@ class EndpointTests(Base):
         self._post_stream("/api/sweep", {"project": "t"})
         prompt = cmds[-1][cmds[-1].index("-p") + 1]
         self.assertIn("PRECOMPUTED DIFFS", prompt)
+        self.assertIn("DESIGN OF THIS PASS", prompt)
         self.assertIn("ACCRUE", prompt)
         self.assertIn("FAMILIARITY.md", prompt)
         self.assertIn("alpha.md is the lead essay", prompt)  # orientation injects familiarity

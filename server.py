@@ -252,169 +252,45 @@ INTERVIEW_TOOLS = [
     "--disallowedTools", "NotebookEdit",
 ]
 
-ACCRUE_PROMPT = (
-    "You are the resident curator of the {name} project (root: {root}). CLOSE already ran "
-    "mechanically (see CLOSE KIT RESULT below) — do NOT re-diff, re-archive, or re-stage. "
-    "Your job is ACCRUE + RESTOCK only:\n"
-    "1. Read {desk_dir}/FAMILIARITY.md (create on first use if missing — project-centered map: "
-    "families, roles, paths, relationships, pitfalls; under ~120 lines).\n"
-    "2. Load the NEXT batch into {queue_path} per {desk_dir}/review-program.md with real "
-    "curatorial briefs (read enough of each document; honor the queue entry schema already "
-    "in the file). Mark the loaded batch in review-program.md. If the program is exhausted, "
-    "leave the queue empty with a note.\n"
-    "3. While reading for briefs, UPDATE FAMILIARITY.md with durable project knowledge you "
-    "newly earned (or correct what went stale). Briefs MUST use familiarity — do not rediscover "
-    "settled structure.\n"
-    "4. Update {desk_dir}/MEMORY.md ONLY if this sitting produced a standing preference; else "
-    "leave it untouched.\n"
-    "5. CROSS-AGENT — when restocking, if a document is a gate for other agents (roadmap, "
-    "spec, interface contract), say so in the brief first line and set `unblocks` to what peer "
-    "work may resume after the patron approves. Lightly re-scan AGENTS.md / CLAUDE.md / fleet "
-    "paths if present; correct FAMILIARITY's peer map only when evidence changed.\n"
-    "6. Append a short note to the existing session log at {session_log} (or write "
-    "{runtime_dir}/sessions/{stamp}-session.md if missing): what you restocked, any familiarity "
-    "updates, any peer gates filed — no per-entry essays.\n"
-    "7. Follow the LIVE REPORTING block at the end of this prompt (patron watches the stream)."
-)
+PROMPTS_DIR = APPDIR / "kits" / "prompts"
 
-SWEEP_PROMPT = (
-    "You are reviewing a round of work on the {name} project (root: {root}) — the sweep is the "
-    "iteration's turn: fired whenever a round of work reaches a review point (day's end is only "
-    "the degenerate case). A sweep is NOT a daily event — it may fire several times in one day, and "
-    "finding the queue already stocked or a session log already present from an earlier pass today "
-    "is normal, not an error or a sign the work is done. Each sweep is its own pass over the current "
-    "queue state.\n"
-    "\n"
-    "DESIGN OF THIS PASS — two jobs with different costs:\n"
-    "  CLOSE  — commit the sitting (rulings, comments, ripples). Keep this cheap when little changed.\n"
-    "  ACCRUE — deepen project familiarity and restock the next batch. This is where time should go:\n"
-    "           honest briefs and a better map of the project for future sittings.\n"
-    "All of this happens in one pass, visibly, but do NOT perform ceremony when there is nothing to "
-    "close. Prefer tool calls that serve ACCRUE over re-deriving diffs the desk already computed.\n"
-    "\n"
-    "=== CLOSE ===\n"
-    "1. RULINGS — if a ruling ledger is configured ({ledger}): apply every ticked/filled/struck "
-    "ruling to its canonical documents exactly as written; annotate each applied row "
-    "'— swept {today}'; never infer rulings; launch-type rulings (a 'go', a grant, an "
-    "acquisition, a schedule) are NOT executed — append 'LAUNCH DIRECTIVE: <what>' to "
-    "{runtime_dir}/sweep.log AND stage a desk egress memo "
-    "(`setsweep egress <project> --kind launch --topic <slug>` or write under "
-    "{desk_dir}/outbound/) so pickup has one folder to drain.\n"
-    "1b. BALLOTS — a persona's `QUESTIONS.md` (an `ask_type: fill` entry) carries the "
-    "Dramaturge's casting questions as checkboxes; a ticked box is the patron's ruling. For each "
-    "tick: if it CONFIRMS the persona's current chief/cast, mark it resolved, clear that question "
-    "from the file, annotate '— swept {today}'. If it CHANGES the cast (a different chief, a figure "
-    "kept/cut/re-weighted, a write-in), that is a RECAST that belongs to the Dramaturge, never the "
-    "desk: raise it as a memo to {root}/Characters/inbox/ (and record it) AND stage a short "
-    "`kind: domain` egress pointer under {desk_dir}/outbound/ — do NOT recast the "
-    "persona BODY/SOURCES from the desk (the standing guardrail). Either way, learn the standing "
-    "casting preference into MEMORY so the question is not re-asked.\n"
-    "2. DIFF — use the PRECOMPUTED DIFFS block below (already computed against "
-    "{runtime_dir}/snapshots/<id>.orig). Do NOT re-run `diff -u` unless a listed entry says "
-    "the precompute is missing. Read the PATRON COMMENTS block: for each entry, surface matching "
-    "comments as binding direction BEFORE you assess that file — same weight as inline edits.\n"
-    "2a. QUIET CLOSE — if EVERY entry is byte-identical to its snapshot (or has no snapshot and "
-    "no file change to assess), carries no patron comment (PATRON COMMENTS block or entry "
-    "`comment` field), and the ledger shows no fresh ruling: skip assess/ripple/preference-write "
-    "for those entries. Still proceed to ACCRUE+RESTOCK unless this is an inbox project whose "
-    "override says otherwise. A full STOP ('nothing to sweep since the last pass') applies only "
-    "when the queue was already archived and there is also nothing to restock — not when approved "
-    "entries still need archive+restock after a quiet sitting.\n"
-    "3. ASSESS — only for entries with a non-empty diff, a patron comment, or a ledger ruling: "
-    "1–2 sentences on what changed and apparent intent. Skip 'unchanged, approved as-is' essays.\n"
-    "4. RIPPLE — only when assess found something that could propagate: check the project for "
-    "stale cross-references, contradicted statements, renamed terms. FIX mechanical issues in "
-    "place; FLAG judgment in the log. A patron comment naming a rename makes propagation "
-    "REQUIRED. Never touch append-only records.\n"
-    "5. PREFERENCES — update {desk_dir}/MEMORY.md ONLY if this sitting produced a standing "
-    "preference or ruling that must not be re-asked (compare briefs' predictions to what the "
-    "patron did). If nothing generalizes, leave MEMORY.md untouched — do not invent thin "
-    "process notes. Terse dated bullets when you do write; keep under ~80 lines; revise/strike "
-    "contradicted entries; if evidence contradicts PROJECT.md, amend it minimally and note that "
-    "in MEMORY.\n"
-    "6. LOG — write {runtime_dir}/sessions/{stamp}-session.md (unique stamp; never overwrite an "
-    "earlier pass). Default shape is THIN: one line per entry "
-    "(id — unchanged-approved | comment acted | ripple fixed | flagged: …). Expand to a short "
-    "paragraph only for judgment flags, multi-file ripples, or memos raised. If a domain memo "
-    "or desk egress file already carries the substance (e.g. Characters/inbox, "
-    "{desk_dir}/outbound/), point at it — do not restate it. "
-    "Include each patron comment verbatim only when you acted on or deferred it.\n"
-    "\n"
-    "=== ACCRUE + RESTOCK (load-bearing; spend the sitting's intelligence here) ===\n"
-    "7. FAMILIARITY + NEXT BATCH — the point of expensive curator time is a desk that knows this "
-    "project better next sitting.\n"
-    "   a. Read {desk_dir}/FAMILIARITY.md (create on first use if missing — see seed purpose "
-    "below). It is the project's accrued map: document families and roles, key paths, "
-    "relationships, pitfalls that improve briefs, what 'good review' looks like here. Not a "
-    "transcript of sittings; not patron prefs (those live in MEMORY.md).\n"
-    "   b. Archive processed entries to {desk_dir}/archive/{today}-batch.json, delete their "
-    "snapshots under {runtime_dir}/snapshots/, then load the NEXT batch into {queue_path} per "
-    "{desk_dir}/review-program.md (entries with real curatorial briefs — read enough of each "
-    "new document to write them; honor the entry schema already in the queue file). When a batch "
-    "is persona pairs (BODY+SOURCES), also load any sibling `QUESTIONS.md` as a companion "
-    "`ask_type: fill` entry (id `<persona>-questions`). Mark the loaded batch in "
-    "review-program.md. If the program is exhausted, leave the queue empty with a note.\n"
-    "   c. While reading for briefs, UPDATE FAMILIARITY.md with durable project knowledge you "
-    "newly earned (or correct what went stale). Keep it under ~120 lines. Briefs MUST use "
-    "familiarity: do not rediscover settled structure; spend reading effort on what is new or "
-    "uncertain. Prefer ask_type judgment/tuning when the file may be edited; pure familiarity "
-    "reads can note that in the brief.\n"
-    "   d. Seed purpose if creating FAMILIARITY.md: header naming it as the curator's "
-    "project-centered expertise — what this corpus is, how pieces relate, what to watch — "
-    "compounded by every restock so future briefs start informed.\n"
-    "8. Follow the LIVE REPORTING block at the end of this prompt (patron watches the stream).\n"
-    "\n"
-    "=== CROSS-AGENT / FLEET (approve + sweep is the patron gate) ===\n"
-    "8b. COORDINATION SCAN — briefly re-check multi-agent signals this sitting "
-    "(AGENTS.md, CLAUDE.md, .cursor/, fleet handoff paths, roadmap 'blocked on review' "
-    "language). Update FAMILIARITY or PROJECT.md only if the peer map changed.\n"
-    "8c. PUBLISH APPROVALS — after CLOSE, stage a desk egress memo "
-    "(`setsweep egress <project> --kind approval --topic sitting-approvals` or write under "
-    "{desk_dir}/outbound/) that other agents can read without opening Setsweep:\n"
-    "   - List each entry the patron **approved** this sitting: id, path, ask, date.\n"
-    "   - List **remaining pending** queue items that still block peer work (path + ask + "
-    "unblocks if set) — peers must not treat those as cleared.\n"
-    "   - If PROJECT.md / SWEEP-ACTIONS name peer agents or routes, put them in **Route:**.\n"
-    "   Leave Status: staged for fleet pickup. If nothing was approved and nothing blocks "
-    "peers, one line in the session log is enough (no empty memo required).\n"
-    "\n"
-    "=== SWEEP ACTIONS (extra work armed at founding) ===\n"
-    "9. After CLOSE/ACCRUE mechanics above, honor {desk_dir}/SWEEP-ACTIONS.md if it exists: "
-    "git commit of sitting changes (run `git init` first if the project has no repo yet), "
-    "stage outbound, append the named plaintext sitting log, update the named sheet path, "
-    "file egress memos for mail/Slack/webhook dispatch or reporting systems, approval "
-    "publication if listed, etc. Setsweep NEVER transmits mail/Slack/webhooks itself — "
-    "stage or `.setsweep/outbound/` egress only, and leave Status: staged for fleet pickup. "
-    "If SWEEP-ACTIONS says nothing extra, skip — but still do 8c when approvals or peer "
-    "blocks exist."
+
+def _load_prompt(name: str, fallback: str) -> str:
+    """Read one product prompt at import; missing files degrade to a short safe prompt."""
+    path = PROMPTS_DIR / name
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        print(
+            f"setsweep: prompt file {path} unavailable ({exc}); using emergency fallback",
+            file=sys.stderr,
+        )
+        return fallback
+    # Prompt files carry one conventional final newline that is not part of the prompt.
+    return text[:-1] if text.endswith("\n") else text
+
+
+ACCRUE_PROMPT = _load_prompt(
+    "accrue.md",
+    "Accrue and restock {name} at {root}. Update {queue_path} and {desk_dir}; "
+    "record the result in {session_log}.",
+)
+SWEEP_PROMPT = _load_prompt(
+    "sweep.md",
+    "Review and sweep {name} at {root}. Use {ledger}; maintain {desk_dir}, "
+    "{runtime_dir}, and {queue_path} for {today} ({stamp}).",
 )
 
 # Live stream narration during /api/sweep. Default is normal (more talkative than the
 # historical quiet default). Stored in settings.json as sweepVerbosity.
 SWEEP_VERBOSITY_LEVELS = ("quiet", "normal", "verbose")
 DEFAULT_SWEEP_VERBOSITY = "normal"
-
 SWEEP_VERBOSITY_INSTRUCTIONS = {
-    "quiet": (
-        "LIVE REPORTING — quiet: report only when something substantive changed — one or two "
-        "lines per real step. Skip no-ops, phase banners, and tool narration."
-    ),
-    "normal": (
-        "LIVE REPORTING — normal: the patron watches this stream. Open each major phase "
-        "(CLOSE rulings · DIFF · ASSESS · RIPPLE · LOG · ACCRUE · RESTOCK · SWEEP ACTIONS) "
-        "with a short banner line when you enter it. For every entry you touch, name the id "
-        "and what you did in one line. When restocking, name each new brief as you file it. "
-        "Skip pure no-ops (do not announce 'unchanged, skipping'). End with a 3–6 line recap "
-        "of what closed and what restocked."
-    ),
-    "verbose": (
-        "LIVE REPORTING — verbose: narrate as you work. Phase banners plus, before each "
-        "meaningful tool use, a half-line of intent; after reads/edits that matter, a one-line "
-        "takeaway. Quote patron comments you act on. Give assess live (not only in the session "
-        "log). When rippling, name each file you fix or flag. Restock: for each new entry, say "
-        "the title and why it was chosen. Finish with a structured recap (closed / flagged / "
-        "restocked / familiarity updates)."
-    ),
+    level: _load_prompt(
+        f"sweep-verbosity-{level}.md",
+        f"LIVE REPORTING — {level}: report meaningful progress and finish with a recap.",
+    )
+    for level in SWEEP_VERBOSITY_LEVELS
 }
 
 
@@ -441,91 +317,19 @@ def sweep_verbosity_block(level: str | None = None) -> str:
     return SWEEP_VERBOSITY_INSTRUCTIONS[lvl]
 
 
-# Founding / propose / bootstrap: patrons watch a long agentic turn. Silence looks stuck.
-FOUNDING_LIVE_REPORTING = (
-    "\n\nLIVE REPORTING (required — the patron is watching this stream):\n"
-    "- Never go more than one meaningful tool call without a short chat line.\n"
-    "- Before each major write, announce it in one line "
-    "(e.g. 'Writing PROJECT.md…', 'Seeding MEMORY…', 'Filing queue entry: spine.md…').\n"
-    "- After each write, one half-line confirm (e.g. 'PROJECT.md done · 42 lines').\n"
-    "- If you fix your own mistake (schema, path, ask_type), say so in one line before re-writing.\n"
-    "- Prefer many small status lines over one big plan then silence. Users love output; "
-    "silence reads as a hang.\n"
-    "- End with a short recap of what was written and what they should do next."
+FOUNDING_LIVE_REPORTING = _load_prompt(
+    "founding-live-reporting.md",
+    "Report meaningful founding progress as you work and finish with a short recap.",
 )
-
-
-# shared by the one-shot bootstrap and the interview's found step
-QUEUE_SCHEMA = (
-    "Queue entry schema (all fields): id (slug), title, path (absolute), project (name), "
-    "project_root (absolute), ask_type (input|tuning|judgment), ask (one line: what is wanted "
-    "from the patron), desk_item (null), urgency (high|medium|low), status (\"pending\"), "
-    "unblocks (one line or \"—\"), brief (the curatorial brief — see the brief standard below).\n"
-    "BRIEF STANDARD (both audiences, in order): the brief is shown to the patron the instant a "
-    "file loads — seconds before any agent reply — so it must do real orienting work on its own. "
-    "Write it in TWO movements: (1) a FIRST LINE that is plain, jargon-free, and immediately "
-    "useful to a human — what this document is and what is wanted of them, in a sentence they "
-    "can act on cold; (2) then 1–3 sentences of precise detail that also prime the review agent "
-    "(specifics, terms of art, what to check). The two movements MUST NOT restate each other — "
-    "movement 2 adds only precision movement 1 omitted (an exact quote, the fault's location, a "
-    "concrete check); if you'd only be re-saying the lead in other words, stop at the lead. Spell "
-    "out abbreviations on first use; no procedural agent-directed tails ('check file X first') — "
-    "fold any sharpening cross-reference into the ask itself. 2–4 sentences total. Never make the "
-    "patron decode shorthand to learn why a file is in front of them.\n"
+QUEUE_SCHEMA = _load_prompt(
+    "queue-schema.md",
+    "Queue entries need id, title, absolute path, project, ask_type, ask, urgency, "
+    "status=pending, and an honest brief.",
 )
-
-BOOTSTRAP_PROMPT = (
-    "You are the founding curator of the {name} project's desk (root: {root}). Setsweep — "
-    "the patron's three-pane review app — has just registered this project; your work creates "
-    "its review apparatus. Duties, in order:\n"
-    "1. SURVEY — map the project briskly: top-level structure, any README/CLAUDE/index files, "
-    "what kinds of documents live here and which carry the project's substance (as opposed to "
-    "machinery, data dumps, or generated artifacts). Sample; do not read everything. "
-    "Characterize, in your own words for the charter, what this project is and what 'review' "
-    "means here — consistent with the type the patron selected (your kit, injected below; if "
-    "none was chosen, judge it from the survey). Every apparatus you build must fit this "
-    "project, not a generic template.\n"
-    "2. THE CHARTER — write {desk_dir}/PROJECT.md: the standing profile every future "
-    "agent receives on arrival (it is auto-injected into the review agent, the sweep, and "
-    "pickups). Sections: what this project IS (identity and purpose, in the patron's terms, "
-    "including the kind you named); the document families and their key paths; the review lens "
-    "(what the patron cares about here — register, standards, sensitivities); conventions "
-    "(formats, naming, what must never be auto-changed); key references (the project's own "
-    "canonical indexes, if any). Keep it under ~80 lines — an orientation, not an archive.\n"
-    "3. THE MEMORY — seed {desk_dir}/MEMORY.md: a short header naming its purpose (the "
-    "curator's accrued judgment — rulings made and patron preferences learned, distilled by "
-    "every sweep; honored by every agent without re-asking) plus any preference ALREADY IN "
-    "EVIDENCE in the project's own files (a CLAUDE.md's stated conventions, style notes, an "
-    "existing editorial standard). Record only what the files attest; never invent or assume "
-    "preferences — an honest near-empty memory beats a speculative full one.\n"
-    "3b. THE FAMILIARITY — seed {desk_dir}/FAMILIARITY.md: the curator's project-centered "
-    "expertise (what this corpus is, document families and roles, key paths, relationships, "
-    "pitfalls that improve future briefs). Seed only what the survey already showed — a thin "
-    "honest map beats a speculative encyclopedia. Sweeps deepen this file when restocking.\n"
-    "4. THE TRACKING SYSTEM — write {desk_dir}/review-program.md: the project's review program. "
-    "Name the document families you found, which need the patron's reading or judgment and why, "
-    "a batch plan if volume warrants batching, and the desk conventions (one batch in the queue "
-    "at a time; the patron's in-editor emendations are themselves the tuning; approve = done "
-    "with this document). Create no speculative empty "
-    "directories.\n"
-    "5. THE FIRST QUEUE — populate {queue_path} (JSON; schema below) with the first batch: "
-    "5–10 entries, the documents that most need the patron's attention first, urgency-ranked. "
-    "Read enough of each chosen document to write an HONEST curatorial brief to the BRIEF "
-    "STANDARD in the schema below (plain human-usable first line, then precise detail) — the "
-    "brief is shown to the patron the instant the file loads AND given to the review agent, so "
-    "it must orient a human on its own and prime the agent both. Set the top-level \"curated\" "
-    "field to today + your role.\n"
-    "5b. SWEEP ACTIONS — write {desk_dir}/SWEEP-ACTIONS.md: for inbox kits default to staging "
-    "approved drafts to outbound (never transmit); for other kits default to 'nothing beyond "
-    "desk close' unless the survey clearly implies an append-only sitting log or egress for "
-    "dispatch. External mail/Slack/webhooks are never executed from the desk — stage or egress "
-    "only.\n"
-    "6. If the folder does not look like a reviewable project at all (empty, pure data, etc.), do NOT "
-    "invent entries — write a queue note saying what you found and what the patron should "
-    "clarify, and say so in your report.\n"
-    + QUEUE_SCHEMA +
-    "Finish with a terse report: families found, entries filed, sweep actions armed, anything odd."
-    + FOUNDING_LIVE_REPORTING
+BOOTSTRAP_PROMPT = _load_prompt(
+    "bootstrap.md",
+    "Found the {name} desk at {root}: write concise apparatus under {desk_dir} and "
+    "populate {queue_path} with honest review entries.",
 )
 
 # ---- the founding interview (agent chat, multi-turn) ----
@@ -535,180 +339,39 @@ BOOTSTRAP_PROMPT = (
 PROPOSAL_ENTRY_ID = "desk-proposal"
 PROPOSAL_FILENAME = "DESK-PROPOSAL.md"
 
-INTERVIEW_ROLE = (
-    "You are the founding curator of the {name} project (root: {root}), conducting the "
-    "FOUNDING INTERVIEW in the patron's agent chat. Tools are read-only. Finish ✓ later "
-    "drafts one proposal file they edit and approve; only that approve founds the desk.\n"
-    "\n"
-    "PURPOSE — become this project's standing second reader. A short human conversation now "
-    "beats re-explaining every sitting. Desk is amendable later; this is a strong start.\n"
-    "\n"
-    "VOICE (critical — first impression):\n"
-    "- Write for a smart person who just opened the folder, not for another agent.\n"
-    "- During SURVEY: if you use more than a couple of tools, emit a one-line progress note "
-    "('Reading README…', 'Scanning top level…') so the stream is not silent.\n"
-    "- OPENING SHAPE — never a single dense paragraph. One short sentence saying what "
-    "this project *is*, in plain English. Then, if the survey earned them, 2–4 short "
-    "bullets — one concrete observation each (what stage it is at, what looks strong, "
-    "what looks unresolved). Then a blank line and the prompt list. No label like "
-    "'Short read.' No status-memo voice.\n"
-    "- Do NOT open with a dense dump of filenames, phase numbers, tool names, internal "
-    "block ids, score lines, or pipe-separated taxonomies. That detail belongs later "
-    "(proposal / deeper turns), not the greeting.\n"
-    "- Warm, brief, workmanlike — no flattery, no ceremony, no jargony self-narration.\n"
-    "\n"
-    "METHOD — survey-then-prompt (not open interrogation):\n"
-    "1. SURVEY — map the project briskly: top-level structure, README/CLAUDE/index, document "
-    "families. Sample; do not read everything. Keep survey notes for yourself; the *spoken* "
-    "opening stays plain.\n"
-    "2. EMPTY / GREENFIELD — if empty or no reviewable substance, open with: this looks "
-    "empty — new project here, or wrong folder? Scaffold only if they want a new project.\n"
-    "3. PROMPT LIST (same first reply, after the opening) — markdown confirmation card "
-    "from the kit stems (### N. [id] headings, GFM - [ ] / - [x]). Copy stems and options "
-    "VERBATIM, keeping the (choose one) tag on single-choice stems; add no other "
-    "per-question instruction text — no '(pick all that apply)', no restating how "
-    "checkboxes work; the card explains itself once. Pre-check what the survey supports. "
-    "Include sweep_actions every time. Leave room for open chat after the list.\n"
-    "   ELABORATE LINES — always emit empty: `Elaborate (optional):` with nothing after the "
-    "colon (or omit filler). NEVER pre-fill elaborate with survey notes, recommendations, "
-    "paraphrases, or 'if you'd rather…' coaching. Only the patron writes free response.\n"
-    "4. DELTAS ONLY — do not re-ask themes survey + kit + founding note already answer.\n"
-    "5. MULTI-AGENT — while surveying, notice whether other agents share this tree "
-    "(AGENTS.md, CLAUDE.md, .cursor/, fleet/handoff folders, 'blocked on review' language). "
-    "Pre-check the fleet stem from evidence; do not invent peers. Approvals later must be "
-    "publishable to those peers via desk egress on sweep.\n"
-    "6. PACING — when the patron returns the confirmation card (or says they are ready), "
-    "the UI advances automatically to draft the desk proposal — do NOT leave them waiting "
-    "on a hidden Finish button. After the card, one short line is enough: the proposal is "
-    "next; they will edit it, then approve. Do not invent more stems."
+INTERVIEW_ROLE = _load_prompt(
+    "interview-role.md",
+    "Interview the patron to found the {name} desk at {root}. Survey read-only, ask only "
+    "what the files cannot answer, and explain that approval is the founding gate.",
+)
+INTERVIEW_KICKOFF = _load_prompt(
+    "interview-kickoff.md",
+    "Survey the project, summarize it plainly, and begin the founding interview.",
+)
+PROPOSE_PROMPT = _load_prompt(
+    "propose.md",
+    "Draft only the editable desk proposal for {name} at {proposal_path}, then put one "
+    "pending proposal entry in {queue_path}. Do not found the full desk yet.",
+)
+FOUND_PROMPT = _load_prompt(
+    "found.md",
+    "Read the approved proposal at {proposal_path}, then found the {name} desk at {root}: "
+    "write apparatus under {desk_dir} and populate {queue_path}.",
+)
+FOUND_LEGACY_PROMPT = _load_prompt(
+    "found-legacy.md",
+    "Found the {name} desk at {root} from the interview and files; write apparatus under "
+    "{desk_dir} and populate {queue_path}.",
+)
+DEFAULT_ROLE = _load_prompt(
+    "default-role.md",
+    "Help the patron review {path} in {project}. Use this brief: {brief}. The ask is: {ask}.",
+)
+CONTEXT_BLOCK = _load_prompt(
+    "context-block.md",
+    "[Active file: {path}]\n[Curatorial brief] {brief}\n[The ask] {ask}\n\n",
 )
 
-INTERVIEW_KICKOFF = (
-    "(The patron has opened the founding interview. Survey the project, then reply in "
-    "plain human language: one sentence on what this is, a few short bullet observations "
-    "if earned (never one dense paragraph, no 'Short read' label, no file inventory), "
-    "then the prompt-list confirmation card. If empty, ask new project vs "
-    "wrong folder. Invite discussion; when they return the card the desk will draft the "
-    "proposal automatically.)"
-)
-
-PROPOSE_PROMPT = (
-    "(The patron confirmed the interview (card returned or finish) — write the desk "
-    "PROPOSAL only, not the full desk. You hold write tools for this turn.\n"
-    "1. Write ONE file: {proposal_path}\n"
-    "   This is the editable charter draft the patron will review in the center pane and "
-    "approve when satisfied. Sections (use these headings):\n"
-    "   # Desk proposal — {name}\n"
-    "   ## What this project is — identity and purpose in the patron's terms (quote them "
-    "where their words were exact); kind/kit posture.\n"
-    "   ## What sittings should do — direction, review lens (kit default ± deltas), "
-    "priorities from the interview.\n"
-    "   ## Fences — what the curator must never auto-change; paths if named.\n"
-    "   ## Sweep extras — extra close-of-sitting work (or 'nothing beyond tidy-up and "
-    "restock'). "
-    "Include git commit if they ticked it (and note init-if-missing). If other agents share "
-    "this repo, default-include publishing approvals as desk egress on sweep. Never transmit "
-    "mail/Slack from the desk; stage or egress only.\n"
-    "   ## Other agents / fleet — who else works this tree (or 'desk only'); what they watch; "
-    "that patron approve+sweep is the gate and approvals are staged under "
-    ".setsweep/outbound/ for pickup.\n"
-    "   ## Document families & first batch — for an existing corpus: families, key paths, "
-    "what should surface first and why. For greenfield/empty: scaffold plan — first files to "
-    "CREATE (typically README/overview, then ROADMAP or PLAN, then further drafts along the "
-    "roadmap); say sittings will draft new material, not only review existing files.\n"
-    "   ## Open questions — only genuine unresolved items, or omit.\n"
-    "   Keep it under ~100 lines. Precise enough that approving it is a real signature of "
-    "intent. Prefer the patron's wording over your paraphrase.\n"
-    "2. THE QUEUE — set {queue_path} to JSON with a single pending entry (schema below) for "
-    "that proposal file ONLY:\n"
-    "   id: \"" + PROPOSAL_ENTRY_ID + "\"\n"
-    "   title: \"Desk proposal\"\n"
-    "   path: absolute path to the proposal file\n"
-    "   project / project_root: {name} / {root}\n"
-    "   ask_type: judgment\n"
-    "   ask: Edit this proposal until it matches your intent, then approve to found the desk\n"
-    "   urgency: high\n"
-    "   status: pending\n"
-    "   founding_phase: proposal\n"
-    "   brief: first line plain — this is the Setsweep desk proposal; approve founds the "
-    "desk from this text. Then one sentence on what they should check.\n"
-    "   Set top-level \"curated\" to today + founding proposal.\n"
-    "   Do NOT file other content entries yet. Do NOT write PROJECT.md, MEMORY.md, or the "
-    "rest of the desk apparatus — that waits for approve.\n"
-    + QUEUE_SCHEMA +
-    "3. Final message (one short line only): the UI will highlight next steps — do NOT "
-    "write a long how-to. e.g. 'Desk proposal filed — edit it, then Approve.' Terse."
-    + FOUNDING_LIVE_REPORTING
-)
-
-FOUND_PROMPT = (
-    "(The patron APPROVED the desk proposal — you now found the desk for {name} ({root}). "
-    "Read {proposal_path} carefully FIRST. That file (especially any patron edits in the "
-    "editor) is the standing brief. Where the proposal and earlier interview chat disagree, "
-    "THE PROPOSAL WINS. Where the proposal and project files disagree, THE PROPOSAL WINS.\n"
-    "1. THE CHARTER — write {desk_dir}/PROJECT.md from the proposal: identity, kind, "
-    "families/paths, review lens, conventions and fences, key references. Under ~80 lines. "
-    "Quote the patron where their wording is exact. If other agents share this repo, name them "
-    "and that Setsweep approve+sweep is the patron gate (approvals egress on sweep).\n"
-    "2. THE MEMORY — seed {desk_dir}/MEMORY.md: purpose header + preferences stated in the "
-    "proposal/interview and attested in project files. Nothing invented.\n"
-    "2b. THE FAMILIARITY — seed {desk_dir}/FAMILIARITY.md from proposal + survey (corpus map "
-    "or greenfield scaffold map). Under ~120 lines.\n"
-    "2c. FOUNDING ANSWERS — write {desk_dir}/founding-answers.md: compact durable extract of "
-    "the approved proposal (status/direction/fences/priorities/sweep extras/elaborations).\n"
-    "2d. SWEEP ACTIONS — write {desk_dir}/SWEEP-ACTIONS.md from the proposal's sweep extras. "
-    "If nothing extra, one line. Never transmit mail/Slack from the desk.\n"
-    "3. THE PROGRAM — write {desk_dir}/review-program.md from the proposal: families and "
-    "batch plan, OR for greenfield the scaffold/roadmap program (next drafts when queue low). "
-    "Desk conventions: one batch at a time; in-editor emendations are the tuning; approve = done.\n"
-    "4. THE FIRST QUEUE — rewrite {queue_path} (JSON; schema below) with the first content "
-    "batch (typically 3–10 entries), urgency-ranked from the proposal's intent:\n"
-    "   - Existing corpus: real project documents that need attention; honest briefs.\n"
-    "   - Greenfield: CREATE the first files if missing (e.g. README/overview, then "
-    "ROADMAP.md or PLAN.md), then queue them with honest briefs. Do not leave an empty queue "
-    "when the proposal asked for scaffold.\n"
-    "   You may leave the desk-proposal entry approved at the bottom or omit it; do not make "
-    "it the only pending work. Set top-level \"curated\" to today + your role.\n"
-    + QUEUE_SCHEMA +
-    "5. Final message: one line on the desk now standing, sweep actions if any, the first "
-    "batch, and that they should select the first content entry. Conversation continues here.)"
-    + FOUNDING_LIVE_REPORTING
-)
-
-# CLI / no-proposal fallback: one-shot found from files (legacy bootstrap path shares this shape).
-FOUND_LEGACY_PROMPT = (
-    "(No approved desk proposal is on file — found the desk for {name} ({root}) in one pass "
-    "from the interview session and/or the files. Where patron words and files disagree, "
-    "THEIR WORDS WIN.\n"
-    "1. THE CHARTER — write {desk_dir}/PROJECT.md (~80 lines).\n"
-    "2. THE MEMORY — seed {desk_dir}/MEMORY.md (stated + file-attested only).\n"
-    "2b. THE FAMILIARITY — seed {desk_dir}/FAMILIARITY.md (~120 lines).\n"
-    "2c. FOUNDING ANSWERS — write {desk_dir}/founding-answers.md from the interview if any.\n"
-    "2d. SWEEP ACTIONS — write {desk_dir}/SWEEP-ACTIONS.md.\n"
-    "3. THE PROGRAM — write {desk_dir}/review-program.md.\n"
-    "4. THE FIRST QUEUE — populate {queue_path} with 5–10 content entries (not a proposal "
-    "placeholder). Honest briefs. Set curated field.\n"
-    + QUEUE_SCHEMA +
-    "5. Final message: desk standing, first batch, select first entry.)"
-    + FOUNDING_LIVE_REPORTING
-)
-
-DEFAULT_ROLE = (
-    "You are the desk assistant in the patron's document-review sitting (project: {project}). "
-    "Their first message opens with the active file's path and its curatorial brief — context "
-    "prepared in advance so neither of you must re-derive it. Help them understand and revise "
-    "that file; read any project files you need. You MAY Edit/Write project files when the "
-    "patron asks you to implement or change something (writes are fenced to the project root). "
-    "For small emendations they want to apply themselves, prefer proposing in fenced code "
-    "blocks (their app turns those into jump-to-line and apply-to-editor buttons). When "
-    "DISCUSSING a passage rather than changing it, quote it in a fenced code block. Never "
-    "touch append-only records or logs. Be concise and direct; they "
-    "are mid-sitting and mental gear-shifts are the enemy."
-)
-
-CONTEXT_BLOCK = (
-    "[Active file: {path}]\n[Curatorial brief] {brief}\n[The ask] {ask}\n\n"
-)
 
 EMPTY_QUEUE = {"curated": "empty — entries are filed by curating agents", "entries": []}
 

@@ -1,4 +1,5 @@
 import json
+import string
 import tempfile
 import unittest
 from pathlib import Path
@@ -29,6 +30,31 @@ class KitsTest(unittest.TestCase):
 
     def test_load_defaults_missing_dir(self):
         self.assertEqual(kits.load_defaults(Path("/nope/kits")), {})
+
+    def test_every_product_prompt_formats(self):
+        prompt_dir = self.shipped / "prompts"
+        expected = {
+            "accrue.md", "bootstrap.md", "context-block.md", "default-role.md",
+            "found-legacy.md", "found.md", "founding-live-reporting.md",
+            "interview-kickoff.md", "interview-role.md", "propose.md",
+            "queue-schema.md", "sweep.md", "sweep-verbosity-normal.md",
+            "sweep-verbosity-quiet.md", "sweep-verbosity-verbose.md",
+        }
+        paths = sorted(prompt_dir.glob("*.md"))
+        self.assertEqual({path.name for path in paths}, expected)
+
+        formatter = string.Formatter()
+        for path in paths:
+            text = path.read_text(encoding="utf-8")
+            fields = {
+                field_name
+                for _, field_name, _, _ in formatter.parse(text)
+                if field_name is not None
+            }
+            try:
+                text.format(**{field: f"<{field}>" for field in fields})
+            except (IndexError, KeyError, ValueError) as exc:
+                self.fail(f"{path.name} does not format cleanly: {exc}")
 
     # ---- resolution ----
 
