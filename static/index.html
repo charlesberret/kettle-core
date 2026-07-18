@@ -2,7 +2,9 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>setsweep</title>
+<!-- Bump this when sitting UI changes; title shows it so we can confirm the shell loaded. -->
+<meta name="setsweep-ui" content="2026-07-17c">
+<title>setsweep · ui-2026-07-17c</title>
 <style>
   /* ---- bundled IBM Plex (served locally from /fonts/ — no network dependency) ---- */
   @font-face { font-family:'IBM Plex Mono'; font-weight:400; font-style:normal;
@@ -72,7 +74,7 @@
   }
   body.desktop-shell #midbar { padding-top:calc(var(--titlebar-h) + 8px); }
   body.desktop-shell #right > h1 { padding-top:calc(var(--titlebar-h) + 12px); }
-  body.desktop-shell #ivhead { padding-top:calc(var(--titlebar-h) + 9px); }
+  body.desktop-shell #foundinghead { padding-top:calc(var(--titlebar-h) + 9px); }
   #left, #mid, #right { min-height:0; height:100%; overflow:hidden; }
 
   /* scrollbars: transparent tracks inherit each panel's background; thumbs stay quiet */
@@ -177,6 +179,30 @@
   body.nofile  #midfoot button, body.nofile  #viewmode, body.nofile  #findtoggle,
   body.noproj  #sweepbtn { opacity:.35; pointer-events:none; }
   body.founding #sweepbtn, body.founding #metaedit { opacity:.35; pointer-events:none; }
+  /* Charter proposal: only Approve applies — no comment / sweep yet */
+  body.proposing #sweepbtn,
+  body.proposing #comment { opacity:.35; pointer-events:none; }
+  /* Desk-proposal phase: make the next step impossible to miss */
+  body.proposing #approve {
+    background: var(--fg); color: var(--bg); border-color: var(--fg); font-weight: 700;
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--acc) 55%, transparent),
+                0 0 18px color-mix(in srgb, var(--acc) 35%, transparent);
+    animation: approvePulse 1.6s ease-in-out infinite;
+  }
+  body.proposing #approve:hover { filter: brightness(1.08); }
+  @keyframes approvePulse {
+    0%, 100% { box-shadow: 0 0 0 2px color-mix(in srgb, var(--acc) 45%, transparent),
+                           0 0 10px color-mix(in srgb, var(--acc) 25%, transparent); }
+    50% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--acc) 75%, transparent),
+                      0 0 22px color-mix(in srgb, var(--acc) 45%, transparent); }
+  }
+  .msg.guide {
+    margin: 10px 14px; padding: 12px 14px; border-radius: 8px;
+    border: 1px solid color-mix(in srgb, var(--acc) 55%, var(--line));
+    background: color-mix(in srgb, var(--acc) 14%, var(--panel));
+    color: var(--fg); font-size: 13.5px; line-height: 1.45; font-weight: 500;
+  }
+  .msg.guide strong { color: var(--acc); font-weight: 700; }
   #meta { flex:1 1 40%; min-height:0; overflow-y:auto; border-top:2px solid var(--line);
           padding:0 14px 12px; font-size:13px; }
   #meta h1 { padding:12px 0 8px; }
@@ -303,56 +329,104 @@
   #right { display:flex; flex-direction:column; border-left:1px solid var(--line); min-width:0; }
   #right h1 { flex:none; display:flex; align-items:center; gap:6px; font-size:12px; letter-spacing:.18em; color:var(--acc); margin:0;
               padding:12px 14px 8px; text-transform:uppercase; }
-  #chat { flex:1; min-height:0; overflow-y:auto; padding:6px 14px; }
+  #chat { flex:1; min-height:0; overflow-y:auto; padding:6px 14px;
+          /* Adding tall agent content must not auto-drag the viewport to the tail */
+          overflow-anchor: none; }
+  /*
+   * Interview kickoff freeze — hard pin:
+   *  - overflow hidden (no user scroll, no browser tail-chase)
+   *  - messages above #interview-start are display:none so the banner is at y=0
+   *  - JS rAF loop keeps scrollTop === 0 until unlock
+   */
+  #chat.interview-loading {
+    overflow: hidden !important;
+    overscroll-behavior: none;
+  }
+  #chat.interview-loading > .iv-pre-hide { display: none !important; }
   .msg { margin:10px 0; white-space:pre-wrap; word-break:break-word; color:var(--muted); }
   .msg.agent strong { color:var(--fg); font-weight:600; }
-  .msg.tool { color:var(--muted); font-style:italic; font-size:12px; margin:4px 0; }
+  .msg.confirm-card { white-space:normal; border:1px solid var(--line); border-radius:8px;
+                      padding:12px 14px; background:color-mix(in srgb, var(--panel2) 70%, var(--bg)); }
+  .msg.confirm-card .cc-preamble { white-space:pre-wrap; color:var(--dim); margin:0 0 10px; }
+  .msg.confirm-card h2.cc-title { margin:0 0 8px; font-size:14px; color:var(--acc); letter-spacing:.04em; }
+  .msg.confirm-card .cc-section { margin:0 0 12px; padding:0 0 10px; border-bottom:1px solid var(--line); }
+  .msg.confirm-card .cc-section:last-of-type { border-bottom:0; padding-bottom:0; }
+  .msg.confirm-card .cc-stem { font-weight:600; color:var(--fg); margin:0 0 6px; line-height:1.35; }
+  .msg.confirm-card label.cc-opt { display:flex; gap:8px; align-items:flex-start; margin:4px 0; cursor:pointer; color:var(--fg); }
+  .msg.confirm-card label.cc-opt input { margin-top:3px; flex:none; accent-color:var(--acc); transform:scale(1.1); }
+  /* Keep option text ~one line in a typical side panel (~36–40ch); wrap only if needed */
+  .msg.confirm-card label.cc-opt span {
+    flex:1; min-width:0; line-height:1.35; font-size:13px;
+    overflow-wrap:anywhere; word-break:break-word;
+  }
+  .msg.confirm-card .cc-elab-label { display:block; margin-top:6px; font-size:12px; color:var(--dim); }
+  .msg.confirm-card .cc-elab { display:block; width:100%; box-sizing:border-box; margin-top:4px; min-height:44px;
+                               background:var(--bg); color:var(--fg); border:1px solid var(--line); border-radius:5px;
+                               padding:6px 8px; font:inherit; resize:vertical; }
+  .msg.confirm-card .cc-elab::placeholder { color:transparent; opacity:0; }
+  .msg.confirm-card .cc-actions { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:10px; }
+  .msg.confirm-card .cc-hint { font-size:12px; color:var(--dim); }
+  /* Soft blue glow on Confirm — draws the eye without shouting */
+  .msg.confirm-card .cc-confirm {
+    --cc-blue: color-mix(in srgb, var(--link, #4daafc) 88%, #fff);
+    background: color-mix(in srgb, var(--link, #4daafc) 78%, var(--btn-primary-bg, var(--acc)));
+    border-color: color-mix(in srgb, var(--link, #4daafc) 55%, transparent);
+    color: #fff;
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--link, #4daafc) 35%, transparent),
+      0 0 10px color-mix(in srgb, var(--link, #4daafc) 38%, transparent),
+      0 0 22px color-mix(in srgb, var(--link, #4daafc) 22%, transparent);
+    animation: cc-glow 2.6s ease-in-out infinite;
+  }
+  .msg.confirm-card .cc-confirm:hover:not(:disabled) {
+    filter: brightness(1.06);
+  }
+  .msg.confirm-card .cc-confirm:disabled {
+    animation: none; opacity: .55; box-shadow: none;
+  }
+  @keyframes cc-glow {
+    0%, 100% {
+      box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--link, #4daafc) 30%, transparent),
+        0 0 8px color-mix(in srgb, var(--link, #4daafc) 28%, transparent),
+        0 0 16px color-mix(in srgb, var(--link, #4daafc) 14%, transparent);
+    }
+    50% {
+      box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--link, #4daafc) 50%, transparent),
+        0 0 14px color-mix(in srgb, var(--link, #4daafc) 48%, transparent),
+        0 0 28px color-mix(in srgb, var(--link, #4daafc) 28%, transparent);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .msg.confirm-card .cc-confirm { animation: none; }
+  }
+  .msg.agent.cc-pending { color:var(--dim); font-style:italic; }
+  .msg.tool { color:var(--acc); font-size:12.5px; margin:5px 0; padding:3px 0 3px 10px;
+              border-left:2px solid color-mix(in srgb, var(--acc) 55%, var(--line));
+              font-family:var(--mono, ui-monospace, monospace); opacity:.92; }
   .msg.err { color:var(--warn); }
   .msg.sys { color:var(--muted); font-size:12px; }
   .msg.ctx .ctxhead { color:var(--slot-ctxhead, var(--fg)); font-size:12px; margin-bottom:4px; }
   .msg.sys .blabel { color:var(--muted); }
   .msg.sys .bbody { color:var(--fg); font-size:13px; white-space:pre-wrap; }
-  /* founding interview — takes over the center panel until the desk is founded */
-  #interview { display:none; flex:1; min-height:0; flex-direction:column; background:var(--bg); }
-  #mid.interviewing #interview { display:flex; }
-  #mid.interviewing #midbar, #mid.interviewing #findbar, #mid.interviewing #edwrap,
-  #mid.interviewing #render, #mid.interviewing #commentpanel, #mid.interviewing #midfoot {
-    display:none !important; }
-  #ivhead { flex:none; padding:9px 14px; border-bottom:1px solid var(--line); color:var(--acc); font-size:13px;
-            display:flex; align-items:center; justify-content:space-between; gap:10px; }
-  #ivhead .ivacts { display:flex; gap:7px; flex:none; }
-  #ivchat { flex:1; min-height:0; overflow-y:auto; padding:6px 18px; }
-  #ivthink { display:none; flex:none; padding:4px 18px; color:var(--warn); font-style:italic; font-size:12px; }
-  #ivbar { flex:none; display:flex; gap:8px; padding:10px 14px; border-top:1px solid var(--line); align-items:flex-end; }
-  #ivin { flex:1; background:var(--panel2); color:var(--fg); border:1px solid var(--line); border-radius:5px;
-          padding:8px 10px; font:inherit; resize:none; min-height:40px; overflow-y:hidden; }
-  #ivstart { display:none; flex:1; flex-direction:column; justify-content:center; align-items:center; gap:10px; padding:30px; }
-  #interview.fresh #ivstart { display:flex; }
-  #interview.fresh #ivchat, #interview.fresh #ivbar, #interview.fresh #ivthink, #interview.fresh #ivhead { display:none; }
-  #ivstart h2 { color:var(--fg); font-size:15px; font-weight:600; margin:0 0 4px; }
-  #ivstart .ivnote { color:var(--dim); font-size:12.5px; width:min(440px, 80%); text-align:left; line-height:1.5; }
-  /* every control in the founding form shares one width + box model (scoped here, so the
-     add-project modal's full-width .kitsel/.kitnote styling stays as-is) */
-  #ivstart input, #ivstart select, #ivstart textarea {
-    width:min(440px, 80%); box-sizing:border-box; margin:0;
-    background:var(--panel2); color:var(--fg); border:1px solid var(--line);
-    border-radius:5px; padding:8px 10px; font:inherit; }
-  #ivstart textarea { min-height:100px; resize:vertical; line-height:1.5; }
-  /* one muted placeholder colour across the form; typed text stays bright --fg */
-  #ivstart input::placeholder, #ivstart textarea::placeholder { color:color-mix(in srgb, var(--fg) 34%, var(--bg)); }
-  /* kit select: when the unselected 'auto-detect' value shows, gray it like a placeholder;
-     the open dropdown options stay --fg (white) */
-  #ivkit:invalid, #addkit:invalid { color:color-mix(in srgb, var(--fg) 34%, var(--bg)); }
-  #ivkit option, #addkit option { color:var(--fg); }
-  #ivstart .btn-primary { width:min(440px, 80%); box-sizing:border-box; margin-top:2px; }
-  #ivstart #ivbrowse { margin:-2px 0 2px; }
-  #iverr { color:var(--warn); font-size:12.5px; min-height:16px; }
+  /* founding interview — lives in the agent chat (right pane), not the editor */
+  body.proposing #foundinghead { display:none; }
+  #foundinghead { display:none; flex:none; padding:9px 14px; border-bottom:1px solid var(--line);
+                  color:var(--acc); font-size:13px; align-items:center; justify-content:space-between; gap:10px; }
+  body.founding #foundinghead { display:flex; }
+  body.founding #right > h1 .agent-label { display:none; }
+  #foundinghead .ivacts { display:flex; gap:7px; flex:none; flex-wrap:wrap; justify-content:flex-end; }
+  #addkit:invalid { color:color-mix(in srgb, var(--fg) 34%, var(--bg)); }
+  #addkit option { color:var(--fg); }
   #chatbar { flex:none; display:flex; gap:8px; padding:10px 14px; border-top:1px solid var(--line); }
   #spin { flex:none; }
   #queue h1 { flex:none; position:sticky; top:0; z-index:5; background:var(--bg); }
   #chatin { flex:1; background:var(--panel2); color:var(--fg); border:1px solid var(--line); border-radius:5px;
             padding:8px 10px; font:inherit; resize:none; min-height:40px; overflow-y:hidden; }
-  #spin { display:none; color:var(--warn); padding:4px 14px 10px; font-size:12px; font-style:italic; }
+  #spin { display:none; color:var(--acc); padding:6px 14px 10px; font-size:12.5px; font-style:italic;
+          border-top:1px solid var(--line); background:color-mix(in srgb, var(--acc) 8%, var(--panel)); }
+  #spin .spin-elapsed { opacity:.7; font-style:normal; font-variant-numeric:tabular-nums; margin-left:8px; }
 
   /* settings panel — follows the active app theme */
   #admin { position:fixed; z-index:50; display:none;
@@ -510,10 +584,9 @@
               border-bottom:1px dotted currentColor; }
   .wikilink:hover { opacity:.8; }
 
-  /* the auto-glance reaction reads dimmer than a full agent turn, with a
-     scannable "comment" heading mirroring the context block's "context ·" head */
+  /* historical chatlog rows may still use cls=glance (feature removed) */
   .msg.glance { color:var(--slot-glance, var(--muted)); font-style:italic; }
-  .msg.glance::before { content:'comment'; display:block; font-style:normal;
+  .msg.glance::before { content:'note'; display:block; font-style:normal;
                         color:var(--slot-cmthead, var(--fg)); font-size:12px; margin-bottom:4px; }
 
   /* semantic colour slots (overridable element colours; fall back to palette) */
@@ -578,34 +651,7 @@
   <div id="midfoot">
     <button id="comment" class="btn btn-sm btn-default" title="leave a note on this file for the agent to address during the sweep">comment</button>
     <span style="flex:1"></span>
-    <button id="approve" class="btn btn-sm btn-default btn-emphasis" title="mark as finished/reviewed — your pass on this file is complete">approve</button>
-  </div>
-  <div id="interview">
-    <div id="ivhead"><span class="ivtitle">founding interview · <span id="ivpname"></span></span><span class="ivacts"><button id="ivquick" type="button" class="btn btn-sm btn-ghost" title="skip the interview — the curator surveys the existing files and founds the desk (charter, memory, first queue) in one pass">found from files</button><button id="ivskip" type="button" class="btn btn-sm btn-ghost" title="leave founding for later — open the project as-is (no charter or queue yet); reselect it to resume founding">skip for now</button></span></div>
-    <div id="ivstart">
-      <h2>choose a project</h2>
-      <div class="ivnote">point the founding curator at a folder — it surveys briskly, then interviews you in this panel; nothing is written until you click finish.</div>
-      <input id="ivname" placeholder="project name" spellcheck="false" autofocus>
-      <input id="ivroot" placeholder="folder (absolute or ~/ path)" spellcheck="false">
-      <button id="ivbrowse" class="btn btn-sm btn-ghost" type="button">browse…</button>
-      <select id="ivkit" class="kitsel" required title="the curator's kind playbook — auto-detected from the folder; confirm or override">
-        <option value="">select project type…</option>
-        <option value="writing">writing</option>
-        <option value="code">code</option>
-        <option value="records">records</option>
-        <option value="knowledge">knowledge</option>
-      </select>
-      <input id="ivdepth" class="kitsel" type="number" min="0" step="1" placeholder="max depth (0 or blank = whole tree)" title="how many directory levels below the root to review — 1 = root files only, 2 = + one subdir level, 0/blank = unlimited">
-      <textarea id="ivnote" class="kitnote" spellcheck="false" placeholder="additional notes (optional) — conventions to honor, things never to touch, tools or corpora the curator should use, what you most want a second reader for"></textarea>
-      <div id="iverr"></div>
-      <button id="ivbegin" class="btn btn-md btn-primary">begin the founding interview</button>
-    </div>
-    <div id="ivchat"></div>
-    <div id="ivthink">the curator is thinking…</div>
-    <div id="ivbar">
-      <textarea id="ivin" placeholder="answer the curator — Enter sends · Shift+Enter newline" spellcheck="false"></textarea>
-      <button id="ivfinish" class="btn btn-sm btn-primary" title="close the interview — the curator founds the desk and continues in the chat pane">finish ✓</button>
-    </div>
+    <button id="approve" class="btn btn-sm btn-default btn-emphasis" title="mark as finished/reviewed — your pass on this file is complete">Approve</button>
   </div>
   <div id="mirror" aria-hidden="true"></div>
 </div>
@@ -613,7 +659,14 @@
 <div id="divR" class="divider" title="drag to resize"></div>
 
 <div id="right">
-  <h1>agent <select id="model">
+  <div id="foundinghead">
+    <span class="ivtitle">founding interview · <span id="ivpname"></span></span>
+    <span class="ivacts">
+      <button id="ivskip" type="button" class="btn btn-sm btn-ghost" title="leave founding for later — open the project as-is (no charter or queue yet); reselect it to resume founding">skip for now</button>
+      <button id="ivfinish" type="button" class="btn btn-sm btn-ghost" title="skip remaining chat and draft the desk proposal now">draft proposal ✓</button>
+    </span>
+  </div>
+  <h1><span class="agent-label">agent</span> <select id="model">
     <option value="haiku">Haiku</option>
     <option value="sonnet">Sonnet</option>
     <option value="opus">Opus</option>
@@ -621,7 +674,7 @@
   </select>
   <span id="ctxbar" title="context used — click to clear this session"><span id="ctxfill"></span><span class="ctxlabel">context</span></span></h1>
   <div id="chat"></div>
-  <div id="spin">thinking…</div>
+  <div id="spin"><span id="spinlabel">working…</span><span class="spin-elapsed" id="spinelapsed"></span></div>
   <div id="chatbar">
     <textarea id="chatin" placeholder=""></textarea>
   </div>
@@ -642,7 +695,7 @@
     </select>
     <input id="adddepth" class="kitsel" type="number" min="0" step="1" placeholder="max depth (0 or blank = whole tree)" title="how many directory levels below the root to review — 1 = root files only, 2 = + one subdir level, 0/blank = unlimited">
     <textarea id="addnote" class="kitnote" spellcheck="false" placeholder="additional notes (optional) — conventions to honor, things never to touch, tools or corpora the curator should use, what you most want a second reader for"></textarea>
-    <div class="mnote">the founding curator surveys the folder, then interviews you in the center panel; the desk is founded when you click finish</div>
+    <div class="mnote">the founding curator surveys the folder and interviews you in the agent chat; finish ✓ drafts a proposal you edit and approve to found the desk</div>
     <div class="mrow">
       <span style="flex:1"></span>
       <button id="addcancel" class="btn btn-md btn-ghost" title="Esc">cancel</button>
@@ -654,11 +707,21 @@
 <div id="setupbg">
   <div id="setupmodal">
     <h2>set up Setsweep</h2>
-    <div class="mnote">choose a model for each kind of agent. defaults are Claude Code models — type any id your agent CLI accepts. you can change these anytime in admin (⌘⇧A → agents).</div>
+    <div class="mnote">Before any project work: pick the agent CLI that will run founding, chat, and sweeps. Setsweep never stores API keys — sign in to the CLI or set its env key in your shell. Change later in Admin → Agents.</div>
+    <div class="mrow" style="margin-bottom:8px">
+      <span class="lbl">provider</span>
+      <select id="setupProvider" style="flex:1">
+        <option value="claude">Claude Code (claude)</option>
+        <option value="grok">Grok Build CLI (grok)</option>
+        <option value="chatgpt">ChatGPT / Codex (codex)</option>
+        <option value="gemini">Gemini CLI (gemini)</option>
+      </select>
+    </div>
+    <div id="setupstatus" class="mnote" style="margin:0">checking curator…</div>
     <div id="setuprows"></div>
     <div class="mrow">
       <span style="flex:1"></span>
-      <button id="setupdone" class="btn btn-md btn-primary" title="save and continue">save &amp; continue</button>
+      <button id="setupdone" class="btn btn-md btn-primary" title="save and continue" disabled>save &amp; continue</button>
     </div>
   </div>
 </div>
@@ -765,8 +828,17 @@
   </div>
 
   <div class="asec" data-tab="agents">
+    <div class="arow" style="margin-bottom:10px">
+      <span class="vname slabel">provider</span>
+      <select id="curatorProvider" title="Which agentic CLI runs curator turns">
+        <option value="claude">Claude Code (claude)</option>
+        <option value="grok">Grok Build CLI (grok)</option>
+        <option value="chatgpt">ChatGPT / Codex (codex)</option>
+        <option value="gemini">Gemini CLI (gemini)</option>
+      </select>
+    </div>
     <div id="agentrows"></div>
-    <div class="arow mono-dim" style="font-size:11px">model is any id your agent CLI accepts — pick a standard model or type a custom id below. (CLIs beyond Claude Code: a flagged future project.)</div>
+    <div class="arow mono-dim" style="font-size:11px" id="agentProviderHint">model is any id your agent CLI accepts — pick a standard model or type a custom id. Auth stays ambient (Claude / Grok / Codex / Gemini login or env keys); Setsweep never stores keys.</div>
   </div>
 
   <div class="asec" data-tab="behavior">
@@ -782,9 +854,13 @@
     <label class="achk"><input type="checkbox" id="optAutoSweep">
       <span class="ctext"><span class="ctitle">auto-sweep when queue is done</span>
       <span class="cdesc">when every entry is approved, open the sweep flow automatically; off keeps sweep manual (recommended)</span></span></label>
-    <label class="achk"><input type="checkbox" id="optGlance">
-      <span class="ctext"><span class="ctitle">glance on open</span>
-      <span class="cdesc">the agent reacts in a sentence or two to each file's brief as it loads (fast, haiku)</span></span></label>
+    <div class="arow"><span class="lbl">sweep report</span>
+      <select id="optSweepVerbosity" title="how talkative the curator is during a live sweep">
+        <option value="quiet">quiet — only substantive lines</option>
+        <option value="normal">normal — phase + entry progress (default)</option>
+        <option value="verbose">verbose — live play-by-play</option>
+      </select></div>
+    <div class="arow mono-dim" style="font-size:11px;margin-top:-4px">how much the curator narrates while sweeping; the patron watches the stream live</div>
     <label class="achk"><input type="checkbox" id="optUnwrap">
       <span class="ctext"><span class="ctitle">unwrap hard-wrapped paragraphs</span>
       <span class="cdesc">on open, join fixed-width-wrapped prose into one line per paragraph for comfortable editing (skips code, lists, tables, headings); saving keeps the unwrapped form</span></span></label>
@@ -883,21 +959,82 @@ let SETTINGS = {}, HOMEDIR = '', findIdx = -1;
    to <desk>/chatlog.json; `restoring` suppresses re-pushing while history re-renders */
 let CHATLOG = [], restoring = false, chatlogTimer = null;
 const CHATLOG_SHOW = 200;  // display cap on reload (server keeps 500)
-const MODELS = ['sonnet', 'opus', 'haiku', 'fable'];
-const MODEL_LABELS = {sonnet: 'Sonnet', opus: 'Opus', haiku: 'Haiku', fable: 'Fable'};
+let MODELS_BY_PROVIDER = {
+  claude: ['sonnet', 'opus', 'haiku', 'fable'],
+  grok: ['grok-4.5', 'grok-composer-2.5-fast'],
+  chatgpt: ['gpt-5.1', 'gpt-5-mini', 'o3', 'o4-mini'],
+  gemini: ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.0-flash'],
+};
+let MODEL_LABELS = {
+  sonnet: 'Sonnet', opus: 'Opus', haiku: 'Haiku', fable: 'Fable',
+  'grok-4.5': 'Grok 4.5',
+  'grok-composer-2.5-fast': 'Composer 2.5 fast',
+  'gpt-5.1': 'GPT-5.1',
+  'gpt-5-mini': 'GPT-5 mini',
+  o3: 'o3',
+  'o4-mini': 'o4-mini',
+  'gemini-2.5-pro': 'Gemini 2.5 Pro',
+  'gemini-2.5-flash': 'Gemini 2.5 Flash',
+  'gemini-2.0-flash': 'Gemini 2.0 Flash',
+};
+let AGENT_DEFAULTS_BY_PROVIDER = {
+  claude: {setup: 'sonnet', chat: 'sonnet'},
+  grok: {setup: 'grok-4.5', chat: 'grok-4.5'},
+  chatgpt: {setup: 'gpt-5.1', chat: 'gpt-5.1'},
+  gemini: {setup: 'gemini-2.5-pro', chat: 'gemini-2.5-pro'},
+};
+const PROVIDER_COMMAND = {claude: 'claude', grok: 'grok', chatgpt: 'codex', gemini: 'gemini'};
+const PROVIDER_HINT = {
+  claude: 'Claude models: sonnet · opus · haiku · fable. Auth is your existing Claude Code login.',
+  grok: 'Grok models: grok-4.5 · grok-composer-2.5-fast. Needs grok on PATH and XAI_API_KEY (or Grok login).',
+  chatgpt: 'ChatGPT via Codex CLI (`codex` on PATH). Auth: ChatGPT login or OPENAI_API_KEY / CODEX_API_KEY.',
+  gemini: 'Gemini CLI (`gemini` on PATH). Auth: Gemini login or GEMINI_API_KEY.',
+};
 
-/** Populate a <select> with every standard model; append the current value if custom. */
+/** Prefer /api/curator/catalog when available (single source of truth). */
+async function refreshCuratorCatalog(){
+  try {
+    const cat = await jget('/api/curator/catalog');
+    if(cat && cat.models_by_provider){
+      MODELS_BY_PROVIDER = Object.assign({}, MODELS_BY_PROVIDER, cat.models_by_provider);
+      // drop cli from admin selects if present
+      delete MODELS_BY_PROVIDER.cli;
+    }
+    if(cat && cat.defaults_by_provider){
+      AGENT_DEFAULTS_BY_PROVIDER = Object.assign({}, AGENT_DEFAULTS_BY_PROVIDER, cat.defaults_by_provider);
+      delete AGENT_DEFAULTS_BY_PROVIDER.cli;
+    }
+    if(cat && Array.isArray(cat.models)){
+      for(const m of cat.models){
+        if(m && m.id && m.label) MODEL_LABELS[m.id] = m.label;
+      }
+    }
+  } catch(e){ /* keep embedded fallbacks */ }
+}
+
+function curatorProvider(){
+  const c = SETTINGS.curator || {};
+  let p = (c.provider || 'claude').toLowerCase();
+  if(p === 'codex') p = 'chatgpt';
+  return MODELS_BY_PROVIDER[p] ? p : 'claude';
+}
+function modelList(){ return MODELS_BY_PROVIDER[curatorProvider()] || MODELS_BY_PROVIDER.claude; }
+function agentDefaults(){ return AGENT_DEFAULTS_BY_PROVIDER[curatorProvider()] || AGENT_DEFAULTS_BY_PROVIDER.claude; }
+
+/** Populate a <select> with every standard model for the active provider; append custom. */
 function fillModelSelect(sel, current){
-  const m = (current || '').trim() || 'sonnet';
+  const list = modelList();
+  const defs = agentDefaults();
+  const m = (current || '').trim() || defs.chat || list[0];
   sel.innerHTML = '';
-  for(const id of MODELS){
+  for(const id of list){
     const o = document.createElement('option');
     o.value = id;
     o.textContent = MODEL_LABELS[id] || id;
     if(id === m) o.selected = true;
     sel.appendChild(o);
   }
-  if(!MODELS.includes(m)){
+  if(!list.includes(m)){
     const o = document.createElement('option');
     o.value = m; o.textContent = m; o.selected = true;
     sel.insertBefore(o, sel.firstChild);
@@ -906,24 +1043,46 @@ function fillModelSelect(sel, current){
 }
 
 /* per-task agents. setup = founding survey / sweep (agentic, edits files);
-   chat = the per-file review conversation (also the top-bar selector); glance = the
-   tool-less reaction on open. Model is a free string — any id the agent CLI accepts,
-   not just the four standards. (CLI backends beyond Claude Code are a flagged future
-   project — see DESIGN.md.) */
+   chat = the per-file review conversation (also the top-bar selector).
+   Model is a free string — any id the agent CLI accepts. */
 const AGENT_TASKS = [
   ['setup',  'curatorial setup', 'founding survey · sweep — agentic, edits files'],
   ['chat',   'session chat',     'per-file review — may Edit/Write under acceptEdits; prefer fences for small emendations'],
-  ['glance', 'context glance',   'the quick reaction on file open — tool-less, so any model fits'],
 ];
-const AGENT_DEFAULTS = {setup: 'sonnet', chat: 'sonnet', glance: 'haiku'};
 function agentModel(task){
-  const a = SETTINGS.agents || {};
-  return a[task] || AGENT_DEFAULTS[task];
+  const a = SETTINGS.agents || (SETTINGS.curator && SETTINGS.curator.models) || {};
+  const defs = agentDefaults();
+  return a[task] || defs[task];
 }
 function setAgent(task, model){
-  const agents = Object.assign({}, AGENT_DEFAULTS, SETTINGS.agents, {[task]: (model || '').trim() || AGENT_DEFAULTS[task]});
-  SETTINGS.agents = agents; saveSettings({agents});
+  const defs = agentDefaults();
+  const agents = Object.assign({}, defs, SETTINGS.agents, {[task]: (model || '').trim() || defs[task]});
+  SETTINGS.agents = agents;
+  const curator = Object.assign({}, SETTINGS.curator || {}, {
+    provider: curatorProvider(),
+    models: Object.assign({}, (SETTINGS.curator && SETTINGS.curator.models) || {}, agents),
+  });
+  SETTINGS.curator = curator;
+  saveSettings({agents, curator});
   if(task === 'chat') syncModelBar();
+}
+function setCuratorProvider(provider){
+  const p = curatorProviderFrom(provider);
+  const defs = AGENT_DEFAULTS_BY_PROVIDER[p];
+  const command = PROVIDER_COMMAND[p] || 'claude';
+  const curator = {provider: p, command, models: Object.assign({}, defs)};
+  SETTINGS.curator = curator;
+  SETTINGS.agents = Object.assign({}, defs);
+  saveSettings({curator, agents: SETTINGS.agents});
+  buildAgentRows();
+  syncModelBar();
+  const hint = $('agentProviderHint');
+  if(hint) hint.textContent = PROVIDER_HINT[p] || PROVIDER_HINT.claude;
+}
+function curatorProviderFrom(provider){
+  let p = (provider || 'claude').toLowerCase();
+  if(p === 'codex') p = 'chatgpt';
+  return MODELS_BY_PROVIDER[p] ? p : 'claude';
 }
 function syncModelBar(){                       // reflect the chat agent in the top-bar <select>
   const sel = $('model'); if(!sel) return;
@@ -1149,7 +1308,8 @@ async function select(id){
   if(!Q || !Q.entries) return;
   cur = Q.entries.find(e => e.id===id);
   if(!cur) return;
-  exitInterview();   // a queue pick leaves the founding interview surface
+  exitInterview();   // a queue pick leaves the interview chrome (proposal keeps proposing)
+  if(!isProposalEntry(cur)) setProposingChrome(false);
   renderQueue(); renderMeta(cur);
   commentMark();
   setFname(cur.path);
@@ -1178,30 +1338,7 @@ async function select(id){
   const lastLogged = CHATLOG[CHATLOG.length - 1];
   if(!(lastLogged && lastLogged.cls === 'ctx' && lastLogged.text === ctxText)){
     addCtx(relPath(cur.path), cur.brief || '(no brief prepared)');
-    glance(cur);  // a one-breath reaction to keep the conversation warm
   }
-}
-
-/* glance: fire a fast, terse comment on the just-loaded brief. Non-blocking and
-   superseded the moment another file is opened (AbortController). Reads the brief
-   only — never the file — so it stays cheap. */
-let glanceCtl = null;
-async function glance(entry){
-  if(glanceCtl) glanceCtl.abort();
-  if(SETTINGS.glance !== true) return;          // off by default; enable in admin
-  const ctl = new AbortController(); glanceCtl = ctl;
-  const eid = entry.id;
-  showSpin();                                    // the agent is reading the note context
-  try {
-    const r = await fetch('/api/glance', {method:'POST', signal: ctl.signal,
-      body: JSON.stringify({project: PROJECT, brief: entry.brief || '', path: entry.path, model: agentModel('glance')})});
-    if(!r.ok) return;
-    let acc = '';
-    await pipeStream(r, (cls, text) => { if(cls === 'agent') acc += text; });
-    if(!ctl.signal.aborted && cur && cur.id === eid && acc.trim())
-      addMsg('glance', acc.trim());
-  } catch(err){ /* aborted or failed: a glance is best-effort, never surfaced as an error */ }
-  finally { if(glanceCtl === ctl && !busy) hideSpin(); }   // don't stomp a live send's spinner
 }
 
 function setDirty(v){ dirty = v; $('dirty').style.display = v ? 'inline' : 'none'; }
@@ -1509,15 +1646,47 @@ async function saveComment(){
   commentMark(); renderQueue(); renderMeta(cur); closeComment();
 }
 
+function isProposalEntry(e){
+  if(!e) return false;
+  if(e.id === 'desk-proposal' || e.founding_phase === 'proposal') return true;
+  const p = String(e.path || '').replace(/\\/g, '/');
+  return p.endsWith('/DESK-PROPOSAL.md') || p.endsWith('DESK-PROPOSAL.md');
+}
 async function approve(){
   if(!cur) return;
+  const wasProposal = isProposalEntry(cur);
   try {
     if(dirty) await save();
-    await jpost('/api/approve', {id: cur.id, project: PROJECT});
+    const r = await jpost('/api/approve', {id: cur.id, project: PROJECT});
+    cur.status = 'approved';
+    renderQueue(); renderMeta(cur);
+    // Approving the desk proposal hands back to the curator to digest edits + first batch.
+    if(wasProposal || r.founding){
+      await foundFromProposal();
+      return;
+    }
   } catch(err){ addMsg('err', 'approve failed: ' + err); return; }
-  cur.status = 'approved';
-  renderQueue(); renderMeta(cur);
   maybeAutoSweep();
+}
+async function foundFromProposal(){
+  if(busy) return;
+  const pid = PROJECT;
+  document.body.classList.remove('proposing', 'founding');
+  clearProposalGuideChrome();
+  addMsg('sys', '— proposal approved · the curator is founding the desk from your text —');
+  busy = true; showSpin(); $('sweepbtn').disabled = true;
+  try {
+    const r = await fetch('/api/found', {method:'POST',
+      body: JSON.stringify({project: pid, model: agentModel('setup')})});
+    if(!r.ok){ const j = await r.json(); throw j.error; }
+    await pipeStream(r, null, {trackCtx:true});
+    PROJECT_SESSION = true;
+    addMsg('sys', '— desk founded —');
+  } catch(err){ addMsg('err', String(err)); }
+  busy = false; hideSpin(); $('sweepbtn').disabled = false;
+  if(PROJECT !== pid) return;
+  await revealQueue(pid, {selectFirst: true});
+  await autoCompact(true);
 }
 
 function postChatlog(pid, msgs){
@@ -1572,8 +1741,292 @@ function addMsg(cls, text){
     d.textContent = text;
   }
   $('chat').appendChild(d);
-  $('chat').scrollTop = $('chat').scrollHeight;
+  chatScrollToBottom();
   return d;
+}
+
+/* ---- founding confirmation card (interactive ticks from curator GFM) ---- */
+/**
+ * Interview kickoff: FREEZE the viewport (do not chase the stream tail).
+ *
+ *   lockInterviewScroll()
+ *     • hide every message above #interview-start (banner is physical y=0)
+ *     • overflow:hidden on #chat
+ *     • rAF loop forces scrollTop = 0 every frame until unlock
+ *     • chatScrollToBottom() becomes a no-op
+ *
+ *   unlockInterviewScroll()
+ *     • stop the loop, restore overflow, leave scrollTop at 0 (banner + card)
+ */
+let interviewScrollLock = false;
+let _ivHoldLoop = 0;
+
+function chatScrollToBottom(){
+  if(interviewScrollLock) return;
+  const c = $('chat');
+  if(c) c.scrollTop = c.scrollHeight;
+}
+
+function _ivHidePreBanner(){
+  const chat = $('chat');
+  if(!chat) return;
+  const anchor = chat.querySelector('#interview-start');
+  let past = !anchor;  // if no anchor yet, hide nothing special
+  for(const m of chat.children){
+    if(anchor && m === anchor){ past = true; m.classList.remove('iv-pre-hide'); continue; }
+    if(!past) m.classList.add('iv-pre-hide');
+    else m.classList.remove('iv-pre-hide');
+  }
+}
+
+function lockInterviewScroll(){
+  const chat = $('chat');
+  if(!chat) return;
+  interviewScrollLock = true;
+  chat.classList.add('interview-loading');
+  _ivHidePreBanner();
+  chat.scrollTop = 0;
+  // Continuous pin — mutation observers and one-shot holds kept losing to flex/spin/layout.
+  if(!_ivHoldLoop){
+    const tick = () => {
+      if(!interviewScrollLock){ _ivHoldLoop = 0; return; }
+      _ivHidePreBanner();
+      if(chat.scrollTop !== 0) chat.scrollTop = 0;
+      _ivHoldLoop = requestAnimationFrame(tick);
+    };
+    _ivHoldLoop = requestAnimationFrame(tick);
+  }
+  if(!chat._ivScrollGuard){
+    chat._ivScrollGuard = () => { if(interviewScrollLock) chat.scrollTop = 0; };
+    chat.addEventListener('scroll', chat._ivScrollGuard, { passive: true });
+  }
+}
+
+function unlockInterviewScroll(){
+  const chat = $('chat');
+  interviewScrollLock = false;
+  if(_ivHoldLoop){ cancelAnimationFrame(_ivHoldLoop); _ivHoldLoop = 0; }
+  if(chat){
+    chat.classList.remove('interview-loading');
+    // Keep pre-banner lines collapsed so the view stays on the interview block.
+    // (They're still in the DOM / chatlog; expand only if the patron scrolls up later
+    //  — for now leave them hidden to avoid a jump.)
+    chat.scrollTop = 0;
+  }
+}
+
+function scheduleHoldInterviewAtTop(){
+  // Back-compat name used by stream/spin paths while locked.
+  if(!interviewScrollLock) return;
+  const chat = $('chat');
+  if(chat) chat.scrollTop = 0;
+}
+
+function looksLikeConfirmCard(text){
+  const t = String(text || '');
+  if(!/- \[[ xX]\] /.test(t)) return false;
+  return /confirmation\s+card|###\s*\d+\.\s*\[/i.test(t);
+}
+function isOtherOptionLabel(label){
+  // Match legacy freeform "Other (elaborate…)" rows only — not "Other coding agents…".
+  const s = String(label || '').trim().toLowerCase();
+  if(!s.startsWith('other')) return false;
+  if(s === 'other' || s.startsWith('other (')) return true;
+  return s.includes('elaborate');
+}
+function parseConfirmCard(text){
+  const lines = String(text || '').replace(/\r\n/g, '\n').split('\n');
+  const SECTION_RE = /^###\s*(\d+)\.\s*\[([^\]]+)\]\s*(.+?)\s*$/;
+  const OPT_RE = /^- \[([ xX])\]\s+(.+?)\s*$/;
+  const ELAB_RE = /^Elaborate(?:\s*\(optional\))?:\s*(.*)$/i;
+  const CARD_HEAD_RE = /^##\s+.*confirmation\s+card/i;
+  let start = lines.findIndex(l => CARD_HEAD_RE.test(l.trim()));
+  if(start < 0) start = lines.findIndex(l => SECTION_RE.test(l.trim()));
+  if(start < 0) return { preamble: String(text || '').trim(), sections: [], epilogue: '' };
+  let preamble = lines.slice(0, start).join('\n').trim();
+  let i = start;
+  if(CARD_HEAD_RE.test((lines[i] || '').trim())){
+    i += 1;
+    const intro = [];
+    while(i < lines.length && !SECTION_RE.test(lines[i].trim())){ intro.push(lines[i]); i++; }
+    const introText = intro.join('\n').trim();
+    if(introText) preamble = preamble ? preamble + '\n\n' + introText : introText;
+  }
+  const sections = [];
+  while(i < lines.length){
+    const m = lines[i].trim().match(SECTION_RE);
+    if(!m) break;
+    const num = m[1], id = m[2].trim();
+    const rawStem = m[3].trim();
+    // Single-choice comes from the "(choose one)" tag; known single ids are the fallback
+    // for cards the agent rendered without it (incl. legacy "(single choice)" chrome).
+    const single = /\((?:choose one|single choice)\)\s*$/i.test(rawStem)
+      || id === 'status' || id === 'horizon';
+    let stem = rawStem.replace(/\s*\((?:multi-select|single choice|choose one)\)\s*$/i, '').trim();
+    i++;
+    const options = [];
+    let elaborate = '';
+    while(i < lines.length){
+      const t = lines[i].trim();
+      if(SECTION_RE.test(t)) break;
+      const om = t.match(OPT_RE);
+      if(om){
+        const label = om[2].trim();
+        // Drop legacy "Other (elaborate)" checkboxes — free response is the Elaborate field.
+        if(!isOtherOptionLabel(label))
+          options.push({ checked: /x/i.test(om[1]), label });
+        i++; continue;
+      }
+      const em = t.match(ELAB_RE);
+      if(em){
+        elaborate = em[1].trim(); i++;
+        while(i < lines.length){
+          const nt = lines[i].trim();
+          if(!nt){
+            i++;
+            if(i < lines.length && (SECTION_RE.test(lines[i].trim()) || OPT_RE.test(lines[i].trim()) || /^Reply with/i.test(lines[i].trim()))) break;
+            if(elaborate) elaborate += '\n';
+            continue;
+          }
+          if(SECTION_RE.test(nt) || OPT_RE.test(nt) || ELAB_RE.test(nt) || /^---+$/.test(nt) || /^Reply with/i.test(nt) || /^##\s/.test(nt)) break;
+          elaborate = elaborate ? elaborate + '\n' + nt : nt; i++;
+        }
+        continue;
+      }
+      if(/^---+$/.test(t) || /^Reply with/i.test(t) || /^##\s/.test(t)) break;
+      i++;
+    }
+    if(options.length){
+      // Agent-prefilled elaborate is always noise; patron fills free response empty.
+      sections.push({ num, id, stem, multi: !single, options, elaborate: '' });
+    }
+  }
+  return { preamble, sections, epilogue: lines.slice(i).join('\n').trim() };
+}
+function serializeConfirmCard(card){
+  const parts = ['## Desk confirmation (patron ticks)', ''];
+  for(const s of card.sections || []){
+    parts.push(`### ${s.num}. [${s.id}] ${s.stem}`);
+    for(const o of s.options || []) parts.push(`- [${o.checked ? 'x' : ' '}] ${o.label}`);
+    const elab = (s.elaborate || '').trim();
+    parts.push(elab ? `Elaborate: ${elab}` : 'Elaborate: (none)');
+    parts.push('');
+  }
+  parts.push('Card returned — proceed from these ticks (finish ✓ when ready).');
+  return parts.join('\n').trim();
+}
+/** Ensure a stable anchor node immediately above the interview card. */
+function ensureInterviewStartAnchor(beforeNode){
+  const chat = $('chat');
+  if(!chat) return null;
+  let anchor = chat.querySelector('#interview-start');
+  // Reuse an existing sys line if present (even without id yet)
+  if(!anchor){
+    for(const m of chat.querySelectorAll('.msg.sys')){
+      if(/beginning interview/i.test(m.textContent || '')){
+        m.id = 'interview-start';
+        anchor = m;
+        break;
+      }
+    }
+  }
+  if(!anchor){
+    anchor = document.createElement('div');
+    anchor.id = 'interview-start';
+    anchor.className = 'msg sys';
+    anchor.textContent = 'Beginning interview…';
+    // Keep transcript honest when we synthesize the banner for restored cards
+    if(!restoring) logChat('sys', 'Beginning interview…');
+  } else {
+    anchor.id = 'interview-start';
+    if(!/beginning interview/i.test(anchor.textContent || ''))
+      anchor.textContent = 'Beginning interview…';
+  }
+  // Always sit the banner immediately above the card so tool spam / survey
+  // preamble is not stuck between the title line and the pretty questions.
+  if(beforeNode && beforeNode.parentNode === chat){
+    if(anchor.nextSibling !== beforeNode) chat.insertBefore(anchor, beforeNode);
+  } else if(!anchor.parentNode){
+    chat.appendChild(anchor);
+  }
+  return anchor;
+}
+
+function renderConfirmCard(host, card){
+  if(!host || !card || !card.sections || !card.sections.length) return false;
+  // Anchor first so the banner is always immediately above the card.
+  ensureInterviewStartAnchor(host);
+  host.className = 'msg confirm-card';
+  host.textContent = '';
+  // Drop survey preamble on the card — banner + questions is the whole screen.
+  const title = document.createElement('h2'); title.className = 'cc-title';
+  title.textContent = 'Desk confirmation card'; host.appendChild(title);
+  card.sections.forEach((sec, si) => {
+    const wrap = document.createElement('div'); wrap.className = 'cc-section';
+    wrap.dataset.num = sec.num || String(si + 1);
+    wrap.dataset.id = sec.id || '';
+    wrap.dataset.stem = sec.stem || '';
+    wrap.dataset.multi = sec.multi ? '1' : '0';
+    const stem = document.createElement('div'); stem.className = 'cc-stem';
+    // Stem only — no [id] · multi chrome (ids remain in the serialized GFM for the agent).
+    stem.textContent = sec.stem || '';
+    wrap.appendChild(stem);
+    const group = 'cc-' + (sec.id || si) + '-' + Date.now();
+    (sec.options || []).forEach(opt => {
+      if(isOtherOptionLabel(opt.label)) return;
+      const lab = document.createElement('label'); lab.className = 'cc-opt';
+      const inp = document.createElement('input');
+      inp.type = sec.multi ? 'checkbox' : 'radio';
+      inp.name = group; inp.checked = !!opt.checked; inp.dataset.label = opt.label || '';
+      lab.appendChild(inp);
+      const span = document.createElement('span'); span.textContent = opt.label || '';
+      lab.appendChild(span); wrap.appendChild(lab);
+    });
+    const elabLab = document.createElement('label'); elabLab.className = 'cc-elab-label';
+    elabLab.textContent = 'Elaborate (optional)';
+    const elab = document.createElement('textarea'); elab.className = 'cc-elab'; elab.rows = 2;
+    elab.value = '';  // always empty for patron free response
+    elab.placeholder = '';  // empty — typing here IS the "other" answer
+    elab.setAttribute('aria-label', 'Elaborate (optional)');
+    elabLab.appendChild(elab); wrap.appendChild(elabLab);
+    host.appendChild(wrap);
+  });
+  const actions = document.createElement('div'); actions.className = 'cc-actions';
+  const send = document.createElement('button'); send.type = 'button';
+  send.className = 'btn btn-sm btn-primary cc-confirm'; send.textContent = 'Confirm & draft proposal';
+  send.onclick = async () => {
+    const sections = Array.from(host.querySelectorAll('.cc-section')).map(wrap => ({
+      num: wrap.dataset.num || '',
+      id: wrap.dataset.id || '',
+      stem: wrap.dataset.stem || '',
+      multi: wrap.dataset.multi === '1',
+      options: Array.from(wrap.querySelectorAll('input')).map(inp => ({
+        label: inp.dataset.label || '', checked: !!inp.checked,
+      })),
+      elaborate: (wrap.querySelector('.cc-elab') || {}).value || '',
+    }));
+    const text = serializeConfirmCard({ preamble: '', sections, epilogue: '' });
+    send.disabled = true;
+    addMsg('user', text);
+    // Send ticks into the interview session, then auto-advance to proposal (no Finish gate).
+    await ivTurn(text);
+    if(document.body.classList.contains('founding') && !busy){
+      await finishInterview();
+    }
+  };
+  const hint = document.createElement('span'); hint.className = 'cc-hint';
+  hint.textContent = 'Tick what fits — free text in Elaborate is “other.” Chat below also works if the card fails to render.';
+  actions.append(send, hint); host.appendChild(actions);
+  // Card is complete — release the kickoff freeze (viewport stays on the banner).
+  unlockInterviewScroll();
+  return true;
+}
+function maybeUpgradeConfirmCard(node, text){
+  if(!document.body.classList.contains('founding')) return false;
+  if(!looksLikeConfirmCard(text)) return false;
+  const card = parseConfirmCard(text);
+  if(!card.sections.length) return false;
+  return renderConfirmCard(node, card);
 }
 
 function addCtx(path, brief){
@@ -1587,17 +2040,20 @@ function addCtx(path, brief){
   body.textContent = brief;
   d.append(head, body);
   $('chat').appendChild(d);
-  $('chat').scrollTop = $('chat').scrollHeight;
+  chatScrollToBottom();
   return d;
 }
 
 async function pipeStream(r, out, opts){
-  const say = out || addMsg;  // default sink: the right chat pane; the interview passes ivMsg
-  const trackCtx = !!(opts && opts.trackCtx);  // only genuine chat turns drive the context bar; glance must not stomp it
+  const say = out || addMsg;  // default sink: the right chat pane
+  const trackCtx = !!(opts && opts.trackCtx);  // only genuine chat turns drive the context bar
+  const coalesceAgent = !out;  // default chat: one bubble per turn (needed for confirm-card upgrade)
   const reader = r.body.getReader();
   const dec = new TextDecoder();
   let buf = '';
   const wrote = [];
+  let agentAcc = '';
+  let agentNode = null;
   while(true){
     const {done, value} = await reader.read();
     if(done) break;
@@ -1607,9 +2063,39 @@ async function pipeStream(r, out, opts){
       const line = buf.slice(0, i); buf = buf.slice(i+1);
       if(!line.trim()) continue;
       let ev; try { ev = JSON.parse(line); } catch { continue; }
-      if(ev.t === 'text') say('agent', ev.s);
+      if(ev.t === 'text'){
+        if(coalesceAgent){
+          agentAcc += ev.s || '';
+          if(!agentNode){
+            // defer logChat until the full turn (avoid empty transcript entry)
+            agentNode = document.createElement('div');
+            agentNode.className = 'msg agent';
+            $('chat').appendChild(agentNode);
+          }
+          // Founding confirmation cards stream as raw GFM first; hide the dump once we
+          // know it's a card, then maybeUpgradeConfirmCard replaces this node at end.
+          if(document.body.classList.contains('founding') && looksLikeConfirmCard(agentAcc)){
+            agentNode.className = 'msg agent cc-pending';
+            agentNode.textContent = 'Preparing interview questions…';
+          } else if(agentAcc.includes('```')){
+            agentNode.textContent = agentAcc;
+          } else if(agentAcc.includes('**')){
+            agentNode.innerHTML = esc(agentAcc).replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
+          } else {
+            agentNode.textContent = agentAcc;
+          }
+          // Kickoff freeze: stay on the banner. Otherwise follow the stream tail.
+          if(interviewScrollLock) scheduleHoldInterviewAtTop();
+          else chatScrollToBottom();
+        } else {
+          say('agent', ev.s);
+        }
+      }
       else if(ev.t === 'tool'){
-        say('tool', '⚙ ' + ev.s);
+        const note = String(ev.s || '').trim() || 'tool';
+        // During interview freeze, keep tool noise out of the pane (spinner label only).
+        if(!interviewScrollLock) say('tool', '› ' + note);
+        if(busy) setSpinLabel(note);
         if((ev.tool === 'Edit' || ev.tool === 'Write') && ev.path) wrote.push(ev.path);
       }
       else if(ev.t === 'model'){ if(trackCtx){ CTX_WINDOW = windowFor(ev.s); setCtxBar(CTX_USED); } }
@@ -1621,7 +2107,20 @@ async function pipeStream(r, out, opts){
       else if(ev.t === 'error') say('err', ev.s);
     }
   }
-  return { wrote };
+  if(agentNode && agentAcc){
+    logChat('agent', agentAcc);
+    const upgraded = maybeUpgradeConfirmCard(agentNode, agentAcc);
+    // If upgrade failed but we were in pending state, fall back to readable text so
+    // the patron is never stuck with only "Preparing interview questions…".
+    if(!upgraded && agentNode.classList.contains('cc-pending')){
+      agentNode.className = 'msg agent';
+      agentNode.textContent = agentAcc;
+      // Failed upgrade — release freeze so the patron can read the plaintext.
+      if(interviewScrollLock) unlockInterviewScroll();
+      else chatScrollToBottom();
+    }
+  }
+  return { wrote, text: agentAcc };
 }
 
 let pendingMsgs = [];
@@ -1650,8 +2149,34 @@ async function refreshOpenFile(wrotePaths){
 /* show/hide the "thinking…" indicator. Showing it shrinks #chat (it's a flex
    sibling below), so pin the scroll to the bottom or the last line gets clipped
    behind the indicator. */
-function showSpin(){ $('spin').style.display = 'block'; const c = $('chat'); c.scrollTop = c.scrollHeight; }
-function hideSpin(){ $('spin').style.display = 'none'; }
+let spinTimer = null, spinStart = 0;
+function setSpinLabel(msg){
+  const lab = $('spinlabel');
+  if(lab) lab.textContent = msg || 'working…';
+}
+function showSpin(msg){
+  setSpinLabel(msg || 'working…');
+  $('spin').style.display = 'block';
+  spinStart = Date.now();
+  const el = $('spinelapsed');
+  if(el) el.textContent = '';
+  if(spinTimer) clearInterval(spinTimer);
+  spinTimer = setInterval(() => {
+    const s = Math.floor((Date.now() - spinStart) / 1000);
+    if($('spinelapsed')) $('spinelapsed').textContent = s >= 2 ? s + 's' : '';
+  }, 500);
+  // Spinner shrinks #chat — hold freeze, else follow the tail.
+  if(interviewScrollLock) scheduleHoldInterviewAtTop();
+  else chatScrollToBottom();
+}
+function hideSpin(){
+  $('spin').style.display = 'none';
+  if(spinTimer){ clearInterval(spinTimer); spinTimer = null; }
+  setSpinLabel('working…');
+  if($('spinelapsed')) $('spinelapsed').textContent = '';
+  // Chat flex-grows when the spinner leaves.
+  if(interviewScrollLock) scheduleHoldInterviewAtTop();
+}
 
 async function send(){
   const m = $('chatin').value.trim();
@@ -1660,6 +2185,12 @@ async function send(){
   // chatting with nothing open) is valid — the session is per-project, not per-file.
   $('chatin').value = '';
   autoGrow();
+  if(document.body.classList.contains('founding')){
+    if(busy) return;
+    addMsg('user', m);
+    await ivTurn(m);
+    return;
+  }
   if(busy){  // interject: queue it; dispatches the moment the current run ends (incl. mid-sweep)
     pendingMsgs.push(m);
     const d = addMsg('user', m);
@@ -2039,6 +2570,14 @@ async function refoundProj(id, btn){
 /* ---- admin · agents: per-task model (<select> lists all standards; custom id optional) ---- */
 function buildAgentRows(){
   const box = $('agentrows'); if(!box) return;
+  const cp = $('curatorProvider');
+  if(cp){
+    cp.value = curatorProvider();
+    if(!cp._wired){
+      cp._wired = true;
+      cp.addEventListener('change', () => setCuratorProvider(cp.value));
+    }
+  }
   box.innerHTML = '';
   for(const [task, label, desc] of AGENT_TASKS){
     const row = document.createElement('div'); row.className = 'arow agentrow';
@@ -2072,9 +2611,26 @@ function buildAgentRows(){
   }
 }
 
-/* ---- first-run setup window: bootstrap the per-task agents, then project setup ---- */
+/* ---- Gate 1: hard curator wizard (before projects / founding) ---- */
+let SETUP_RESOLVE = null;   // promise resolver when hard-gate finishes
+let SETUP_CATALOG = null;
+
 function buildSetupRows(){
   const box = $('setuprows'); if(!box) return;
+  const sp = $('setupProvider');
+  if(sp && !sp._wired){
+    sp._wired = true;
+    sp.addEventListener('change', () => {
+      const p = curatorProviderFrom(sp.value);
+      const defs = AGENT_DEFAULTS_BY_PROVIDER[p];
+      SETTINGS.curator = Object.assign({}, SETTINGS.curator || {}, {
+        provider: p, command: PROVIDER_COMMAND[p] || 'claude', models: Object.assign({}, defs),
+      });
+      SETTINGS.agents = Object.assign({}, defs);
+      buildSetupRows();
+      refreshSetupStatus();
+    });
+  }
   box.innerHTML = '';
   for(const [task, label, desc] of AGENT_TASKS){
     const row = document.createElement('div'); row.className = 'mrow';
@@ -2090,17 +2646,101 @@ function buildSetupRows(){
     box.appendChild(row);
   }
 }
-function showSetup(){ buildSetupRows(); $('setupbg').classList.add('open'); }
-function finishSetup(){
-  const agents = Object.assign({}, AGENT_DEFAULTS, SETTINGS.agents);
+async function refreshSetupStatus(){
+  const st = $('setupstatus');
+  const btn = $('setupdone');
+  if(!st || !btn) return;
+  const sp = $('setupProvider');
+  const want = curatorProviderFrom(sp && sp.value);
+  try {
+    SETUP_CATALOG = await jget('/api/curator/catalog');
+  } catch(e){
+    st.textContent = 'Cannot reach the Setsweep server catalog.';
+    st.style.color = 'var(--warn)';
+    btn.disabled = true;
+    return;
+  }
+  const prov = (SETUP_CATALOG.providers || []).find(p => p.id === want);
+  if(!prov){
+    st.textContent = 'Unknown provider.';
+    st.style.color = 'var(--warn)';
+    btn.disabled = true;
+    return;
+  }
+  if(prov.command_exists === false){
+    const auth = prov.auth_hint || prov.hint || '';
+    st.textContent = `CLI not found: ${prov.command || want}. Install it and ensure it is on PATH.`
+      + (auth ? ' ' + auth : '');
+    st.style.color = 'var(--warn)';
+    btn.disabled = true;
+    return;
+  }
+  const auth = prov.auth_hint || prov.hint || '';
+  st.textContent = `Ready: ${prov.label || want} → ${prov.command_resolved || prov.command}`
+    + (auth ? ' · ' + auth : '');
+  st.style.color = 'var(--dim)';
+  btn.disabled = false;
+}
+function showSetup(){
+  const sp = $('setupProvider');
+  if(sp){ sp.value = curatorProvider(); }
+  buildSetupRows();
+  $('setupbg').classList.add('open');
+  refreshSetupStatus();
+}
+/** Hard gate: resolves only after a ready provider is saved. */
+function runSetupWizard(){
+  return new Promise(resolve => {
+    SETUP_RESOLVE = resolve;
+    showSetup();
+  });
+}
+async function finishSetup(){
+  const sp = $('setupProvider');
+  const provider = curatorProviderFrom(sp && sp.value);
+  await refreshSetupStatus();
+  const prov = (SETUP_CATALOG && SETUP_CATALOG.providers || []).find(p => p.id === provider);
+  if(!prov || prov.command_exists === false){
+    addMsg('err', 'Choose a provider whose CLI is installed before continuing.');
+    return;
+  }
+  const defs = AGENT_DEFAULTS_BY_PROVIDER[provider];
+  const agents = Object.assign({}, defs);
   $('setuprows').querySelectorAll('.smodel').forEach(sel => {
     const task = sel.dataset.task;
     const v = sel.value === '__custom__' ? '' : (sel.value || '').trim();
-    agents[task] = v || AGENT_DEFAULTS[task];
+    agents[task] = v || defs[task];
   });
-  SETTINGS.agents = agents; saveSettings({agents}); syncModelBar();
+  const curator = {
+    provider,
+    command: PROVIDER_COMMAND[provider] || 'claude',
+    models: Object.assign({}, agents),
+  };
+  SETTINGS.curator = curator;
+  SETTINGS.agents = agents;
+  SETTINGS.curator_setup_complete = true;
+  saveSettings({curator, agents, curator_setup_complete: true});
+  syncModelBar();
   $('setupbg').classList.remove('open');
-  // on first run the founding interview is already showing underneath; nothing more to open
+  const done = SETUP_RESOLVE;
+  SETUP_RESOLVE = null;
+  if(done) done();
+}
+async function curatorReady(){
+  // Hard gate: wizard completed once + active CLI still on PATH.
+  if(!SETTINGS.curator_setup_complete) return false;
+  try {
+    const cat = await jget('/api/curator/catalog');
+    const activeId = (cat.active && cat.active.provider)
+      || (SETTINGS.curator && SETTINGS.curator.provider)
+      || curatorProvider();
+    const active = (cat.providers || []).find(p => p.id === activeId);
+    if(active && active.command_exists === false) return false;
+    return true;
+  } catch(e){
+    // Catalog unreachable: trust the saved completion flag (server may be mid-restart).
+    return true;
+  }
 }
 /* ---- K · curators: the kit editor (fork-on-edit; shipped defaults stay pristine) ---- */
 let KITS = [], KIT_KINDS = [];
@@ -2230,148 +2870,201 @@ function syncBrowseButtons(){
 window.addEventListener('pywebviewready', syncBrowseButtons);
 syncBrowseButtons();
 if($('addbrowse')) $('addbrowse').onclick = () => pickFolderInto('addroot', 'addname');
-if($('ivbrowse'))  $('ivbrowse').onclick  = () => pickFolderInto('ivroot', 'ivname');
-
-
-/* ================= founding interview (center panel) =================
-   Phase A: the curator surveys (read-only) and interviews the patron in the
-   middle pane. Phase B (finish): the same session gains write tools, founds
-   the desk, and "swings over" \u2014 its founding stream renders in the right chat
-   pane, the queue fills, and review begins. The center transcript is not
-   persisted locally; the claude session holds the conversation, so a relaunch
-   resumes server-side. */
-let ivBusy = false;
-const SKIPPED_FOUNDING = new Set();   // desks the patron chose to open un-founded this session (escape hatch)
-function ivMsg(cls, text){
-  const d = document.createElement('div');
-  d.className = 'msg ' + cls;
-  if(cls === 'agent' && text.includes('**'))
-    d.innerHTML = esc(text).replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
-  else d.textContent = text;
-  $('ivchat').appendChild(d);
-  $('ivchat').scrollTop = $('ivchat').scrollHeight;
-  return d;
+/* ================= founding interview (agent chat) =================
+   Phase A: survey + prompt list + open discussion (read-only interview).
+   Phase B (finish ✓): write DESK-PROPOSAL.md, load it in the editor (proposing).
+   Phase C (approve proposal): curator digests the edited proposal, founds desk, first batch.
+   Chat stays live through B so the patron can ask for proposal revisions. */
+const SKIPPED_FOUNDING = new Set();   // desks the patron chose to open un-founded this session
+function setFoundingChrome(on){
+  document.body.classList.toggle('founding', !!on);
+  if(on) document.body.classList.remove('proposing');
+  else if(interviewScrollLock) unlockInterviewScroll();
+  const p = PROJECTS.find(x => x.id === PROJECT);
+  if($('ivpname')) $('ivpname').textContent = p ? p.name : (PROJECT || '');
+  $('chatin').placeholder = on
+    ? 'Chat with your agent about the interview questions…'
+    : '';
+  if(on){
+    try { $('chatin').focus({ preventScroll: true }); }
+    catch(_){ $('chatin').focus(); }
+  }
+}
+function setProposingChrome(on){
+  document.body.classList.toggle('proposing', !!on);
+  if(on){
+    document.body.classList.remove('founding');
+    if(typeof closeComment === 'function') closeComment();  // no sweep notes on charter
+  } else {
+    clearProposalGuideChrome();
+  }
+  $('chatin').placeholder = on
+    ? 'ask to revise the proposal — or edit it in the center pane · then Approve'
+    : '';
+  if(on) $('chatin').focus();
 }
 function enterInterview(opts){
   opts = opts || {};
-  $('mid').classList.add('interviewing');
-  document.body.classList.add('founding');   // dim cross-panel actions (sweep, edit) during founding
-  $('interview').classList.toggle('fresh', !!opts.form);
-  const p = PROJECTS.find(x => x.id === PROJECT);
-  $('ivpname').textContent = opts.form ? '' : (p ? p.name : PROJECT || '');
-  if(opts.form){ $('ivname').focus(); setTimeout(() => $('ivname').focus(), 60); return; }
-  if(!$('ivchat').children.length){
+  if(opts.form){ openAddProj(); return; }   // first project: use the add-project modal
+  setFoundingChrome(true);
+  // Kick off only when this load has no interview turns in the restored chat yet.
+  const hasTurns = !!$('chat').querySelector('.msg.agent, .msg.user');
+  if(!hasTurns){
     if(opts.resume){
-      ivMsg('sys', '(resuming the founding interview \u2014 the curator holds the earlier exchange)');
-      ivTurn('(the patron has returned to the interview \u2014 restate in two lines where things stand and what you still need)');
+      const start = addMsg('sys', 'Beginning interview…');
+      if(start) start.id = 'interview-start';
+      lockInterviewScroll();  // freeze before any stream tokens arrive
+      ivTurn('(the patron has returned to the interview — restate in two plain lines where things stand and what you still need; no dense status dump)');
     } else {
-      ivMsg('sys', '\u2014 the curator is surveying the project \u2014');
+      const p = PROJECTS.find(x => x.id === PROJECT);
+      // Status lines are logged but hidden for the freeze (iv-pre-hide).
+      addMsg('sys', 'Registered ' + (p ? p.name : PROJECT) + ' in Setsweep.');
+      addMsg('sys', 'Reading contents…');
+      const start = addMsg('sys', 'Beginning interview…');
+      if(start) start.id = 'interview-start';
+      // Freeze BEFORE the long survey stream — growth below cannot move the view.
+      lockInterviewScroll();
       ivTurn('');
     }
-  } else $('ivin').focus();
+  } else if(opts.resume){
+    addMsg('sys', 'Interview in progress — continue below, or finish ✓ when ready.');
+  }
+  // Promote any restored GFM confirmation blurb into interactive ticks.
+  let upgraded = false;
+  for(const el of [...$('chat').querySelectorAll('.msg.agent')]){
+    if(maybeUpgradeConfirmCard(el, el.innerText || el.textContent || '')) upgraded = true;
+  }
+  // maybeUpgradeConfirmCard → unlockInterviewScroll when a card is present
+  if(!upgraded && interviewScrollLock && hasTurns){
+    // Restored transcript with no card yet — leave unlocked so history is scrollable
+    unlockInterviewScroll();
+  }
 }
 function exitInterview(){
-  $('mid').classList.remove('interviewing');
-  document.body.classList.remove('founding');
-  $('interview').classList.remove('fresh');
-  $('ivchat').innerHTML = ''; $('ivin').value = '';
+  if(interviewScrollLock) unlockInterviewScroll();
+  setFoundingChrome(false);
 }
 async function ivTurn(m){
-  if(ivBusy) return;
-  ivBusy = true; busy = true; $('ivthink').style.display = 'block';
+  if(busy) return;
+  busy = true; showSpin();
   try {
     const r = await fetch('/api/interview', {method:'POST',
       body: JSON.stringify({project: PROJECT, message: m, model: agentModel('setup')})});
     if(!r.ok){ const j = await r.json(); throw j.error; }
-    await pipeStream(r, ivMsg, {trackCtx:true});
-  } catch(err){ ivMsg('err', String(err)); }
-  ivBusy = false; busy = false; $('ivthink').style.display = 'none';
-  $('ivin').focus();
+    await pipeStream(r, null, {trackCtx:true});
+    PROJECT_SESSION = true;
+  } catch(err){
+    addMsg('err', String(err));
+    if(interviewScrollLock) unlockInterviewScroll();
+  }
+  busy = false; hideSpin();
+  // If the stream finished without a confirm card (open chat turn mid-founding),
+  // release the freeze so the patron can scroll freely again.
+  if(interviewScrollLock && !$('chat').querySelector('.msg.confirm-card'))
+    unlockInterviewScroll();
+  if(document.body.classList.contains('founding')){
+    try { $('chatin').focus({ preventScroll: true }); }
+    catch(_){ $('chatin').focus(); }
+  }
 }
-function ivSend(){
-  const m = $('ivin').value.trim();
-  if(!m || ivBusy) return;
-  $('ivin').value = '';
-  autoGrowIv();          // shrink back to the resting height after sending
-  ivMsg('user', m);
-  ivTurn(m);
+const PROPOSAL_GUIDE =
+  'Proposal is in the center pane — edit freely, talk here if something’s wrong, '
+  + 'then click Approve when it reads true.';
+
+function showProposalGuide(){
+  // One highlighted callout (avoid stacking on re-enter)
+  for(const el of [...$('chat').querySelectorAll('.msg.guide')]) el.remove();
+  addMsg('guide', PROPOSAL_GUIDE);
+  const last = $('chat').querySelector('.msg.guide:last-child');
+  if(last){
+    last.innerHTML =
+      'Proposal is in the <strong>center pane</strong> — edit freely, talk here if something’s wrong, '
+      + 'then click <strong>Approve</strong> when it reads true.';
+  }
+  const ab = $('approve');
+  if(ab){
+    ab.title = 'Approve this desk proposal — founds the project from your edited text';
+    ab.textContent = 'Approve proposal';
+  }
 }
-async function finishFounding(){
-  if(ivBusy || busy) return;
+function clearProposalGuideChrome(){
+  const ab = $('approve');
+  if(ab){
+    ab.title = 'mark as finished/reviewed — your pass on this file is complete';
+    ab.textContent = 'Approve';
+  }
+}
+async function finishInterview(){
+  if(busy) return;
   const pid = PROJECT;
   exitInterview();
-  addMsg('sys', '\u2014 interview closed \u00b7 the curator is founding the desk \u2014');
+  addMsg('sys', 'Drafting desk proposal…');
   busy = true; showSpin(); $('sweepbtn').disabled = true;
   try {
-    const r = await fetch('/api/found', {method:'POST',
+    const r = await fetch('/api/propose', {method:'POST',
       body: JSON.stringify({project: pid, model: agentModel('setup')})});
     if(!r.ok){ const j = await r.json(); throw j.error; }
     await pipeStream(r, null, {trackCtx:true});
-    PROJECT_SESSION = true;  // founding ran on the project session \u2014 chat continues that thread
-    addMsg('sys', '\u2014 desk founded \u2014');
+    PROJECT_SESSION = true;
   } catch(err){ addMsg('err', String(err)); }
   busy = false; hideSpin(); $('sweepbtn').disabled = false;
-  if(PROJECT !== pid) return;  // the patron moved on mid-founding
-  await revealQueue(pid);    // show the founded queue FIRST — it's already on disk
-  await autoCompact(true);   // then shed the heavy founding survey (slow; must not gate the reveal)
+  if(PROJECT !== pid) return;
+  await enterProposing(pid);
 }
-async function revealQueue(pid){
+async function enterProposing(pid){
+  setProposingChrome(true);
   try {
     Q = await jget('/api/queue?project=' + encodeURIComponent(pid));
     renderQueue();
-    const pending = Q.entries.filter(e => e.status !== 'approved');
+    const prop = (Q.entries || []).find(e => isProposalEntry(e) && e.status !== 'approved');
+    if(prop){
+      await select(prop.id);
+      // select() clears founding chrome; restore proposing after load
+      setProposingChrome(true);
+      showProposalGuide();
+      $('metadl').innerHTML =
+        '<dd class="proposal-next" style="color:var(--acc);font-weight:600">'
+        + 'Desk proposal — edit in the center, then <strong>Approve</strong> to found the desk'
+        + '</dd>';
+    } else {
+      addMsg('sys', 'no proposal entry filed — see the report above; try draft proposal again or reselect the project.');
+      setProposingChrome(false);
+      clearProposalGuideChrome();
+    }
+  } catch(err){ addMsg('err', String(err)); setProposingChrome(false); clearProposalGuideChrome(); }
+}
+async function revealQueue(pid, opts){
+  opts = opts || {};
+  try {
+    Q = await jget('/api/queue?project=' + encodeURIComponent(pid));
+    renderQueue();
+    document.body.classList.remove('proposing', 'founding');
+    const pending = Q.entries.filter(e => e.status !== 'approved' && !isProposalEntry(e));
     if(pending.length){
-      const lines = pending.map(e => `\u2022 ${e.title} (${e.urgency}) \u2014 ${e.ask || ''}`);
+      const lines = pending.map(e => '• ' + e.title + ' (' + e.urgency + ') — ' + (e.ask || ''));
       addMsg('sys', 'now in the queue:');
       addMsg('agent', lines.join('\n'));
-      addMsg('sys', 'select an entry on the left when ready \u2014 this chat stays.');
+      addMsg('sys', 'select an entry on the left when ready — this chat stays.');
+      if(opts.selectFirst) await select(pending[0].id);
     } else {
-      addMsg('sys', 'the curator filed no entries \u2014 see its report above; reselect the project to reopen the interview.');
+      addMsg('sys', 'the curator filed no content entries — see its report above; reselect the project to resume founding.');
     }
   } catch(err){ addMsg('err', String(err)); }
 }
 
-/* Escape hatch #1 — open an un-founded desk as-is. Drops the interview surface and shows the
-   bare three-pane (likely an empty queue + a hint). Session-scoped: reselecting the project, or
-   reloading the app, re-offers founding. Nothing is written. */
+/* Escape hatch — open an un-founded desk as-is. Session-scoped skip. */
 function skipInterview(){
   const pid = PROJECT;
-  SKIPPED_FOUNDING.add(pid);        // don't re-trap on re-render within this session
+  SKIPPED_FOUNDING.add(pid);
   exitInterview();
+  setProposingChrome(false);
   renderQueue();
   $('metadl').innerHTML = (Q && Q.entries && Q.entries.some(e => e.status !== 'approved'))
     ? '<dd style="color:var(--dim)">select a file from the queue</dd>'
-    : '<dd style="color:var(--dim)">not founded yet — reselect the project to resume founding, or found it from the interview header</dd>';
-}
-
-/* Escape hatch #2 — found from the existing files in one pass (no interview). Calls /api/bootstrap:
-   the curator surveys, writes charter + memory + first queue, and marks the desk founded. Mirrors
-   finishFounding, but survey-driven rather than interview-driven, so it works whether or not an
-   interview was ever started. */
-async function quickFound(){
-  if(ivBusy || busy) return;
-  const pid = PROJECT;
-  SKIPPED_FOUNDING.delete(pid);     // founding for real now
-  exitInterview();
-  addMsg('sys', '— founding from existing files · the curator is surveying —');
-  busy = true; showSpin(); $('sweepbtn').disabled = true;
-  try {
-    const r = await fetch('/api/bootstrap', {method:'POST',
-      body: JSON.stringify({project: pid, model: agentModel('setup')})});
-    if(!r.ok){ const j = await r.json(); throw j.error; }
-    await pipeStream(r, null, {trackCtx:true});
-    PROJECT_SESSION = true;         // founding ran on the project session — chat continues that thread
-    addMsg('sys', '— desk founded —');
-  } catch(err){ addMsg('err', String(err)); }
-  busy = false; hideSpin(); $('sweepbtn').disabled = false;
-  if(PROJECT !== pid) return;       // the patron moved on mid-founding
-  await revealQueue(pid);           // show the founded queue FIRST — it's already on disk
-  await autoCompact(true);          // then shed the heavy founding survey (slow; must not gate the reveal)
+    : '<dd style="color:var(--dim)">not founded yet — reselect the project to resume founding, or finish ✓ in the agent chat</dd>';
 }
 
 /* ---- chat input auto-grow (cap ~40% of the column) ---- */
-/* shared textarea auto-grow: expand with content up to maxLines, then scroll. Used by both
-   the right-panel chat input and the founding-interview answer box, so they behave alike. */
 function growTextarea(el, maxLines = 10, maxHeightPx){
   if(!el) return;
   el.style.height = 'auto';
@@ -2386,7 +3079,6 @@ function growTextarea(el, maxLines = 10, maxHeightPx){
   el.style.overflowY = el.scrollHeight > cap ? 'auto' : 'hidden';
 }
 function autoGrow(){ growTextarea($('chatin'), 10); }
-function autoGrowIv(){ growTextarea($('ivin'), 10); }
 function autoGrowComment(){
   growTextarea($('commentin'), 10, Math.floor(window.innerHeight * 0.5));
 }
@@ -2407,29 +3099,8 @@ $('commentin').addEventListener('keydown', e => {
   if(e.key==='Escape'){ e.preventDefault(); closeComment(); }
 });
 $('commentin').addEventListener('input', autoGrowComment);
-$('ivfinish').onclick = finishFounding;
-$('ivquick').onclick = quickFound;
+$('ivfinish').onclick = finishInterview;
 $('ivskip').onclick = skipInterview;
-$('ivin').addEventListener('keydown', e => {
-  if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); ivSend(); }
-});
-$('ivin').addEventListener('input', autoGrowIv);
-$('ivbegin').onclick = async () => {
-  const name = $('ivname').value.trim(), root = $('ivroot').value.trim();
-  $('iverr').textContent = '';
-  if(!name || !root){ $('iverr').textContent = 'name and folder are both required'; return; }
-  let added;
-  try { added = await jpost('/api/projects/add',
-        {name, root, kit: $('ivkit').value, note: $('ivnote').value.trim(), max_depth: $('ivdepth').value}); }
-  catch(err){ $('iverr').textContent = String(err); return; }
-  try {
-    const pj = await jget('/api/projects');
-    PROJECTS = pj.projects; HOMEDIR = pj.home || HOMEDIR;
-    renderProjOptions();
-    $('proj').value = added.id;
-    await loadProject(added.id);  // unfounded → re-enters the interview, now in chat form
-  } catch(err){ $('iverr').textContent = String(err); }
-};
 let sweepArm = null;
 function maybeAutoSweep(){
   if(SETTINGS.autoSweep !== true) return;             // off by default
@@ -2440,7 +3111,8 @@ function maybeAutoSweep(){
   sweepClicked();
 }
 function sweepClicked(){
-  if(busy || !PROJECT || document.body.classList.contains('founding')) return;   // no project / founding: deactivated
+  if(busy || !PROJECT || document.body.classList.contains('founding')
+     || document.body.classList.contains('proposing')) return;
   if(SETTINGS.sweepConfirm === false){
     if(sweepArm){  // second click during countdown = undo
       clearTimeout(sweepArm); sweepArm = null;
@@ -2607,7 +3279,7 @@ async function loadProject(pid){
   }
   restoring = false;
   const qData = await jget('/api/queue?project=' + encodeURIComponent(pid));
-  // an unfounded desk opens the founding interview in the center panel instead
+  // an unfounded desk opens the founding interview in the agent chat
   let ivst = {status: 'none'};
   try { ivst = await jget('/api/interview?project=' + encodeURIComponent(pid)); } catch(e){}
   if(PROJECT !== pid) return;   // superseded mid-load — don't render stale state over the newer one
@@ -2615,23 +3287,37 @@ async function loadProject(pid){
   // the server may already hold a persisted session for this project (a prior run): trust
   // its word, not just in-page activity, so compact/clear work on load without a first turn.
   PROJECT_SESSION = !!ivst.has_session;
-  const hasQueue = !!(Q.entries && Q.entries.length);
-  const unfounded = !hasQueue && (
+  const contentEnts = (Q.entries || []).filter(e => !isProposalEntry(e));
+  const hasContent = contentEnts.length > 0;
+  const hasProposal = !!(ivst.has_proposal || (Q.entries || []).some(isProposalEntry));
+  const proposing = !hasContent && (
+    ivst.status === 'proposing' || (hasProposal && ivst.status !== 'founded')
+  ) && !SKIPPED_FOUNDING.has(pid);
+  const unfounded = !hasContent && !proposing && (
     ivst.status === 'interviewing' ||
     (ivst.status !== 'founded' && /awaiting founding/i.test(Q.curated || ''))
-  ) && !SKIPPED_FOUNDING.has(pid);   // honor a 'skip for now' choice this session
-  exitInterview();  // clear any prior project's interview surface
+  ) && !SKIPPED_FOUNDING.has(pid);
+  exitInterview();
+  setProposingChrome(false);
   if(unfounded){
     renderQueue();
-    $('metadl').innerHTML = '<dd style="color:var(--dim)">project founding in progress</dd>';
+    $('metadl').innerHTML = '<dd style="color:var(--dim)">project founding in progress — answer the curator in the agent chat</dd>';
+    $('editor').placeholder = 'founding in progress — the interview is in the agent chat';
     enterInterview({resume: ivst.status === 'interviewing'});
     return;
   }
+  if(proposing){
+    renderQueue();
+    $('editor').placeholder = 'desk proposal — edit, then approve to found';
+    await enterProposing(pid);
+    return;
+  }
+  $('editor').placeholder = 'select a file from the queue';
   renderQueue();
   // no file auto-loads on launch or project change: selecting a file is what fires the
-  // glance/agent read, so an auto-loaded first file burns tokens before the patron has
+  // agent read, so an auto-loaded first file burns tokens before the patron has
   // chosen. Leave the center panel clear (editor shows its placeholder) until a pick.
-  if(Q.entries.some(e => e.status!=='approved'))
+  if(contentEnts.some(e => e.status!=='approved'))
     $('metadl').innerHTML = '<dd style="color:var(--dim)">select a file from the queue</dd>';
   else
     $('metadl').innerHTML = '<dd style="color:var(--dim)">queue empty — agents file entries here as they produce documents</dd>';
@@ -2887,11 +3573,10 @@ const TEXT_SLOTS = [
   ['mdhead', 'editor · section head', '--ansi-3'],
   ['ctxhead', 'context · label', '--ansi-7'],
   ['ctxbody', 'context · body', '--ansi-7'],
-  ['cmthead', 'glance · label', '--ansi-7'],
+  ['cmthead', 'comment · label', '--ansi-7'],
   ['comment', 'comment affordance', '--ansi-4'],
   ['agent', 'agent prose', '--ansi-7'],
   ['user', 'chat · your messages', '--ansi-4'],
-  ['glance', 'glance prose', '--ansi-7'],
 ];
 const IFACE_SLOTS = [
   ['bg', 'canvas', '--ansi-0'],
@@ -3231,9 +3916,9 @@ function applyMdToggle(){
   }
 }
 function applySettingsDefaults(){
-  if(SETTINGS.glance == null) SETTINGS.glance = false;
   if(SETTINGS.autoCompact == null) SETTINGS.autoCompact = true;
   if(SETTINGS.autoSweep == null) SETTINGS.autoSweep = false;
+  if(SETTINGS.sweepVerbosity == null) SETTINGS.sweepVerbosity = 'normal';
 }
 function syncBehaviorInputs(){
   hlLineEnabled = SETTINGS.hlLine === true;
@@ -3241,7 +3926,10 @@ function syncBehaviorInputs(){
   $('optMd').checked = SETTINGS.mdHighlight !== false;
   $('optSweepConfirm').checked = SETTINGS.sweepConfirm !== false;
   if($('optAutoSweep')) $('optAutoSweep').checked = SETTINGS.autoSweep === true;
-  if($('optGlance')) $('optGlance').checked = SETTINGS.glance === true;
+  if($('optSweepVerbosity')){
+    const v = (SETTINGS.sweepVerbosity || 'normal').toLowerCase();
+    $('optSweepVerbosity').value = ['quiet','normal','verbose'].includes(v) ? v : 'normal';
+  }
   if($('optUnwrap')) $('optUnwrap').checked = SETTINGS.unwrap === true;
   if($('optCtxCompact')) $('optCtxCompact').checked = (SETTINGS.ctxClick || 'compact') !== 'clear';
   if($('optAutoCompact')) $('optAutoCompact').checked = SETTINGS.autoCompact !== false;
@@ -3262,9 +3950,13 @@ async function loadAdminDebug(){
   const senCls = {live:'ok', stale:'warnv', down:'bad'}[sen.state] || '';
   let h = '';
   // server
+  const cur = s.curator || {};
+  const path = s.curator_path || s.claude_path || cur.command_resolved || '—';
+  const exists = (s.curator_exists != null) ? s.curator_exists : s.claude_exists;
   h += `<div class="kv">
     <span class="k">bound port</span><span class="v">${esc(s.port)}</span>
-    <span class="k">claude path</span><span class="v ${s.claude_exists?'ok':'bad'}">${esc(s.claude_path)} ${s.claude_exists?'✓':'✗ missing'}</span>
+    <span class="k">curator path</span><span class="v ${exists?'ok':'bad'}">${esc(path)} ${exists?'✓':'✗ missing'}</span>
+    <span class="k">provider</span><span class="v">${esc(cur.provider || 'claude')} · ${esc(cur.stream || '—')}</span>
     <span class="k">active projects</span><span class="v">${esc(s.project_count)}</span>
   </div>`;
   // sentinel
@@ -3467,7 +4159,7 @@ function wireAdmin(){
   $('palapply').onclick = applyPalette;
   $('paldel').onclick = deletePalette;
   $('optAutoSweep') && ($('optAutoSweep').onchange = () => saveSettings({autoSweep: $('optAutoSweep').checked}));
-  $('optGlance') && ($('optGlance').onchange = () => saveSettings({glance: $('optGlance').checked}));
+  $('optSweepVerbosity') && ($('optSweepVerbosity').onchange = () => saveSettings({sweepVerbosity: $('optSweepVerbosity').value}));
   $('optUnwrap') && ($('optUnwrap').onchange = () => saveSettings({unwrap: $('optUnwrap').checked}));
   $('optCtxCompact') && ($('optCtxCompact').onchange = () => { saveSettings({ctxClick: $('optCtxCompact').checked ? 'compact' : 'clear'}); setCtxBar(CTX_USED); });
   $('optAutoCompact') && ($('optAutoCompact').onchange = () => saveSettings({autoCompact: $('optAutoCompact').checked}));
@@ -3522,6 +4214,7 @@ function wireAdmin(){
 
 (async function init(){
   try { SETTINGS = await jget('/api/settings'); } catch(e){ SETTINGS = {}; }
+  await refreshCuratorCatalog();
   applySettingsDefaults();
   SETTINGS.colWidths = Object.assign({}, COLW_DEFAULTS, SETTINGS.colWidths || {});
   migrateThemeSettings();
@@ -3530,11 +4223,14 @@ function wireAdmin(){
   applyCols(); applySplit();
   initDividers();
   $('metaedit').onclick = toggleMetaEdit;
-  const freshSetup = !SETTINGS.agents && !SETTINGS.model;   // never configured an agent → bootstrap
-  if(!SETTINGS.agents && SETTINGS.model){ SETTINGS.agents = {...AGENT_DEFAULTS, chat: SETTINGS.model}; }  // migrate old single model -> chat agent
+  // Gate 1 (DESIGN): hard block until curator CLI is chosen and on PATH.
+  if(!SETTINGS.agents && SETTINGS.model){ SETTINGS.agents = {...agentDefaults(), chat: SETTINGS.model}; }
   syncModelBar();
   $('model').onchange = () => setAgent('chat', $('model').value);
-  $('setupdone').onclick = finishSetup;
+  $('setupdone').onclick = () => { finishSetup().catch(e => addMsg('err', String(e))); };
+  if(!(await curatorReady())){
+    await runSetupWizard();
+  }
   const pj = await jget('/api/projects');
   PROJECTS = pj.projects;
   HOMEDIR = pj.home || '';
@@ -3545,14 +4241,13 @@ function wireAdmin(){
     loadProject(v);
   };
   if(PROJECTS.length){
-    // reopen the last active project if it still exists, else the alphabetically-first
     const last = SETTINGS.lastProject;
     const start = (last && PROJECTS.some(p => p.id === last)) ? last : PROJECTS[0].id;
     await loadProject(start);
+  } else {
+    openAddProj();
   }
-  else enterInterview({form: true});  // first launch: found the first project from the center panel
-  syncChrome();                        // set nofile/noproj from the start (covers the no-projects case)
-  if(freshSetup) showSetup();          // bootstrap agents on top, before anything else
+  syncChrome();
 })();
 </script>
 </body>

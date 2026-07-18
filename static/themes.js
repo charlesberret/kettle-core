@@ -42,16 +42,16 @@ const IFACE_OPACITY_LIGHT = {
 
 const SLOTS_DARK = {
   mdhead: '--ansi-3', ctxhead: '--ansi-7', ctxbody: '--ansi-7', cmthead: '--ansi-7',
-  comment: '--ansi-4', agent: '--ansi-7', user: '--ansi-4', glance: '--ansi-7',
+  comment: '--ansi-4', agent: '--ansi-7', user: '--ansi-4',
 };
 
 const SLOTS_LIGHT = {
   mdhead: '--ansi-4', ctxhead: '--ansi-0', ctxbody: '--ansi-0', cmthead: '--ansi-0',
-  comment: '--ansi-4', agent: '--ansi-0', user: '--ansi-4', glance: '--ansi-0',
+  comment: '--ansi-4', agent: '--ansi-0', user: '--ansi-4',
 };
 
-const SLOT_OPACITY_DARK = { agent: 58, glance: 58 };
-const SLOT_OPACITY_LIGHT = { agent: 48, glance: 48 };
+const SLOT_OPACITY_DARK = { agent: 58 };
+const SLOT_OPACITY_LIGHT = { agent: 48 };
 
 function pack(colors16, slots, iface, ifaceOpacity, slotOpacity) {
   return { colors: ansiMap(colors16), slots, iface, ifaceOpacity: ifaceOpacity || {}, slotOpacity: slotOpacity || {} };
