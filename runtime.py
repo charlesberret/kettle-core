@@ -471,6 +471,52 @@ TOOL_TIERS: dict[str, tuple[Optional[str], list[str], list[str]]] = {
     ),
 }
 
+# ---------- per-provider capabilities (honest, derived from tools_argv above) ----------
+#
+# A tier is only as real as the provider's CLI makes it. Each boolean states what the
+# provider *actually* guarantees under the argv `tools_argv` builds below — not what we
+# wish it did. Kept beside TOOL_TIERS / tools_argv so a change to the builder and a change
+# to this claim land in one diff (test_runtime cross-checks the load-bearing ones).
+#
+#   read_only_tier — the interview/read-only tier genuinely cannot write or run shell.
+#       claude/cli: explicit --allowedTools (Read/Glob/Grep only, no Edit/Write/open Bash);
+#       chatgpt: --sandbox read-only; gemini: --approval-mode plan (no execution).
+#       grok: NO — its read-only tier is `--always-approve --allow Bash`, i.e. arbitrary
+#       shell including writes (see the grok branch of tools_argv). This is the one the
+#       founding interview must be able to trust.
+#   tool_allowlist — access is gated by a per-tool allowlist (claude/cli) rather than a
+#       coarse sandbox / approval mode (chatgpt/gemini) or open Bash (grok).
+#   resume — threads a prior session (--resume / `exec resume`).
+#   effort — honors a reasoning-effort flag (EFFORT_BY_PROVIDER is non-empty; gemini none).
+#   fenced_writes — write tiers stay inside the project cwd (allowlist or workspace
+#       sandbox) rather than open Bash. grok write = bypassPermissions + open Bash → not
+#       fenced.
+PROVIDER_CAPABILITIES: dict[str, dict[str, bool]] = {
+    "claude":  {"read_only_tier": True,  "tool_allowlist": True,  "resume": True, "effort": True,  "fenced_writes": True},
+    "cli":     {"read_only_tier": True,  "tool_allowlist": True,  "resume": True, "effort": True,  "fenced_writes": True},
+    "grok":    {"read_only_tier": False, "tool_allowlist": False, "resume": True, "effort": True,  "fenced_writes": False},
+    "chatgpt": {"read_only_tier": True,  "tool_allowlist": False, "resume": True, "effort": True,  "fenced_writes": True},
+    "gemini":  {"read_only_tier": True,  "tool_allowlist": False, "resume": True, "effort": False, "fenced_writes": True},
+}
+
+CAPABILITY_KEYS = ("read_only_tier", "tool_allowlist", "resume", "effort", "fenced_writes")
+
+
+def capabilities_for(provider: str) -> dict[str, bool]:
+    """Honest capability booleans for a provider. Unknown providers get the weakest
+    guarantees (all False) so read-only enforcement refuses rather than assumes."""
+    provider = "chatgpt" if provider == "codex" else provider
+    caps = PROVIDER_CAPABILITIES.get(provider)
+    if caps is None:
+        return {k: False for k in CAPABILITY_KEYS}
+    return dict(caps)
+
+
+def guarantees_read_only(provider: str) -> bool:
+    """True iff the provider's read-only (interview) tier truly cannot write or run shell."""
+    return capabilities_for(provider)["read_only_tier"]
+
+
 # Providers that accept Claude-style --append-system-prompt / --name / --verbose
 CLAUDE_FAMILY = frozenset({"claude", "cli"})
 # Providers that take system text as prompt prefix (no dedicated flag)

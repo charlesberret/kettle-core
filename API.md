@@ -176,6 +176,36 @@ matches the live HTTP sweep posture and is **deliberately unchanged**; whether t
 *should* keep `rm`/`python3` is a security-posture decision left to the patron (see the note
 beside `SHELL_SWEEP` in `runtime.py`).
 
+### Per-provider capability matrix
+
+A tier is only as real as the provider's CLI makes it. These booleans (source:
+`runtime.PROVIDER_CAPABILITIES`, surfaced on `/api/ping` `curator.capabilities` and
+`/api/curator/catalog` `active.capabilities` + each `providers[]` entry) state what each
+provider **actually** guarantees under the argv `runtime.tools_argv` builds:
+
+| Provider | `read_only_tier` | `tool_allowlist` | `resume` | `effort` | `fenced_writes` |
+|----------|:---:|:---:|:---:|:---:|:---:|
+| claude   | ✅ | ✅ | ✅ | ✅ | ✅ |
+| cli      | ✅ | ✅ | ✅ | ✅ | ✅ |
+| chatgpt (codex) | ✅ (`--sandbox read-only`) | ❌ (sandbox, not allowlist) | ✅ | ✅ | ✅ (`workspace-write`) |
+| gemini   | ✅ (`--approval-mode plan`) | ❌ | ✅ | ❌ (no effort flag) | ✅ |
+| grok     | ❌ (`--always-approve --allow Bash`) | ❌ | ✅ | ✅ | ❌ (bypassPermissions + open Bash) |
+
+`read_only_tier` is the load-bearing one: the founding interview (`/api/interview`) runs the
+read-only tier and is the trust ceremony.
+
+**Enforcement.** When a read-only turn is requested and the active provider's
+`read_only_tier` is `false`, the route **refuses pre-stream** with
+
+```
+HTTP 409  { "error": "read_only_unavailable", "provider": "...", "message": "...", "options": [...] }
+```
+
+The stream never starts (viewports show a normal error, not a hung turn). To proceed anyway,
+set `curator.allow_unfenced_readonly: true` in settings — the turn then runs and its stream
+opens with a `[read-only downgrade]` notice. For `provider: claude` (the default) this
+enforcement is a strict no-op. Unknown providers are treated as the weakest case (refused).
+
 ---
 
 ## Route tiers

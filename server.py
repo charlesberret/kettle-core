@@ -177,6 +177,60 @@ def build_turn_cmd(
     )
 
 
+READ_ONLY_UNAVAILABLE = "read_only_unavailable"
+
+
+def read_only_capability_error() -> dict | None:
+    """Pre-stream guard for read-only turns (the founding interview / discussion phase).
+
+    A tier is only as safe as the provider makes it: some curator CLIs (Grok today) cannot
+    offer a genuinely read-only tier — their read-only mode still permits shell and writes
+    (see runtime.PROVIDER_CAPABILITIES). The founding interview is the trust ceremony, so
+    when the active provider cannot guarantee read-only we REFUSE (pre-stream 4xx) unless
+    the patron has explicitly acknowledged the downgrade via
+    `curator.allow_unfenced_readonly: true`. Returns an error dict to send, or None to allow.
+    """
+    settings = load_settings()
+    cfg = curator_mod.resolve_curator(settings)
+    if runtime.guarantees_read_only(cfg.provider):
+        return None
+    block = settings.get("curator") if isinstance(settings.get("curator"), dict) else {}
+    if bool(block.get("allow_unfenced_readonly")):
+        return None
+    label = curator_mod.PROVIDER_LABEL.get(cfg.provider, cfg.provider)
+    return {
+        "error": READ_ONLY_UNAVAILABLE,
+        "provider": cfg.provider,
+        "message": (
+            f"The founding interview must be read-only, but the active curator ({label}) "
+            f"cannot guarantee a read-only tier — its read-only mode still permits shell "
+            f"and writes. Switch to a provider that fences read-only (claude, chatgpt, or "
+            f"gemini), or set curator.allow_unfenced_readonly: true to proceed anyway."
+        ),
+        "options": [
+            "switch curator.provider to claude, chatgpt, or gemini",
+            "set curator.allow_unfenced_readonly: true to acknowledge the downgrade",
+        ],
+    }
+
+
+def read_only_downgrade_notice() -> str | None:
+    """When a read-only turn proceeds only because allow_unfenced_readonly is set, the
+    stream should say so. Returns the notice text, or None when no downgrade is in effect."""
+    settings = load_settings()
+    cfg = curator_mod.resolve_curator(settings)
+    if runtime.guarantees_read_only(cfg.provider):
+        return None
+    block = settings.get("curator") if isinstance(settings.get("curator"), dict) else {}
+    if not bool(block.get("allow_unfenced_readonly")):
+        return None
+    label = curator_mod.PROVIDER_LABEL.get(cfg.provider, cfg.provider)
+    return (
+        f"[read-only downgrade] {label} cannot fence this turn to read-only; proceeding "
+        f"because curator.allow_unfenced_readonly is set. The curator may run shell/writes."
+    )
+
+
 CHATLOG_LOCK = threading.Lock()
 CHATLOG_CAP = 500  # server-side cap: most recent N messages kept per project
 
@@ -1910,6 +1964,13 @@ class Handler(BaseHTTPRequestHandler):
                 "Desk proposal is ready — edit it in the center pane, talk here to revise, "
                 "approve when it matches your intent.")
             return
+        # The founding interview runs the read-only tier — refuse pre-stream if the active
+        # provider cannot guarantee it (unless the patron acknowledged the downgrade).
+        guard = read_only_capability_error()
+        if guard is not None:
+            self.send_json(guard, 409)
+            return
+        notice = read_only_downgrade_notice()
         sid = session_id_for_curator(
             proj=proj, model=current_curator().model_for("chat", d.get("model")),
         )
@@ -1948,7 +2009,8 @@ class Handler(BaseHTTPRequestHandler):
                 kw["model"] = m
             save_session(proj, **kw)
 
-        self.run_curator(cmd, str(project_root(proj)), prior_sid=sid, persist=persist)
+        self.run_curator(cmd, str(project_root(proj)), prior_sid=sid, persist=persist,
+                         notice=notice)
 
     # ---- finish interview: write DESK-PROPOSAL.md + single queue entry (not full found) ----
     def propose(self, d):
@@ -2085,7 +2147,7 @@ class Handler(BaseHTTPRequestHandler):
         mark_founded_if_filed(proj)
 
     def run_curator(self, cmd, cwd, prior_sid=None, persist=None, record_user_message=None,
-                    role="agent"):
+                    role="agent", notice=None):
         """Spawn the active curator CLI; forward normalized events as ndjson to the client.
 
         Stream parsing, usage accounting, and transcript capture live in `runtime.py` —
@@ -2114,6 +2176,9 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/x-ndjson; charset=utf-8")
         self.send_header("Cache-Control", "no-cache")
         self.end_headers()
+
+        if notice:  # e.g. a read-only downgrade acknowledgement, before curator output
+            self.stream_line({"t": "text", "s": str(notice) + "\n\n"})
 
         assert proc.stdout is not None
         meter = runtime.UsageMeter()

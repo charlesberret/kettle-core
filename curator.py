@@ -42,6 +42,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
 
+import runtime
+
 DEFAULT_MODELS = {
     "setup": "sonnet",
     "chat": "sonnet",
@@ -282,6 +284,7 @@ def provider_readiness(
         "command_resolved": resolved,
         "command_exists": _command_exists(resolved) or _command_exists(command),
         "stream": STREAM_LABEL.get(p, "unknown"),
+        "capabilities": runtime.capabilities_for(p),
     }
     hint = AUTH_HINT.get(p)
     if hint:
@@ -374,6 +377,7 @@ def build_catalog(settings: Optional[dict] = None) -> dict[str, Any]:
             "command": cfg.command,
             "models": dict(cfg.models),
             "effort": cfg.effort or "default",
+            "capabilities": runtime.capabilities_for(cfg.provider),
         },
     }
 
@@ -435,6 +439,7 @@ class CuratorConfig:
             "models": dict(self.models),
             "effort": self.effort or "default",
             "stream": self.stream_format(),
+            "capabilities": runtime.capabilities_for(self.provider),
         }
         hint = AUTH_HINT.get(self.provider)
         if hint:

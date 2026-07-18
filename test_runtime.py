@@ -319,6 +319,45 @@ class TestDialectArgv(unittest.TestCase):
         self.assertEqual(effort_argv("", "claude"), [])
 
 
+class TestProviderCapabilities(unittest.TestCase):
+    def test_read_only_guarantee_matches_the_argv_builder(self):
+        """The declared read_only_tier must not drift from what tools_argv actually
+        constructs for the interview (read-only) tier. A provider genuinely guarantees
+        read-only only if its interview argv grants neither open shell nor auto-approval
+        that would let shell run."""
+        for provider in ("claude", "cli", "grok", "chatgpt", "gemini"):
+            argv = tools_argv("interview", provider)
+            # Open shell + always-approve (grok's read-only escape) means writes are possible.
+            open_shell = "--allow" in argv and "Bash" in argv and "--always-approve" in argv
+            derived_read_only = not open_shell
+            self.assertEqual(
+                runtime.guarantees_read_only(provider), derived_read_only,
+                f"{provider}: PROVIDER_CAPABILITIES.read_only_tier disagrees with tools_argv",
+            )
+
+    def test_grok_cannot_guarantee_read_only(self):
+        self.assertFalse(runtime.guarantees_read_only("grok"))
+        caps = runtime.capabilities_for("grok")
+        self.assertFalse(caps["fenced_writes"])
+        self.assertFalse(caps["tool_allowlist"])
+
+    def test_claude_family_guarantees_read_only_and_fenced_writes(self):
+        for p in ("claude", "cli"):
+            caps = runtime.capabilities_for(p)
+            self.assertTrue(caps["read_only_tier"])
+            self.assertTrue(caps["fenced_writes"])
+            self.assertTrue(caps["tool_allowlist"])
+
+    def test_codex_alias_resolves_to_chatgpt(self):
+        self.assertEqual(runtime.capabilities_for("codex"),
+                         runtime.capabilities_for("chatgpt"))
+
+    def test_unknown_provider_gets_weakest_guarantees(self):
+        caps = runtime.capabilities_for("nope")
+        self.assertEqual(set(caps.keys()), set(runtime.CAPABILITY_KEYS))
+        self.assertFalse(any(caps.values()))
+
+
 class TestSessionLedger(unittest.TestCase):
     def test_append_and_read_roundtrip(self):
         with tempfile.TemporaryDirectory() as d:

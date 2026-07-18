@@ -97,6 +97,12 @@ a count, or a named artifact, never a feeling.
   machine (pipx or signed DMG — briefs 11/15); a quickstart doc; the security pass
   landed (briefs 05/06) and an adversarial session found no localhost-bypass write
   path.
+  - *Read-only tier honesty (brief 06):* the founding interview refuses (HTTP 409
+    `read_only_unavailable`) under any provider whose `read_only_tier` capability is
+    false, unless `curator.allow_unfenced_readonly` is explicitly set. The single
+    authority is `runtime.PROVIDER_CAPABILITIES` — if a provider's CLI quirks change
+    (e.g. Grok gains a real read-only mode), update that table and nothing else. Verify
+    with `/api/ping` and `/api/curator/catalog` (both carry `capabilities`).
 - *Exit:* each alpha user completed a founding and 5 sittings; no severity-1 incident
   (data loss, crash-with-loss, security); founding completion ≥ 80% without help.
 
