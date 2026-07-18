@@ -36,11 +36,6 @@ module below 60% and publishes the full table in the job summary.
 
 Now the holes, named:
 
-- **Hang and disconnect.** No test simulates a curator that stays open emitting
-  nothing, and no watchdog exists to kill one — `run_curator`'s read loop blocks on
-  stdout with only a `proc.wait(timeout=10)` after EOF. A hung CLI pins a handler
-  thread indefinitely. Client-disconnect mid-stream is equally untested. Brief 07 owns
-  both the watchdog and its tests.
 - **The frontend: 4,254 lines, zero tests.** The one file whose breakage takes the app
   offline while the patron is in it has no harness at all — not even a smoke test that
   the page parses.
@@ -55,10 +50,10 @@ Now the holes, named:
 
 What to build, in the order the briefs sequence it:
 
-1. **Stub-curator extensions** (brief 07). Add sleep-then-emit, die-mid-stream, and
-   client-disconnect variants to `_stub_claude`, landed together with the read watchdog
-   they exercise. The harness pattern already exists; this closes the last standing
-   item from `_Status.md`'s original test wishlist.
+1. **Stub-curator extensions** (brief 07, landed). Sleep-then-emit, die-mid-stream,
+   client-disconnect, and spawn-failure cases pin the idle watchdog and terminal `done`
+   contract. This closes the last standing item from `_Status.md`'s original test
+   wishlist.
 2. **The e2e lifecycle test** (brief 14, landed). It drives register → interview →
    propose → approve → found → chat → approve → sweep → close against the stub and is
    now executable documentation for the founding state machine.

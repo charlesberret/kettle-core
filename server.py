@@ -16,7 +16,9 @@ Bundled (Electron .app):     PyInstaller sidecar; set DESK_PROJECTS for the regi
 
 import difflib
 import json
+import math
 import os
+import queue
 import re
 import shutil
 import signal
@@ -92,10 +94,30 @@ RUNTIME_PATH = HOME / ".cache/setsweep/server.json"  # informational record of t
 QUEUE_LOCK = threading.Lock()
 SETTINGS_LOCK = threading.Lock()
 PROJECTS_LOCK = threading.Lock()
+DEFAULT_CURATOR_IDLE_TIMEOUT_S = 300.0
 
 
 def current_curator() -> curator_mod.CuratorConfig:
     return curator_mod.resolve_curator(load_settings())
+
+
+def curator_idle_timeout_s() -> float:
+    """Configured maximum silence between normalized curator events.
+
+    Five minutes leaves ample room for ordinary provider-side tool work; every supported
+    stream dialect emits model/text/tool/usage events when it is active. Tests shorten the
+    setting. Invalid, non-positive, and non-finite values fall back safely.
+    """
+    settings = load_settings()
+    block = settings.get("curator") if isinstance(settings.get("curator"), dict) else {}
+    raw = block.get("idle_timeout_s", DEFAULT_CURATOR_IDLE_TIMEOUT_S)
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return DEFAULT_CURATOR_IDLE_TIMEOUT_S
+    if not math.isfinite(value) or value <= 0:
+        return DEFAULT_CURATOR_IDLE_TIMEOUT_S
+    return max(0.05, min(value, 86_400.0))
 
 
 def agent_bin() -> str:
@@ -2456,36 +2478,97 @@ class Handler(BaseHTTPRequestHandler):
         — so continuity is the desk's, not the agent process's. Event shapes are unchanged
         (model/text/tool/done/error); `usage` is additive and ignored by older frontends;
         `done.ctx` is now true single-call occupancy, not the turn's summed aggregate."""
+        proc = None
+        has_streamed = False
+        try:
+            # stderr merged into stdout: a second unread pipe can deadlock the CLI mid-stream
+            proc = subprocess.Popen(
+                cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+            )
+        except Exception as exc:  # noqa: BLE001 — executable missing / spawn refused
+            self.send_json({"error": f"curator failed to start: {exc}"}, 500)
+            return
+
+        # From this point the response belongs to the NDJSON stream. Any later failure is
+        # represented as stream events; never attempt a second HTTP response.
+        has_streamed = True
         self.send_response(200)
         self.send_header("Content-Type", "application/x-ndjson; charset=utf-8")
         self.send_header("Cache-Control", "no-cache")
         self.end_headers()
 
-        # stderr merged into stdout: a second unread pipe can deadlock the CLI mid-stream
-        proc = subprocess.Popen(
-            cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
-        )
         assert proc.stdout is not None
         meter = runtime.UsageMeter()
         cap = {"sid": prior_sid, "text": [], "tools": [], "edits": []}
         noise: list[str] = []  # non-JSON CLI chatter (e.g. Grok resume 404)
         saw_error_evt = False
+        done_sent = False
+        pending_done = None
+        client_gone = False
+        idle_timeout = curator_idle_timeout_s()
+
+        def emit(evt) -> bool:
+            nonlocal done_sent
+            if done_sent:
+                return False
+            if evt.get("t") == "done":
+                done_sent = True
+            return self.stream_line(evt)
+
+        def stop_process() -> None:
+            if proc.poll() is None:
+                proc.kill()
+            try:
+                proc.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait(timeout=10)
 
         def on_session(new_sid):
             cap["sid"] = new_sid
             if persist and new_sid and new_sid != prior_sid:
                 persist(new_sid)  # immediately, so a fast next turn finds the session
 
+        line_queue: queue.Queue = queue.Queue()
+        eof = object()
+
+        def read_stdout() -> None:
+            try:
+                for line in proc.stdout:
+                    line_queue.put(line)
+            except Exception as exc:  # noqa: BLE001 — surface reader failures in handler thread
+                line_queue.put(exc)
+            finally:
+                line_queue.put(eof)
+
+        threading.Thread(target=read_stdout, daemon=True,
+                         name="setsweep-curator-stdout").start()
+        last_event_at = [time.monotonic()]
+
         def iter_lines():
-            for line in proc.stdout:
-                raw = line.rstrip("\n")
+            while True:
+                remaining = idle_timeout - (time.monotonic() - last_event_at[0])
+                if remaining <= 0:
+                    raise TimeoutError(
+                        f"curator idle timeout after {idle_timeout:g}s without an event")
+                try:
+                    item = line_queue.get(timeout=remaining)
+                except queue.Empty as exc:
+                    raise TimeoutError(
+                        f"curator idle timeout after {idle_timeout:g}s without an event") from exc
+                if item is eof:
+                    return
+                if isinstance(item, Exception):
+                    raise item
+                raw = item.rstrip("\n")
                 stripped = raw.strip()
                 if stripped and not stripped.startswith("{"):
                     noise.append(stripped)
-                yield line
+                yield item
 
         try:
             for evt in runtime.normalize(iter_lines(), meter, on_session):
+                last_event_at[0] = time.monotonic()
                 if evt["t"] == "text":
                     cap["text"].append(evt["s"])
                 elif evt["t"] == "tool":
@@ -2494,10 +2577,15 @@ class Handler(BaseHTTPRequestHandler):
                         cap["edits"].append(evt["path"])
                 elif evt["t"] == "error":
                     saw_error_evt = True
-                if not self.stream_line(evt):  # client gone
-                    proc.kill()
+                if evt["t"] == "done":
+                    pending_done = evt
                     break
-            proc.wait(timeout=10)
+                if not emit(evt):  # client gone
+                    client_gone = True
+                    stop_process()
+                    break
+            if not client_gone:
+                proc.wait(timeout=10)
             if proc.returncode not in (0, None, -9) and not saw_error_evt:
                 detail = next(
                     (n for n in reversed(noise)
@@ -2506,10 +2594,18 @@ class Handler(BaseHTTPRequestHandler):
                 )
                 msg = (f"{detail} (exit {proc.returncode})" if detail
                        else f"curator exited {proc.returncode}")
-                self.stream_line({"t": "error", "s": msg})
+                emit({"t": "error", "s": msg})
+            emit(pending_done or {"t": "done"})
+        except TimeoutError as exc:
+            stop_process()
+            if has_streamed:
+                emit({"t": "error", "s": str(exc)})
+                emit({"t": "done"})
         except Exception as e:  # noqa: BLE001
-            proc.kill()
-            self.stream_line({"t": "error", "s": repr(e)})
+            stop_process()
+            if has_streamed:
+                emit({"t": "error", "s": repr(e)})
+                emit({"t": "done"})
         finally:
             if record_user_message is not None and cap["sid"]:
                 try:
@@ -2526,7 +2622,9 @@ class Handler(BaseHTTPRequestHandler):
                 except OSError:
                     pass
             if proc.poll() is None:
-                proc.kill()
+                stop_process()
+            if has_streamed and not done_sent:
+                emit({"t": "done"})
 
     # Back-compat alias for tests / older call sites
     run_claude = run_curator

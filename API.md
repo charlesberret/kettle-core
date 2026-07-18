@@ -147,6 +147,13 @@ Success shapes vary today (see Stability notes). Prefer:
 
 **Streaming routes:** `POST /api/chat`, `/api/compact`, `/api/sweep`, `/api/bootstrap`, `/api/interview`, `/api/propose`, `/api/found`.
 
+Every established NDJSON stream ends with exactly one terminal `done` event. Failures
+emit `error` immediately before `done`; no event follows `done`. If the curator process
+cannot be spawned, the route fails before streaming with one JSON 500 response instead.
+The server kills a curator that emits no normalized event for
+`settings.curator.idle_timeout_s` seconds (default 300) and closes it as
+`error` → `done`. A client disconnect also kills the curator process.
+
 ---
 
 ## Route tiers

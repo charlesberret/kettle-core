@@ -13,8 +13,11 @@ Do not run it under pytest-xdist until those seams become instance-scoped.
 import http.client
 import json
 import os
+import socket
 import shutil
+import sys
 import tempfile
+import time
 import unittest
 import urllib.error
 import urllib.request
@@ -248,6 +251,17 @@ class HelperTests(Base):
     def test_settings_survives_corrupt_file(self):
         server.SETTINGS_PATH.write_text("{not json")
         self.assertEqual(server.load_settings(), {})           # no crash
+
+    def test_curator_idle_timeout_setting(self):
+        server.SETTINGS_PATH.write_text(json.dumps({
+            "curator": {"idle_timeout_s": 0.2},
+        }))
+        self.assertEqual(server.curator_idle_timeout_s(), 0.2)
+        server.SETTINGS_PATH.write_text(json.dumps({
+            "curator": {"idle_timeout_s": "invalid"},
+        }))
+        self.assertEqual(server.curator_idle_timeout_s(),
+                         server.DEFAULT_CURATOR_IDLE_TIMEOUT_S)
 
     def test_queue_creates_empty_when_missing(self):
         q = server.load_queue(self.proj())
@@ -610,9 +624,7 @@ class EndpointTests(Base):
     def test_compact_without_session_is_terminal_noop(self):
         s, body = self._post_stream("/api/compact", {"project": "t"})
         self.assertEqual(s, 200)
-        self.assertEqual(body, "")
-        # Brief 07 will make done terminal on every stream path. Until that lands,
-        # the route-smoke contract here is a clean no-op that leaves the server alive.
+        self.assertEqual(self._events(body)[-1]["t"], "done")
         ping, _ = _http("GET", f"{self.base}/api/ping")
         self.assertEqual(ping, 200)
 
@@ -1114,6 +1126,16 @@ class EndpointTests(Base):
         server.CLAUDE = str(stub)
         self.addCleanup(lambda: setattr(server, "CLAUDE", saved))
 
+    def _stub_curator_python(self, source, name="curator-python-stub"):
+        """Install a Python curator stub for timing/process-lifecycle cases."""
+        stub = self.tmp / name
+        stub.write_text(f"#!{sys.executable}\n" + source)
+        stub.chmod(0o755)
+        saved = server.CLAUDE
+        server.CLAUDE = str(stub)
+        self.addCleanup(lambda: setattr(server, "CLAUDE", saved))
+        return stub
+
     @staticmethod
     def _init(sid="sid-x", model="stub"):
         return json.dumps({"type": "system", "subtype": "init",
@@ -1133,7 +1155,12 @@ class EndpointTests(Base):
         req = urllib.request.Request(f"{self.base}{path}",
                                      data=json.dumps(body).encode(), method="POST")
         with urllib.request.urlopen(req, timeout=10) as r:
-            return r.status, r.read().decode()
+            status, text = r.status, r.read().decode()
+        events = self._events(text)
+        self.assertTrue(events, f"{path} returned an empty stream")
+        self.assertEqual(events[-1].get("t"), "done",
+                         f"{path} did not end with terminal done: {events[-1:]}")
+        return status, text
 
     @staticmethod
     def _events(text):
@@ -1356,8 +1383,11 @@ class EndpointTests(Base):
             def wait(self, timeout=None):
                 return 0
 
+            def poll(self):
+                return self.returncode
+
             def kill(self):
-                pass
+                self.returncode = -9
 
         def fake_popen(argv, *a, **k):
             cmds.append(list(argv))
@@ -1525,17 +1555,83 @@ class EndpointTests(Base):
                                     {"project": "t", "id": "alpha", "message": "x"})
         self.assertEqual(s, 200)
         self.assertIn("partial", body)            # what streamed before the failure survives
-        self.assertTrue(any(e.get("t") == "error" and "curator exited 3" in str(e.get("s"))
-                            for e in self._events(body)))
+        events = self._events(body)
+        self.assertEqual([e["t"] for e in events[-2:]], ["error", "done"])
+        self.assertIn("curator exited 3", events[-2]["s"])
 
-    def test_missing_claude_binary_does_not_kill_server(self):
+    def test_hung_curator_is_killed_after_idle_timeout(self):
+        pidfile = self.tmp / "hung-curator.pid"
+        server.save_settings({"curator": {"idle_timeout_s": 0.5}})
+        self._stub_curator_python(
+            "import os, time\n"
+            f"open({str(pidfile)!r}, 'w').write(str(os.getpid()))\n"
+            "time.sleep(5)\n"
+            "print('late output', flush=True)\n",
+            name="hung-curator",
+        )
+        s, body = self._post_stream(
+            "/api/chat", {"project": "t", "id": "alpha", "message": "hang"})
+        self.assertEqual(s, 200)
+        events = self._events(body)
+        self.assertEqual([e["t"] for e in events], ["error", "done"])
+        self.assertIn("idle timeout", events[0]["s"])
+        pid = int(pidfile.read_text())
+        with self.assertRaises(ProcessLookupError):
+            os.kill(pid, 0)
+
+    def test_client_disconnect_kills_curator_process(self):
+        pidfile = self.tmp / "disconnect-curator.pid"
+        self._stub_curator_python(
+            "import json, os, time\n"
+            f"open({str(pidfile)!r}, 'w').write(str(os.getpid()))\n"
+            "print(json.dumps({'type':'system','subtype':'init','session_id':'sid-disconnect',"
+            "'model':'stub'}), flush=True)\n"
+            "time.sleep(0.15)\n"
+            "while True:\n"
+            "    print(json.dumps({'type':'assistant','message':{'content':[{'type':'text',"
+            "'text':'tick'}]}}), flush=True)\n"
+            "    time.sleep(0.03)\n",
+            name="disconnect-curator",
+        )
+        payload = json.dumps({
+            "project": "t", "id": "alpha", "message": "disconnect",
+        }).encode()
+        conn = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
+        conn.request("POST", "/api/chat", body=payload,
+                     headers={"Content-Type": "application/json",
+                              "Content-Length": str(len(payload))})
+        response = conn.getresponse()
+        self.assertEqual(response.status, 200)
+        first = json.loads(response.readline())
+        self.assertEqual(first["t"], "model")
+        stream_socket = conn.sock or response.fp.raw._sock
+        stream_socket.shutdown(socket.SHUT_RDWR)
+        stream_socket.close()
+        response.close()
+        conn.close()
+
+        deadline = time.monotonic() + 3
+        pid = int(pidfile.read_text())
+        while time.monotonic() < deadline:
+            try:
+                os.kill(pid, 0)
+            except ProcessLookupError:
+                break
+            time.sleep(0.03)
+        else:
+            os.kill(pid, signal.SIGKILL)
+            self.fail("curator process survived client disconnect")
+
+    def test_spawn_failure_returns_clean_json_and_does_not_kill_server(self):
         saved = server.CLAUDE
         server.CLAUDE = str(self.tmp / "definitely-not-here")
         self.addCleanup(lambda: setattr(server, "CLAUDE", saved))
-        try:
-            self._post_stream("/api/chat", {"project": "t", "id": "alpha", "message": "x"})
-        except Exception:
-            pass  # the response may break mid-flight; we only assert the server survives
+        s0, failed = _http(
+            "POST", f"{self.base}/api/chat",
+            {"project": "t", "id": "alpha", "message": "x"})
+        self.assertEqual(s0, 500)
+        self.assertEqual(list(failed), ["error"])
+        self.assertIn("curator failed to start", failed["error"])
         s, _ = _http("GET", f"{self.base}/api/projects")
         self.assertEqual(s, 200)
 

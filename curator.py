@@ -511,6 +511,7 @@ def ensure_curator_settings(settings: dict) -> dict:
     Seeds curator.menu when missing (Claude sonnet/opus/haiku).
     """
     cfg = resolve_curator(settings)
+    prior_curator = settings.get("curator") if isinstance(settings.get("curator"), dict) else {}
     out = dict(settings)
     prev = settings.get("curator") if isinstance(settings.get("curator"), dict) else {}
     menu = normalize_menu(prev.get("menu"))
@@ -524,6 +525,8 @@ def ensure_curator_settings(settings: dict) -> dict:
     }
     if cfg.effort:
         cur["effort"] = cfg.effort
+    if "idle_timeout_s" in prior_curator:
+        cur["idle_timeout_s"] = prior_curator["idle_timeout_s"]
     out["curator"] = cur
     out["agents"] = dict(cfg.models)
     return out

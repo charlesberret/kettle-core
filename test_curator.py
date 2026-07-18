@@ -166,6 +166,10 @@ class TestEnsure(unittest.TestCase):
         self.assertEqual(out["curator"]["menu"]["claude"], ["opus"])
         self.assertEqual(out["curator"]["menu"]["grok"], ["grok-4.5"])
 
+    def test_ensure_preserves_idle_timeout(self):
+        out = ensure_curator_settings({"curator": {"idle_timeout_s": 12.5}})
+        self.assertEqual(out["curator"]["idle_timeout_s"], 12.5)
+
 
 class TestCatalog(unittest.TestCase):
     def test_build_catalog_seed_menu_and_visible(self):
