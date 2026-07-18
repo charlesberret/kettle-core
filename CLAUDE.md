@@ -32,7 +32,7 @@ These files, if broken, take the app offline while the patron is in it. **Handof
 | File | Why it's run-critical |
 |---|---|
 | `server.py` | Entire backend: routes, file-fence (`safe_path`), atomic writes, circuit-breaker (`start_server_preferred`) |
-| `static/index.html` | Entire single-file frontend — a JS error produces a blank window on reload with no app left to repair it |
+| `static/index.html` | Entire single-file frontend — a JS error produces a blank window on reload with no app left to repair it. A tiny boot bootstrap (first inline `<script>`, before themes.js) paints a survival banner ("Setsweep hit a script error — [reload] [copy details]") on any parse/boot failure and `init()` names the failing phase, but this is a safety net, not a license to edit the file live. |
 | `setsweep_main.py` | Launcher shim — the entry point the desktop shell / `Setsweep.app` invoke |
 | `projects.json` | Live-read registry; sentinel and cron re-read it on every cycle |
 | `settings.json` | Live-read settings; a shallow-merge clobber silently drops key groups. Prefer deep-merge for `curator` / `agents` via `curator.deep_merge_settings` |

@@ -5,7 +5,7 @@ repo: setsweep-core
 touches: [static/index.html, static/ (new small js file), test_server.py]
 risk: run-critical
 depends-on: [01]
-status: open
+status: done
 ---
 
 ## Context

@@ -925,6 +925,76 @@
   </div>
 </div>
 
+<script>
+/* BOOT ERROR BOOTSTRAP — loads before everything and depends on nothing else.
+   If any later script (themes.js, marked, or the 3,300-line main script) fails
+   to parse or throws during boot, this is the only code guaranteed to have run.
+   It therefore owns the survival banner: a visible message with [reload] and
+   [copy details], built from DOM primitives it defines itself. It must never
+   reference anything from the main script — it is the thing that has to keep
+   working when everything else is broken. Keep it tiny and self-contained. */
+(function(){
+  var details = [];
+  function paint(label, detail){
+    if(detail){ details.push(detail); }
+    var root = document.body || document.documentElement;
+    if(!root){ return; }
+    var b = document.getElementById('errbanner');
+    if(!b){
+      b = document.createElement('div');
+      b.id = 'errbanner';
+      b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:2147483647;'
+        + 'background:#d4756b;color:#16161e;padding:6px 14px;'
+        + 'font:12px Menlo,Monaco,monospace;display:flex;align-items:center;gap:10px;';
+      var msg = document.createElement('span');
+      msg.id = 'errbanner-msg';
+      msg.style.cssText = 'flex:1 1 auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+      b.appendChild(msg);
+      var reload = document.createElement('button');
+      reload.textContent = 'reload';
+      reload.style.cssText = 'font:inherit;cursor:pointer;border:1px solid #16161e;'
+        + 'background:transparent;color:inherit;padding:1px 8px;border-radius:3px;';
+      reload.onclick = function(){ location.reload(); };
+      b.appendChild(reload);
+      var copy = document.createElement('button');
+      copy.textContent = 'copy details';
+      copy.style.cssText = reload.style.cssText;
+      copy.onclick = function(){
+        var text = details.join('\n');
+        try {
+          if(navigator.clipboard && navigator.clipboard.writeText){
+            navigator.clipboard.writeText(text);
+          } else { throw 0; }
+        } catch(err){
+          var ta = document.createElement('textarea');
+          ta.value = text; document.body.appendChild(ta); ta.select();
+          try { document.execCommand('copy'); } catch(ignore){}
+          document.body.removeChild(ta);
+        }
+        copy.textContent = 'copied';
+        setTimeout(function(){ copy.textContent = 'copy details'; }, 1500);
+      };
+      b.appendChild(copy);
+      root.appendChild(b);
+    }
+    var m = document.getElementById('errbanner-msg');
+    if(m){ m.textContent = 'Setsweep hit a script error — ' + label; }
+  }
+  /* Exposed so the main script's init() can name the boot phase that failed.
+     One-directional: init() may call in; the boot layer calls nothing out. */
+  window.__ssBootError = paint;
+  window.addEventListener('error', function(e){
+    var where = (e.filename || '').split('/').pop();
+    paint(String(e.message || 'error'),
+      'error: ' + (e.message || '') + ' @ ' + where + ':' + (e.lineno || 0) + ':' + (e.colno || 0));
+  });
+  window.addEventListener('unhandledrejection', function(e){
+    var r = e.reason;
+    var m = (r && r.message) || r || 'unhandled rejection';
+    paint(String(m), 'unhandledrejection: ' + (r && r.stack ? r.stack : m));
+  });
+})();
+</script>
 <script src="/themes.js"></script>
 <script src="/marked.min.js"></script>
 <script>
@@ -936,15 +1006,12 @@ function pushJsErr(msg, src, line){
   if(JSERR.length > 30) JSERR.length = 30;
   if(typeof renderErrLog === 'function' && document.getElementById('admin').classList.contains('open')) renderErrLog();
 }
+/* The visible survival banner is owned by the boot bootstrap (top of body,
+   before themes.js) so it keeps working even when this whole script fails to
+   parse. Here we only feed the in-app diagnostics log — for both errors and
+   unhandled rejections — while the boot layer paints the banner for each. */
 window.addEventListener('error', e => {
   pushJsErr(e.message, e.filename, e.lineno);
-  let b = document.getElementById('errbanner');
-  if(!b){
-    b = document.createElement('div'); b.id = 'errbanner';
-    b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99;background:#d4756b;color:#16161e;padding:6px 14px;font:12px Menlo,monospace;';
-    document.body.appendChild(b);
-  }
-  b.textContent = 'script error: ' + e.message + ' (' + (e.filename||'').split('/').pop() + ':' + e.lineno + ')';
 });
 window.addEventListener('unhandledrejection', e => {
   pushJsErr('unhandled rejection: ' + (e.reason && e.reason.message || e.reason), '', 0);
@@ -4213,41 +4280,62 @@ function wireAdmin(){
 }
 
 (async function init(){
-  try { SETTINGS = await jget('/api/settings'); } catch(e){ SETTINGS = {}; }
-  await refreshCuratorCatalog();
-  applySettingsDefaults();
-  SETTINGS.colWidths = Object.assign({}, COLW_DEFAULTS, SETTINGS.colWidths || {});
-  migrateThemeSettings();
-  applyTheme(); applySizes(); applyFonts();
-  syncBehaviorInputs(); applyMdToggle(); wireAdmin();
-  applyCols(); applySplit();
-  initDividers();
-  $('metaedit').onclick = toggleMetaEdit;
-  // Gate 1 (DESIGN): hard block until curator CLI is chosen and on PATH.
-  if(!SETTINGS.agents && SETTINGS.model){ SETTINGS.agents = {...agentDefaults(), chat: SETTINGS.model}; }
-  syncModelBar();
-  $('model').onchange = () => setAgent('chat', $('model').value);
-  $('setupdone').onclick = () => { finishSetup().catch(e => addMsg('err', String(e))); };
-  if(!(await curatorReady())){
-    await runSetupWizard();
+  /* Each boot phase names itself so a failure paints the survival banner with
+     the phase that broke, rather than a dead three-pane shell. The banner is
+     the boot bootstrap's (window.__ssBootError); we do not re-throw, so the
+     named-phase message is not overwritten by a raw unhandledrejection. */
+  let phase = 'startup';
+  try {
+    phase = 'loading settings';
+    try { SETTINGS = await jget('/api/settings'); } catch(e){ SETTINGS = {}; }
+    phase = 'loading curator catalog';
+    await refreshCuratorCatalog();
+    applySettingsDefaults();
+    SETTINGS.colWidths = Object.assign({}, COLW_DEFAULTS, SETTINGS.colWidths || {});
+    migrateThemeSettings();
+    applyTheme(); applySizes(); applyFonts();
+    syncBehaviorInputs(); applyMdToggle(); wireAdmin();
+    applyCols(); applySplit();
+    initDividers();
+    $('metaedit').onclick = toggleMetaEdit;
+    // Gate 1 (DESIGN): hard block until curator CLI is chosen and on PATH.
+    if(!SETTINGS.agents && SETTINGS.model){ SETTINGS.agents = {...agentDefaults(), chat: SETTINGS.model}; }
+    syncModelBar();
+    $('model').onchange = () => setAgent('chat', $('model').value);
+    $('setupdone').onclick = () => { finishSetup().catch(e => addMsg('err', String(e))); };
+    phase = 'checking curator';
+    if(!(await curatorReady())){
+      await runSetupWizard();
+    }
+    phase = 'loading projects';
+    const pj = await jget('/api/projects');
+    PROJECTS = pj.projects;
+    HOMEDIR = pj.home || '';
+    renderProjOptions();
+    $('proj').onchange = () => {
+      const v = $('proj').value;
+      if(v === '__add__'){ $('proj').value = PROJECT; openAddProj(); return; }
+      loadProject(v);
+    };
+    phase = 'opening project';
+    if(PROJECTS.length){
+      const last = SETTINGS.lastProject;
+      const start = (last && PROJECTS.some(p => p.id === last)) ? last : PROJECTS[0].id;
+      await loadProject(start);
+    } else {
+      openAddProj();
+    }
+    syncChrome();
+  } catch(err){
+    if(typeof console !== 'undefined' && console.error){
+      console.error('Setsweep init failed while ' + phase, err);
+    }
+    if(window.__ssBootError){
+      window.__ssBootError(
+        'boot failed while ' + phase + ' — ' + ((err && err.message) || err),
+        'init() phase "' + phase + '": ' + ((err && err.stack) || err));
+    }
   }
-  const pj = await jget('/api/projects');
-  PROJECTS = pj.projects;
-  HOMEDIR = pj.home || '';
-  renderProjOptions();
-  $('proj').onchange = () => {
-    const v = $('proj').value;
-    if(v === '__add__'){ $('proj').value = PROJECT; openAddProj(); return; }
-    loadProject(v);
-  };
-  if(PROJECTS.length){
-    const last = SETTINGS.lastProject;
-    const start = (last && PROJECTS.some(p => p.id === last)) ? last : PROJECTS[0].id;
-    await loadProject(start);
-  } else {
-    openAddProj();
-  }
-  syncChrome();
 })();
 </script>
 </body>
