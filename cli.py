@@ -167,15 +167,19 @@ def cmd_found(args) -> int:
             name=proj["name"], root=str(server.project_root(proj)),
             desk_dir=str(server.desk_dir(proj)), queue_path=str(server.queue_path(proj)),
         )
-    extra = list(server.SWEEP_TOOLS)            # write powers, confined by cwd + acceptEdits
-    if args.model:
-        extra += ["--model", args.model]
-    if not sid:
-        extra += ["--name", server.session_name(proj)]
-    rt = runtime.Runtime(server.CLAUDE, server.desk_dir(proj) / "sessions")
+    # Resolve the provider from settings exactly as the HTTP routes do, and let
+    # build_turn_cmd → runtime.build_argv single-source the sweep tier (write powers,
+    # confined by cwd + acceptEdits) and the dialect flags — no Claude hardcoding.
+    cfg = server.current_curator()
+    cmd = server.build_turn_cmd(
+        prompt, task="setup", request_model=args.model,
+        session_id=sid, name=server.session_name(proj), tools_tier="sweep",
+    )
+    rt = runtime.Runtime(server.agent_bin(), server.desk_dir(proj) / "sessions",
+                         provider=cfg.provider)
     print(f"· founding {proj['id']} — the curator surveys {server.project_root(proj)} …\n")
     for ev in rt.spawn(prompt, cwd=str(server.project_root(proj)), session_id=sid,
-                       role="found", extra=extra):
+                       role="found", cmd=cmd):
         t = ev["t"]
         if t == "text":
             sys.stdout.write(ev["s"]); sys.stdout.flush()
@@ -248,7 +252,9 @@ def cmd_chat(args) -> int:
     sid = sess.get("session_id")
     last_entry = sess.get("last_entry")
     entry = server.find_entry(server.load_queue(proj), args.id) if args.id else None
-    rt = runtime.Runtime(server.CLAUDE, server.desk_dir(proj) / "sessions")
+    cfg = server.current_curator()
+    rt = runtime.Runtime(server.agent_bin(), server.desk_dir(proj) / "sessions",
+                         provider=cfg.provider)
     root = str(server.project_root(proj))
 
     where = f"file [{entry['id']}]" if entry else "project-level"
@@ -273,9 +279,7 @@ def cmd_chat(args) -> int:
                 path=entry["path"], brief=entry.get("brief", "(none prepared)"),
                 ask=entry.get("ask", "general review")) + msg
 
-        extra = list(server.AGENT_TOOLS)
-        if args.model:
-            extra += ["--model", args.model]
+        sysprompt = None
         if not sid:  # first turn: orient the curator, name the session
             role = proj.get("role") or server.DEFAULT_ROLE
             sysprompt = role.format(
@@ -286,14 +290,22 @@ def cmd_chat(args) -> int:
             orient = server.project_orientation(proj)
             if orient:
                 sysprompt += "\n\n" + orient
-            extra += ["--append-system-prompt", sysprompt, "--name", server.session_name(proj)]
+
+        # Same single source as the HTTP routes: build_turn_cmd resolves the provider
+        # from settings and maps the "agent" tier + dialect flags. The CLI review chat
+        # keeps its established (agent-tier) write powers, now provider-correct.
+        cmd = server.build_turn_cmd(
+            message, task="chat", request_model=args.model,
+            session_id=sid, system_append=sysprompt,
+            name=server.session_name(proj), tools_tier="agent",
+        )
 
         server.save_session(proj, **({"last_entry": entry["id"]} if entry else {}),
                             name=server.session_name(proj))
 
         sys.stdout.write("\ncurator> ")
         sys.stdout.flush()
-        for ev in rt.spawn(message, cwd=root, session_id=sid, role="chat", extra=extra):
+        for ev in rt.spawn(message, cwd=root, session_id=sid, role="chat", cmd=cmd):
             t = ev["t"]
             if t == "text":
                 sys.stdout.write(ev["s"])

@@ -436,6 +436,10 @@ SHELL_SWEEP = [
     # Restock/archive often shells through when Write is sticky — keep these tight.
     "Bash(mkdir:*)", "Bash(mv:*)", "Bash(cp:*)", "Bash(rm:*)",
     "Bash(tee:*)", "Bash(python3:*)", "Bash(python:*)",
+    # NOTE (deferred to patron): rm/python3 let a sweep escape the Edit fence by
+    # construction (a script can write anywhere). This mirrors the *live* HTTP sweep
+    # posture; single-sourcing the tiers here is not the moment to change it. Whether
+    # the sweep tier should keep rm/python3 is a security-posture call for the patron.
 ]
 
 SHELL_INTERVIEW = [
@@ -716,10 +720,16 @@ class Runtime:
         self.window = window
 
     def spawn(self, prompt: str, cwd: Path | str, session_id: Optional[str] = None,
-              role: str = "chat", extra: Optional[list] = None) -> Iterator[dict]:
+              role: str = "chat", extra: Optional[list] = None,
+              cmd: Optional[list] = None) -> Iterator[dict]:
         meter = UsageMeter(self.window)
         cap = {"sid": session_id, "text": [], "tools": [], "edits": []}
-        cmd = build_cmd(self.claude, prompt, session_id, extra, provider=self.provider)
+        # A caller that resolved the provider from settings (e.g. the CLI via
+        # server.build_turn_cmd → build_argv) may pass a fully-built argv; otherwise
+        # build the Claude-dialect default here. `prompt`/`session_id` still drive the
+        # ledger + capture regardless.
+        if cmd is None:
+            cmd = build_cmd(self.claude, prompt, session_id, extra, provider=self.provider)
         proc = subprocess.Popen(cmd, cwd=str(cwd), stdout=subprocess.PIPE,
                                 stderr=subprocess.STDOUT, text=True)
         assert proc.stdout is not None

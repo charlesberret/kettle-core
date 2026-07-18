@@ -5,7 +5,7 @@ repo: setsweep-core
 touches: [cli.py, server.py, runtime.py, test_server.py, test_runtime.py]
 risk: run-critical
 depends-on: [01]
-status: open
+status: done
 ---
 
 ## Context

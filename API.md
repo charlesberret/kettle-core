@@ -156,6 +156,28 @@ The server kills a curator that emits no normalized event for
 
 ---
 
+## Tool tiers
+
+Every agentic turn — HTTP route or CLI — runs under one abstract **tool tier**, single-sourced
+in `runtime.TOOL_TIERS` and mapped to each provider's CLI dialect by `runtime.tools_argv`.
+There is no second copy in `server.py`; `build_turn_cmd` (→ `runtime.build_argv`) is the only
+path that arms a turn.
+
+| Tier | Used by | Write? | Powers (abstract) |
+|------|---------|--------|-------------------|
+| `interview` | founding interview (`/api/interview`) | no | Read · Glob · Grep + read-only shell |
+| `chat` | — (reserved) | yes (`acceptEdits`) | Read/Glob/Grep/Edit/Write + narrow shell |
+| `agent` | review chat (`/api/chat`, `setsweep chat`) | yes (`acceptEdits`) | Edit/Write + everyday shell kit (`mv`/`cp`) |
+| `sweep` | founding/found, sweep (`/api/found`, `/api/sweep`, `setsweep found`) | yes (`acceptEdits`) | Edit/Write + `mkdir`/`mv`/`cp`/`rm`/`tee`/`python3` |
+
+**`sweep` holds `Bash(rm:*)` and `Bash(python3:*)`** — a script can write outside the Edit
+fence by construction, so the sweep tier is genuinely broader than "edit the queue." This
+matches the live HTTP sweep posture and is **deliberately unchanged**; whether the sweep tier
+*should* keep `rm`/`python3` is a security-posture decision left to the patron (see the note
+beside `SHELL_SWEEP` in `runtime.py`).
+
+---
+
 ## Route tiers
 
 ### Tier 0 — lifecycle

@@ -202,55 +202,10 @@ def _env_allowed_roots() -> list[Path]:
 # SETSWEEP_ALLOWED_ROOTS="$HOME/Seafile:$HOME/Library/Mobile Documents/com~apple~CloudDocs".
 BASE_ALLOWED_ROOTS = _env_allowed_roots()
 
-# the everyday shell kit — compound commands get split by the permission system,
-# so every harmless part must be individually allowed or headless runs hit walls
-SHELL_KIT = [
-    "Bash(ls:*)", "Bash(cat:*)", "Bash(head:*)", "Bash(tail:*)", "Bash(echo:*)",
-    "Bash(rg:*)", "Bash(grep:*)", "Bash(fd:*)", "Bash(find:*)", "Bash(wc:*)",
-    "Bash(sed:*)", "Bash(awk:*)", "Bash(sort:*)", "Bash(uniq:*)", "Bash(diff:*)",
-    "Bash(date:*)", "Bash(basename:*)", "Bash(dirname:*)", "Bash(mkdir:*)",
-]
-
-AGENT_TOOLS = [
-    "--permission-mode", "acceptEdits",
-    "--allowedTools",
-    "Read", "Glob", "Grep", "Edit", "Write", *SHELL_KIT,
-    "Bash(mv:*)", "Bash(cp:*)",
-    "--disallowedTools", "NotebookEdit",
-]
-
-# Interim: review chat may Edit/Write under acceptEdits (project cwd).
-# Future: may reengineer the chat window for full agent capabilities / permission UX.
-# Founding interview stays read-only until Finish/Found (SWEEP_TOOLS).
-CHAT_TOOLS = [
-    "--permission-mode", "acceptEdits",
-    "--allowedTools",
-    "Read", "Glob", "Grep", "Edit", "Write",
-    "Bash(ls:*)", "Bash(cat:*)", "Bash(head:*)", "Bash(tail:*)",
-    "Bash(rg:*)", "Bash(fd:*)", "Bash(find:*)", "Bash(wc:*)",
-    "--disallowedTools", "NotebookEdit",
-]
-
-# the sweep applies rulings to canonical files, so it carries write tools —
-# confined by cwd + acceptEdits to the project tree
-SWEEP_TOOLS = [
-    "--permission-mode", "acceptEdits",
-    "--allowedTools",
-    "Read", "Glob", "Grep", "Edit", "Write",
-    "Bash(ls:*)", "Bash(cat:*)", "Bash(rg:*)", "Bash(fd:*)", "Bash(find:*)",
-    "Bash(diff:*)",
-    "--disallowedTools", "NotebookEdit",
-]
-
-# the founding interview is read-only: the curator surveys and converses; finish
-# writes a single DESK-PROPOSAL.md; approve of that entry runs the write-armed found.
-INTERVIEW_TOOLS = [
-    "--allowedTools",
-    "Read", "Glob", "Grep",
-    "Bash(ls:*)", "Bash(cat:*)", "Bash(head:*)", "Bash(tail:*)",
-    "Bash(rg:*)", "Bash(fd:*)", "Bash(find:*)", "Bash(wc:*)",
-    "--disallowedTools", "NotebookEdit",
-]
+# Tool tiers (agent / chat / sweep / interview) are single-sourced in
+# runtime.TOOL_TIERS and mapped to each provider's dialect by runtime.tools_argv.
+# Every turn — HTTP routes and the CLI alike — resolves them through build_turn_cmd
+# (→ runtime.build_argv). The old duplicate server-side flag constants were removed.
 
 PROMPTS_DIR = APPDIR / "kits" / "prompts"
 

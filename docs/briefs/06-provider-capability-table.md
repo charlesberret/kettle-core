@@ -19,6 +19,14 @@ Grok write tiers use `--permission-mode bypassPermissions` with open Bash
 tells the patron; nothing refuses. The tier table in API.md reads as a guarantee the
 implementation cannot keep on every provider.
 
+> **From brief 03 (done):** the tool tiers are now single-sourced in
+> `runtime.TOOL_TIERS` (the `server.py` duplicates are gone) and the CLI resolves the
+> provider from settings via `build_turn_cmd`, so a capability table added here has one
+> authority to derive from. The `sweep` tier deliberately keeps `Bash(rm:*)` /
+> `Bash(python3:*)` (live posture; rm/python3 escape the Edit fence — flagged for the
+> patron, not changed unattended). API.md now has a "Tool tiers" section to extend with
+> the per-provider matrix.
+
 ## Task
 
 1. Add a per-provider capability table to `runtime.py` (beside TOOL_TIERS):

@@ -115,13 +115,14 @@ class CliTests(unittest.TestCase):
         self.assertEqual(status["project"], proj["id"])
         self.assertEqual(len(status["staged"]), 1)
 
-    def test_found_hands_current_argv_inputs_to_runtime(self):
+    def test_found_hands_provider_built_cmd_to_runtime(self):
         proj = self.register()
         captured = []
 
         class FakeRuntime:
-            def __init__(self, command, sessions_dir):
-                captured.append({"command": command, "sessions_dir": Path(sessions_dir)})
+            def __init__(self, command, sessions_dir, provider="claude"):
+                captured.append({"command": command, "sessions_dir": Path(sessions_dir),
+                                 "provider": provider})
 
             def spawn(self, prompt, **kwargs):
                 captured[-1].update(prompt=prompt, **kwargs)
@@ -132,12 +133,18 @@ class CliTests(unittest.TestCase):
             code, _, _ = self.run_cli(["found", proj["id"], "--model", "opus"])
         self.assertEqual(code, 0)
         call = captured[0]
-        self.assertEqual(call["command"], "claude-test")
+        # Provider resolved from settings (default claude); the full argv is single-sourced
+        # through build_turn_cmd and handed to spawn as cmd=, not extra=.
+        self.assertEqual(call["provider"], "claude")
         self.assertEqual(call["role"], "found")
         self.assertEqual(Path(call["cwd"]).resolve(), Path(proj["root"]).resolve())
-        self.assertIn("--model", call["extra"])
-        self.assertEqual(call["extra"][call["extra"].index("--model") + 1], "opus")
-        self.assertIn("--name", call["extra"])
+        cmd = call["cmd"]
+        self.assertEqual(cmd[0], server.agent_bin())
+        self.assertIn("--model", cmd)
+        self.assertEqual(cmd[cmd.index("--model") + 1], "opus")
+        self.assertIn("--name", cmd)                      # first turn names the session
+        self.assertIn("--permission-mode", cmd)           # sweep tier is write-armed
+        self.assertIn("acceptEdits", cmd)
 
     def test_chat_hands_context_and_tool_tier_to_runtime(self):
         proj = self.register()
@@ -153,8 +160,9 @@ class CliTests(unittest.TestCase):
         captured = []
 
         class FakeRuntime:
-            def __init__(self, command, sessions_dir):
-                captured.append({"command": command, "sessions_dir": Path(sessions_dir)})
+            def __init__(self, command, sessions_dir, provider="claude"):
+                captured.append({"command": command, "sessions_dir": Path(sessions_dir),
+                                 "provider": provider})
 
             def spawn(self, prompt, **kwargs):
                 captured[-1].update(prompt=prompt, **kwargs)
@@ -168,11 +176,65 @@ class CliTests(unittest.TestCase):
         self.assertEqual(code, 0)
         call = captured[0]
         self.assertEqual(call["role"], "chat")
+        self.assertEqual(call["provider"], "claude")
         self.assertIn("[Active file:", call["prompt"])
         self.assertIn("Assess structure", call["prompt"])
-        self.assertIn("--append-system-prompt", call["extra"])
-        self.assertIn("--name", call["extra"])
-        self.assertIn("--model", call["extra"])
+        cmd = call["cmd"]
+        self.assertIn("--append-system-prompt", cmd)
+        self.assertIn("--name", cmd)
+        self.assertIn("--model", cmd)
+        self.assertEqual(cmd[cmd.index("--model") + 1], "sonnet")
+
+    def test_chat_builds_grok_argv_when_provider_is_grok(self):
+        """Gate for brief 03: a grok curator config makes `setsweep chat` build Grok
+        dialect argv (no Claude hardcoding), single-sourced through build_turn_cmd."""
+        self.settings.write_text(json.dumps({
+            "curator": {
+                "provider": "grok",
+                "command": "grok",
+                "models": {"setup": "grok-4.5", "chat": "grok-4.5"},
+            },
+        }))
+        proj = self.register()
+        target = Path(proj["root"]) / "draft.md"
+        target.write_text("draft")
+        server.atomic_write(server.queue_path(proj), json.dumps({
+            "curated": "test",
+            "entries": [{
+                "id": "draft", "path": str(target), "status": "pending",
+                "brief": "Assess structure", "ask": "Recommend edits",
+            }],
+        }))
+        captured = []
+
+        class FakeRuntime:
+            def __init__(self, command, sessions_dir, provider="claude"):
+                captured.append({"command": command, "sessions_dir": Path(sessions_dir),
+                                 "provider": provider})
+
+            def spawn(self, prompt, **kwargs):
+                captured[-1].update(prompt=prompt, **kwargs)
+                yield {"t": "model", "session": "sid-grok"}
+                yield {"t": "done", "usage": {}, "cost": 0}
+
+        answers = iter(["hello", ":q"])
+        with mock.patch.object(cli.runtime, "Runtime", FakeRuntime), \
+                mock.patch("builtins.input", side_effect=lambda _prompt="": next(answers)):
+            code, _, _ = self.run_cli(["chat", proj["id"], "draft"])
+        self.assertEqual(code, 0)
+        call = captured[0]
+        self.assertEqual(call["provider"], "grok")
+        cmd = call["cmd"]
+        # Grok dialect: streaming-json, --rules (not --append-system-prompt), --allow
+        # Bash (not Claude's --allowedTools), no --name, and the grok model.
+        self.assertIn("streaming-json", cmd)
+        self.assertNotIn("--verbose", cmd)
+        self.assertIn("--rules", cmd)
+        self.assertNotIn("--append-system-prompt", cmd)
+        self.assertIn("--allow", cmd)
+        self.assertNotIn("--allowedTools", cmd)
+        self.assertNotIn("--name", cmd)
+        self.assertIn("grok-4.5", cmd)
 
 
 if __name__ == "__main__":
