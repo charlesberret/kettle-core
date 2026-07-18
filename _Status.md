@@ -11,37 +11,38 @@ healthbeacon: ~/.cache/setsweep/watch-health.json
 
 ## Status
 
-The suite is 256 green on Python 3.14.6. Branch `codex/shore-up-system` carries a
-durable, committed baseline: the provider-neutral runtime, proposal-first founding flow,
-viewport changes, mechanical sweep close, and tracked egress layer are all in history.
-The empty root `package-lock.json` was unreferenced and removed; no experimental hunks
-were held back. `ROADMAP.md`, the three companion plans, and eighteen agent briefs under
-`docs/briefs/` are also committed. Brief 14 adds route, CLI, watcher, entrypoint, and full
-lifecycle coverage; the measured baseline is 80% total with every shipped Python module
-at 62% or higher. CI runs Python 3.11/3.14 on Ubuntu/macOS and publishes coverage. Brief
-07 adds a configurable 300-second curator idle watchdog, terminal `done` on every
-established stream, clean pre-stream spawn failures, and client-disconnect process kills.
-Brief 04 moves all 15 product prompts verbatim to `kits/prompts/`, with import-time
-loading, logged emergency fallbacks, a format smoke test, and founding/sweep sentinel
-coverage. Prompt genericizing remains deliberately deferred to brief 10.
+The suite is 269 green (was 36 in mid-June). On 2026-07-17 a full-system survey (eleven
+subsystem audits across core, desktop, and plugin) produced `ROADMAP.md`, the
+`docs/PLATFORMS.md` / `ENGINEERING.md` / `RELEASE.md` companions, and eighteen agent
+briefs under `docs/briefs/`. Seven briefs have since landed on `codex/shore-up-system`:
+01 (the working tree is now committed — the roadmap's first act), 04 (product prompts
+externalized to `kits/prompts/`), 07 (curator stream watchdog), 14 (deeper suite + CI),
+03 (tool tiers single-sourced on `runtime.TOOL_TIERS`; CLI de-hardcoded from Claude), 06
+(per-provider capability table with pre-stream read-only enforcement), and 08 (frontend
+error bootstrap that survives a script parse failure, plus a `node --check` gate). The
+branch is committed and green; promotion to `main` is still pending patron review.
 
 ## Next action
 
-- [ ] Patron: review and merge `codex/shore-up-system` to `main`; the core branch is green
-      and boots successfully on an ephemeral port
-- [ ] After this core-only chain, brief 02 remains the separate plugin-repo Phase 0 task
-- [ ] Resume core roadmap work with brief 03; keep brief 10's generic-content pass separate
+- [ ] Brief 02 — reconcile the two divergent plugin implementations (plugin repo)
+- [ ] Brief 11 — package restructure + version (the packaging pivot; unblocks 13/15/17/18
+      — do it alone, it moves every module)
+- [ ] Newly unblocked and safe: brief 09 (sanitizer + a11y, needs 08 ✓), brief 12 (unify
+      the folder-watchers, needs 03 ✓)
+- [ ] Held for a supervised session: brief 05 (API hardening — three-repo blast radius),
+      brief 10 (de-personalization — rewrites private egress config)
+- [ ] Live open-brief list: `grep -l "status: open" docs/briefs/*.md`
 
 ## Known gaps
 
-Full inventory now lives in `ROADMAP.md` ("Where it stands") and the briefs; still-true
+Full inventory lives in `ROADMAP.md` ("Where it stands") and the briefs; still-open
 highlights:
 
 - No auth/Origin/Host checks on the HTTP surface — localhost bind is the only barrier
-  (brief 05); Grok provider breaks the read-only interview tier (brief 06)
-- Frontend has zero tests and its error banner lives inside the script it guards — a JS
-  error still produces a blank window (brief 08)
+  (brief 05, held for supervised)
 - Chat writes are always-on via `acceptEdits` (interim); a fuller permission UX may
   replace this later
 - Settings shallow-merge clobber guard covers only `curator`/`agents` groups — other
   top-level groups can still be dropped by a bad patch
+- Personal-fleet vocabulary still baked into shipped egress routes / prompts / admin
+  panels (brief 10, held for supervised)
