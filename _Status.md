@@ -11,17 +11,17 @@ healthbeacon: ~/.cache/setsweep/watch-health.json
 
 ## Status
 
-The suite is 225 green on Python 3.14.6. Branch `codex/shore-up-system` now carries a
+The suite is 249 green on Python 3.14.6. Branch `codex/shore-up-system` carries a
 durable, committed baseline: the provider-neutral runtime, proposal-first founding flow,
 viewport changes, mechanical sweep close, and tracked egress layer are all in history.
 The empty root `package-lock.json` was unreferenced and removed; no experimental hunks
 were held back. `ROADMAP.md`, the three companion plans, and eighteen agent briefs under
-`docs/briefs/` are also committed. Brief 01 is complete; the overnight chain continues
-with additive test depth before either remaining run-critical brief.
+`docs/briefs/` are also committed. Brief 14 adds route, CLI, watcher, entrypoint, and full
+lifecycle coverage; the measured baseline is 80% total with every shipped Python module
+at 62% or higher. CI now runs Python 3.11/3.14 on Ubuntu/macOS and publishes coverage.
 
 ## Next action
 
-- [ ] Brief 14 — deepen route, CLI, lifecycle, and CI coverage
 - [ ] Brief 07 — add the curator idle watchdog and terminal-stream guarantees
 - [ ] Brief 04 — externalize prompt constants without genericizing them
 - [ ] After this core-only chain, brief 02 remains the separate plugin-repo Phase 0 task

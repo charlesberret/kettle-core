@@ -1,0 +1,44 @@
+name: test
+
+on:
+  pull_request:
+  push:
+    branches:
+      - codex/shore-up-system
+
+jobs:
+  pytest:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python: ["3.11", "3.14"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+      - name: Install test dependencies
+        run: python -m pip install -e '.[dev]'
+      - name: Run the serial suite with coverage
+        run: >-
+          python -m pytest -q --cov --cov-report=term-missing
+          --cov-report=json:coverage.json
+      - name: Enforce the per-module coverage floor
+        run: >-
+          python -c "import json,sys;
+          data=json.load(open('coverage.json'));
+          low={name:round(row['summary']['percent_covered'],1)
+          for name,row in data['files'].items()
+          if row['summary']['percent_covered'] < 60};
+          print('modules below 60%:', low or 'none');
+          sys.exit(bool(low))"
+      - name: Publish coverage in the job summary
+        shell: bash
+        run: |
+          echo '### Coverage' >> "$GITHUB_STEP_SUMMARY"
+          echo '```text' >> "$GITHUB_STEP_SUMMARY"
+          python -m coverage report >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"

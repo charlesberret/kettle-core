@@ -7,13 +7,14 @@ says how the building stays sound — tests, CI, debugging systems, code health.
 
 ## Where testing stands
 
-The suite is honest about what it is: ~225 tests (run `python3 -m pytest
---collect-only -q` for the live number), all stdlib `unittest` + `urllib` — pytest is
-the runner, nothing more. No fixtures, no third-party test deps, matching the product's
-stdlib-only invariant. Every suite redirects module globals into a tempdir; the real
-registry, settings, and desk are never touched.
+The suite is honest about what it is: 249 tests as of brief 14 (run `python3 -m pytest
+--collect-only -q` for the live number), written with stdlib `unittest` + `urllib` and
+run by pytest. Product runtime remains stdlib-only; the `dev` extra adds pytest,
+coverage.py, and pytest-cov for measurement and CI. No custom fixtures are required.
+Every suite redirects module globals into a tempdir; the real registry, settings, and
+desk are never touched.
 
-`test_server.py` carries roughly half the suite (109 tests) and is the crown jewel: a
+`test_server.py` carries roughly half the suite (117 tests) and is the crown jewel: a
 real HTTP server booted on an ephemeral port via `start_server(0)` — never 4242 — plus a
 shell-script stub curator (`_stub_claude`) and a Popen-capturing fake (`_capture_cmds`)
 that exercise the streaming endpoints end to end. The stub harness already covers the
@@ -22,7 +23,16 @@ event, a missing binary leaving the server alive, provider/model mismatch skippi
 `--resume`, and prompt-content assertions on sweep. The file fence has 12 dedicated
 tests (symlink escape, dotdot, null byte, multi-root union); the port-4242 circuit
 breaker has 7 regression tests that stub its seams without ever binding a real port.
-Regression tests are annotated with the incident they pin — keep doing that.
+Route smokes now cover kits GET/save/delete, chatlog GET/POST, compact, refound, static
+assets, and font traversal. A stub-curator lifecycle composes register → interview →
+proposal → approve → found → chat → approve → sweep/close. `test_cli.py` covers the
+serverless add/init/projects/queue/egress paths and current Runtime handoff; watcher and
+entrypoint routing tests pin their beacons and dispatch. Regression tests are annotated
+with the incident they pin — keep doing that.
+
+Coverage is measured in CI and locally with `python -m pytest --cov`. The brief-14
+baseline is 80% total; every shipped Python module is at or above 62%. CI rejects any
+module below 60% and publishes the full table in the job summary.
 
 Now the holes, named:
 
@@ -31,24 +41,15 @@ Now the holes, named:
   stdout with only a `proc.wait(timeout=10)` after EOF. A hung CLI pins a handler
   thread indefinitely. Client-disconnect mid-stream is equally untested. Brief 07 owns
   both the watchdog and its tests.
-- **Untested routes.** Six-plus routes have zero coverage: `GET /api/kits`,
-  `POST /api/kits/save`, `POST /api/kits/delete` (file-writing endpoints with untested
-  fencing), `GET`+`POST /api/chatlog`, `POST /api/compact`,
-  `POST /api/projects/refound`, and all static serving — including the `/fonts/` route's
-  own inline traversal check.
-- **`cli.py`: 454 lines, zero tests.** Fourteen subcommands, argv parsing, exit codes,
-  and the only consumer of `Runtime.spawn` — which no test ever constructs.
 - **The frontend: 4,254 lines, zero tests.** The one file whose breakage takes the app
   offline while the patron is in it has no harness at all — not even a smoke test that
   the page parses.
-- **No end-to-end lifecycle test.** Every stage of founding-to-close is tested in
-  isolation; nothing composes them, so cross-stage state regressions are caught only
-  piecewise.
-- **No coverage measurement.** All coverage claims are by inspection.
 - **The suite is serial-only.** Tests monkeypatch module globals and even
   `subprocess.Popen` in place; this is safe under a single runner and breaks under
   pytest-xdist. That is a documented constraint, not a bug — do not parallelize the
-  suite without first removing the global patching.
+  suite without first removing the global patching. CI runs plain pytest with no xdist;
+  `test_server.py` repeats this warning at the top of the file where a future test-runner
+  change is most likely to see it.
 
 ## The harness roadmap
 
@@ -58,10 +59,9 @@ What to build, in the order the briefs sequence it:
    client-disconnect variants to `_stub_claude`, landed together with the read watchdog
    they exercise. The harness pattern already exists; this closes the last standing
    item from `_Status.md`'s original test wishlist.
-2. **The e2e lifecycle test** (brief 14). One test that drives register → interview →
-   propose → approve → found → chat → approve → sweep → close against the stub. It will
-   document the founding state machine better than any prose, and it is the single
-   cheapest guard against the class of bug the session-healing logic already patches.
+2. **The e2e lifecycle test** (brief 14, landed). It drives register → interview →
+   propose → approve → found → chat → approve → sweep → close against the stub and is
+   now executable documentation for the founding state machine.
 3. **Frontend, in three steps.** First the extract-and-node-check syntax gate (brief
    08) — pull the inline script, run `node --check`, fail CI on a parse error; this
    closes the blank-window class structurally. Then the injection corpus against the
@@ -75,26 +75,26 @@ What to build, in the order the briefs sequence it:
 5. **Contract snapshots** (brief 13). Tests that pin the wire shapes `API.md` promises —
    queue entry, ping, the streaming event vocabulary — so a viewport-breaking change to
    the envelope fails a test in core before it fails a plugin in the field.
-6. **Coverage, measured honestly.** `coverage.py` as a dev-only tool with a visible
-   number. The target is *no module below 60% and no new code untested* — a floor and a
-   ratchet, not a vanity total. Coverage of `server.py`'s route handlers matters more
-   than a repo-wide percentage.
+6. **Coverage, measured honestly** (brief 14, landed). `coverage.py` is dev-only and CI
+   publishes the number. The target is *no module below 60% and no new code untested* —
+   a floor and a ratchet, not a vanity total. Coverage of `server.py`'s route handlers
+   matters more than a repo-wide percentage.
 
 ## CI
 
-There is no CI anywhere today — no `.github/` in any of the three repos, no tags, no
-release workflow. Each repo gets its own GitHub Actions setup. PR runs are the fast
-lane; nightly is the full lane.
+Core now has `.github/workflows/test.yml`: PRs and this working branch run the serial
+suite with coverage on Python 3.11/3.14 across Ubuntu and macOS, enforce the per-module
+floor, and publish the coverage table. The plugin and desktop still need their own
+workflows; no repo has a release workflow yet.
 
 | Repo | PR lane | Nightly / release |
 |---|---|---|
-| **core** | pytest on a matrix (Python 3.11 and 3.14 × ubuntu and macos — 3.11 is the declared floor and currently untested); wheel-install smoke from brief 11; the `node --check` frontend gate from brief 08 | Full matrix plus the coverage report |
+| **core** | pytest + coverage on Python 3.11 and 3.14 × ubuntu and macos; wheel-install smoke joins after brief 11; the `node --check` frontend gate joins after brief 08 | A later nightly can reuse the same full matrix |
 | **plugin** | compile, tests, `vsce package` producing the VSIX as an artifact | — |
 | **desktop** | build + sidecar smoke on macOS (the smoke script exists; CI just runs it) | Release job on tags, refusing to stamp a build from a dirty core tree (brief 15) — the currently installed app was built dirty, which is exactly the failure this closes |
 
-The matrix earns its keep immediately: the live venv runs 3.14, `requires-python>=3.11`
-has never been exercised at its floor, and no build has ever happened off the dev
-laptop.
+The matrix earns its keep immediately: the live venv runs 3.14 and CI now exercises the
+declared 3.11 floor off the development laptop.
 
 ## Debugging systems
 

@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """Unit tests for curator.py — pluggable curator settings / resolution."""
+import os
+import tempfile
 import unittest
+from pathlib import Path
+from unittest import mock
 
 import curator
 from curator import CuratorConfig, deep_merge_settings, ensure_curator_settings, resolve_curator
@@ -165,14 +169,23 @@ class TestEnsure(unittest.TestCase):
 
 class TestCatalog(unittest.TestCase):
     def test_build_catalog_seed_menu_and_visible(self):
-        cat = curator.build_catalog({})
+        # Pin PATH so the visibility assertions cannot pass vacuously on a host with
+        # no curator CLIs (or vary because a developer happens to have several).
+        with tempfile.TemporaryDirectory(prefix="setsweep-catalog-") as td:
+            claude = Path(td) / "claude"
+            claude.write_text("#!/bin/sh\nexit 0\n")
+            claude.chmod(0o755)
+            with mock.patch.dict(os.environ, {"PATH": td}):
+                cat = curator.build_catalog({})
         self.assertEqual(cat["menu"]["claude"], ["sonnet", "opus", "haiku"])
         self.assertNotIn("fable", cat["menu"].get("claude", []))
-        # Only checked Claude models appear when Claude CLI exists (typical on avicenna)
+        providers = {p["id"]: p for p in cat["providers"]}
+        self.assertTrue(providers["claude"]["command_exists"])
+        self.assertFalse(providers["grok"]["command_exists"])
+        # Only checked Claude models appear; the pinned fake CLI makes this unconditional.
         claude_visible = [v["id"] for v in cat["visible"] if v["provider"] == "claude"]
         for mid in ("sonnet", "opus", "haiku"):
-            if any(p["id"] == "claude" and p["command_exists"] for p in cat["providers"]):
-                self.assertIn(mid, claude_visible)
+            self.assertIn(mid, claude_visible)
         self.assertNotIn("fable", claude_visible)
         # Unchecked providers should not contribute visible rows unless forced active
         grok_visible = [v for v in cat["visible"] if v["provider"] == "grok" and not v.get("forced")]

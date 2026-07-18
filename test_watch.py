@@ -10,6 +10,8 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+from unittest import mock
 
 import setsweep_watch as w
 
@@ -103,6 +105,119 @@ class HealthTest(unittest.TestCase):
             self.assertIn("last_run", rec)
         finally:
             w.CACHE, w.HEALTH = saved
+
+
+class IntakePassTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(prefix="sw-pass-"))
+        self.root = self.tmp / "project"
+        self.watch = self.root / "incoming"
+        self.watch.mkdir(parents=True)
+        self.source = self.watch / "Request One.eml"
+        self.source.write_text("Please reply")
+        self.proj = {
+            "id": "inbox", "name": "Inbox", "root": str(self.root),
+            "intake": {"watch": "incoming", "responses": "responses"},
+        }
+        runtime = self.root / ".setsweep" / "runtime"
+        runtime.mkdir(parents=True)
+        self.queue = runtime / "queue.json"
+        self.queue.write_text(json.dumps({"entries": [{"id": "request-one"}]}))
+
+    def test_success_builds_curator_command_marks_seen_and_normalizes(self):
+        state = {}
+        calls = []
+
+        def run(cmd, **kwargs):
+            calls.append((cmd, kwargs))
+            return SimpleNamespace(returncode=0, stderr="")
+
+        with mock.patch.object(w.subprocess, "run", side_effect=run):
+            count = w.intake_pass(self.proj, state, {})
+        self.assertEqual(count, 1)
+        self.assertEqual(state["intake_seen"], [str(self.source.resolve())])
+        entry = json.loads(self.queue.read_text())["entries"][0]
+        self.assertEqual(entry["status"], "pending")
+        self.assertEqual(entry["project"], "inbox")
+        cmd, kwargs = calls[0]
+        self.assertEqual(cmd[0], w.CLAUDE)
+        self.assertIn("--add-dir", cmd)
+        self.assertIn(str(self.source.resolve()), cmd[cmd.index("-p") + 1])
+        self.assertEqual(kwargs["cwd"], str(self.root))
+        self.assertEqual(kwargs["timeout"], 900)
+
+    def test_timeout_reports_error_and_leaves_item_unseen(self):
+        state = {}
+        health = []
+        with mock.patch.object(
+            w.subprocess, "run",
+            side_effect=w.subprocess.TimeoutExpired(["claude"], 900),
+        ), mock.patch.object(w, "log_health", side_effect=lambda *a, **k: health.append((a, k))):
+            count = w.intake_pass(self.proj, state, {})
+        self.assertEqual(count, 0)
+        self.assertEqual(state["intake_seen"], [])
+        self.assertEqual(health[0][1]["status"], "error")
+        self.assertIn("timed out", health[0][1]["error_msg"])
+
+    def test_nonzero_curator_exit_is_retried_next_cycle(self):
+        state = {}
+        health = []
+        result = SimpleNamespace(returncode=7, stderr="bad credentials")
+        with mock.patch.object(w.subprocess, "run", return_value=result), \
+                mock.patch.object(w, "log_health",
+                                  side_effect=lambda *a, **k: health.append((a, k))):
+            count = w.intake_pass(self.proj, state, {})
+        self.assertEqual(count, 0)
+        self.assertEqual(state["intake_seen"], [])
+        self.assertIn("bad credentials", health[0][1]["error_msg"])
+
+
+class MainTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(prefix="sw-main-"))
+        self._saved = {name: getattr(w, name) for name in (
+            "CLAUDE", "PROJECTS", "CACHE", "STATE", "HEALTH", "SCRIPT_DIR",
+        )}
+        w.CACHE = self.tmp / "cache"
+        w.STATE = w.CACHE / "watch-state.json"
+        w.HEALTH = w.CACHE / "watch-health.json"
+        w.SCRIPT_DIR = self.tmp
+        w.PROJECTS = self.tmp / "projects.json"
+        curator = self.tmp / "claude-stub"
+        curator.write_text("#!/bin/sh\nexit 0\n")
+        curator.chmod(0o755)
+        w.CLAUDE = str(curator)
+
+    def tearDown(self):
+        for name, value in self._saved.items():
+            setattr(w, name, value)
+
+    def test_main_runs_projects_persists_state_and_health(self):
+        w.PROJECTS.write_text(json.dumps({"projects": [
+            {"id": "one", "name": "One", "root": str(self.tmp)},
+            {"id": "two", "name": "Two", "root": str(self.tmp)},
+        ]}))
+        with mock.patch.object(w, "intake_pass", side_effect=[2, 1]):
+            code = w.main()
+        self.assertEqual(code, 0)
+        self.assertEqual(set(json.loads(w.STATE.read_text())), {"one", "two"})
+        health = json.loads(w.HEALTH.read_text())
+        self.assertEqual((health["status"], health["curated"]), ("ok", 3))
+
+    def test_main_missing_curator_fails_with_healthbeacon(self):
+        w.CLAUDE = str(self.tmp / "missing-curator")
+        code = w.main()
+        self.assertEqual(code, 1)
+        health = json.loads(w.HEALTH.read_text())
+        self.assertEqual(health["status"], "error")
+        self.assertIn("not found", health["error"])
+
+    def test_main_bad_registry_fails_with_healthbeacon(self):
+        w.PROJECTS.write_text("{broken")
+        code = w.main()
+        self.assertEqual(code, 1)
+        health = json.loads(w.HEALTH.read_text())
+        self.assertIn("cannot read registry", health["error"])
 
 
 if __name__ == "__main__":

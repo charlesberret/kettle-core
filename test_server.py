@@ -5,8 +5,12 @@ Stdlib only (unittest + urllib). Run:  python3 test_server.py   (or python3 -m u
 
 The server uses module-level globals for its data paths and security fence; each test
 redirects those into a tempdir so the real registry/queue/settings are never touched.
+
+SERIAL ONLY: this module temporarily replaces server globals and subprocess.Popen.
+Do not run it under pytest-xdist until those seams become instance-scoped.
 """
 
+import http.client
 import json
 import os
 import shutil
@@ -561,6 +565,101 @@ class EndpointTests(Base):
         _, j2 = _http("GET", f"{self.base}/api/curator/catalog")
         self.assertEqual(j2["menu"]["claude"], ["opus"])
 
+    def test_kits_get_lists_defaults(self):
+        s, j = _http("GET", f"{self.base}/api/kits")
+        self.assertEqual(s, 200)
+        self.assertEqual(j["kinds"], ["writing", "code", "records", "knowledge", "inbox"])
+        self.assertTrue(any(k.get("_key") == "code" for k in j["kits"]))
+
+    def test_kits_save_path_like_key_stays_in_settings_fence(self):
+        # User kits are values inside the fixed SETTINGS_PATH, never filenames derived
+        # from the client key. A traversal-shaped key therefore cannot select a path.
+        key = "../../outside-kit"
+        s, j = _http("POST", f"{self.base}/api/kits/save", {
+            "key": key,
+            "kit": {"name": "Traversal-shaped", "kind": "code", "lens": "stay fenced"},
+        })
+        self.assertEqual(s, 200)
+        self.assertTrue(any(k.get("_key") == key for k in j["kits"]))
+        self.assertEqual(server.load_settings()["kits"][key]["lens"], "stay fenced")
+        self.assertFalse((self.tmp / "outside-kit.json").exists())
+        self.assertFalse((self.root / "outside-kit.json").exists())
+
+    def test_kits_delete_removes_only_user_override(self):
+        _http("POST", f"{self.base}/api/kits/save", {
+            "key": "code",
+            "kit": {"name": "My Code", "kind": "code", "lens": "custom"},
+        })
+        s, j = _http("POST", f"{self.base}/api/kits/delete", {"key": "code"})
+        self.assertEqual(s, 200)
+        code = next(k for k in j["kits"] if k.get("_key") == "code")
+        self.assertEqual(code["_source"], "default")
+        self.assertNotIn("code", server.load_settings().get("kits", {}))
+
+    def test_chatlog_post_then_get(self):
+        messages = [
+            {"role": "user", "text": "question"},
+            {"role": "agent", "text": "answer"},
+        ]
+        s, saved = _http("POST", f"{self.base}/api/chatlog",
+                         {"project": "t", "messages": messages})
+        self.assertEqual((s, saved["count"]), (200, 2))
+        s2, loaded = _http("GET", f"{self.base}/api/chatlog?project=t")
+        self.assertEqual((s2, loaded["messages"]), (200, messages))
+
+    def test_compact_without_session_is_terminal_noop(self):
+        s, body = self._post_stream("/api/compact", {"project": "t"})
+        self.assertEqual(s, 200)
+        self.assertEqual(body, "")
+        # Brief 07 will make done terminal on every stream path. Until that lands,
+        # the route-smoke contract here is a clean no-op that leaves the server alive.
+        ping, _ = _http("GET", f"{self.base}/api/ping")
+        self.assertEqual(ping, 200)
+
+    def test_refound_backs_up_and_reseeds_desk(self):
+        desk = server.desk_dir(self.proj())
+        (desk / "PROJECT.md").write_text("old charter")
+        server.save_session(self.proj(), session_id="old", status="founded",
+                            founding_note="keep this steer")
+        s, j = _http("POST", f"{self.base}/api/projects/refound", {"id": "t"})
+        self.assertEqual((s, j["ok"]), (200, True))
+        self.assertTrue(Path(j["backup"]).is_dir())
+        self.assertEqual(server.load_queue(self.proj())["entries"], [])
+        sess = server.load_session(self.proj())
+        self.assertEqual(sess, {"founding_note": "keep this steer"})
+        self.assertFalse((desk / "PROJECT.md").exists())
+
+    def test_static_shell_scripts_fonts_and_font_traversal(self):
+        def raw(path):
+            conn = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
+            try:
+                conn.request("GET", path)
+                res = conn.getresponse()
+                return res.status, dict(res.getheaders()), res.read()
+            finally:
+                conn.close()
+
+        s, headers, body = raw("/")
+        self.assertEqual(s, 200)
+        self.assertIn(b"<!DOCTYPE HTML", body[:100].upper())
+        self.assertIn("no-store", headers.get("Cache-Control", ""))
+
+        s2, headers2, body2 = raw("/themes.js")
+        self.assertEqual(s2, 200)
+        self.assertTrue(body2)
+        self.assertIn("javascript", headers2.get("Content-Type", ""))
+
+        font = "/fonts/IBMPlexMono-Regular.woff2"
+        s3, headers3, body3 = raw(font)
+        self.assertEqual(s3, 200)
+        self.assertTrue(body3)
+        self.assertEqual(headers3.get("Content-Type"), "font/woff2")
+
+        # This resolves back to the same bundled font if traversal is normalized.
+        # The route must reject it before opening the file.
+        s4, _, _ = raw("/fonts/../fonts/IBMPlexMono-Regular.woff2")
+        self.assertEqual(s4, 404)
+
     def test_comment_set_overwrite_clear(self):
         _http("POST", f"{self.base}/api/comment", {"project": "t", "id": "alpha", "text": "note one"})
         e = self._entry("alpha")
@@ -867,6 +966,139 @@ class EndpointTests(Base):
         s2, j2 = _http("POST", f"{self.base}/api/approve", {"id": "alpha"})
         self.assertEqual(s2, 400)
         self.assertIn("missing project", j2["error"])
+
+    def test_full_founding_review_and_close_lifecycle(self):
+        life_root = self.tmp / "lifecycle"
+        life_root.mkdir()
+        s, added = _http("POST", f"{self.base}/api/projects/add", {
+            "name": "Lifecycle", "root": str(life_root), "kit": "code",
+        })
+        self.assertEqual((s, added["id"]), (200, "lifecycle"))
+        proj = server.get_project("lifecycle")
+        calls = []
+        real_popen = server.subprocess.Popen
+
+        class StubCurator:
+            def __init__(self, argv):
+                call = len(calls)
+                calls.append(list(argv))
+                if call == 1:  # finish interview -> proposal entry
+                    proposal = server.proposal_path(proj)
+                    proposal.write_text("# Desk proposal\nPatron intent.\n")
+                    server.atomic_write(server.queue_path(proj), json.dumps({
+                        "curated": "proposal ready",
+                        "entries": [{
+                            "id": server.PROPOSAL_ENTRY_ID,
+                            "title": "Desk proposal",
+                            "path": str(proposal),
+                            "status": "pending",
+                            "founding_phase": "proposal",
+                            "ask": "Approve to found",
+                        }],
+                    }, indent=2))
+                elif call == 2:  # approved proposal -> durable desk + first content batch
+                    desk = server.desk_dir(proj)
+                    for name, text in {
+                        "PROJECT.md": "# Lifecycle charter\n",
+                        "MEMORY.md": "# Memory\n- Patron intent wins.\n",
+                        "FAMILIARITY.md": "# Familiarity\n- draft.md is first.\n",
+                        "SWEEP-ACTIONS.md": "# Sweep actions\n- Ordinary close.\n",
+                    }.items():
+                        (desk / name).write_text(text)
+                    draft = life_root / "draft.md"
+                    draft.write_text("first draft\n")
+                    server.atomic_write(server.queue_path(proj), json.dumps({
+                        "curated": "opening batch",
+                        "entries": [{
+                            "id": "first",
+                            "title": "Review the first draft",
+                            "path": str(draft),
+                            "status": "pending",
+                            "urgency": "high",
+                            "ask": "Approve the opening draft",
+                        }],
+                    }, indent=2))
+                lines = [
+                    self._init("lifecycle-sid"),
+                    self._say(f"stub turn {call}"),
+                    self._result(),
+                ]
+                self.stdout = iter(line + "\n" for line in lines)
+                self.returncode = 0
+
+            @staticmethod
+            def _init(sid):
+                return EndpointTests._init(sid=sid)
+
+            @staticmethod
+            def _say(text):
+                return EndpointTests._say(text)
+
+            @staticmethod
+            def _result():
+                return EndpointTests._result()
+
+            def wait(self, timeout=None):
+                return self.returncode
+
+            def poll(self):
+                return self.returncode
+
+            def kill(self):
+                self.returncode = -9
+
+        def fake_popen(argv, *args, **kwargs):
+            return StubCurator(argv)
+
+        server.subprocess.Popen = fake_popen
+        self.addCleanup(lambda: setattr(server.subprocess, "Popen", real_popen))
+
+        # register -> interview -> propose
+        s1, interview = self._post_stream(
+            "/api/interview", {"project": "lifecycle", "message": "Begin"})
+        self.assertEqual(s1, 200)
+        self.assertEqual(self._events(interview)[-1]["t"], "done")
+        self.assertEqual(server.load_session(proj)["status"], "interviewing")
+
+        s2, proposed = self._post_stream("/api/propose", {"project": "lifecycle"})
+        self.assertEqual(s2, 200)
+        self.assertEqual(self._events(proposed)[-1]["t"], "done")
+        proposal_entry = server.find_entry(
+            server.load_queue(proj), server.PROPOSAL_ENTRY_ID)
+        self.assertEqual(proposal_entry["status"], "pending")
+        self.assertEqual(server.load_session(proj)["status"], "proposing")
+
+        # approve proposal -> found -> durable desk and content queue
+        s3, approved_proposal = _http("POST", f"{self.base}/api/approve", {
+            "project": "lifecycle", "id": server.PROPOSAL_ENTRY_ID,
+        })
+        self.assertEqual((s3, approved_proposal["founding"]), (200, True))
+        s4, found = self._post_stream("/api/found", {"project": "lifecycle"})
+        self.assertEqual(s4, 200)
+        self.assertEqual(self._events(found)[-1]["t"], "done")
+        self.assertEqual(server.load_session(proj)["status"], "founded")
+        for name in ("PROJECT.md", "MEMORY.md", "FAMILIARITY.md", "SWEEP-ACTIONS.md"):
+            self.assertTrue((server.desk_dir(proj) / name).is_file())
+
+        # queue read snapshots the content -> chat -> approve -> sweep performs quiet CLOSE
+        sq, queue = _http("GET", f"{self.base}/api/queue?project=lifecycle")
+        self.assertEqual((sq, [e["id"] for e in queue["entries"]]), (200, ["first"]))
+        sc, chat = self._post_stream("/api/chat", {
+            "project": "lifecycle", "id": "first", "message": "Review it",
+        })
+        self.assertEqual(sc, 200)
+        self.assertEqual(self._events(chat)[-1]["t"], "done")
+        sa, _ = _http("POST", f"{self.base}/api/approve", {
+            "project": "lifecycle", "id": "first",
+        })
+        self.assertEqual(sa, 200)
+        ss, swept = self._post_stream("/api/sweep", {"project": "lifecycle"})
+        self.assertEqual(ss, 200)
+        self.assertEqual(self._events(swept)[-1]["t"], "done")
+        self.assertEqual(server.load_queue(proj)["entries"], [])
+        self.assertTrue(any((server.desk_dir(proj) / "archive").glob("*-batch.json")))
+        self.assertTrue(any((server.runtime_dir(proj) / "sessions").glob("*-session.md")))
+        self.assertEqual(len(calls), 5)
 
     # ---- streaming harness: a fake `claude` emitting stream-json ----
     def _stub_claude(self, *lines, exit_code=0):
