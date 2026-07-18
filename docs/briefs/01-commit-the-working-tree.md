@@ -5,7 +5,7 @@ repo: setsweep-core
 touches: [git only — no code changes]
 risk: normal
 depends-on: []
-status: open
+status: done
 ---
 
 ## Context
