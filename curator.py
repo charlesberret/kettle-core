@@ -723,16 +723,22 @@ def ensure_curator_settings(settings: dict) -> dict:
     menu = normalize_menu(prev.get("menu"))
     if not menu:
         menu = default_menu()
-    cur: dict[str, Any] = {
+    # Keys this function is authoritative over. Everything else in the prior block is
+    # carried through untouched: the curator block is an extension point (watchdog
+    # timeouts, read-only overrides, future groups), and rebuilding it from a fixed
+    # key set silently ate them — `idle_timeout_s` needed a hand-written rescue, and
+    # `allow_unfenced_readonly` (brief 06's security override) was dropped entirely
+    # until 2026-07-21. Preserve-by-default, normalize only what we own.
+    MANAGED = ("provider", "command", "models", "menu", "effort")
+    cur: dict[str, Any] = {k: v for k, v in prior_curator.items() if k not in MANAGED}
+    cur.update({
         "provider": cfg.provider,
         "command": cfg.command,
         "models": dict(cfg.models),
         "menu": menu,
-    }
+    })
     if cfg.effort:
         cur["effort"] = cfg.effort
-    if "idle_timeout_s" in prior_curator:
-        cur["idle_timeout_s"] = prior_curator["idle_timeout_s"]
     out["curator"] = cur
     out["agents"] = dict(cfg.models)
     return out

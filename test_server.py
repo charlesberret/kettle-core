@@ -242,17 +242,45 @@ class HelperTests(Base):
                 os.environ["SETSWEEP_ALLOWED_ROOTS"] = saved
 
     def test_settings_create_then_shallow_merge(self):
-        self.assertEqual(server.load_settings(), {})           # creates {}
+        # A missing file is seeded with a normalized curator block (provider/command/
+        # models/menu) rather than {} — disk, core, and UI must share one pair.
+        seeded = server.load_settings()
         self.assertTrue(server.SETTINGS_PATH.exists())
+        self.assertEqual(seeded["curator"]["provider"], "claude")
+        self.assertEqual(seeded["agents"], seeded["curator"]["models"])
         server.save_settings({"model": "sonnet"})
         server.save_settings({"colWidths": {"left": 280}})     # disjoint key
         merged = server.load_settings()
         self.assertEqual(merged["model"], "sonnet")            # preserved
         self.assertEqual(merged["colWidths"], {"left": 280})
+        self.assertEqual(merged["curator"]["provider"], "claude")   # survives merges
 
     def test_settings_survives_corrupt_file(self):
         server.SETTINGS_PATH.write_text("{not json")
-        self.assertEqual(server.load_settings(), {})           # no crash
+        loaded = server.load_settings()                        # no crash
+        self.assertEqual(loaded["curator"]["provider"], "claude")   # reseeded
+        self.assertTrue(server.SETTINGS_PATH.with_suffix(".json.corrupt").exists())
+
+    def test_curator_block_preserves_unknown_keys(self):
+        """The curator block is an extension point: normalizing it must not drop keys
+        it does not own (idle_timeout_s, allow_unfenced_readonly, future groups)."""
+        server.SETTINGS_PATH.write_text(json.dumps({"curator": {
+            "provider": "claude", "allow_unfenced_readonly": True, "idle_timeout_s": 0.2,
+        }}))
+        block = server.load_settings()["curator"]
+        self.assertIs(block["allow_unfenced_readonly"], True)
+        self.assertEqual(block["idle_timeout_s"], 0.2)
+        self.assertEqual(block["provider"], "claude")          # still normalized
+        # and it survives a disjoint patch through save_settings
+        after = server.save_settings({"colWidths": {"left": 280}})["curator"]
+        self.assertIs(after["allow_unfenced_readonly"], True)
+
+    def test_legacy_model_migrates(self):
+        """A settings file predating the agents block resolves its top-level "model"
+        into curator.models.chat on first load (back-compat, still supported)."""
+        server.SETTINGS_PATH.write_text(json.dumps({"model": "opus"}))
+        block = server.load_settings()["curator"]
+        self.assertEqual(block["models"]["chat"], "opus")
 
     def test_curator_idle_timeout_setting(self):
         server.SETTINGS_PATH.write_text(json.dumps({
@@ -572,9 +600,19 @@ class EndpointTests(Base):
         _http("POST", f"{self.base}/api/settings", {"model": "opus"})
         _http("POST", f"{self.base}/api/settings", {"colors": {"--bg": "#000"}})
         s, j = _http("GET", f"{self.base}/api/settings")
-        self.assertEqual(j["model"], "opus")
+        self.assertEqual(j["model"], "opus")                   # disjoint key kept
         self.assertEqual(j["colors"], {"--bg": "#000"})
-        self.assertEqual(j["curator"]["models"]["chat"], "opus")
+        # The legacy top-level "model" does NOT override an established pair: settings
+        # are seeded with an explicit agents.chat, and explicit beats legacy (see
+        # curator.models_from_settings). Legacy migration is for files predating the
+        # agents block — HelperTests.test_legacy_model_migrates covers that path.
+        self.assertEqual(j["curator"]["models"]["chat"], "sonnet")
+        # the modern path does change it, and the agents mirror stays in sync
+        _http("POST", f"{self.base}/api/settings",
+              {"curator": {"models": {"chat": "opus"}}})
+        _, j2 = _http("GET", f"{self.base}/api/settings")
+        self.assertEqual(j2["curator"]["models"]["chat"], "opus")
+        self.assertEqual(j2["agents"]["chat"], "opus")
 
     def test_ping_exposes_curator(self):
         s, j = _http("GET", f"{self.base}/api/ping")
