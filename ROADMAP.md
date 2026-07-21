@@ -44,6 +44,13 @@ and viewports wherever the person already works (browser, editor, desktop, notes
 6. **Invariants survive rewrites.** DESIGN §5 verbatim: localhost-only, file-fence on
    every route, append-only records never auto-mutated, patron's words beat the files,
    memory is distillation, every automated actor beats a healthbeacon.
+7. **The fence should be real.** Today the project-root boundary is enforced by prompt,
+   not architecture — a tool allowlist names binaries, it cannot bound where they write
+   (see `API.md`, "What a tier is — and is not"). The ambition is containment as a
+   property of the system: *point Setsweep at a folder and it cannot touch anything
+   outside it.* No adjacent agent tool makes that claim, and it is the natural completion
+   of the division of labor this product exists to enforce. Ladder and first increment:
+   [brief 19](docs/briefs/19-enforce-the-fence.md).
 
 ## Where it stands (2026-07-17, honest)
 

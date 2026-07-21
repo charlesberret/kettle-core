@@ -168,13 +168,25 @@ path that arms a turn.
 | `interview` | founding interview (`/api/interview`) | no | Read · Glob · Grep + read-only shell |
 | `chat` | — (reserved) | yes (`acceptEdits`) | Read/Glob/Grep/Edit/Write + narrow shell |
 | `agent` | review chat (`/api/chat`, `setsweep chat`) | yes (`acceptEdits`) | Edit/Write + everyday shell kit (`mv`/`cp`) |
-| `sweep` | founding/found, sweep (`/api/found`, `/api/sweep`, `setsweep found`) | yes (`acceptEdits`) | Edit/Write + `mkdir`/`mv`/`cp`/`rm`/`tee`/`python3` |
+| `sweep` | founding/found, sweep (`/api/found`, `/api/sweep`, `setsweep found`) | yes (`acceptEdits`) | Edit/Write + `mkdir`/`mv`/`cp`/`rm`/`tee` |
 
-**`sweep` holds `Bash(rm:*)` and `Bash(python3:*)`** — a script can write outside the Edit
-fence by construction, so the sweep tier is genuinely broader than "edit the queue." This
-matches the live HTTP sweep posture and is **deliberately unchanged**; whether the sweep tier
-*should* keep `rm`/`python3` is a security-posture decision left to the patron (see the note
-beside `SHELL_SWEEP` in `runtime.py`).
+### What a tier is — and is not
+
+A tier is an **allowlist of tool names**. It constrains *which* binaries a turn may run. It
+does **not** constrain *where* those binaries write: `rm`, `mv`, `cp`, and `tee` all take
+arbitrary paths, as do `sed` and `awk` in the `agent` tier. So every write-bearing tier is
+**trusted, not fenced** — the project-root boundary is a convention the prompts ask agents to
+respect, not a boundary the system enforces.
+
+Read that plainly: a curator turn *could* write outside its project root. Nothing today stops
+it. `safe_path` fences Setsweep's own **HTTP file routes** (`/api/file`, `/api/save`), which is
+a different surface from the tools a spawned curator CLI holds.
+
+`python`/`python3` were removed from the `sweep` tier on 2026-07-20 — no prompt ever referenced
+them and an interpreter is the widest possible escape — but that narrowed the hole rather than
+closing it. Closing it needs an OS-level sandbox around the curator process; that work is
+tracked as [brief 19](docs/briefs/19-enforce-the-fence.md) and named as a product ambition in
+[`ROADMAP.md`](ROADMAP.md).
 
 ### Per-provider capability matrix
 

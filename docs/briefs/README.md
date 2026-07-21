@@ -58,6 +58,7 @@ own `status`).
 | 16 | [Extract the shared core-client](16-extract-core-client.md) | plugin | 3 | 02 |
 | 17 | [Docs for strangers](17-docs-for-strangers.md) | core | 4 | 10, 11 |
 | 18 | [Metrics beacons + setsweep doctor](18-metrics-and-doctor.md) | core | 5 | 11 |
+| 19 | [Enforce the agent fence](19-enforce-the-fence.md) | core | 6 | 03, 06 |
 
 Status board: a brief's `status` frontmatter is the truth; this table stays status-free
 so it never lies. `grep -l "status: open" docs/briefs/*.md` is the live to-do list.
