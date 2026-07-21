@@ -253,7 +253,7 @@ def _env_allowed_roots() -> list[Path]:
 
 # The fence = these base roots + every registered project root (see allowed_roots()). Base
 # defaults to empty for portability; the author can restore prior behavior with, e.g.,
-# SETSWEEP_ALLOWED_ROOTS="$HOME/Seafile:$HOME/Library/Mobile Documents/com~apple~CloudDocs".
+# SETSWEEP_ALLOWED_ROOTS="$HOME/cloud/sync:$HOME/Library/Mobile Documents/com~apple~CloudDocs".
 BASE_ALLOWED_ROOTS = _env_allowed_roots()
 
 # Tool tiers (agent / chat / sweep / interview) are single-sourced in
@@ -909,25 +909,63 @@ def save_chatlog(proj: dict, messages: list) -> int:
 # ---------- settings ----------
 
 def load_settings() -> dict:
+    """Load settings.json, normalize curator block, reseeding empty/corrupt files.
+
+    Empty ``{}`` used to resolve as silent Claude defaults while the desk still
+    held a cached Grok model id. We now persist a normalized curator block so
+    disk, core, and UI share one pair.
+    """
     with SETTINGS_LOCK:
-        if not SETTINGS_PATH.exists():
-            atomic_write(SETTINGS_PATH, "{}")
-            return {}
-        try:
-            return json.loads(SETTINGS_PATH.read_text())
-        except json.JSONDecodeError:
-            return {}
+        raw: dict = {}
+        existed = SETTINGS_PATH.exists()
+        corrupt = False
+        if not existed:
+            raw = {}
+        else:
+            try:
+                loaded = json.loads(SETTINGS_PATH.read_text() or "{}")
+                raw = loaded if isinstance(loaded, dict) else {}
+            except json.JSONDecodeError:
+                corrupt = True
+                # Keep a backup of the unreadable file once.
+                try:
+                    bak = SETTINGS_PATH.with_suffix(".json.corrupt")
+                    bak.write_bytes(SETTINGS_PATH.read_bytes())
+                except OSError:
+                    pass
+                raw = {}
+        normalized = curator_mod.ensure_curator_settings(raw)
+        # Persist when missing, corrupt, empty, or models/provider were illegal.
+        if (not existed) or corrupt or raw != normalized:
+            atomic_write(
+                SETTINGS_PATH,
+                json.dumps(normalized, indent=2, ensure_ascii=False),
+            )
+        return normalized
 
 
 def save_settings(patch: dict) -> dict:
-    """Merge patch into settings.json (deep-merge for curator/agents); returns merged dict."""
+    """Merge patch into settings.json (deep-merge for curator/agents); returns merged dict.
+
+    Always sanitizes provider↔model pairs so half-patches cannot leave
+    ``provider=claude`` with ``chat=grok-4.5``.
+    """
     with SETTINGS_LOCK:
         try:
             cur = json.loads(SETTINGS_PATH.read_text()) if SETTINGS_PATH.exists() else {}
+            if not isinstance(cur, dict):
+                cur = {}
         except json.JSONDecodeError:
             cur = {}
         cur = curator_mod.deep_merge_settings(cur, patch)
         cur = curator_mod.ensure_curator_settings(cur)
+        # Final coerce: illegal model ids for the active provider → defaults.
+        block = cur.get("curator") if isinstance(cur.get("curator"), dict) else {}
+        prov = str(block.get("provider") or "claude")
+        block = dict(block)
+        block["models"] = curator_mod.sanitize_models_for_provider(prov, block.get("models"))
+        cur["curator"] = block
+        cur["agents"] = dict(block.get("models") or {})
         atomic_write(SETTINGS_PATH, json.dumps(cur, indent=2, ensure_ascii=False))
         return cur
 
@@ -1447,6 +1485,30 @@ class Handler(BaseHTTPRequestHandler):
                 })
             elif url.path == "/api/settings":
                 self.send_json(save_settings(d))
+            elif url.path == "/api/curator":
+                # Atomic curator selection: provider + model (+ optional effort) in one write.
+                # Preferred over partial PATCH /api/settings for the desk model menu.
+                try:
+                    next_settings = curator_mod.apply_curator_selection(
+                        load_settings(),
+                        provider=d.get("provider"),
+                        model=d.get("model"),
+                        task=str(d.get("task") or "chat"),
+                        effort=d.get("effort"),
+                        command=d.get("command"),
+                        models=d.get("models") if isinstance(d.get("models"), dict) else None,
+                    )
+                except ValueError as e:
+                    self.send_json({"error": str(e)}, 400)
+                    return
+                # apply_curator_selection returns a full settings dict — write via merge of
+                # the curator block so we don't drop unrelated top-level keys unexpectedly.
+                saved = save_settings({"curator": next_settings.get("curator") or {}})
+                self.send_json({
+                    "ok": True,
+                    "settings": saved,
+                    "active": curator_mod.resolved_active(saved),
+                })
             elif url.path == "/api/chatlog":
                 proj = get_project(d.get("project"))
                 msgs = d.get("messages")

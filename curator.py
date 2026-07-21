@@ -54,6 +54,12 @@ DEFAULT_MODELS_GROK = {
     "chat": "grok-4.5",
 }
 
+# Custom CLI: omit --model unless the user sets real ids (model_for treats "default" as None).
+DEFAULT_MODELS_CLI = {
+    "setup": "default",
+    "chat": "default",
+}
+
 DEFAULT_MODELS_CHATGPT = {
     "setup": "gpt-5.1",
     "chat": "gpt-5.1",
@@ -105,7 +111,11 @@ PROVIDER_HINT = {
     "grok": "Needs grok on PATH · XAI_API_KEY or Grok login",
     "chatgpt": "Needs codex on PATH · ChatGPT login / OPENAI_API_KEY",
     "gemini": "Needs gemini on PATH · GEMINI_API_KEY or Gemini login",
-    "cli": "Any binary that speaks Claude-compatible stream-json",
+    "cli": (
+        "Any agent binary that speaks Claude stream-json (OpenCode, Claude, Pi wrappers, "
+        "etc.). Set Command to that binary and list model ids it accepts below. "
+        "Raw Ollama HTTP is not this path — use an agent that wraps Ollama/local models."
+    ),
 }
 
 # Desk menu checkmarks — seeded on first ensure (not the full catalog).
@@ -154,20 +164,154 @@ CATALOG_MODELS: list[dict[str, Any]] = [
     {"id": "gemini-2.0-flash", "provider": "gemini", "label": "Gemini 2.0 Flash",
      "blurb": "Earlier Gemini flash id.",
      "good_for": ["chat"], "effort_supported": False},
-    # Custom CLI mirrors Claude family ids (stream-json compatible).
-    {"id": "sonnet", "provider": "cli", "label": "Sonnet",
-     "blurb": "Pass-through model id for a custom stream-json CLI.",
-     "good_for": ["setup", "chat"], "effort_supported": True},
-    {"id": "opus", "provider": "cli", "label": "Opus",
-     "blurb": "Pass-through model id for a custom stream-json CLI.",
-     "good_for": ["setup", "chat"], "effort_supported": True},
-    {"id": "haiku", "provider": "cli", "label": "Haiku",
-     "blurb": "Pass-through model id for a custom stream-json CLI.",
-     "good_for": ["chat"], "effort_supported": True},
-    {"id": "fable", "provider": "cli", "label": "Fable",
-     "blurb": "Pass-through model id for a custom stream-json CLI.",
-     "good_for": ["chat"], "effort_supported": True},
+    # Custom CLI has no fixed catalog — model ids come from curator.menu.cli
+    # (user-configured) and are synthesized in build_catalog.
 ]
+
+def provider_for_model_id(model_id: str) -> Optional[str]:
+    """Catalog owner of a model id, or None if unknown / multi-provider ambiguous."""
+    mid = (model_id or "").strip()
+    if not mid:
+        return None
+    owners = {m["provider"] for m in CATALOG_MODELS if m.get("id") == mid}
+    if len(owners) == 1:
+        return next(iter(owners))
+    # sonnet/opus/haiku appear under both claude and cli — treat as claude-family.
+    if owners <= {"claude", "cli"} and owners:
+        return "claude"
+    return None
+
+
+def model_ok_for_provider(model_id: str, provider: str) -> bool:
+    """True when model_id may be passed to this provider's CLI.
+
+    Known catalog ids must match the provider (or claude-family on ``cli``).
+    Unknown ids are allowed as pass-through (custom model strings the CLI may accept).
+    """
+    mid = (model_id or "").strip()
+    prov = (provider or "claude").strip().lower() or "claude"
+    if prov == "codex":
+        prov = "chatgpt"
+    if not mid or mid == "default":
+        return False
+    owner = provider_for_model_id(mid)
+    if owner is None:
+        return True  # custom / unlisted id — let the CLI accept or reject
+    if owner == prov:
+        return True
+    if prov == "cli" and owner == "claude":
+        return True
+    return False
+
+
+def sanitize_models_for_provider(provider: str, models: Optional[dict] = None) -> dict[str, str]:
+    """Return task→model map legal for provider; illegal ids replaced with defaults."""
+    prov = (provider or "claude").strip().lower() or "claude"
+    if prov == "codex":
+        prov = "chatgpt"
+    if prov not in KNOWN_PROVIDERS:
+        prov = "claude"
+    defaults = default_models_for(prov)
+    out = dict(defaults)
+    if not isinstance(models, dict):
+        return out
+    for task in DEFAULT_MODELS:
+        v = models.get(task)
+        if not isinstance(v, str):
+            continue
+        mid = v.strip()
+        if not mid or mid == "default":
+            continue
+        if model_ok_for_provider(mid, prov):
+            out[task] = mid
+    return out
+
+
+def resolved_active(settings: Optional[dict] = None) -> dict[str, Any]:
+    """Single snapshot the UI should mirror: provider + models + effort + command."""
+    cfg = resolve_curator(settings)
+    return {
+        "provider": cfg.provider,
+        "command": cfg.command,
+        "command_resolved": cfg.resolved_command(),
+        "command_exists": cfg.command_exists(),
+        "models": dict(cfg.models),
+        "chat": cfg.models.get("chat") or default_models_for(cfg.provider).get("chat"),
+        "setup": cfg.models.get("setup") or default_models_for(cfg.provider).get("setup"),
+        "effort": cfg.effort or "default",
+        "stream": cfg.stream_format(),
+    }
+
+
+def apply_curator_selection(
+    settings: Optional[dict],
+    *,
+    provider: Optional[str] = None,
+    model: Optional[str] = None,
+    task: str = "chat",
+    effort: Optional[str] = None,
+    command: Optional[str] = None,
+    models: Optional[dict] = None,
+) -> dict:
+    """
+    Atomically update curator selection and return a full settings dict ready to save.
+
+    Selecting a model always pairs it with a provider. Cross-provider model ids are
+    either rejected (when provider is also given and disagrees) or force the provider
+    to the model's owner when only `model` is supplied.
+    """
+    cur = dict(settings) if isinstance(settings, dict) else {}
+    task = task if task in DEFAULT_MODELS else "chat"
+    patch: dict[str, Any] = {"curator": {}}
+
+    prov_in = (provider or "").strip().lower() or None
+    if prov_in == "codex":
+        prov_in = "chatgpt"
+    mid = (model or "").strip() or None
+    if mid == "default":
+        mid = None
+
+    if mid and not prov_in:
+        owner = provider_for_model_id(mid)
+        if owner:
+            prov_in = owner
+
+    if prov_in:
+        if prov_in not in KNOWN_PROVIDERS:
+            raise ValueError(f"unknown curator provider: {prov_in}")
+        patch["curator"]["provider"] = prov_in
+        if command and str(command).strip():
+            patch["curator"]["command"] = str(command).strip()
+
+    if mid:
+        effective = prov_in or resolve_curator(cur).provider
+        if not model_ok_for_provider(mid, effective):
+            raise ValueError(
+                f"model {mid!r} is not valid for provider {effective!r}"
+            )
+        models_patch = dict(models) if isinstance(models, dict) else {}
+        models_patch[task] = mid
+        # Keep setup in sync when only chat is set and setup would become illegal.
+        patch["curator"]["models"] = models_patch
+    elif isinstance(models, dict):
+        patch["curator"]["models"] = {
+            k: v for k, v in models.items()
+            if isinstance(v, str) and k in DEFAULT_MODELS
+        }
+
+    if effort is not None:
+        e = str(effort).strip()
+        patch["curator"]["effort"] = e if e and e.lower() != "default" else "default"
+
+    if command and str(command).strip() and "command" not in patch["curator"]:
+        patch["curator"]["command"] = str(command).strip()
+
+    if not patch["curator"]:
+        return ensure_curator_settings(cur)
+
+    merged = deep_merge_settings(cur, patch)
+    return ensure_curator_settings(merged)
+
 
 EFFORT_BY_PROVIDER: dict[str, list[dict[str, str]]] = {
     "claude": [
@@ -312,8 +456,12 @@ def build_catalog(settings: Optional[dict] = None) -> dict[str, Any]:
     ]
     ready_by = {p["id"]: bool(p["command_exists"]) for p in providers}
 
+    # Built-in catalog + user-defined Custom CLI ids from menu / active models.
     catalog = [dict(row) for row in CATALOG_MODELS]
+    catalog.extend(synthetic_cli_models(menu, cfg.models))
     active_chat = (cfg.models.get("chat") or "").strip()
+    if active_chat == "default":
+        active_chat = ""
     visible: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
 
@@ -330,6 +478,11 @@ def build_catalog(settings: Optional[dict] = None) -> dict[str, Any]:
     for row in catalog:
         p, mid = row["provider"], row["id"]
         checked = mid in menu.get(p, [])
+        # Custom CLI: every menu id is visible when the command exists (no separate "check").
+        if p == "cli":
+            if ready_by.get(p, False) and mid in menu.get("cli", []):
+                _add_visible(row)
+            continue
         if checked and ready_by.get(p, False):
             _add_visible(row)
 
@@ -355,17 +508,20 @@ def build_catalog(settings: Optional[dict] = None) -> dict[str, Any]:
                 forced=True,
             )
 
+    mbp = models_by_provider()
+    mbp["cli"] = [m["id"] for m in catalog if m.get("provider") == "cli"]
+
     return {
         "providers": providers,
         "models": catalog,
-        "models_by_provider": models_by_provider(),
+        "models_by_provider": mbp,
         "efforts_by_provider": {
             p: [dict(e) for e in EFFORT_BY_PROVIDER.get(p, [])]
             for p in PROVIDER_ORDER
         },
         "defaults_by_provider": {
             "claude": dict(DEFAULT_MODELS),
-            "cli": dict(DEFAULT_MODELS),
+            "cli": dict(DEFAULT_MODELS_CLI),
             "grok": dict(DEFAULT_MODELS_GROK),
             "chatgpt": dict(DEFAULT_MODELS_CHATGPT),
             "gemini": dict(DEFAULT_MODELS_GEMINI),
@@ -417,16 +573,28 @@ class CuratorConfig:
         return shutil.which(path) is not None
 
     def model_for(self, task: str, override: Optional[str] = None) -> Optional[str]:
-        """Resolve model id for a task. override from the request body wins when set."""
+        """Resolve model id for a task.
+
+        Request override wins only when it is legal for this provider. Cross-provider
+        overrides are ignored so a stale desk cache cannot produce
+        ``claude --model grok-4.5``.
+        """
         defaults = default_models_for(self.provider)
         if override is not None:
             o = str(override).strip()
+            # Explicit "default" / empty means omit --model (legacy request contract).
             if not o or o == "default":
                 return None
-            return o
+            if model_ok_for_provider(o, self.provider):
+                return o
+            # Foreign known id → fall through to settings (never cross CLI families).
         m = (self.models.get(task) or defaults.get(task) or "").strip()
         if not m or m == "default":
             return None
+        if not model_ok_for_provider(m, self.provider):
+            m = (defaults.get(task) or "").strip()
+            if not m or m == "default":
+                return None
         return m
 
     def as_public_dict(self) -> dict[str, Any]:
@@ -454,7 +622,38 @@ def default_models_for(provider: str) -> dict[str, str]:
         return dict(DEFAULT_MODELS_CHATGPT)
     if provider == "gemini":
         return dict(DEFAULT_MODELS_GEMINI)
+    if provider == "cli":
+        return dict(DEFAULT_MODELS_CLI)
     return dict(DEFAULT_MODELS)
+
+
+def synthetic_cli_models(menu: Optional[dict] = None, active_models: Optional[dict] = None) -> list[dict[str, Any]]:
+    """User-configured Custom CLI model rows (no hard-coded Claude clones)."""
+    ids: list[str] = []
+    seen: set[str] = set()
+    for mid in (menu or {}).get("cli") or []:
+        m = str(mid or "").strip()
+        if not m or m == "default" or m in seen:
+            continue
+        seen.add(m)
+        ids.append(m)
+    if isinstance(active_models, dict):
+        for task in ("setup", "chat"):
+            m = str(active_models.get(task) or "").strip()
+            if m and m != "default" and m not in seen:
+                seen.add(m)
+                ids.append(m)
+    return [
+        {
+            "id": mid,
+            "provider": "cli",
+            "label": mid,
+            "blurb": "Custom CLI model id (passed as --model).",
+            "good_for": ["setup", "chat"],
+            "effort_supported": True,
+        }
+        for mid in ids
+    ]
 
 
 def _legacy_models(settings: dict) -> dict[str, str]:
@@ -499,6 +698,8 @@ def resolve_curator(settings: Optional[dict] = None) -> CuratorConfig:
             v = raw_models.get(k)
             if isinstance(v, str) and v.strip():
                 models[k] = v.strip()
+    # Drop illegal pairs (e.g. provider=claude with chat=grok-4.5 left from a wipe/race).
+    models = sanitize_models_for_provider(provider, models)
 
     effort = str(block.get("effort") or "").strip()
     if effort.lower() == "default":
@@ -578,6 +779,8 @@ def deep_merge_settings(cur: dict, patch: dict) -> dict:
                 base["menu"] = menu
             elif "menu" not in base or not normalize_menu(base.get("menu")):
                 base["menu"] = default_menu()
+            # Always coerce models to the active provider after any curator patch.
+            base["models"] = sanitize_models_for_provider(provider, base.get("models"))
             out["curator"] = base
             if "models" in base:
                 agents = dict(out.get("agents") or {})
@@ -593,7 +796,7 @@ def deep_merge_settings(cur: dict, patch: dict) -> dict:
                 provider = "chatgpt"
             models = dict(curator.get("models") or default_models_for(provider))
             models.update({k: v for k, v in agents.items() if k in DEFAULT_MODELS})
-            curator["models"] = models
+            curator["models"] = sanitize_models_for_provider(provider, models)
             if "provider" not in curator:
                 curator["provider"] = "claude"
             if "command" not in curator:
@@ -601,6 +804,7 @@ def deep_merge_settings(cur: dict, patch: dict) -> dict:
             if "menu" not in curator or not normalize_menu(curator.get("menu")):
                 curator["menu"] = default_menu()
             out["curator"] = curator
+            out["agents"] = dict(curator["models"])
         else:
             out[key] = val
     return out

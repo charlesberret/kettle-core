@@ -102,6 +102,44 @@ class TestResolveCurator(unittest.TestCase):
         self.assertIsNone(cfg.model_for("setup", "default"))
         self.assertEqual(cfg.model_for("chat"), "sonnet")
 
+    def test_model_for_ignores_cross_provider_override(self):
+        cfg = CuratorConfig(
+            provider="claude",
+            models={"setup": "sonnet", "chat": "sonnet"},
+        )
+        # Desk cache still holding grok-4.5 after a provider flip must not win.
+        self.assertEqual(cfg.model_for("chat", "grok-4.5"), "sonnet")
+        self.assertEqual(cfg.model_for("chat", "opus"), "opus")
+
+    def test_resolve_sanitizes_illegal_model_pair(self):
+        cfg = resolve_curator({
+            "curator": {
+                "provider": "claude",
+                "models": {"setup": "sonnet", "chat": "grok-4.5"},
+            },
+        })
+        self.assertEqual(cfg.provider, "claude")
+        self.assertEqual(cfg.models["chat"], "sonnet")
+
+    def test_deep_merge_sanitizes_foreign_chat_model(self):
+        cur = {"curator": {"provider": "claude", "command": "claude",
+                           "models": {"setup": "sonnet", "chat": "sonnet"}}}
+        out = deep_merge_settings(cur, {"curator": {"models": {"chat": "grok-4.5"}}})
+        self.assertEqual(out["curator"]["provider"], "claude")
+        self.assertEqual(out["curator"]["models"]["chat"], "sonnet")
+
+    def test_apply_curator_selection_model_sets_provider(self):
+        from curator import apply_curator_selection
+        out = apply_curator_selection({}, model="grok-4.5")
+        self.assertEqual(out["curator"]["provider"], "grok")
+        self.assertEqual(out["curator"]["models"]["chat"], "grok-4.5")
+        self.assertEqual(out["curator"]["command"], "grok")
+
+    def test_apply_curator_selection_rejects_mismatched_pair(self):
+        from curator import apply_curator_selection
+        with self.assertRaises(ValueError):
+            apply_curator_selection({}, provider="claude", model="grok-4.5")
+
     def test_effort_roundtrip(self):
         cfg = resolve_curator({"curator": {"provider": "claude", "effort": "xhigh"}})
         self.assertEqual(cfg.effort, "xhigh")
