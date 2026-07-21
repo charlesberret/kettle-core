@@ -36,3 +36,9 @@ settings.json
 # ── Local-only working files (kept on disk, never published) ──
 # e.g. the internal/fleet-specific design docs (DESIGN.md, LINEAGE.md) live here.
 .local/
+
+# ── Claude Code local state ──
+# settings.local.json is per-machine personal config; worktrees/ is ephemeral scratch
+# created when agents run in isolation. Nothing here is shared project config today —
+# if that changes (e.g. a committed .claude/settings.json), add a negation below.
+.claude/
