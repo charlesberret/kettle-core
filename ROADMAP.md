@@ -52,25 +52,35 @@ and viewports wherever the person already works (browser, editor, desktop, notes
    of the division of labor this product exists to enforce. Ladder and first increment:
    [brief 19](docs/briefs/19-enforce-the-fence.md).
 
-## Where it stands (2026-07-17, honest)
+## Where it stands (2026-07-22, honest)
 
-**Strong:** a stdlib-only core with ~225 tests including a real stub-curator harness for
-the streaming endpoints; a solid file fence (symlink, dotdot, null-byte cases covered); a
-circuit breaker that never kills a healthy live window; genuinely provider-neutral stream
-normalization across four CLI dialects; a clean kit system; working lineage attribution;
-three live viewports (web, Electron desktop, VS Code) plus a serverless CLI.
+**Strong:** stdlib-only core with ~280 tests; file fence and circuit breaker solid;
+provider-neutral stream normalization; kit system; lineage; egress; install determinism
+(`~/.setsweep-venv`, `setsweep doctor` seed); de-personalized defaults; public docs
+(`ARCHITECTURE.md`, README glossary/quickstart, `docs/UI.md` type hierarchy); three
+viewports (web, Electron desktop, VS Code/Cursor plugin) plus CLI. Plugin auto-starts
+the live core on `:4242` (v0.6.4). Desktop loads the same `static/index.html` as the
+web — no forked sitting UI.
 
-**Fragile:** nearly all recent work is uncommitted — the egress layer is untracked, core
-carries ~4,000 uncommitted inserted lines (roughly 1,700 of them on run-critical files),
-and the VS Code plugin
-exists as *two divergent implementations* (an 8,223-line committed branch with tests and
-sidecar vs. a 3,293-line leaner rewrite sitting untracked on main). The HTTP surface has
-no auth/Origin/Host checks. Charles's personal fleet is baked into shipped prompts, egress
-routes, and admin panels. Truth is duplicated in ~8 places (tool tiers twice and diverged,
-prompts split across `server.py` and `kits/`, two folder-watchers, two model catalogs).
-Install is editable-only; a wheel would ship a broken app. The frontend can fail to a
-blank window with its own error handler unregistered. Docs describe a smaller, older
-project than the one that exists.
+**Landed since the 2026-07-17 snapshot (briefs):** 01, 03, 04, 06, 07, 08, 09, 10, 14,
+17, 20, 21 (and UI type-system follow-on). Working tree on `codex/shore-up-system` is
+committed in batches; plugin `main` carries auto-start + Desk sitting.
+
+**Fragile / next pressure:**
+
+| Gap | Why it hurts | Track |
+|-----|--------------|--------|
+| **Founding UX split** | Plugin Desk has an in-panel interview; web/desktop still use multi-field add/setup modals. Desktop *looks* behind because it is the web sitting. | **Brief 22** + PLATFORMS parity matrix |
+| **No living parity bar** | Improvements land on whichever viewport is open; siblings drift (type scale, founding, first-run). | PLATFORMS.md ritual matrix; UI.md for chrome |
+| **HTTP unauthenticated** | Localhost-only is the only barrier (brief 05 still open). | Phase 2 |
+| **Packaging** | Editable install works; wheel/pipx (11), signed DMG (15), marketplace VSIX polish still open. | Phase 3 |
+| **Watchers / fence / metrics** | Duplicate watchers (12), containment ambition (19), full doctor (18). | Phases 1 / 5 / 6 |
+
+**Open briefs (grep is source of truth):**  
+`02 05 11 12 13 15 16 18 19 22` — plus any new ones. Done: `01 03 04 06 07 08 09 10 14 17 20 21`.
+
+**Near-term order for public GitHub (web + CLI first):**  
+22 (founding parity into web → desktop free) → 05 (API harden) when supervised → 11/15 packaging when ready.
 
 ## The arc
 
@@ -159,9 +169,16 @@ the marketplace; a viewport detects version skew and says so.
   tiers) — brief 17.
 - ✅ Glossary, clone-based quickstart, CLI reference, sync-layer guidance for
   `.setsweep/runtime/` — brief 17 (screenshots optional polish later).
+- ✅ Sitting type hierarchy (`docs/UI.md`, `--text-*` tokens) — process guard against
+  chrome/body color drift.
+- **Open:** **viewport founding / first-run parity** — web is canonical; plugin Desk is
+  the quality bar for in-panel interview; desktop inherits web (brief **22**). Without
+  this, public installs and the `.app` keep the multi-box add-project popup while Cursor
+  feels like a different product.
 
 **Exit test:** someone who has never seen the project installs it, founds a desk on a
-real folder, and completes a sitting without asking a question the docs don't answer.
+real folder (same ritual in web or desktop), and completes a sitting without asking a
+question the docs don't answer.
 
 ### Phase 5 — Prove it works
 

@@ -1,138 +1,134 @@
 # Setsweep — Platforms & Viewports
 
-*Companion to [`ROADMAP.md`](../ROADMAP.md) Phases 3 and 6. The roadmap says what order the
-platform work happens in; this file says what the platforms are, what each covers today, and
-which adapters come next and why. Current-state claims below trace to the 2026-07-17 subsystem
-surveys or to the files cited.*
+*Companion to [`ROADMAP.md`](../ROADMAP.md). Current-state claims below: **2026-07-22**.
+Refresh this file when a viewport ships a ritual change (founding, add-project, sitting
+chrome). Stale matrices are how desktop “falls behind” without anyone forking it.*
 
 ## What a viewport is
 
-A viewport is a thin client on the localhost core. It renders the desk; it holds no desk state
-of its own (the desk is files in `.setsweep/`; the wire contract is [`API.md`](../API.md)).
-Viewports differ only in how much of the contract they speak. Three capability levels, built
-from API.md's route tiers:
+A viewport is a thin client on the localhost core. It renders the desk; it holds no desk
+state of its own (the desk is files in `.setsweep/`; the wire contract is
+[`API.md`](../API.md)). Viewports differ only in how much of the contract they speak and
+how they host chrome.
 
 | Level | What the patron can do | API surface |
 |---|---|---|
-| **A — attach + read** | Find the live core, see the queue and briefs | Discovery (`~/.cache/setsweep/server.json` → `:4242`, ping-validated), `GET /api/ping`, `/api/projects`, `/api/queue?mutate=0`, `/api/file` — API.md Tiers 0–1 reads |
-| **B — full sitting** | Rule: approve, comment, read diffs, sweep, chat | `POST /api/approve`, `/api/comment`, `GET /api/diff` + `/api/diffstat`, the `/api/sweep` and `/api/chat`/`/api/compact` NDJSON streams, `/api/save` — API.md Tiers 1–2 |
-| **C — founding** | Bring a new folder under care | `GET/POST /api/interview`, the confirm card, `POST /api/propose`, proposal approve, `POST /api/found` — API.md Tier 3 |
+| **A — attach + read** | Find the live core, see the queue and briefs | Discovery (`server.json` → `:4242`), `GET /api/ping`, `/api/projects`, `/api/queue`, `/api/file` |
+| **B — full sitting** | Approve, comment, diffs, sweep, chat | Tiers 1–2 writes + NDJSON streams |
+| **C — founding** | Bring a new folder under care | Interview → propose → approve proposal → found (Tier 3) |
 
-Tier A is the floor for calling something a viewport. Tier B is a real sitting. Tier C is the
-hardest to build — the founding interview streams GFM that the client must upgrade into an
-interactive confirm card, and the state machine (`none → interviewing → proposing → founded`)
-must be derived from `/api/interview`, not guessed. API.md Tier 4 (kits, lineage, admin) and
-Tier 5 (host-specific) are desk administration, not part of the viewport contract; a viewport
-that never touches them is complete.
+Tier A is the floor. Tier B is a real sitting. Tier C is the product’s front door — and
+the place viewports have diverged.
 
-## The current matrix
+## Canonical UI rule (non-negotiable)
 
-| Viewport | A | B | C | Honest gaps (survey findings) |
+| Surface | Source of truth |
+|---------|-----------------|
+| **Sitting chrome** (queue, editor, agent pane, modals, type scale) | `setsweep-core/static/index.html` + [`docs/UI.md`](./UI.md) |
+| **Desktop `.app`** | **No separate frontend** — BrowserWindow loads the sidecar’s web app |
+| **Plugin Desk** | Host-adapted UI (`deskPanel.ts`) — may layout for the editor, but **rituals must match** the web state machine and copy bar |
+| **CLI** | Serverless desk access; no full graphical founding |
+
+**Implication:** if desktop “looks behind” the plugin on founding, fix **web** (and the
+plugin only if it still diverges). Do not invent an Electron-only wizard.
+
+## Capability matrix (A/B/C)
+
+| Viewport | A | B | C | Notes (2026-07-22) |
 |---|---|---|---|---|
-| Web app (`static/index.html`) | yes | yes | yes | The reference implementation — also the only one with kits UI, lineage, admin, themes. One 4,254-line file; survivability work is Phase 2 (briefs 08–09), not platform work. |
-| Electron desktop | yes | yes | yes | Attach-and-render: it loads the web frontend from the bundled sidecar, so it inherits every capability and every gap. Its own problems are distribution, not coverage — see below. |
-| VS Code extension | yes | yes | yes | No kits UI, no lineage, no model picker (`/api/curator/catalog` unimplemented in its client); chatlog is not rehydrated on reload, so founding resume loses the transcript; no sidecar auto-start on main — attach-only. And it exists as two divergent trees (8,223-line committed branch vs 3,293-line untracked rewrite) awaiting brief 02. |
-| CLI (`setsweep …`) | yes | partial | yes | Serverless — imports the desk code directly, never binds a port. 14 subcommands cover found/queue/chat/sweep-close/lineage/egress, but its agent turns hardcode the Claude dialect (brief 03 ports it onto `runtime.TOOL_TIERS`), and there is no approve/comment subcommand — ruling still happens in a graphical viewport. |
+| **Web** (`static/index.html`) | yes | yes | yes | Reference sitting: kits, lineage, admin, themes, UI.md type roles. |
+| **Desktop** (Electron) | yes | yes | yes | Same UI as web via sidecar. Gaps = **web gaps** + distribution (brief 15). |
+| **VS Code / Cursor** (plugin ≥0.6.4) | yes | yes | yes | Auto-starts core on `:4242`. Full Desk sitting; founding **in-panel** (quality bar for C). No full kits/lineage/admin parity with web. |
+| **CLI** | yes | partial | yes | `found` / `queue` / `chat` / sweep helpers; no graphical approve/comment. |
 
-The pattern to notice: every viewport that exists reached Tier C, because founding is where a
-desk begins. The gaps cluster in Tier B polish (streams rehydrated, models pickable) and in
-Tier 4 conveniences nobody has needed outside the web app yet.
+## Ritual parity matrix (the real product)
 
-## The shared client
+Same ritual, every graphical viewport. Cells: **same** (matches canonical web) ·
+**better** (ahead of web — must fold back) · **gap** · **host-only** (OK) · **n/a**.
 
-The VS Code extension already contains the seed of every future TypeScript adapter. Five files
-— `api.ts` (393 lines), `discover.ts` (80), `confirmCard.ts` (173), `state.ts` (113),
-`paths.ts` (35) — are host-agnostic today: ~800 lines with zero `vscode` imports, verified by
-grep in the plugin survey. Brief 16 extracts them into `packages/core-client` in the plugin
-monorepo.
+| Ritual | Web | Desktop | Plugin | CLI |
+|--------|-----|---------|--------|-----|
+| Discover / start core | same | same (sidecar) | **better** (auto-start default) | n/a |
+| First-run curator setup | same (setup modal) | same | host settings + core settings deep-link | ambient CLI auth |
+| Add / register project | same (multi-field modal) | same | host folder + API | `setsweep add` |
+| Founding interview | same (right pane + founding head) | same | **better** (fixed Desk founding pane, confirm card) | `setsweep found` / chat |
+| Confirm card → proposal | same | same | same (shared confirm-card logic) | n/a |
+| Proposal approve → found | same | same | same | n/a |
+| Sitting (approve / comment / sweep) | same | same | same (Desk ritual buttons) | partial |
+| Type hierarchy (gray chrome) | same (UI.md) | same | **gap** (Desk CSS separate) | n/a |
+| Brief on file select | left brief tab; no auto chat dump | same | Desk brief region | n/a |
 
-What belongs in core-client: the typed API client, the NDJSON line parser and stream reducer
-(partial-line buffering, the six event types, EOF-is-terminal), the confirm-card parser and
-tick serializer, server discovery, and the ephemeral sitting-state store. What never belongs
-there: rendering, webviews, commands, keybindings, or anything that knows what a panel is. The
-extraction also forces the reconciliation of the two `api.ts` variants the divergent plugin
-trees currently carry — brief 02 and brief 16 are the same cleanup seen from two ends.
+**Priority debt:** rows where plugin is **better** and web/desktop are **gap** on
+*perceived* polish (add-project modal density, founding presentation) — close via
+**brief 22**, not by special-casing desktop.
 
-For hosts that can't consume TypeScript, there is no shared client — **`API.md` is the
-platform**. That is why the contract work (brief 13: queue-entry schema, Tier-4 shapes, the
-streaming protocol spelled out, changelog discipline) is platform work, not documentation
-housekeeping. Every non-TS adapter below is built from that document alone.
+## Founding / first-run parity (track owner: brief 22)
 
-## Adapter candidates, ranked
+### Canonical state machine (all viewports)
 
-| Rank | Host | Language / consumes | Audience | Effort | Call |
-|---|---|---|---|---|---|
-| 1 | Obsidian | TypeScript, Electron / `core-client` | Writing + knowledge kits | Moderate | **Build first** |
-| 2 | MCP viewport | Python, in core / `API.md` internally | Any MCP host | Small | **Build second** |
-| 3 | JetBrains | Kotlin / `API.md` | Large code audience | Heavy | After demand evidence |
-| 4 | Sublime | Python / `API.md` | Modest | Moderate | Only on request |
-| 5 | Neovim / Emacs | Lua, Elisp / `API.md` | Enthusiast | — | Document, don't build |
+```text
+none → interviewing → proposing → founded
+```
 
-**Obsidian** is the clear first adapter. It is TypeScript on Electron, so it consumes
-core-client directly — the client work is already done the day brief 16 lands, leaving only the
-plugin shell and panel rendering. More importantly it reaches the audience the kit system was
-half built for: the writing and knowledge kits assume a patron who lives in a notes vault, and
-today that patron's only viewport is a browser tab. Effort is moderate; payoff is a second
-proof that the desk is host-neutral, in front of the right users.
+Derived from `GET /api/interview` (and project desk files), never guessed.
 
-**The MCP viewport** is the cheapest surface-area multiplier available. Expose the desk as an
-MCP server — tools for queue, entry, approve, comment, plus sweep behind a confirmation — and
-every MCP-capable host (Claude Desktop, other agent clients) becomes a Tier A/B viewport
-without us writing a line of host code. It is a thin translation layer over routes that
-already exist. What it will not carry well is Tier C: the founding interview's confirm-card
-choreography doesn't map onto tool calls, and shouldn't be forced to. Found in a full viewport;
-sit anywhere.
+### Target product experience (web = canonical)
 
-**JetBrains** has the largest paying code audience of anything on this list, and no path to the
-TypeScript client — a Kotlin plugin consumes `API.md` and nothing else, which makes it the
-truest test of brief 13's contract. It is also the heaviest build (its own UI toolkit, its own
-review conventions) and should wait for evidence that VS Code + Cursor users are asking for it.
+1. **Setup** once: pick curator provider (no API keys in Setsweep).  
+2. **Add project**: name + folder (+ kit) with the lightest chrome that still works —
+   not a dense debugging form. Plugin’s in-context start is the quality bar.  
+3. **Interview** in the agent surface (right pane / Desk stream), not a second popup.  
+4. **Finish** → editable proposal in the editor → **approve** → found + first queue.  
+5. **Sitting** continues in the same window.
 
-**Sublime** is a Python host, so an adapter is honest, modest work against the HTTP contract —
-but the audience is small and shrinking. Build it if a real user asks; don't build it on spec.
+Desktop inherits steps 1–5 by shipping the web app. Plugin may keep VS Code layout
+(Explorer queue + secondary Desk) but must not invent a second state machine.
 
-**Neovim and Emacs** users build their own integrations better than we would, and resent being
-handed one. The right investment is a complete, truthful `API.md` with the streaming protocol
-and queue-entry schema documented (brief 13), plus a short "writing an adapter" note — then
-let the community shape what fits their editors.
+### Anti-patterns
 
-## The desktop app's road
+- Electron-only add-project dialogs that bypass web registration UX.  
+- Plugin founding that never lands improvements back into `static/index.html`.  
+- “Fix desktop founding” as a desktop brief when the code path is core static.
 
-Today's honest state, from the desktop survey: the app works and its Electron security posture
-is genuinely careful, but it is not distributable. No signing or notarization (`osxSign:
-false`; the built bundle carries an adhoc signature with `Identifier=Electron`), zip-only maker
-with the DMG maker installed but unwired, no auto-update, no CI, no release tags. The bundle is
-317 MB with the 20 MB PyInstaller sidecar shipped twice, darwin-arm64 only — and the currently
-installed app was built from a dirty core tree (`setsweepDirty: true` in its own version.json).
+## Shared TypeScript client (plugin monorepo)
 
-The road out is ordered and mostly known (brief 15 carries it):
+Host-agnostic seed in the VS Code package: `api.ts`, `discover.ts`, `confirmCard.ts`,
+`state.ts`, `paths.ts`. Brief **16** extracts `packages/core-client`. Brief **02**
+(reconcile plugin trees) is largely superseded by the 0.6.x single VSIX line — confirm
+and close or retarget when working the monorepo.
 
-1. **Signing + notarization** — Developer ID in the forge config; the one step with an
-   external prerequisite (an Apple Developer account) and the hardest wall between the repo
-   and a downloadable app.
-2. **DMG** — wire the maker that is already a devDependency.
-3. **CI on tags** — build, sign, and release from GitHub Actions, and refuse to stamp a build
-   when the core tree is dirty. A bug report must correspond to a commit.
-4. **Auto-update** against GitHub Releases — the stamped version.json already gives an honest
-   local version to compare.
-5. **Bundle slim** — stop shipping the sidecar twice, exclude dev files, enable asar.
-6. **Universal binary** — arm64+x64 doubles the addressable macOS audience at modest cost.
-7. **Windows/Linux horizon** — the PyInstaller sidecar makes both plausible (nothing in core
-   is macOS-bound except `/api/open-link`), but neither is promised until macOS is clean.
+For non-TS hosts, **`API.md` is the platform** (brief 13).
 
-Two sidecar-lifecycle fixes ride along: a sidecar crash today shows a dialog and quits the app,
-costing the patron their window — replace with restart-with-backoff and reattach. And the
-app's hardest external dependency, the curator CLI, gets no onboarding at all — a first-launch
-detection with a friendly explanation is the cheapest fix for the worst first impression.
+## Adapter candidates (post-parity)
+
+| Rank | Host | Call |
+|---|---|---|
+| 1 | Obsidian | After founding parity + core-client (16) |
+| 2 | MCP viewport | Queue/approve/comment tools; founding stays in full viewport |
+| 3 | JetBrains | After demand + contract v1 (13) |
+| 4–5 | Sublime / nvim / Emacs | On request or community |
+
+## Desktop distribution road (brief 15)
+
+Still distribution, not a second product UI:
+
+1. Signing + notarization (Apple Developer ID)  
+2. DMG + CI that refuses dirty core trees  
+3. Auto-update from GitHub Releases  
+4. Bundle slim; universal binary; then Windows/Linux horizon  
+5. Sidecar crash → restart-with-backoff; curator-CLI onboarding copy  
+
+UX polish for founding rides **brief 22 → core static → rebuild sidecar**.
 
 ## Remote access
 
-No viewport leaves localhost until two preconditions hold, in order: the Phase 2 per-boot auth
-token (brief 05) ships, and access arrives as **tunnel guidance** — SSH port-forward or
-Tailscale-style overlay to `127.0.0.1:4242` on the desk machine — documented for patrons who
-want it. There will never be a listen-on-0.0.0.0 flag.
+No listen-on-0.0.0.0. After brief **05** (auth token), remote = **tunnel guidance** only
+(SSH / Tailscale to `127.0.0.1:4242`).
 
-The reason is the write surface: `/api/save` writes files under every registered project root,
-and `/api/sweep` spawns an agent with write-tier tools — so any host that can reach the port
-can edit the patron's files. Localhost-only is DESIGN §5's first invariant, and remote access
-must be something a patron builds a tunnel for on purpose, never something the server offers.
+## Maintenance rule
+
+When you change a ritual in any viewport:
+
+1. Update the **ritual parity matrix** above.  
+2. If web and plugin diverge, open or extend a brief — do not leave “better” stranded.  
+3. Re-date the subtitle of this file.

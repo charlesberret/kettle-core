@@ -61,6 +61,11 @@ own `status`).
 | 19 | [Enforce the agent fence](19-enforce-the-fence.md) | core | 6 | 03, 06 |
 | 20 | [One setsweep — install determinism](20-install-determinism.md) | core | 3 | — |
 | 21 | [First-run design pass (web)](21-first-run-design.md) | core | 4 | 08 |
+| 22 | [Viewport founding parity](22-viewport-founding-parity.md) | core | 4 | 08, 21 |
 
 Status board: a brief's `status` frontmatter is the truth; this table stays status-free
 so it never lies. `grep -l "status: open" docs/briefs/*.md` is the live to-do list.
+
+**Parity rule:** founding and sitting chrome changes update
+[`docs/PLATFORMS.md`](../PLATFORMS.md) ritual matrix the same day. Type/color chrome:
+[`docs/UI.md`](../UI.md).
