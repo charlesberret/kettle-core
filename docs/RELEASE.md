@@ -50,6 +50,7 @@ not vibes.
 | Confirm-card parse fallbacks | Streamed cards that fell back to sanitized text because regex parsing failed (the plugin already has this fallback path) | fallback event |
 | Error banners shown | Frontend error-banner displays per sitting | banner event via the error bootstrap |
 | Doctor runs that find problems | `setsweep doctor` invocations reporting at least one failed check | doctor event |
+| Keyboard-only sitting | Select entry, read, comment, approve, sweep without a pointer (brief 09) | manual standing check each release |
 
 ## The beacon design
 

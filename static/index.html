@@ -146,9 +146,17 @@
   .qitem { padding:8px 14px; border-bottom:1px solid var(--line); cursor:pointer; }
   .qitem:hover { background:var(--panel); }
   .qitem.active { background:var(--activebg); padding-left:14px; }
+  .qitem:focus { outline:none; }
+  .qitem:focus-visible { box-shadow: inset 0 0 0 2px var(--acc); }
   .qitem .t { display:flex; gap:8px; align-items:baseline; }
-  .dot { width:8px; height:8px; border-radius:2px; flex:none; align-self:center; }
+  /* urgency: color + letter so it is not color-only (brief 09 a11y) */
+  .dot { min-width:14px; height:14px; border-radius:3px; flex:none; align-self:center;
+         display:inline-flex; align-items:center; justify-content:center;
+         font-size:9px; font-weight:700; line-height:1; letter-spacing:0;
+         color:var(--c-black, #16171a); background:var(--dim); }
   .dot.high { background:var(--urghigh); } .dot.medium { background:var(--urgmed); } .dot.low { background:var(--urglow); }
+  .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden;
+             clip:rect(0,0,0,0); white-space:nowrap; border:0; }
   .qname { flex:1 1 auto; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .qtag { flex:none; font-size:9.5px; color:var(--muted); border:1px solid var(--muted);
           border-radius:4px; padding:0 5px; letter-spacing:.06em; }
@@ -683,6 +691,7 @@
   </select>
   <span id="ctxbar" title="context used — click to clear this session"><span id="ctxfill"></span><span class="ctxlabel">context</span></span></h1>
   <div id="chat"></div>
+  <div id="chat-live" class="sr-only" aria-live="polite" aria-atomic="true"></div>
   <div id="spin"><span id="spinlabel">working…</span><span class="spin-elapsed" id="spinelapsed"></span></div>
   <div id="chatbar">
     <textarea id="chatin" placeholder=""></textarea>
@@ -748,10 +757,10 @@
   </div>
 </div>
 
-<div id="admin">
+<div id="admin" role="dialog" aria-modal="true" aria-labelledby="admin-title">
   <div id="adminstick">
     <div id="adminhead">
-      <h1>settings</h1>
+      <h1 id="admin-title">settings</h1>
       <span class="spacer"></span>
       <button id="adminreload" class="btn btn-sm btn-ghost" title="reload the app">⟳ reload</button>
       <button id="adminclose" class="btn btn-sm btn-icon btn-ghost" title="Esc">✕</button>
@@ -1006,6 +1015,7 @@
 </script>
 <script src="/themes.js"></script>
 <script src="/marked.min.js"></script>
+<script src="/purify.min.js"></script>
 <script>
 /* running in-memory JS error log — the diagnostics tab renders the last
    ~30, most recent first; the banner stays as the loud, immediate signal */
@@ -1205,11 +1215,19 @@ function renderQueue(){
   const queueHandled = e => (e.status === 'approved' || e.status === 'rework') ? 1 : 0;
   const list = [...Q.entries].sort((a,b) =>
     queueHandled(a) - queueHandled(b) || (order[a.urgency]??9)-(order[b.urgency]??9));
-  $('qlist').innerHTML = '';
+  const qlist = $('qlist');
+  qlist.innerHTML = '';
+  qlist.setAttribute('role', 'listbox');
+  qlist.setAttribute('aria-label', 'review queue');
+  const urgLetter = {high:'H', medium:'M', low:'L'};
   for(const e of list){
     const d = document.createElement('div');
     d.className = 'qitem' + (cur && e.id===cur.id ? ' active':'') + (e.status==='approved' ? ' approved':'')
                 + (e.status==='rework' ? ' rework':'');
+    d.tabIndex = 0;
+    d.setAttribute('role', 'option');
+    d.setAttribute('aria-selected', cur && e.id===cur.id ? 'true' : 'false');
+    d.dataset.id = e.id;
     // line 1 is the FILE you'll open (the key identifier); line 2 is why it's queued.
     // Legacy/non-standard entries may carry no path — fall back to the title so the
     // render never throws (a single bad entry must not blank the whole queue).
@@ -1219,11 +1237,24 @@ function renderQueue(){
     const tsum = hasPath
       ? (dash > 0 ? e.title.slice(dash + 3) : (e.title || e.ask || ''))
       : (e.note || e.ask || '');
-    d.innerHTML = `<div class="t"><span class="dot ${esc(e.urgency || '')}"></span>
+    const urg = e.urgency || '';
+    const letter = urgLetter[urg] || '·';
+    const urgLabel = urg ? (urg + ' urgency') : 'urgency unset';
+    d.innerHTML = `<div class="t"><span class="dot ${esc(urg)}" title="${esc(urgLabel)}" aria-label="${esc(urgLabel)}">${letter}</span>
         <span class="qname" title="${esc(e.path || e.title || '')}">${esc(fname)}</span>${e.comment ? `<span class="notedot" title="${esc(e.comment)}"></span>` : ''}${diffBadge(e.diff)}</div>
         <div class="qsum" title="${esc(e.title || '')}">${e.ask_type ? `<span class="qtag">${esc(e.ask_type)}</span> ` : ''}${esc(tsum)}${e.desk_item ? ' · desk #' + esc(e.desk_item) : ''}</div>`;
     d.onclick = () => select(e.id);
-    $('qlist').appendChild(d);
+    d.onkeydown = (ev) => {
+      if(ev.key === 'Enter' || ev.key === ' '){ ev.preventDefault(); select(e.id); return; }
+      if(ev.key === 'ArrowDown' || ev.key === 'ArrowUp'){
+        ev.preventDefault();
+        const items = [...qlist.querySelectorAll('.qitem')];
+        const i = items.indexOf(d);
+        const next = items[i + (ev.key === 'ArrowDown' ? 1 : -1)];
+        if(next) next.focus();
+      }
+    };
+    qlist.appendChild(d);
   }
   syncChrome();
 }
@@ -1486,14 +1517,48 @@ function setMode(m){
   }
 }
 
+/* Allowlist sanitizer for rendered markdown (brief 09). DOMPurify is vendored at
+   /purify.min.js — no CDN. Task-list checkboxes stay allowed so reading view can
+   toggle them; scripts, forms, SVG event surfaces, and javascript:/data: URIs go. */
+const MD_PURIFY = {
+  ALLOWED_TAGS: [
+    'a','abbr','b','blockquote','br','code','del','em','h1','h2','h3','h4','h5','h6',
+    'hr','i','img','li','ol','p','pre','s','strong','sub','sup','table','tbody','td',
+    'th','thead','tr','ul','span','div','input','section','details','summary',
+  ],
+  ALLOWED_ATTR: [
+    'href','title','alt','src','class','id','type','checked','disabled','colspan',
+    'rowspan','start','align','aria-label','aria-hidden','role','open',
+  ],
+  ALLOW_DATA_ATTR: false,
+  // http(s), mailto, relative paths, anchors — not javascript: or data:
+  ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i,
+};
+
 function sanitizeRender(el){
-  el.querySelectorAll('script,iframe,object,embed,link,style').forEach(n => n.remove());
+  if(!el) return;
+  if(typeof DOMPurify !== 'undefined' && DOMPurify.sanitize){
+    el.innerHTML = DOMPurify.sanitize(el.innerHTML, MD_PURIFY);
+    return;
+  }
+  // Fallback if purify failed to load — still strip the worst blocklist holes.
+  el.querySelectorAll('script,iframe,object,embed,link,style,form,svg').forEach(n => n.remove());
   el.querySelectorAll('*').forEach(n => {
     [...n.attributes].forEach(a => {
-      if(/^on/i.test(a.name)) n.removeAttribute(a.name);
-      if(a.name === 'href' && /^javascript:/i.test(n.getAttribute('href') || '')) n.removeAttribute('href');
+      if(/^on/i.test(a.name) || a.name === 'formaction' || a.name === 'srcdoc') n.removeAttribute(a.name);
+      if((a.name === 'href' || a.name === 'src' || a.name === 'xlink:href') &&
+         /^(javascript|data):/i.test(n.getAttribute(a.name) || '')) n.removeAttribute(a.name);
     });
   });
+}
+
+/** Screen-reader announce for completed chat turns (not per token). */
+function announceChat(summary){
+  const el = $('chat-live');
+  if(!el || !summary) return;
+  el.textContent = '';
+  // Force a re-announce even when the text is identical to the previous turn.
+  requestAnimationFrame(() => { el.textContent = String(summary).slice(0, 280); });
 }
 
 /* source offsets of the state-char of each task checkbox, skipping fenced code
@@ -1818,6 +1883,9 @@ function addMsg(cls, text){
   }
   $('chat').appendChild(d);
   chatScrollToBottom();
+  if(cls === 'agent' || cls === 'user' || cls === 'err'){
+    announceChat((cls === 'agent' ? 'Agent: ' : cls === 'user' ? 'You: ' : 'Error: ') + text);
+  }
   return d;
 }
 
@@ -2195,6 +2263,8 @@ async function pipeStream(r, out, opts){
       if(interviewScrollLock) unlockInterviewScroll();
       else chatScrollToBottom();
     }
+    // Announce once per completed turn, not per token (brief 09).
+    announceChat('Agent: ' + agentAcc);
   }
   return { wrote, text: agentAcc };
 }
@@ -3256,6 +3326,7 @@ function trapTab(container, e){
 $('addbg').addEventListener('keydown', e => trapTab($('addmodal'), e));
 $('setupbg').addEventListener('keydown', e => trapTab($('setupmodal'), e));
 $('sweepbg').addEventListener('keydown', e => trapTab($('sweepconfirm'), e));
+$('admin').addEventListener('keydown', e => trapTab($('admin'), e));
 $('chatin').addEventListener('input', autoGrow);
 $('chatin').addEventListener('keydown', e => {
   if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); send(); }
@@ -3267,6 +3338,7 @@ document.addEventListener('keydown', e => {
     // setupbg is deliberately not dismissible — it is the hard curator gate.
     if($('addbg').classList.contains('open')) closeAddProj();
     else if($('sweepbg').style.display === 'flex'){ $('sweepbg').style.display = 'none'; $('sweepthrust').value = ''; }
+    else if($('admin').classList.contains('open')) closeAdmin();
     else if($('findbar').classList.contains('open')) closeFind();
   }
 });
@@ -4209,8 +4281,13 @@ function openAdmin(){
   loadAdminDebug();
   renderLineage();
   loadKits();   // curators tab — fetch kits, fill the editor + project kit dropdowns
+  // Focus the first tab control so keyboard users enter the dialog (brief 09).
+  const firstTab = $('admin').querySelector('.atab, button, input, select');
+  if(firstTab) try { firstTab.focus(); } catch(_){}
 }
-function closeAdmin(){ $('admin').classList.remove('open'); }
+function closeAdmin(){
+  $('admin').classList.remove('open');
+}
 
 /* drag by the header, resize by the corner (CSS), remember where it sits */
 function saveAdminBox(){

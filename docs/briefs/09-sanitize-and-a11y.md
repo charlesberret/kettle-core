@@ -5,7 +5,7 @@ repo: setsweep-core
 touches: [static/index.html, static/ (vendored DOMPurify)]
 risk: run-critical
 depends-on: [08]
-status: open
+status: done
 ---
 
 ## Context

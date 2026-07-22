@@ -245,5 +245,7 @@ of cron polling, an app icon) are tracked in the issues. Contributions welcome u
 
 MIT — see [`LICENSE`](./LICENSE). Use it freely; the only ask is that the copyright and license
 notice travel with copies (that's the attribution). Bundles
-[marked](https://github.com/markedjs/marked) (MIT) and [IBM Plex](https://github.com/IBM/plex)
-(OFL); see [`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md).
+[marked](https://github.com/markedjs/marked) (MIT),
+[DOMPurify](https://github.com/cure53/DOMPurify) (Apache-2.0 / MPL-2.0), and
+[IBM Plex](https://github.com/IBM/plex) (OFL); see
+[`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md).
