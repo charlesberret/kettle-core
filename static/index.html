@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <!-- Bump this when sitting UI changes; title shows it so we can confirm the shell loaded. -->
-<meta name="setsweep-ui" content="2026-07-22d">
-<title>setsweep · ui-2026-07-22d</title>
+<meta name="setsweep-ui" content="2026-07-22e">
+<title>setsweep · ui-2026-07-22e</title>
 <style>
   /*
    * Type & chrome roles — single source of sitting hierarchy.
@@ -161,6 +161,10 @@
   .btn-ghost:hover { color: var(--fg); border-color: var(--acc); }
   .btn-icon { width: var(--btn-h-sm); min-width: var(--btn-h-sm); padding: 0; font-size: 14px;
               text-transform: none; letter-spacing: 0; }
+  /* Icon-only chrome (reload, settings): no box — borderless ghost */
+  .btn-icon.btn-ghost { border-color: transparent; background: transparent; }
+  .btn-icon.btn-ghost:hover { border-color: transparent; color: var(--fg);
+    background: color-mix(in srgb, var(--fg) 6%, transparent); }
   .btn-emphasis { font-weight: 600; color: var(--fg); }
   .btn.arm { color: var(--warn); font-weight: 600; }
   .btn-signature {
@@ -172,18 +176,14 @@
   .btn-signature.arming { color: var(--warn); border-color: var(--warn); animation: sweepfade 5s linear forwards; }
   @keyframes sweepfade { from { opacity:1; } to { opacity:.25; } }
   #reloadbtn { margin-left: 8px; font-size: 15px; line-height: 1; padding: 0; }
-  #reloadbtn.spinning { color: var(--acc); border-color: var(--acc); animation: spin360 .7s linear infinite; }
+  #reloadbtn.spinning { color: var(--acc); animation: spin360 .7s linear infinite; }
   @keyframes spin360 { to { transform: rotate(360deg); } }
 
   /* founding form: kit dropdown + the customization (additional notes) note */
-  .qitem { padding:8px 14px; border-bottom:1px solid var(--line); cursor:pointer;
-           border-left:3px solid transparent; }
+  .qitem { padding:8px 14px; border-bottom:1px solid var(--line); cursor:pointer; }
   .qitem:hover { background:color-mix(in srgb, var(--fg) 4%, transparent); }
-  /* Selection: faint link wash + left bar — not solid --activebg (was crushing text) */
-  .qitem.active {
-    background:var(--row-active-bg);
-    border-left-color:var(--row-active-bar);
-  }
+  /* Selection: same wash as mid chrome bars (--row-active-bg); no left bar */
+  .qitem.active { background:var(--row-active-bg); }
   .qitem:focus { outline:none; }
   .qitem:focus-visible { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--link) 50%, transparent); }
   .qitem .t { display:flex; gap:8px; align-items:baseline; }
@@ -290,8 +290,9 @@
 
   /* middle */
   #mid { display:flex; flex-direction:column; min-width:0; }
+  /* Mid chrome uses the selected-row wash (not solid --panel / palette stock) */
   #midbar { flex:none; display:flex; align-items:center; gap:10px; padding:8px 14px;
-            border-bottom:1px solid var(--line); background:var(--panel); }
+            border-bottom:1px solid var(--line); background:var(--row-active-bg); }
   #fname { flex:1; color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   #fname .fbase { color:var(--text-link); }
   #sittingdiff { flex:none; display:flex; align-items:center; gap:6px; font-size:12px; }
@@ -309,9 +310,9 @@
                    border:1px solid var(--line); border-radius:4px; padding:4px 8px; font:inherit; }
   #findcount { color:var(--dim); font-size:12px; min-width:48px; text-align:center; }
 
-  /* middle bottom bar */
+  /* middle bottom bar — same wash as midbar / selected queue row */
   #midfoot { flex:none; display:flex; align-items:center; gap:10px; padding:8px 14px;
-             border-top:1px solid var(--line); background:var(--panel); }
+             border-top:1px solid var(--line); background:var(--row-active-bg); }
   #commentpanel { display:none; flex:none; flex-direction:column; gap:8px; padding:10px 14px;
                   border-top:1px solid var(--line); background:var(--panel2); min-height:0; }
   #commentpanel.open { display:flex; }
