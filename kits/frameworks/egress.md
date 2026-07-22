@@ -1,7 +1,7 @@
 # Desk egress
 
 `.setsweep/outbound/` is the desk's **staging queue** for signals meant for the broader agent
-ecosystem. Stage here; never route from the curator sandbox into `~/Seafile/System/` or transmit
+ecosystem. Stage here; never route from the curator sandbox into `~/cloud/sync/system/` or transmit
 mail. Fleet pickup drains `Status: staged` files and routes them.
 
 **Not** the inbox kit's `<root>/outbox` — that holds approved mail drafts for an out-of-band sender.

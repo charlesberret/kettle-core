@@ -2,7 +2,7 @@
 project: setsweep
 kind: software
 phase: active
-canonical: ~/Repos/setsweep-core
+canonical: ~/cloud/git-projects/setsweep-core
 deps: pip
 test_cmd: pytest
 test_signal: .pytest_cache/v/cache/lastfailed

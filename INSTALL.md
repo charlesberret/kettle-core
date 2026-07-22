@@ -6,7 +6,7 @@ CLI viewport are pure stdlib.
 ## Quick start — CLI + browser
 
 ```sh
-cd ~/Repos/setsweep-core                     # canonical core repo
+cd ~/cloud/git-projects/setsweep-core                     # canonical core repo
 python3 -m venv ~/.setsweep-venv
 ~/.setsweep-venv/bin/pip install -e .
 ~/.setsweep-venv/bin/setsweep projects        # the CLI viewport
@@ -22,17 +22,17 @@ setsweep                                                       # then just `sets
 
 ## The native window (macOS)
 
-The Electron shell at `~/Repos/setsweep-desktop/` wraps the server in a proper `.app`
+The Electron shell at `~/cloud/git-projects/setsweep-desktop/` wraps the server in a proper `.app`
 (Dock icon, external-link interception, native folder picker). It bundles the Python
 server via PyInstaller so the `.app` does not require a separate Python install.
 
 See the setsweep-desktop README for dev/build commands. The built `.app` is at
-`~/Repos/setsweep-desktop/out/Setsweep-darwin-arm64/Setsweep.app`.
+`~/cloud/git-projects/setsweep-desktop/out/Setsweep-darwin-arm64/Setsweep.app`.
 
 ## Viewports
 
 This repo ships the browser/server and CLI viewports. The macOS `.app` is
-`~/Repos/setsweep-desktop/`; editor plugins live in `~/Repos/setsweep-plugin/`
+`~/cloud/git-projects/setsweep-desktop/`; editor plugins live in `~/cloud/git-projects/setsweep-plugin/`
 (VS Code/Cursor first; Obsidian and Sublime planned).
 
 ```

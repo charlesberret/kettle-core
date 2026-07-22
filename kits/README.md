@@ -72,7 +72,7 @@ each wires differently at spawn:
   {"type":"skill",  "ref":"notes"},                 // a Claude Code skill
   {"type":"mcp",    "ref":"arena-mcp"},              // an MCP server
   {"type":"rag",    "ref":"writing-style-rag"},      // a retrieval endpoint
-  {"type":"corpus", "ref":"~/Seafile/Notes"}         // a reference dir made available to the agent
+  {"type":"corpus", "ref":"~/cloud/sync/notes"}         // a reference dir made available to the agent
 ]
 ```
 

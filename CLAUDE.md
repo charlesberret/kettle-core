@@ -1,6 +1,6 @@
 # Setsweep-core — Agent Orientation
 
-Canonical path: `~/Repos/setsweep-core` (moved from Seafile `Code/_archive/setsweep`).
+Canonical path: `~/cloud/git-projects/setsweep-core` (moved from Seafile `Code/_archive/setsweep`).
 
 ## Architecture
 
@@ -12,8 +12,8 @@ Python backend (`server.py`, `runtime.py`, `lineage.py`, `kits.py`, `cli.py`, `c
 
 | Path | Role |
 |------|------|
-| `~/Repos/setsweep-desktop` | Electron macOS shell — bundles this server as a sidecar |
-| `~/Repos/setsweep-plugin` | Host adapters; `packages/vscode` first (Cursor too); Obsidian/Sublime later |
+| `~/cloud/git-projects/setsweep-desktop` | Electron macOS shell — bundles this server as a sidecar |
+| `~/cloud/git-projects/setsweep-plugin` | Host adapters; `packages/vscode` first (Cursor too); Obsidian/Sublime later |
 
 Changes to the Python layer do not require touching desktop/plugin unless the HTTP API surface changes. Wire contract: [`API.md`](./API.md).
 

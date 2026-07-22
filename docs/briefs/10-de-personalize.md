@@ -14,7 +14,7 @@ Charles's personal fleet is baked into surfaces every user would ship: `egress.p
 `_DEFAULT_ROUTES` (lines ~17–24) name avicenna, the majordomo inbox, and
 `Characters/inbox`; the sweep prompt hardcodes Dramaturge/persona-recast doctrine
 (currently server.py:281–289); `kits/_base.md` (lines ~80–92) instructs **every spawned
-curator** about "Majordomo escalations" and "never write into ~/Seafile/System/";
+curator** about "Majordomo escalations" and "never write into ~/cloud/sync/system/";
 `/api/admin` ships Xanadu persona scanning (server.py:1486–1502) and reads
 `~/.cache/claude` sentinel files (1408–1456). A public user's curator would receive
 instructions about a private infrastructure it cannot see — confusing at best,

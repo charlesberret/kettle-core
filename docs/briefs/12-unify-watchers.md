@@ -2,7 +2,7 @@
 id: 12
 title: Unify the folder-watchers
 repo: setsweep-core
-touches: [setsweep_watch.py, test_watch.py, crontab (fleet), ~/Seafile/Code/bin/setsweep-watch (retire)]
+touches: [setsweep_watch.py, test_watch.py, crontab (fleet), ~/cloud/sync/code/bin/setsweep-watch (retire)]
 risk: normal
 depends-on: [03]
 status: open
@@ -12,7 +12,7 @@ status: open
 
 Two implementations share one name. The repo ships `setsweep_watch.py` (the packaged
 `setsweep-watch` console script, state under `~/.cache/setsweep/`), but cron actually
-runs `~/Seafile/Code/bin/setsweep-watch` every 15 minutes — an older fork with an extra
+runs `~/cloud/sync/code/bin/setsweep-watch` every 15 minutes — an older fork with an extra
 PICKUP pass and state under `~/.cache/claude/`. Fixes to the repo version never reach
 production and vice versa; their seen-state files differ, so a naive cutover would
 re-curate previously seen intake items and spam drafts. The repo version also resolves

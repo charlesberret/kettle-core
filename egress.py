@@ -1,7 +1,7 @@
 """Desk egress — durable staging of outward signals under `.setsweep/outbound/`.
 
 Distinct from inbox kit mail staging (`<root>/outbox`). The desk writes Status: staged;
-fleet pickup drains and routes. Never transmits; never writes into ~/Seafile/System from here.
+fleet pickup drains and routes. Never transmits; never writes into ~/cloud/sync/system from here.
 """
 from __future__ import annotations
 

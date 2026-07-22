@@ -39,7 +39,7 @@ all; every cross-repo pointer is a Charles-local path; no doc gives a clone URL.
 5. **Fix the drift list** above, item by item; point `kits/README.md`'s dead DESIGN
    reference at ARCHITECTURE.md.
 6. **De-personalize the doc layer** (code layer is brief 10): clone URLs instead of
-   `~/Repos/...` pointers; `_Status.md` reviewed for shipped-repo appropriateness.
+   `~/cloud/git-projects/...` pointers; `_Status.md` reviewed for shipped-repo appropriateness.
 
 ## Constraints
 
@@ -52,7 +52,7 @@ all; every cross-repo pointer is a Charles-local path; no doc gives a clone URL.
 ## Done when
 
 - A fresh clone contains no reference to a gitignored or Charles-local path (grep for
-  `.local/DESIGN`, `~/Repos/`, `~/Seafile/` across tracked docs).
+  `.local/DESIGN`, `~/cloud/git-projects/`, `~/cloud/sync/` across tracked docs).
 - The quickstart has been executed literally, command by command, on a clean checkout
   by the agent running this brief — every command as written, every claimed output
   observed.

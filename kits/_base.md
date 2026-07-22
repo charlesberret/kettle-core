@@ -79,7 +79,7 @@ Approvals never auto-mutate canonical documents; only a sweep, on request, appli
 `.setsweep/outbound/` is the desk's staging queue for signals meant for the broader agent ecosystem
 (handoffs, Majordomo escalations, launch directives, domain memos). Stage with
 `setsweep egress` (or write the same header shape by hand). Leave `Status: staged` — fleet pickup
-drains and routes. Never write into `~/Seafile/System/` from the curator sandbox; never transmit.
+drains and routes. Never write into `~/cloud/sync/system/` from the curator sandbox; never transmit.
 
 This is **not** the inbox kit's `<root>/outbox` (approved mail drafts for an out-of-band sender).
 

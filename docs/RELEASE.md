@@ -138,15 +138,15 @@ the beta entry gate, over everything that ships — code, prompts, kit files, do
 - The sweep prompt hardcodes Dramaturge/persona-recast doctrine — genericize.
 - `/api/admin` scans `Worlds/Xanadu/personas` and reads desk-sentinel state under
   `~/.cache/claude/` — gate the personal panels behind settings.
-- Desktop first-run seeds its registry from `~/Repos/setsweep-core/projects.json` —
+- Desktop first-run seeds its registry from `~/cloud/git-projects/setsweep-core/projects.json` —
   harmless on a stranger's machine, but it goes.
 
 **Docs items (brief 17):**
 
 - `kits/_base.md`'s egress section instructs every spawned curator about the
-  Majordomo and `~/Seafile/System/` — split into a generic core plus a user overlay.
+  Majordomo and `~/cloud/sync/system/` — split into a generic core plus a user overlay.
 - `kits/frameworks/egress.md`'s route table is pure personal-fleet content.
-- `INSTALL.md` opens with `cd ~/Repos/setsweep-core` and no clone URL; sibling-repo
+- `INSTALL.md` opens with `cd ~/cloud/git-projects/setsweep-core` and no clone URL; sibling-repo
   pointers are local paths a stranger cannot resolve.
 - `_Status.md` is a personal dashboard sidecar shipping in a public repo — retire or
   regenerate.
