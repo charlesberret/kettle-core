@@ -210,6 +210,28 @@ Post-beta expansion, ordered by evidence of demand. Full analysis in `docs/PLATF
   bash-utility layer that lets tool-less local models do real curator work.
 - Re-founding as merge, not amnesia (DESIGN §4) — needs a real design.
 
+### Phase 7 — Multi-user server (horizon; after single-patron 1.0)
+
+**Deferred.** Today's product is one patron, one machine, many viewports on one local
+core. Shared live activity across those viewports is intentional (desk-is-files), not a
+multi-user design.
+
+A **Setsweep server edition** — multiple people founding and sitting on desks in a
+shared space, in the spirit of **JupyterHub / multi-user Jupyter** (shared runtime,
+per-user isolation, admin of the hub) — is on the roadmap only as a **post-1.0 horizon**:
+
+- **Not** Phase 2–5 work. Personal localhost product, auth (brief 05), packaging, and
+  alpha/beta gates come first.
+- **Prerequisites (in order):** real auth and identity (beyond a single boot token);
+  a threat model for multi-tenant file fences; explicit session/desk ownership so two
+  humans do not share one curator session by accident; then a hub process that
+  provisions or routes per-user (or per-org) cores — not “open 0.0.0.0 and hope.”
+- **Out of scope until then:** collaborative live cursors, free-for-all shared chat
+  streams, or multi-tenant deployments without isolation.
+
+When demand is real, open a brief series under this phase; do not smuggle multi-user
+into Phase 6 adapter work.
+
 ## Progress scaffolding
 
 How this roadmap stays true instead of rotting:
@@ -241,6 +263,9 @@ How this roadmap stays true instead of rotting:
   only if bundle size or memory becomes a beta complaint.
 - **Remote (non-localhost) viewports wait for Phase 2 auth**, and then arrive as tunnel
   guidance, not as a listening-on-0.0.0.0 flag.
+- **Multi-user / hub server is Phase 7 only** — after single-patron 1.0. One person,
+  many viewports on one local core remains the product through beta; JupyterHub-style
+  shared hosting is deferred, not denied.
 - **No phone-home telemetry, ever.** Measurement is local files the patron owns; sharing
   them is a patron action (see `docs/RELEASE.md`).
 

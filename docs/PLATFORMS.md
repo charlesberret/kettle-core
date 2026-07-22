@@ -125,6 +125,26 @@ UX polish for founding rides **brief 22 → core static → rebuild sidecar**.
 No listen-on-0.0.0.0. After brief **05** (auth token), remote = **tunnel guidance** only
 (SSH / Tailscale to `127.0.0.1:4242`).
 
+## Multi-user server edition (Phase 7 — horizon)
+
+**Not now.** Through 1.0, Setsweep is a **personal** instrument: one patron, one machine
+(or one tunnel they control), many thin viewports. Shared state across web / plugin /
+desktop is the single-desk model, not multi-tenancy.
+
+A later **server edition** (roadmap Phase 7) would look more like **JupyterHub** than
+like “open the port”:
+
+| JupyterHub analogue | Setsweep sketch (when the phase opens) |
+|---------------------|----------------------------------------|
+| Hub + spawners | Hub routes users to isolated cores or desk sandboxes |
+| Per-user home / notebook dir | Per-user (or per-team) desk roots + fence |
+| Auth (OAuth, etc.) | Real identity; not a single shared boot token |
+| Shared “studio” space | Shared org registry of desks; optional concurrent sittings with ownership |
+
+Do not implement multi-user isolation as a side effect of adapter work (Obsidian, MCP).
+When the phase is greenlit, add briefs under Phase 7; until then, concurrent viewports
+for **one** patron remain the only supported multi-client pattern.
+
 ## Maintenance rule
 
 When you change a ritual in any viewport:
