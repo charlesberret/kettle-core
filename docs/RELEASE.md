@@ -95,9 +95,10 @@ a count, or a named artifact, never a feeling.
 **Private alpha** — 3–5 named users, hand-held.
 
 - *Entry:* Phases 0–2 exit tests pass; an install path that works on a stranger's
-  machine (pipx or signed DMG — briefs 11/15); a quickstart doc; the security pass
-  landed (briefs 05/06) and an adversarial session found no localhost-bypass write
-  path.
+  machine (clone + `~/.setsweep-venv` in [`INSTALL.md`](../INSTALL.md) / README
+  quickstart — ✅ brief 17; pipx or signed DMG still briefs 11/15); a quickstart doc
+  (✅ README); the security pass landed (briefs 05/06) and an adversarial session found
+  no localhost-bypass write path.
   - *Read-only tier honesty (brief 06):* the founding interview refuses (HTTP 409
     `read_only_unavailable`) under any provider whose `read_only_tier` capability is
     false, unless `curator.allow_unfenced_readonly` is explicitly set. The single
@@ -139,18 +140,16 @@ the beta entry gate, over everything that ships — code, prompts, kit files, do
 - Sweep prompt ballots are generic fill-entries (no Dramaturge/Characters hardcoding).
 - `/api/admin` fleet panels (sentinel, desk-events, watcher, persona family) gated behind
   `admin.fleet_panels` (default false).
-- Desktop first-run seeds its registry from `~/cloud/git-projects/setsweep-core/projects.json` —
-  harmless on a stranger's machine, but it goes (desktop brief 15).
+- Desktop first-run may seed its registry from a local core checkout — harmless on a
+  stranger's machine, but it should use a published example or empty registry (desktop
+  brief 15).
 
-**Docs items (brief 17):**
+**Docs items (brief 17):** ✅ done 2026-07-22
 
-- `kits/_base.md`'s egress section instructs every spawned curator about the
-  Majordomo and `~/cloud/sync/system/` — split into a generic core plus a user overlay.
-- `kits/frameworks/egress.md`'s route table is pure personal-fleet content.
-- `INSTALL.md` opens with `cd ~/cloud/git-projects/setsweep-core` and no clone URL; sibling-repo
-  pointers are local paths a stranger cannot resolve.
-- `_Status.md` is a personal dashboard sidecar shipping in a public repo — retire or
-  regenerate.
+- Public [`ARCHITECTURE.md`](../ARCHITECTURE.md), README glossary + quickstart + CLI
+  reference, clone-based [`INSTALL.md`](../INSTALL.md).
+- Kit egress docs use neutral routes (brief 10); drift fixes (five kinds, sweep-close).
+- `_Status.md` slimmed to generic maintainer status (no private topology).
 
 **Licensing:** LICENSE files present in all three repos. Core has one (MIT, declared
 in `pyproject.toml`); desktop and plugin currently lack LICENSE files, and the plugin

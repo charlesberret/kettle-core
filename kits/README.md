@@ -4,7 +4,7 @@ A **kit** arms a project's resident curator. `_base.md` is the shared handbook e
 reads; each `<kind>.json` here is a **kind playbook** layered on top, and a project picks one at
 founding (its `kit` field in `projects.json`) — the patron chooses; there is no auto-detection.
 
-The four kinds are cut on one axis — the **review posture** the curator takes:
+The **five** kinds are cut on one axis — the **review posture** the curator takes:
 
 - **writing** — prose you compose/refine (notes, drafts, articles, reports, correspondence)
 - **code** — any software project
@@ -46,7 +46,8 @@ configured on the **project stanza** (not the kit — intake paths are personal 
   `.setsweep/`).
 - **Sweep routes outward** — approve is a bookmark; at sweep the approved drafts are **staged to
   `outbound/`** (a send-queue an external tool picks up). The sweep never transmits — staging
-  only, per the localhost-only invariant. See `DESIGN.md` → "The inbox kit + live intake".
+  only, per the localhost-only invariant. See [`ARCHITECTURE.md`](../ARCHITECTURE.md) (desk model
+  and tool tiers) and the inbox notes below.
 
 ## Kit schema (`<kind>.json`)
 

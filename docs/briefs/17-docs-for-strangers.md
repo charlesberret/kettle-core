@@ -5,7 +5,7 @@ repo: setsweep-core
 touches: [README.md, INSTALL.md, API.md, kits/README.md, CLAUDE.md, ARCHITECTURE.md (new), _Status.md]
 risk: normal
 depends-on: [10, 11]
-status: open
+status: done
 ---
 
 ## Context

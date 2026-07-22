@@ -1,7 +1,9 @@
 # Installing Setsweep
 
 Setsweep needs **Python 3.11+** and a curator CLI (default: **`claude`**, logged in). The
-server and the CLI viewport are pure stdlib.
+server and the CLI viewport are pure stdlib — no pip runtime dependencies.
+
+Source: [github.com/charlesberret/setsweep](https://github.com/charlesberret/setsweep)
 
 ## Canonical install
 
@@ -10,7 +12,7 @@ server and the CLI viewport are pure stdlib.
 | Piece | Location |
 |---|---|
 | Venv (canonical) | `~/.setsweep-venv` |
-| Editable source | `~/cloud/git-projects/setsweep-core` (also reachable via the `~/Repos` symlink) |
+| Editable source | clone of this repo |
 | Console script | `~/.setsweep-venv/bin/setsweep` |
 | PATH shim (exactly one) | e.g. `~/.local/bin/setsweep` → `~/.setsweep-venv/bin/setsweep` |
 
@@ -21,7 +23,8 @@ never deletes PATH entries.
 ### Quick start — CLI + browser
 
 ```sh
-cd ~/cloud/git-projects/setsweep-core                     # canonical core repo
+git clone https://github.com/charlesberret/setsweep.git
+cd setsweep
 python3 -m venv ~/.setsweep-venv
 ~/.setsweep-venv/bin/pip install -e .
 ~/.setsweep-venv/bin/setsweep projects        # the CLI viewport
@@ -45,61 +48,53 @@ requires reinstalling editable**, or the CLI dies with `ModuleNotFoundError` for
 name even though the file is in the tree:
 
 ```sh
-~/.setsweep-venv/bin/pip install -e ~/cloud/git-projects/setsweep-core
+~/.setsweep-venv/bin/pip install -e .
 ```
 
 `setsweep doctor` checks that every name in `py-modules` is importable and present in the
 installed distribution's top-level list.
 
-### PATH retirement checklist (patron-run only)
+### PATH hygiene (you run these; agents never delete PATH entries)
 
-Agents **propose** these; they do **not** remove anything from your PATH. On a machine that
-has accumulated older installs, `which -a setsweep` may show several winners. Retire
-strays so the single shim above is first:
-
-```sh
-# 1. Dead post-migration shell shim (if present)
-rm -i ~/Seafile/Code/bin/setsweep          # pre-migration path
-rm -i ~/cloud/sync/code/bin/setsweep       # fleet Code/bin copy, if not the intentional shim
-
-# 2. Homebrew console script (shadows the venv when it sorts first on PATH)
-brew uninstall setsweep 2>/dev/null || true
-# or, if it was a plain pip --user / brew python install:
-rm -i /opt/homebrew/bin/setsweep
-
-# 3. Keep only one ~/.local/bin entry — must be a symlink to the venv, not a second script
-ls -la ~/.local/bin/setsweep
-# expected: … -> …/.setsweep-venv/bin/setsweep
-
-hash -r
-which -a setsweep
-setsweep doctor
-```
+If `which -a setsweep` shows more than one winner, retire strays so a single shim points
+at `~/.setsweep-venv/bin/setsweep`. Common extras: a Homebrew or pip-user console script,
+and leftover shell shims from older installs. Keep only the symlink under a dir on PATH
+(e.g. `~/.local/bin/setsweep`), then `hash -r` and re-run `setsweep doctor`.
 
 ## The native window (macOS)
 
-The Electron shell at `~/cloud/git-projects/setsweep-desktop/` wraps the server in a proper `.app`
-(Dock icon, external-link interception, native folder picker). It bundles the Python
-server via PyInstaller so the `.app` does not require a separate Python install.
+The Electron shell lives in the sibling **[setsweep-desktop](https://github.com/charlesberret/setsweep-desktop)**
+repo (if published). It wraps the server in a proper `.app` (Dock icon, external-link
+interception, native folder picker) and may bundle the Python server via PyInstaller.
 
-See the setsweep-desktop README for dev/build commands. The built `.app` is at
-`~/cloud/git-projects/setsweep-desktop/out/Setsweep-darwin-arm64/Setsweep.app`.
+Editor plugins live in **setsweep-plugin** (VS Code/Cursor first; Obsidian and Sublime
+planned). Neither is required for CLI or browser use of this core.
 
 ## Viewports
 
-This repo ships the browser/server and CLI viewports. The macOS `.app` is
-`~/cloud/git-projects/setsweep-desktop/`; editor plugins live in `~/cloud/git-projects/setsweep-plugin/`
-(VS Code/Cursor first; Obsidian and Sublime planned).
+This repo ships the browser/server and CLI viewports.
 
 ```
 setsweep                          browser / server mode   (default; stdlib only)
 setsweep --web [--port N]         same as bare launch
-setsweep projects                 list registered desks   ┐
-setsweep queue   <project>        show a desk's queue      │  CLI viewport
-setsweep open    <project> <id>   open the file in $EDITOR │  (stdlib only)
-setsweep chat    <project> [id]   talk to the curator      │
-setsweep doctor                   install health           ┘
+setsweep projects                 list registered desks
+setsweep add     <folder>         register a folder as a desk
+setsweep init                      register the current folder
+setsweep found   <project>        curator founds the desk
+setsweep queue   <project>        show a desk's queue
+setsweep open    <project> <id>   open the file in $EDITOR
+setsweep chat    <project> [id]   talk to the curator
+setsweep lineage <project>        who edited what
+setsweep bind    <project>        add lineage directive to CLAUDE.md
+setsweep doctor                   install health
+setsweep sweep-status <project>   CLOSE readiness
+setsweep sweep-close  <project>   quiet mechanical CLOSE
+setsweep sweep-archive <project>  archive queue entries
+setsweep egress <project> …       stage a desk egress memo
+setsweep egress-status <project>  list staged egress memos
 ```
+
+Full help: `setsweep --help` / `setsweep <cmd> --help`.
 
 ## Auth — Setsweep stores no key
 
@@ -123,22 +118,16 @@ repo-local `projects.json` in a source checkout — see [`API.md`](./API.md).
 
 Each project points at a directory; desk state lives in `<root>/.setsweep/`. Add a project
 with `setsweep add <dir>`, by editing the registry, or via the app's admin panel. The
-bundled Electron `.app` always uses Application Support (sets `DESK_PROJECTS`). On first
-launch the shell copies `projects.json` from your setsweep source tree if the userData
-file does not exist yet (override the source with `SETSWEEP_PROJECTS_SRC`).
+bundled Electron `.app` always uses Application Support (sets `DESK_PROJECTS`).
+
+**Sync tip:** exclude `.setsweep/runtime/` from file-sync tools so the queue/chatlog/snapshots
+do not race. Durable charter/memory files under `.setsweep/` may sync normally. See
+[`ARCHITECTURE.md`](./ARCHITECTURE.md).
 
 ## Notes for the maintainer
 
-- **Canonical install is `~/.setsweep-venv` with one PATH shim** — see above. Do not leave
-  multiple `setsweep` console scripts on PATH; `doctor` flags extras.
-- **Editable install (`-e`) is the supported mode.** It keeps `static/` and the registry
-  resolving from the source tree (`APPDIR = the repo`). A standalone wheel would need the
-  flat modules restructured under a `setsweep/` package with `package-data` for `static/`
-  — deferred (the flat layout is run-critical and well-tested as-is).
-- **Reinstall after every `py-modules` change** — the finder MAPPING is fixed at install
-  time; see the reinstall rule above and the comment next to `py-modules` in
-  `pyproject.toml`.
-- **Isolated venv required for the flat layout:** top-level module names (`server`, `cli`,
-  `runtime`) are namespaced by the venv so they cannot collide with anything else on
-  import. The supported isolation is `~/.setsweep-venv` (or `pipx` if you accept that the
-  doctor will report a non-canonical path until the shim points there).
+- **Canonical install is `~/.setsweep-venv` with one PATH shim** — see above.
+- **Editable install (`-e`) is the supported mode.** It keeps `static/` resolving from the
+  source tree. A non-editable wheel would need a package restructure — deferred.
+- **Reinstall after every `py-modules` change** — see the reinstall rule and the comment
+  next to `py-modules` in `pyproject.toml`.

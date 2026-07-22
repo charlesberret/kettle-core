@@ -1,0 +1,121 @@
+# Setsweep architecture
+
+How the product is shaped today. Longer private design notes may exist outside the
+published tree; **this file is the public source of truth** for clone readers and new
+contributors.
+
+## Thesis
+
+Setsweep is a **review instrument**. Agents prepare and propagate; the human reviewer
+(the *patron*) reads and rules. Context is paid for once by a per-project *curator* and
+delivered pre-packed (the *brief*). Rulings are applied outward mechanically by a
+*sweep*. Nothing asks the patron to re-derive what an agent already knows; nothing lets
+an agent rule on what is the patron’s to rule.
+
+## Desk-is-files; the app is a viewport
+
+All durable desk state lives under `<project-root>/.setsweep/` as ordinary files — no
+hidden database. Any frontend (browser, CLI, desktop shell, editor plugin) is a
+**viewport** over the same localhost API and the same desk files.
+
+| Concern | Location |
+|--------|----------|
+| Charter, memory, review program, archive, outbound egress | `.setsweep/` (durable; safe to sync) |
+| Queue, chatlog, snapshots, session logs, comments | `.setsweep/runtime/` (**exclude from file sync**) |
+| Project registry | `projects.json` (user-local or Application Support for the `.app`) |
+| Preferences / curator provider | `settings.json` |
+
+**Sync rule:** if the project tree is synced (Dropbox, iCloud, git-annex, etc.), exclude
+`.setsweep/runtime/` so the sync daemon does not race high-churn rewrites. Durable desk
+files may sync normally.
+
+Multiple viewports may open one desk. Concurrency is file-level atomic writes, not a
+long-lived state daemon.
+
+## Process model
+
+One Python server per machine, binds **`127.0.0.1` only**, default port **4242**. An
+identity beacon (`GET /api/ping`) lets a new launch recognize and retire a previous
+healthy Setsweep instance — never by trusting a stale pidfile alone. Foreign occupants of
+the port fall back to an ephemeral port.
+
+## Viewports
+
+| Viewport | Where |
+|----------|--------|
+| Browser / server | this repo — `setsweep` / `setsweep --web` |
+| CLI | this repo — `setsweep projects \| queue \| chat \| …` |
+| macOS `.app` | sibling **setsweep-desktop** |
+| Editor plugins | sibling **setsweep-plugin** (VS Code/Cursor first) |
+
+Wire contract: [`API.md`](./API.md).
+
+## Tool tiers
+
+| Tier | Used for | Grant |
+|------|----------|--------|
+| read-only | founding interview (until Finish) | Read / Glob / Grep (+ read-only shell where the provider supports it) |
+| project-write | review chat, sweep, found/finish | Edit / Write under `acceptEdits`, fenced to the project root |
+| never | anyone | network beyond localhost; auto-mutation of append-only records; paths outside the fence |
+
+Provider quirks (e.g. whether a real read-only mode exists) are single-sourced in
+`runtime.PROVIDER_CAPABILITIES`.
+
+## Founding state machine
+
+1. **Register** a folder (`setsweep add` or in-app add) — seeds an empty desk + queue
+   “awaiting founding.”
+2. **Interview** — read-only curator chat; patron’s words beat the files.
+3. **Propose** — Finish drafts `.setsweep/DESK-PROPOSAL.md` into the editor.
+4. **Approve proposal** — curator digests *patron-edited* text and founds the desk
+   (charter, memory, first queue batch).
+5. **Sitting** — patron works the queue: read, comment, approve/rework.
+6. **Sweep** — closes the sitting: apply rulings, assess diffs, restock queue, stage egress.
+
+## Lineage
+
+Edits are attributed as **agent**, **user**, or **unattributed** — never guessed. Agents
+do not relabel patron claims. CLI: `setsweep lineage` / `setsweep bind`. HTTP:
+`/api/lineage` and related resolve endpoints. See also the desk’s own ledger files.
+
+## Invariants (non-negotiable)
+
+1. **Localhost only.** File I/O is fenced (resolve-then-`is_relative_to`); registered
+   roots extend the fence and registration is gated (under `$HOME`, validated).
+2. **Append-only records are never auto-mutated.** Rulings ledgers are applied exactly as
+   written; launch-type rulings are logged as directives, never executed by the sweep.
+3. **The curator never invents:** briefs are honest; memory records only what is attested
+   (by files or by the patron’s own words); empty queues say so.
+4. **The patron’s answers beat the files** where they disagree — and the charter records
+   the patron’s words, not a paraphrase, where they were exact.
+5. **Memory is distillation, not log:** bounded (~80 lines), revisable, evidence-backed;
+   the session log holds the particulars.
+6. **Every background actor writes a healthbeacon;** silent failure is a bug by
+   definition.
+7. **No artifact attributes a choice to the patron without lineage citation.** Default
+   attribution is prototype/agent unless a dated patron action says otherwise.
+
+## Security surface (summary)
+
+- No API keys stored — ambient curator-CLI login only.
+- File fence on every route that touches the filesystem.
+- Rendered markdown is allowlist-sanitized (DOMPurify) before reading-view HTML.
+- Admin “fleet” diagnostics are opt-in (`settings.admin.fleet_panels`).
+
+## Layout of this package
+
+Flat Python modules at repo root (`server.py`, `cli.py`, `runtime.py`, …), stdlib-only
+runtime for server and CLI. Install **editable** (`pip install -e .`) so `static/` and
+the registry resolve from the source tree. Canonical install path: `~/.setsweep-venv`
+(see [`INSTALL.md`](./INSTALL.md)). `setsweep doctor` checks PATH and editable mapping.
+
+## Further reading
+
+| Doc | Role |
+|-----|------|
+| [`README.md`](./README.md) | Product intro, glossary, quickstart |
+| [`INSTALL.md`](./INSTALL.md) | Install, PATH, reinstall rule |
+| [`API.md`](./API.md) | HTTP contract for viewports |
+| [`ROADMAP.md`](./ROADMAP.md) | Phased plan and release ladder |
+| [`docs/RELEASE.md`](./docs/RELEASE.md) | Measurement and gates |
+| [`kits/README.md`](./kits/README.md) | Curator playbooks |

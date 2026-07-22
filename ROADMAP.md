@@ -155,11 +155,10 @@ the marketplace; a viewport detects version skew and says so.
 
 ### Phase 4 — Docs meet strangers
 
-- Public `ARCHITECTURE.md` distilled from `.local/DESIGN.md` (desk model, invariants,
-  durable-vs-runtime split, tool tiers) — fixes the dangling references shipped today.
-- Glossary (sitting, desk, patron, curator, founding, kit, sweep, egress, ledger,
-  viewport); ten-minute quickstart with screenshots; generated CLI reference; sync-layer
-  guidance for `.setsweep/runtime/`. All in brief 17.
+- ✅ Public `ARCHITECTURE.md` (desk model, invariants, durable-vs-runtime split, tool
+  tiers) — brief 17.
+- ✅ Glossary, clone-based quickstart, CLI reference, sync-layer guidance for
+  `.setsweep/runtime/` — brief 17 (screenshots optional polish later).
 
 **Exit test:** someone who has never seen the project installs it, founds a desk on a
 real folder, and completes a sitting without asking a question the docs don't answer.

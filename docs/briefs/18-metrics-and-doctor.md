@@ -34,7 +34,9 @@ needs before an alpha cohort exists.
 3. **`setsweep doctor`**: checks, in order — **install seed already from brief 20**
    (`cli.install_doctor_checks`: which `setsweep` on PATH vs `~/.setsweep-venv`,
    extra PATH hits, every `py-modules` name importable and present in the installed
-   `top_level`); then expand with Python + package version and install mode;
+   `top_level`); each failing row should point at [`INSTALL.md`](../../INSTALL.md) or
+   [`ARCHITECTURE.md`](../../ARCHITECTURE.md) (brief 17); then expand with Python +
+   package version and install mode;
    registry readable and desks intact (queue.json parses, desk dirs exist); server
    reachable + version match (the brief-11 ping field) + auth token present; curator
    CLI resolves (`curator.provider_readiness()` exists) plus a real auth probe — new
