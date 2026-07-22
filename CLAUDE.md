@@ -13,6 +13,11 @@ viewport are stdlib-only. Single-file frontend at `static/index.html` (plus vend
 `marked.min.js`, `purify.min.js`, `themes.js`, fonts). Three-pane layout: agent-curated queue ·
 patron's editor · project-aware review agent.
 
+**Sitting UI conventions:** [`docs/UI.md`](./docs/UI.md) — type hierarchy (`--text-heading` /
+`--text-label` / `--text-secondary` / `--text-primary`), buttons, urgency, meta pane. **Read
+before editing `static/index.html`.** New panels must use those roles; do not ship body-white
+copy next to gray chrome. Desktop loads the same file (no style fork).
+
 **Viewport vs curator:** Desktop, VS Code, and MCP are *viewports* onto the desk. Agentic turns
 (interview, found, sweep, chat) run through the **curator provider** configured in
 `settings.json` (`curator.provider` / `curator.command` / `curator.models`) — default is the

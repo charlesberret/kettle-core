@@ -54,8 +54,47 @@ def node_check(source: str) -> subprocess.CompletedProcess:
         Path(tmp).unlink(missing_ok=True)
 
 
+class SittingUiConventions(unittest.TestCase):
+    """docs/UI.md type hierarchy must stay wired in static/index.html.
+
+    Guards against new panes defaulting to body-white while chrome is gray.
+    """
+
+    def test_type_role_tokens_defined(self):
+        css = INDEX.read_text(encoding="utf-8")
+        for token in (
+            "--text-heading",
+            "--text-label",
+            "--text-secondary",
+            "--text-primary",
+            "--text-muted",
+            "--text-link",
+        ):
+            self.assertIn(token, css, f"missing type token {token} (see docs/UI.md)")
+
+    def test_brief_pane_uses_secondary_not_primary_ink(self):
+        css = INDEX.read_text(encoding="utf-8")
+        # Brief values must not reintroduce pure --fg as their color.
+        self.assertRegex(
+            css,
+            r"\.brief-ask[^{]*\{[^}]*color:\s*var\(--text-secondary\)",
+            "brief-ask must use --text-secondary (docs/UI.md)",
+        )
+        self.assertRegex(
+            css,
+            r"\.brief-body[^{]*\{[^}]*color:\s*var\(--text-secondary\)",
+            "brief-body must use --text-secondary (docs/UI.md)",
+        )
+        self.assertNotRegex(
+            css,
+            r"\.brief-ask\s*\{[^}]*color:\s*var\(--fg\)",
+            "brief-ask must not use raw --fg",
+        )
+
+
 @unittest.skipIf(NODE is None, "node not on PATH — frontend syntax gate skipped")
 class FrontendSyntaxGate(unittest.TestCase):
+
     def test_index_html_has_inline_scripts(self):
         blocks = inline_scripts(INDEX.read_text(encoding="utf-8"))
         # The boot bootstrap + the main script are both inline; guard against a

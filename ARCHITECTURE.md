@@ -109,6 +109,9 @@ runtime for server and CLI. Install **editable** (`pip install -e .`) so `static
 the registry resolve from the source tree. Canonical install path: `~/.setsweep-venv`
 (see [`INSTALL.md`](./INSTALL.md)). `setsweep doctor` checks PATH and editable mapping.
 
+**Sitting UI** is only `static/index.html` (plus themes/fonts). Type hierarchy, buttons,
+and meta-pane rules: [`docs/UI.md`](./docs/UI.md). Desktop does not fork that file.
+
 ## Further reading
 
 | Doc | Role |
