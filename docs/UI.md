@@ -69,19 +69,21 @@ Patron-facing **strings** must not drift between web, desktop, and the plugin De
 
 | Role | Location |
 |------|----------|
-| **Canonical** | `static/ui-copy.js` → `window.SETSWEEP_UI_COPY` (served as `/ui-copy.js`) |
-| **Plugin mirror** | `setsweep-plugin/packages/vscode/src/uiCopy.ts` → `UI_COPY` |
+| **Canonical (edit here only)** | `static/ui-copy.js` → `window.SETSWEEP_UI_COPY` (`/ui-copy.js`) |
+| **Plugin (generated)** | `setsweep-plugin/packages/vscode/src/uiCopy.ts` — **do not hand-edit** |
 | **Desktop** | inherits web (same static files via sidecar) |
 
-**Rule:** change a sitting string once in `ui-copy.js`, update `uiCopy.ts` in the same
-session, reinstall the VSIX. Prefer reading from the catalog (`uic('chatPlaceholder')` /
-`UI_COPY.chatPlaceholder`) over hardcoding new prose in HTML/TS.
+**Workflow**
 
-**Test:** `test_ui_copy.py` asserts core keys exist and, when the plugin path is present
-on disk, that key sets match.
+1. Edit `setsweep-core/static/ui-copy.js` only.
+2. In the plugin package: `npm run sync-ui-copy` (also runs on `precompile` / `prepackage`).
+3. Rebuild / reinstall the VSIX if needed.
 
-Longer term (Phase 6 / monorepo): ship one npm package of strings both trees import so
-mirroring is automatic. Until then, dual files + the test are the process.
+`SETSWEEP_SRC` (core root) or `SETSWEEP_UI_COPY` (path to `ui-copy.js`) override discovery
+when the repos are not siblings.
+
+**Test:** `test_ui_copy.py` asserts core keys exist and, when the plugin tree is present,
+that generated `uiCopy.ts` still matches (CI safety if someone hand-edits the mirror).
 
 ## Founding / add project (brief 22)
 

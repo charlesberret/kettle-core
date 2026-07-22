@@ -1,10 +1,10 @@
 /**
- * Canonical sitting UI copy — single source for web (and desktop via sidecar).
- * Plugin: packages/vscode/src/uiCopy.ts must stay key-for-key identical
- * (see docs/UI.md § Shared UI copy). When you change a string, update both files
- * in the same change or the next parity pass will fail.
+ * Canonical sitting UI copy — single source for web, desktop (sidecar), and plugin.
  *
- * Served as /ui-copy.js; window.SETSWEEP_UI_COPY after load.
+ * Served as /ui-copy.js → window.SETSWEEP_UI_COPY.
+ * Plugin regenerates packages/vscode/src/uiCopy.ts via:
+ *   npm run sync-ui-copy   (also precompile / package)
+ * See docs/UI.md § Shared UI copy. Edit ONLY this file for sitting strings.
  */
 (function (root) {
   "use strict";
