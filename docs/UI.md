@@ -18,11 +18,16 @@ CSS variables live on `:root` in `static/index.html`. Prefer **role tokens**, no
 | **Label** | `--text-label` | Field names: ask, brief, path, status, “context” |
 | **Secondary** | `--text-secondary` | Second lines in the queue, brief/ask *values*, supporting copy, meta values |
 | **Primary** | `--text-primary` | File names in the queue, active control text, editor content |
-| **Muted** | `--text-muted` | Tertiary / default stream voice |
+| **Muted** | `--text-muted` | Tertiary / stream voice / syntax markers |
 | **Link** | `--text-link` | Paths that open, wikilinks |
 | **Good / warn** | `--text-good` / `--text-warn` | Diff adds, errors, urgency (via `--urg*`) |
 
 Utility classes: `.t-heading`, `.t-label`, `.t-secondary`, `.t-primary`, `.t-muted`, `.t-link`.
+
+**Implementation:** type tokens use `color-mix(in srgb, var(--fg) N%, var(--bg))`, **not**
+`var(--dim)`. Theme defaults set `--muted`/`--dim` equal to `--fg` (opacity is applied
+only to some iface roles in JS), so aliasing labels to `--dim` made subheaders the same
+white as body text. Always mix toward `--bg` for gray chrome.
 
 ### Rules of thumb
 
@@ -31,6 +36,8 @@ Utility classes: `.t-heading`, `.t-label`, `.t-secondary`, `.t-primary`, `.t-mut
 3. **Primary ink is scarce.** Queue *file names*, editor body, focused control labels.
 4. **New panes inherit the ladder.** A new tab or panel must map every string to a role *before* shipping; do not default new copy to `--fg` because it “looks fine alone.”
 5. **Same roles across tabs.** Info and Brief share `#meta dt` / `#meta dd` roles — do not invent a second type scale for a sibling tab.
+6. **Selection is subtle.** Active queue row: faint link wash + left bar (`--row-active-*`), not solid `--activebg`.
+7. **Diff badges** color `.qdiff .add` / `.del` with good/warn in **both** midbar and queue.
 
 ## Buttons
 

@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <!-- Bump this when sitting UI changes; title shows it so we can confirm the shell loaded. -->
-<meta name="setsweep-ui" content="2026-07-22b">
-<title>setsweep · ui-2026-07-22b</title>
+<meta name="setsweep-ui" content="2026-07-22c">
+<title>setsweep · ui-2026-07-22c</title>
 <style>
   /*
    * Type & chrome roles — single source of sitting hierarchy.
@@ -39,15 +39,19 @@
     --urghigh:var(--ansi-1); --urgmed:var(--ansi-3); --urglow:var(--ansi-2);
     /* ---- legacy aliases (derived from interface roles above) ---- */
     --dim:var(--muted); --blue:var(--link); --burnt:var(--warn);
-    /* ---- type hierarchy (docs/UI.md) — chrome is gray; primary ink is rare ---- */
-    --text-heading: var(--dim);   /* pane titles: project / agent / tab chrome */
-    --text-label: var(--dim);     /* field labels: ask, brief, path, status… */
-    --text-secondary: var(--dim); /* second lines, briefs, supporting copy */
-    --text-primary: var(--fg);    /* selected file names, active control text, editor */
-    --text-muted: var(--muted);   /* tertiary / stream default voice */
+    /* ---- type hierarchy (docs/UI.md) — mix fg toward bg so labels stay gray even when
+       --muted/--dim are set equal to --fg (theme defaults). Do not alias --dim here. ---- */
+    --text-heading: color-mix(in srgb, var(--fg) 48%, var(--bg));
+    --text-label: color-mix(in srgb, var(--fg) 48%, var(--bg));
+    --text-secondary: color-mix(in srgb, var(--fg) 58%, var(--bg));
+    --text-primary: var(--fg);
+    --text-muted: color-mix(in srgb, var(--fg) 42%, var(--bg));
     --text-link: var(--link);
     --text-good: var(--good);
     --text-warn: var(--warn);
+    /* selection: faint wash + optional bar (not solid gray that kills contrast) */
+    --row-active-bg: color-mix(in srgb, var(--link) 10%, transparent);
+    --row-active-bar: color-mix(in srgb, var(--link) 75%, var(--fg));
     /* ---- fonts: mono interface, sans body (overridable in admin) ---- */
     --ui-font:'IBM Plex Mono', "SF Mono", Menlo, monospace;
     --body-font:'IBM Plex Sans', -apple-system, system-ui, "Helvetica Neue", sans-serif;
@@ -172,11 +176,16 @@
   @keyframes spin360 { to { transform: rotate(360deg); } }
 
   /* founding form: kit dropdown + the customization (additional notes) note */
-  .qitem { padding:8px 14px; border-bottom:1px solid var(--line); cursor:pointer; }
-  .qitem:hover { background:var(--panel); }
-  .qitem.active { background:var(--activebg); padding-left:14px; }
+  .qitem { padding:8px 14px; border-bottom:1px solid var(--line); cursor:pointer;
+           border-left:3px solid transparent; }
+  .qitem:hover { background:color-mix(in srgb, var(--fg) 4%, transparent); }
+  /* Selection: faint link wash + left bar — not solid --activebg (was crushing text) */
+  .qitem.active {
+    background:var(--row-active-bg);
+    border-left-color:var(--row-active-bar);
+  }
   .qitem:focus { outline:none; }
-  .qitem:focus-visible { box-shadow: inset 0 0 0 2px var(--acc); }
+  .qitem:focus-visible { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--link) 50%, transparent); }
   .qitem .t { display:flex; gap:8px; align-items:baseline; }
   /* urgency: color-only squares (a11y via aria-label/title); low = green */
   .dot { width:8px; height:8px; min-width:8px; border-radius:2px; flex:none; align-self:center;
@@ -200,10 +209,10 @@
   .qitem.rework { opacity:.38; }
   .qitem.rework .qname { text-decoration:line-through; }
   /* this-sitting change badge on the queue entry's first line */
-  .qitem .qdiff { margin-left:auto; flex:none; font-size:10.5px; font-variant-numeric:tabular-nums;
-                  white-space:nowrap; padding-left:8px; }
-  .qitem .qdiff .add { color:var(--good); }
-  .qitem .qdiff .del { color:var(--warn); margin-left:5px; }
+  .qdiff { font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .qdiff .add { color:var(--text-good, var(--good)); }
+  .qdiff .del { color:var(--text-warn, var(--warn)); margin-left:5px; }
+  .qitem .qdiff { margin-left:auto; flex:none; font-size:10.5px; padding-left:8px; }
   /* info-panel: view-diff peek + small inline link */
   .minilink { font-size:11px; color:var(--link); cursor:pointer; text-decoration:none; margin-left:6px; }
   .minilink:hover { text-decoration:underline; }
@@ -250,13 +259,17 @@
   #meta .meta-tabs { display:inline-flex; align-items:center; gap:4px; }
   #meta .meta-tab {
     box-sizing:border-box; width:26px; height:26px; padding:0; border-radius:5px;
-    border:1px solid var(--line); background:var(--panel2); color:var(--dim);
+    border:1px solid var(--line); background:var(--panel2); color:var(--text-label);
     cursor:pointer; display:inline-flex; align-items:center; justify-content:center;
     font-family:var(--ui-font); font-size:12px; font-weight:600; line-height:1;
   }
-  #meta .meta-tab:hover { color:var(--fg); border-color:var(--acc); }
-  #meta .meta-tab.active { color:var(--fg); border-color:var(--acc);
-    background:color-mix(in srgb, var(--acc) 14%, var(--panel2)); }
+  #meta .meta-tab:hover { color:var(--fg); border-color:color-mix(in srgb, var(--link) 40%, var(--line)); }
+  /* Active tab: cool/neutral wash — not strong yellow --acc */
+  #meta .meta-tab.active {
+    color:var(--fg);
+    border-color:color-mix(in srgb, var(--link) 35%, var(--line));
+    background:color-mix(in srgb, var(--link) 11%, var(--panel2));
+  }
   #meta .meta-tab .mt-ico { display:block; width:14px; height:14px; }
   /* Meta pane uses the same type roles as the rest of the sitting (docs/UI.md).
      Labels = --text-label; values = --text-secondary. Never pure --fg for brief copy. */
@@ -283,7 +296,9 @@
   #fname .fbase { color:var(--text-link); }
   #sittingdiff { flex:none; display:flex; align-items:center; gap:6px; font-size:12px; }
   #sittingdiff:empty { display:none; }
-  #sittingdiff .qdiff { font-variant-numeric:tabular-nums; }
+  #sittingdiff .qdiff { font-size:12px; }
+  #sittingdiff .qdiff .add { color:var(--text-good, var(--good)); }
+  #sittingdiff .qdiff .del { color:var(--text-warn, var(--warn)); }
   #dirty { color:var(--warn); display:none; }
 
   /* find/replace bar */
@@ -370,35 +385,53 @@
   #editor::selection { background:color-mix(in srgb, var(--selection) 35%, transparent); }
   ::selection { background:color-mix(in srgb, var(--selection) 35%, transparent); }
   #edback { position:absolute; top:0; bottom:0; left:var(--gutter-w,56px); right:0; overflow:hidden; z-index:1;
-            padding:18px 22px 18px 14px; pointer-events:none; color:var(--fg);
+            padding:18px 22px 18px 14px; pointer-events:none; color:var(--text-primary);
             white-space:pre-wrap; overflow-wrap:break-word; word-break:normal;
             font:var(--ed-font,13.5px)/1.55 var(--ui-font); tab-size:4; }
-  #edback .mdhead { color:var(--slot-mdhead, var(--acc)); }
-  #edback .mdsyn { color:var(--muted); }
+  #edback .mdhead { color:var(--slot-mdhead, color-mix(in srgb, var(--acc) 85%, var(--fg))); font-weight:600; }
+  #edback .mdsyn { color:var(--text-muted); }
+  #edback .mdcode { color:color-mix(in srgb, var(--link) 55%, var(--fg)); }
+  #edback .mdstr { color:color-mix(in srgb, var(--good) 55%, var(--fg)); }
+  #edback .mdkw { color:color-mix(in srgb, var(--acc) 70%, var(--fg)); }
+  #edback .mdcmt { color:var(--text-muted); font-style:italic; }
   #mirror { position:absolute; visibility:hidden; left:-99999px; top:0; white-space:pre-wrap;
             overflow-wrap:break-word; word-break:normal; padding:0; border:0;
             font:var(--ed-font,13.5px)/1.55 var(--ui-font); tab-size:4; }
 
-  /* rendered (reading) view */
+  /* rendered (reading) view — consistent heading ladder (body font, predictable scale) */
   #render { flex:1; min-height:0; overflow-y:auto; overflow-x:hidden; padding:22px 34px; display:none; max-width:100%;
-            font:15px/1.65 var(--body-font); word-wrap:break-word; overflow-wrap:break-word; }
+            font:15px/1.65 var(--body-font); color:var(--text-primary);
+            word-wrap:break-word; overflow-wrap:anywhere; }
   body.reading #render { display:block; }
   body.reading #edwrap { display:none; }
-  #render h1, #render h2, #render h3, #render h4 { color:var(--fg); line-height:1.25; }
-  #render h1, #render h2 { font-weight:600; }
-  #render h1 { font-size:21px; border-bottom:1px solid var(--line); padding-bottom:6px; }
-  #render h2 { font-size:17px; } #render h3 { font-size:15px; }
-  #render table { border-collapse:collapse; margin:12px 0; font-size:13px; }
+  #render > :first-child { margin-top:0; }
+  #render h1, #render h2, #render h3, #render h4, #render h5, #render h6 {
+    font-family:var(--body-font); font-weight:600; line-height:1.3;
+    letter-spacing:-0.01em; margin:1.15em 0 0.4em; max-width:100%;
+    overflow-wrap:anywhere; word-break:break-word;
+  }
+  #render h1 { font-size:1.4em; color:var(--text-primary);
+               border-bottom:1px solid var(--line); padding-bottom:0.3em; margin-top:0.35em; }
+  #render h2 { font-size:1.22em; color:var(--text-primary); }
+  #render h3 { font-size:1.08em; color:color-mix(in srgb, var(--fg) 88%, var(--bg)); }
+  #render h4 { font-size:1em; color:var(--text-secondary); }
+  #render h5, #render h6 { font-size:0.95em; color:var(--text-label); font-weight:600;
+                           text-transform:none; letter-spacing:0; }
+  #render p { margin:0.65em 0; }
+  #render table { border-collapse:collapse; margin:12px 0; font-size:13px; max-width:100%; display:block; overflow-x:auto; }
   #render th, #render td { border:1px solid var(--line); padding:4px 10px; text-align:left; }
-  #render th { background:var(--panel); }
-  #render code { background:var(--panel2); padding:1px 5px; border-radius:4px;
-                 font:12.5px var(--ui-font); }
-  #render pre { background:var(--panel2); padding:10px 14px; border-radius:6px; overflow-x:auto; }
-  #render pre code { background:none; padding:0; }
-  #render blockquote { margin:10px 0; padding:2px 0; color:var(--dim); }
-  #render a { color:var(--link); }
-  #render hr { border:0; border-top:1px solid var(--line); }
-  #render li { margin:3px 0; }
+  #render th { background:var(--panel); color:var(--text-label); font-weight:600; }
+  #render code { background:color-mix(in srgb, var(--fg) 8%, var(--panel2)); padding:1px 5px;
+                 border-radius:4px; font:12.5px/1.4 var(--ui-font); color:color-mix(in srgb, var(--link) 40%, var(--fg)); }
+  #render pre { background:color-mix(in srgb, var(--fg) 6%, var(--panel2)); padding:12px 14px;
+                border-radius:6px; overflow-x:auto; border:1px solid var(--line); margin:0.85em 0; }
+  #render pre code { background:none; padding:0; color:var(--text-primary); font-size:12.5px; line-height:1.5; }
+  #render blockquote { margin:0.85em 0; padding:0.15em 0 0.15em 0.9em;
+                       border-left:3px solid var(--line); color:var(--text-secondary); }
+  #render a { color:var(--text-link); }
+  #render hr { border:0; border-top:1px solid var(--line); margin:1.25em 0; }
+  #render ul, #render ol { margin:0.55em 0; padding-left:1.4em; }
+  #render li { margin:0.28em 0; }
   #render input[type=checkbox] { accent-color:var(--acc); transform:scale(1.18); margin-right:7px; cursor:pointer; }
   #sweepconfirm { width:min(440px, 90vw); }
   #sweepconfirm h2 { color:var(--good); }
@@ -1860,25 +1893,84 @@ function renderGutter(){
   $('gutter').innerHTML = html;
   syncGutter();
 }
-/* syntax layer behind the transparent textarea: heading text stands out for
-   scanning; markdown marker characters stay muted so body prose reads cleanly */
+/* Light code coloring for source view (no extra deps). Keywords / strings / comments. */
+const CODE_KW = new Set((
+  'and as assert async await break case catch class const continue def del elif else ' +
+  'enum except export extends finally for from function if import in is lambda let ' +
+  'module new not or pass private public return static switch throw try type typeof ' +
+  'var void while with yield true false null nil None True False self this const ' +
+  'package interface struct map chan go defer select range func type var const'
+).split(/\s+/));
+
+function colorCodeLine(line){
+  // Whole-line comments first
+  if(/^\s*(#|\/\/|\/\*|\*)/.test(line) && !/^\s*#\{/.test(line))
+    return '<span class="mdcmt">' + esc(line) + '</span>';
+  let out = '', i = 0;
+  const s = line;
+  while(i < s.length){
+    // string
+    if(s[i] === '"' || s[i] === "'" || s[i] === '`'){
+      const q = s[i];
+      let j = i + 1;
+      while(j < s.length){
+        if(s[j] === '\\'){ j += 2; continue; }
+        if(s[j] === q){ j++; break; }
+        j++;
+      }
+      out += '<span class="mdstr">' + esc(s.slice(i, j)) + '</span>';
+      i = j;
+      continue;
+    }
+    // line comment mid-line
+    if(s[i] === '#' || (s[i] === '/' && s[i+1] === '/')){
+      out += '<span class="mdcmt">' + esc(s.slice(i)) + '</span>';
+      break;
+    }
+    // word (keyword or bare)
+    if(/[A-Za-z_]/.test(s[i])){
+      let j = i + 1;
+      while(j < s.length && /[A-Za-z0-9_]/.test(s[j])) j++;
+      const w = s.slice(i, j);
+      out += CODE_KW.has(w)
+        ? '<span class="mdkw">' + esc(w) + '</span>'
+        : esc(w);
+      i = j;
+      continue;
+    }
+    out += esc(s[i]);
+    i++;
+  }
+  return out;
+}
+
+function pathLooksLikeCode(p){
+  return /\.(py|js|jsx|ts|tsx|mjs|cjs|go|rs|java|kt|swift|rb|php|c|cc|cpp|h|hpp|cs|sh|bash|zsh|lua|r|sql|json|toml|yaml|yml|css|scss|html|vue|svelte)$/i.test(p || '');
+}
+
+/* syntax layer behind the transparent textarea: markdown structure + light code color */
 function renderBack(){
   const w = $('editor').clientWidth;
   if(!w) return;  // editor not laid out (reading mode) — renders on source entry
   const src = $('editor').value;
+  const path = (cur && cur.path) || '';
+  const forceCode = pathLooksLikeCode(path);
   let fence = false;
   const out = src.split('\n').map(line => {
-    if(/^\s*(```|~~~)/.test(line)){ fence = !fence; return '<span class="mdsyn">' + esc(line) + '</span>'; }
-    if(fence) return esc(line);
+    if(/^\s*(```|~~~)/.test(line)){
+      fence = !fence;
+      return '<span class="mdsyn">' + esc(line) + '</span>';
+    }
+    if(fence || forceCode) return colorCodeLine(line);
     let m = line.match(/^(#{1,6} )(.*)$/);
     if(m) return '<span class="mdhead"><span class="mdsyn">' + esc(m[1]) + '</span>' + esc(m[2]) + '</span>';
     let h = esc(line)
       .replace(/^(\s*(?:[-*+]|\d+\.) )(\[[ xX]\] )?/, (a, bullet, box) =>
         '<span class="mdsyn">' + bullet + (box || '') + '</span>')
       .replace(/^(&gt;\s*)/, '<span class="mdsyn">$1</span>')
-      .replace(/\*\*([^*\n]+)\*\*/g, '<span class="mdsyn">**</span>$1<span class="mdsyn">**</span>')
+      .replace(/\*\*([^*\n]+)\*\*/g, '<span class="mdsyn">**</span><span class="mdhead">$1</span><span class="mdsyn">**</span>')
       .replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, '$1<span class="mdsyn">*</span>$2<span class="mdsyn">*</span>')
-      .replace(/`([^`\n]+)`/g, '<span class="mdsyn">`</span>$1<span class="mdsyn">`</span>')
+      .replace(/`([^`\n]+)`/g, '<span class="mdsyn">`</span><span class="mdcode">$1</span><span class="mdsyn">`</span>')
       .replace(/\|/g, '<span class="mdsyn">|</span>');
     if(/^(-{3,}|={3,})\s*$/.test(line)) h = '<span class="mdsyn">' + esc(line) + '</span>';
     return h;

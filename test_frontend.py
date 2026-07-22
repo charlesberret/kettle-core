@@ -72,6 +72,22 @@ class SittingUiConventions(unittest.TestCase):
         ):
             self.assertIn(token, css, f"missing type token {token} (see docs/UI.md)")
 
+    def test_type_labels_mix_toward_bg_not_alias_dim(self):
+        """Labels must stay gray even when --muted equals --fg (theme defaults)."""
+        css = INDEX.read_text(encoding="utf-8")
+        # Extract :root block roughly
+        self.assertIn("color-mix(in srgb, var(--fg)", css)
+        self.assertRegex(
+            css,
+            r"--text-label:\s*color-mix\(in srgb,\s*var\(--fg\)",
+            "--text-label must color-mix toward bg, not alias --dim",
+        )
+        self.assertNotRegex(
+            css,
+            r"--text-label:\s*var\(--dim\)",
+            "--text-label must not be a bare --dim alias",
+        )
+
     def test_brief_pane_uses_secondary_not_primary_ink(self):
         css = INDEX.read_text(encoding="utf-8")
         # Brief values must not reintroduce pure --fg as their color.
@@ -90,6 +106,11 @@ class SittingUiConventions(unittest.TestCase):
             r"\.brief-ask\s*\{[^}]*color:\s*var\(--fg\)",
             "brief-ask must not use raw --fg",
         )
+
+    def test_diff_badges_colored_globally(self):
+        css = INDEX.read_text(encoding="utf-8")
+        self.assertRegex(css, r"\.qdiff\s+\.add[^{]*\{[^}]*--good")
+        self.assertRegex(css, r"\.qdiff\s+\.del[^{]*\{[^}]*--warn")
 
 
 @unittest.skipIf(NODE is None, "node not on PATH — frontend syntax gate skipped")
