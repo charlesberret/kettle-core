@@ -243,19 +243,29 @@
   #commentpanel .crow { display:flex; align-items:center; gap:8px; }
   #commenthint { color:var(--dim); font-size:11px; }
 
-  /* modals (add project) */
+  /* modals — shared chrome for setup / add-project / sweep-confirm */
   #addbg, #setupbg { position:fixed; inset:0; background:rgba(0,0,0,.55); display:none;
              align-items:center; justify-content:center; z-index:20; }
   #addbg.open, #setupbg.open { display:flex; }
-  #addmodal, #setupmodal { background:var(--panel); border:1px solid var(--line); border-radius:8px;
-                 width:min(560px, 90vw); padding:18px 20px; display:flex;
-                 flex-direction:column; gap:12px; }
-  #addmodal h2 { margin:0; font-size:13px; letter-spacing:.14em; text-transform:uppercase;
+  #addmodal, #setupmodal, #sweepconfirm {
+                 background:var(--panel); border:1px solid var(--line); border-radius:8px;
+                 width:min(560px, 90vw); padding:22px 24px; display:flex;
+                 flex-direction:column; gap:14px; box-shadow:0 14px 44px rgba(0,0,0,.38); }
+  #addmodal h2, #setupmodal h2, #sweepconfirm h2 {
+                    margin:0 0 2px; font-size:12px; letter-spacing:.16em; text-transform:uppercase;
                     color:var(--acc); }
-  #addmodal .mrow { display:flex; align-items:center; gap:10px; }
-  #addmodal input { background:var(--bg); color:var(--fg); border:1px solid var(--line);
-                    border-radius:5px; padding:8px 10px; font:inherit; }
-  #addmodal .mnote { color:var(--dim); font-size:12px; }
+  #addmodal .mrow, #setupmodal .mrow { display:flex; align-items:center; gap:12px; }
+  #addmodal .mrow .lbl, #setupmodal .mrow .lbl {
+                    flex:none; width:112px; color:var(--dim); font-size:12px; letter-spacing:.04em; }
+  #addmodal input, #setupmodal input {
+                    background:var(--bg); color:var(--fg); border:1px solid var(--line);
+                    border-radius:5px; padding:9px 11px; font:inherit; }
+  #addmodal select, #setupmodal select, #sweepconfirm select {
+                    background:var(--panel2); color:var(--fg); border:1px solid var(--line);
+                    border-radius:5px; font:13px var(--ui-font); padding:8px 11px; }
+  #addmodal input:focus, #setupmodal input:focus, #addmodal select:focus,
+  #setupmodal select:focus, #sweepconfirm select:focus { outline:none; border-color:var(--acc); }
+  #addmodal .mnote, #setupmodal .mnote { color:var(--dim); font-size:12px; line-height:1.55; }
   .kitsel { display:block; width:100%; box-sizing:border-box; margin:6px 0 0;
             background:var(--panel2); color:var(--fg); border:1px solid var(--line);
             border-radius:4px; font:13px var(--ui-font); padding:6px 8px; }
@@ -308,10 +318,9 @@
   #render hr { border:0; border-top:1px solid var(--line); }
   #render li { margin:3px 0; }
   #render input[type=checkbox] { accent-color:var(--acc); transform:scale(1.18); margin-right:7px; cursor:pointer; }
-  #sweepconfirm { background:var(--panel); border:1px solid var(--line); border-radius:8px;
-                  width:min(440px, 90vw); padding:18px 20px; display:flex; flex-direction:column; gap:12px; }
-  #sweepconfirm h2 { margin:0; font-size:13px; letter-spacing:.14em; text-transform:uppercase; color:var(--good); }
-  #sweepconfirm label { color:var(--dim); font-size:12px; display:flex; gap:6px; align-items:center; }
+  #sweepconfirm { width:min(440px, 90vw); }
+  #sweepconfirm h2 { color:var(--good); }
+  #sweepconfirm label { color:var(--dim); font-size:12px; display:flex; gap:6px; align-items:center; line-height:1.5; }
   #sweepthrust { background:var(--bg); color:var(--fg); border:1px solid var(--line); border-radius:5px;
                  padding:8px 10px; font:inherit; resize:vertical; min-height:64px; }
   #sweepthrust:focus { outline:none; border-color:var(--good); }
@@ -681,8 +690,8 @@
 </div>
 
 <div id="addbg">
-  <div id="addmodal">
-    <h2>add project</h2>
+  <div id="addmodal" role="dialog" aria-modal="true" aria-labelledby="addmodal-h">
+    <h2 id="addmodal-h">add project</h2>
     <input id="addname" placeholder="name" spellcheck="false">
     <input id="addroot" placeholder="folder (absolute or ~/ path)" spellcheck="false">
     <button id="addbrowse" class="btn btn-sm btn-ghost" type="button">browse…</button>
@@ -705,9 +714,9 @@
 </div>
 
 <div id="setupbg">
-  <div id="setupmodal">
-    <h2>set up Setsweep</h2>
-    <div class="mnote">Before any project work: pick the agent CLI that will run founding, chat, and sweeps. Setsweep never stores API keys — sign in to the CLI or set its env key in your shell. Change later in Admin → Agents.</div>
+  <div id="setupmodal" role="dialog" aria-modal="true" aria-labelledby="setupmodal-h">
+    <h2 id="setupmodal-h">set up Setsweep</h2>
+    <div class="mnote">Pick the agent CLI that runs founding, chat, and sweeps. Setsweep never stores API keys — sign in to the CLI or set its key in your shell.</div>
     <div class="mrow" style="margin-bottom:8px">
       <span class="lbl">provider</span>
       <select id="setupProvider" style="flex:1">
@@ -727,8 +736,8 @@
 </div>
 
 <div id="sweepbg" style="position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:21;">
-  <div id="sweepconfirm">
-    <h2>sweep the desk?</h2>
+  <div id="sweepconfirm" role="dialog" aria-modal="true" aria-labelledby="sweepconfirm-h">
+    <h2 id="sweepconfirm-h">sweep the desk?</h2>
     <div style="font-size:13px;color:var(--fg)">Closes the sitting: applies ticked rulings (launches become logged directives), diffs and assesses every reviewed entry, fixes or flags ripples, writes the session log, and restocks the queue.</div>
     <label><input type="checkbox" id="sweepnoask"> don't ask again (button becomes a 5-second undo instead)</label>
     <textarea id="sweepthrust" spellcheck="false" placeholder="a steer for this pass — what's most on your mind as you close the sitting. the agent reads it first (optional · ⌘Enter sweeps)"></textarea>
@@ -2753,6 +2762,7 @@ function showSetup(){
   if(sp){ sp.value = curatorProvider(); }
   buildSetupRows();
   $('setupbg').classList.add('open');
+  if(sp) sp.focus();
   refreshSetupStatus();
 }
 /** Hard gate: resolves only after a ready provider is saved. */
@@ -3229,6 +3239,23 @@ $('addbg').addEventListener('mousedown', e => { if(e.target === $('addbg')) clos
 for(const id of ['addname', 'addroot']) $(id).addEventListener('keydown', e => {
   if((e.metaKey||e.ctrlKey) && e.key === 'Enter'){ e.preventDefault(); submitAddProj(); }
 });
+
+// Focus trap — keep Tab inside an open modal (a11y floor, brief 21). The setup
+// modal is a hard gate (no Esc-close), so trapping is the only thing keeping a
+// keyboard user from tabbing into the dead app behind it.
+function trapTab(container, e){
+  if(e.key !== 'Tab' || !container) return;
+  const f = [...container.querySelectorAll(
+    'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])')]
+    .filter(n => n.offsetParent !== null);
+  if(!f.length) return;
+  const first = f[0], last = f[f.length - 1];
+  if(e.shiftKey && document.activeElement === first){ e.preventDefault(); last.focus(); }
+  else if(!e.shiftKey && document.activeElement === last){ e.preventDefault(); first.focus(); }
+}
+$('addbg').addEventListener('keydown', e => trapTab($('addmodal'), e));
+$('setupbg').addEventListener('keydown', e => trapTab($('setupmodal'), e));
+$('sweepbg').addEventListener('keydown', e => trapTab($('sweepconfirm'), e));
 $('chatin').addEventListener('input', autoGrow);
 $('chatin').addEventListener('keydown', e => {
   if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); send(); }
@@ -3237,7 +3264,9 @@ document.addEventListener('keydown', e => {
   if((e.metaKey||e.ctrlKey) && e.key==='s'){ e.preventDefault(); save(); }
   if((e.metaKey||e.ctrlKey) && e.key==='e'){ e.preventDefault(); setMode(mode === 'reading' ? 'source' : 'reading'); }
   if(e.key === 'Escape'){
+    // setupbg is deliberately not dismissible — it is the hard curator gate.
     if($('addbg').classList.contains('open')) closeAddProj();
+    else if($('sweepbg').style.display === 'flex'){ $('sweepbg').style.display = 'none'; $('sweepthrust').value = ''; }
     else if($('findbar').classList.contains('open')) closeFind();
   }
 });
