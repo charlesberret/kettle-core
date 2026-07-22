@@ -745,7 +745,7 @@ def ensure_curator_settings(settings: dict) -> dict:
 
 
 def deep_merge_settings(cur: dict, patch: dict) -> dict:
-    """Shallow merge with deep merge for curator / agents / models / menu."""
+    """Shallow merge with deep merge for curator / agents / models / menu / egress / admin."""
     out = dict(cur)
     for key, val in patch.items():
         if key == "curator" and isinstance(val, dict):
@@ -811,6 +811,25 @@ def deep_merge_settings(cur: dict, patch: dict) -> dict:
                 curator["menu"] = default_menu()
             out["curator"] = curator
             out["agents"] = dict(curator["models"])
+        elif key == "egress" and isinstance(val, dict):
+            base = dict(out.get("egress") or {})
+            routes_patch = val.get("routes")
+            for k, v in val.items():
+                if k == "routes":
+                    continue
+                base[k] = v
+            if isinstance(routes_patch, dict):
+                routes = dict(base.get("routes") or {})
+                routes.update({
+                    k: v for k, v in routes_patch.items()
+                    if isinstance(v, str) and v.strip()
+                })
+                base["routes"] = routes
+            out["egress"] = base
+        elif key == "admin" and isinstance(val, dict):
+            base = dict(out.get("admin") or {})
+            base.update(val)
+            out["admin"] = base
         else:
             out[key] = val
     return out

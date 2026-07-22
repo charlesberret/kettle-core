@@ -131,15 +131,15 @@ the beta entry gate, over everything that ships — code, prompts, kit files, do
 
     avicenna  hesiod  majordomo  Seafile  Xanadu  Dramaturge  /Users/charles
 
-**Code items (brief 10):**
+**Code items (brief 10):** ✅ done 2026-07-22
 
-- `egress.py` default routes name avicenna, majordomo, and `Characters/inbox` — move
-  routes into settings with neutral defaults.
-- The sweep prompt hardcodes Dramaturge/persona-recast doctrine — genericize.
-- `/api/admin` scans `Worlds/Xanadu/personas` and reads desk-sentinel state under
-  `~/.cache/claude/` — gate the personal panels behind settings.
+- `egress.py` defaults are neutral (`peers` / `escalation` / `launch` / `domain`); personal
+  routes live in `settings.egress.routes` (local overlay).
+- Sweep prompt ballots are generic fill-entries (no Dramaturge/Characters hardcoding).
+- `/api/admin` fleet panels (sentinel, desk-events, watcher, persona family) gated behind
+  `admin.fleet_panels` (default false).
 - Desktop first-run seeds its registry from `~/cloud/git-projects/setsweep-core/projects.json` —
-  harmless on a stranger's machine, but it goes.
+  harmless on a stranger's machine, but it goes (desktop brief 15).
 
 **Docs items (brief 17):**
 

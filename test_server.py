@@ -1086,8 +1086,22 @@ class EndpointTests(Base):
     def test_admin_report_shape(self):
         s, j = _http("GET", f"{self.base}/api/admin?project=t")
         self.assertEqual(s, 200)
-        for key in ("server", "settings", "sentinel"):
+        for key in ("server", "settings", "fleet_panels", "sentinel", "projects"):
             self.assertIn(key, j)
+        # Fleet panels default off (brief 10): sentinel/events/watcher are null.
+        self.assertFalse(j["fleet_panels"])
+        self.assertIsNone(j["sentinel"])
+        self.assertIsNone(j.get("events"))
+        self.assertIsNone(j.get("watcher"))
+
+    def test_admin_fleet_panels_when_enabled(self):
+        server.save_settings({"admin": {"fleet_panels": True}})
+        s, j = _http("GET", f"{self.base}/api/admin?project=t")
+        self.assertEqual(s, 200)
+        self.assertTrue(j["fleet_panels"])
+        self.assertIsInstance(j["sentinel"], dict)
+        self.assertIn("state", j["sentinel"])
+        self.assertIsInstance(j["events"], list)
 
     def test_unknown_project_400(self):
         s, _ = _http("GET", f"{self.base}/api/queue?project=bogus")

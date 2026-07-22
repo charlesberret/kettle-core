@@ -241,6 +241,16 @@ class TestCatalog(unittest.TestCase):
         self.assertEqual(out["curator"]["menu"]["claude"], ["sonnet"])
         self.assertEqual(out["curator"]["menu"]["grok"], ["grok-4.5"])
 
+    def test_egress_and_admin_deep_merge(self):
+        cur = {"egress": {"routes": {"handoff": "peers"}}, "admin": {"fleet_panels": False}}
+        out = deep_merge_settings(cur, {
+            "egress": {"routes": {"launch": "launch-directives"}},
+            "admin": {"fleet_panels": True},
+        })
+        self.assertEqual(out["egress"]["routes"]["handoff"], "peers")
+        self.assertEqual(out["egress"]["routes"]["launch"], "launch-directives")
+        self.assertTrue(out["admin"]["fleet_panels"])
+
     def test_visible_force_includes_active(self):
         cat = curator.build_catalog({
             "curator": {

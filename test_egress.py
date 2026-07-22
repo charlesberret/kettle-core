@@ -60,13 +60,13 @@ class EgressTests(unittest.TestCase):
         self.assertIn("# Egress: Ship the beta", body)
         self.assertIn("**From:** setsweep/t", body)
         self.assertIn("**Kind:** launch", body)
-        self.assertIn("**Route:** handoff-setsweep-avicenna-directives", body)
+        self.assertIn("**Route:** launch", body)  # neutral product default
         self.assertIn("**Status:** staged", body)
         self.assertIn("Approve go for beta release.", body)
 
     def test_list_staged_skips_readme_and_routed(self):
         egress.stage_egress(
-            self.proj(), kind="handoff", topic="note", body="hello", route="avicenna")
+            self.proj(), kind="handoff", topic="note", body="hello", route="peers")
         d = egress.egress_dir(self.proj())
         (d / "old-done.md").write_text(
             "# Egress: done\n**Kind:** handoff\n**Route:** x\n**Status:** routed\n\nok\n")
@@ -79,7 +79,7 @@ class EgressTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             egress.stage_egress(self.proj(), kind="mail", topic="x", body="y")
 
-    def test_approval_kind_routes_to_fleet(self):
+    def test_approval_kind_routes_to_peers_by_default(self):
         result = egress.stage_egress(
             self.proj(),
             kind="approval",
@@ -88,7 +88,22 @@ class EgressTests(unittest.TestCase):
         )
         body = Path(result["path"]).read_text()
         self.assertIn("**Kind:** approval", body)
-        self.assertIn("**Route:** fleet", body)
+        self.assertIn("**Route:** peers", body)
+
+    def test_settings_egress_routes_override_defaults(self):
+        server.SETTINGS_PATH.write_text(json.dumps({
+            "egress": {"routes": {
+                "launch": "handoff-setsweep-avicenna-directives",
+                "handoff": "avicenna",
+            }},
+        }))
+        result = egress.stage_egress(
+            self.proj(), kind="launch", topic="Go", body="Ship it.")
+        self.assertIn("**Route:** handoff-setsweep-avicenna-directives",
+                      Path(result["path"]).read_text())
+        result2 = egress.stage_egress(
+            self.proj(), kind="handoff", topic="Note", body="hi")
+        self.assertIn("**Route:** avicenna", Path(result2["path"]).read_text())
 
     def test_register_project_seeds_outbound(self):
         folder = self.tmp / "notes"

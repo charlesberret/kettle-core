@@ -1,7 +1,7 @@
 """Desk egress — durable staging of outward signals under `.setsweep/outbound/`.
 
 Distinct from inbox kit mail staging (`<root>/outbox`). The desk writes Status: staged;
-fleet pickup drains and routes. Never transmits; never writes into ~/cloud/sync/system from here.
+external pickup drains and routes. Never transmits from the desk process itself.
 """
 from __future__ import annotations
 
@@ -14,14 +14,30 @@ import server
 
 KINDS = frozenset({"handoff", "escalation", "launch", "domain", "approval"})
 
-_DEFAULT_ROUTES = {
-    "handoff": "avicenna",
-    "escalation": "majordomo",
-    "launch": "handoff-setsweep-avicenna-directives",
-    "domain": "Characters/inbox",
-    # Fleet-readable "patron approved / still waiting" signals from approve+sweep
-    "approval": "fleet",
+# Neutral product defaults. Personal fleet routes live in settings.egress.routes
+# (see INSTALL / API — brief 10).
+DEFAULT_ROUTES = {
+    "handoff": "peers",
+    "escalation": "escalation",
+    "launch": "launch",
+    "domain": "domain",
+    "approval": "peers",
 }
+# Back-compat alias for older imports/tests
+_DEFAULT_ROUTES = DEFAULT_ROUTES
+
+
+def routes_for_settings(settings: dict | None = None) -> dict[str, str]:
+    """Resolve kind → route hint: product defaults overlaid by settings.egress.routes."""
+    routes = dict(DEFAULT_ROUTES)
+    raw = settings if settings is not None else server.load_settings()
+    block = raw.get("egress") if isinstance(raw, dict) else None
+    custom = block.get("routes") if isinstance(block, dict) else None
+    if isinstance(custom, dict):
+        for kind, hint in custom.items():
+            if kind in KINDS and isinstance(hint, str) and hint.strip():
+                routes[kind] = hint.strip()
+    return routes
 
 
 def egress_dir(proj: dict) -> Path:
@@ -35,7 +51,7 @@ def _framework_text() -> str:
     except OSError:
         return (
             "# Desk egress\n\n"
-            "`.setsweep/outbound/` stages outward signals for fleet pickup. "
+            "`.setsweep/outbound/` stages outward signals for external pickup. "
             "Not the inbox kit's `<root>/outbox` (mail drafts). "
             "Status: staged — never route or transmit from the desk.\n"
         )
@@ -75,7 +91,7 @@ def stage_egress(
     body = str(body or "").strip()
     if not body:
         raise ValueError("body required")
-    route = (route or "").strip() or _DEFAULT_ROUTES[kind]
+    route = (route or "").strip() or routes_for_settings()[kind]
     day = day or date.today().isoformat()
     ensure_egress(proj)
     fname = f"{day}-{kind}-{_slug_topic(topic)}.md"
@@ -146,7 +162,8 @@ def status_for_prompt(proj: dict) -> str:
     staged = list_staged(proj)
     lines = [
         f"DESK EGRESS — stage outward signals under {egress_dir(proj)} "
-        "(not inbox <root>/outbox). Prefer `setsweep egress`. Status stays staged; pickup routes.",
+        "(not inbox <root>/outbox). Prefer `setsweep egress`. Status stays staged; "
+        "external pickup routes.",
         f"Currently staged: {len(staged)}",
     ]
     for row in staged[:12]:

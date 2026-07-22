@@ -76,20 +76,21 @@ Approvals never auto-mutate canonical documents; only a sweep, on request, appli
 
 ## Egress discipline
 
-`.setsweep/outbound/` is the desk's staging queue for signals meant for the broader agent ecosystem
-(handoffs, Majordomo escalations, launch directives, domain memos). Stage with
-`setsweep egress` (or write the same header shape by hand). Leave `Status: staged` — fleet pickup
-drains and routes. Never write into `~/cloud/sync/system/` from the curator sandbox; never transmit.
+`.setsweep/outbound/` is the desk's staging queue for signals meant for other agents or systems
+(handoffs, escalations, launch directives, domain memos). Stage with `setsweep egress` (or write
+the same header shape by hand). Leave `Status: staged` — external pickup drains and routes.
+Never transmit from the curator sandbox.
 
 This is **not** the inbox kit's `<root>/outbox` (approved mail drafts for an out-of-band sender).
 
 - Launch-type ledger rulings: append `LAUNCH DIRECTIVE:` to `runtime/sweep.log` **and** stage a
   `kind: launch` egress memo.
-- Domain memos may still land in their project path (e.g. `Characters/inbox`); also stage a short
+- Domain memos may still land in a project path named by the charter; also stage a short
   `kind: domain` egress pointer so pickup sees one place.
 - Session logs: point at egress paths; do not restate the body.
 
-See `kits/frameworks/egress.md` for Kind / Route / filename rules.
+See `kits/frameworks/egress.md` for Kind / Route / filename rules. Route defaults are neutral;
+override with `settings.egress.routes` for a personal fleet.
 
 ## Sweep actions
 

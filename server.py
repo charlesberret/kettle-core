@@ -464,7 +464,7 @@ def runtime_dir(proj: dict) -> Path:
     """Volatile runtime state — the high-churn files (queue, chatlog, logs, snapshots,
     sessions) that must NOT sync. Kept INSIDE the project at <root>/.setsweep/runtime/
     so they stay within the review agent's project-root fence (no out-of-sandbox
-    --add-dir needed). If you sync the project tree (Seafile/Dropbox/etc.), exclude
+    --add-dir needed). If you sync the project tree (Dropbox/iCloud/etc.), exclude
     `.setsweep/runtime/` at the sync layer (e.g. a `seafile-ignore.txt`) so the daemon
     doesn't race these rapid rewrites. The durable desk files stay in desk_dir() and sync
     normally. (A sync idiosyncrasy is fixed at the sync layer, not by moving state outside
@@ -1188,7 +1188,14 @@ def _events_tail(n: int = 20) -> list[str]:
         return []
 
 
-def _project_debug(proj: dict) -> dict:
+def _admin_fleet_panels_enabled(settings: dict | None = None) -> bool:
+    """Personal-fleet admin panels (sentinel, desk-events, persona family). Default off."""
+    s = settings if settings is not None else load_settings()
+    admin = s.get("admin") if isinstance(s, dict) else None
+    return bool(isinstance(admin, dict) and admin.get("fleet_panels"))
+
+
+def _project_debug(proj: dict, *, fleet_panels: bool = False) -> dict:
     """Per-project counts, read defensively — a broken project never 500s the report."""
     info = {
         "id": proj.get("id"), "name": proj.get("name"), "root": proj.get("root"),
@@ -1212,28 +1219,32 @@ def _project_debug(proj: dict) -> dict:
         info["sessions"] = (rd / "sessions").is_dir()
     except Exception as e:  # noqa: BLE001 — report, never raise
         info["error"] = repr(e)
-    # Persona-rebuild family status — a whole-family progress read (the queue only
-    # tracks the active batch). Surfaced only where a Xanadu personas dir exists;
-    # never lets its own failure break the report.
-    try:
-        pdir = Path(proj.get("root", "")) / "Worlds/Xanadu/personas"
-        if pdir.is_dir():
-            fam = {"total": 0, "rebuilt": 0, "pending": 0, "curiosity": 0}
-            for d in sorted(pdir.iterdir()):
-                if not d.is_dir() or d.name.startswith("_"):
-                    continue
-                if not (d / "BODY.md").is_file():
-                    continue
-                fam["total"] += 1
-                if (d / "SOURCES.md").is_file():
-                    fam["rebuilt"] += 1
-                else:
-                    fam["pending"] += 1
-                if (d / "CURIOSITY.md").is_file():
-                    fam["curiosity"] += 1
-            info["persona_family"] = fam
-    except Exception:  # noqa: BLE001 — the family scan must never 500 the report
-        pass
+    # Optional persona-family progress: only when fleet_panels is on *and*
+    # settings.admin.persona_family_relpath is set (no product-default personal path).
+    if fleet_panels:
+        try:
+            settings = load_settings()
+            admin = settings.get("admin") if isinstance(settings, dict) else {}
+            rel = (admin or {}).get("persona_family_relpath")
+            if isinstance(rel, str) and rel.strip():
+                pdir = Path(proj.get("root", "")) / rel.strip()
+                if pdir.is_dir():
+                    fam = {"total": 0, "rebuilt": 0, "pending": 0, "curiosity": 0}
+                    for d in sorted(pdir.iterdir()):
+                        if not d.is_dir() or d.name.startswith("_"):
+                            continue
+                        if not (d / "BODY.md").is_file():
+                            continue
+                        fam["total"] += 1
+                        if (d / "SOURCES.md").is_file():
+                            fam["rebuilt"] += 1
+                        else:
+                            fam["pending"] += 1
+                        if (d / "CURIOSITY.md").is_file():
+                            fam["curiosity"] += 1
+                    info["persona_family"] = fam
+        except Exception:  # noqa: BLE001 — the family scan must never 500 the report
+            pass
     return info
 
 
@@ -1244,10 +1255,10 @@ def admin_report(active_pid: str | None) -> dict:
         projects = load_projects()
     except Exception:  # noqa: BLE001
         projects = []
-    health = _read_json(CACHE / "inventory-health.json")
-    watch = health.get("setsweep-watch") if isinstance(health, dict) else None
+    settings = load_settings()
+    fleet = _admin_fleet_panels_enabled(settings)
     cfg = current_curator()
-    return {
+    report = {
         "server": {
             "port": SERVER_PORT,
             "claude_path": cfg.resolved_command(),  # back-compat alias
@@ -1258,12 +1269,20 @@ def admin_report(active_pid: str | None) -> dict:
             "project_count": len(projects),
             "active": active_pid,
         },
-        "settings": load_settings(),
-        "projects": [_project_debug(p) for p in projects],
-        "sentinel": _sentinel_status(),
-        "events": _events_tail(20),
-        "watcher": watch,
+        "settings": settings,
+        "projects": [_project_debug(p, fleet_panels=fleet) for p in projects],
+        "fleet_panels": fleet,
+        "sentinel": None,
+        "events": None,
+        "watcher": None,
     }
+    if fleet:
+        health = _read_json(CACHE / "inventory-health.json")
+        watch = health.get("setsweep-watch") if isinstance(health, dict) else None
+        report["sentinel"] = _sentinel_status()
+        report["events"] = _events_tail(20)
+        report["watcher"] = watch
+    return report
 
 
 # ---------- http ----------

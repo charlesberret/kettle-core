@@ -4042,8 +4042,8 @@ async function loadAdminDebug(){
   try { a = await jget('/api/admin?project=' + encodeURIComponent(PROJECT || '')); }
   catch(err){ box.innerHTML = `<span class="v bad">admin read failed: ${esc(err)}</span>`; return; }
   $('adminstamp').textContent = 'as of ' + stamp();
-  const s = a.server || {}, sen = a.sentinel || {}, w = a.watcher;
-  const senCls = {live:'ok', stale:'warnv', down:'bad'}[sen.state] || '';
+  const s = a.server || {};
+  const fleet = !!a.fleet_panels;
   let h = '';
   // server
   const cur = s.curator || {};
@@ -4055,19 +4055,23 @@ async function loadAdminDebug(){
     <span class="k">provider</span><span class="v">${esc(cur.provider || 'claude')} · ${esc(cur.stream || '—')}</span>
     <span class="k">active projects</span><span class="v">${esc(s.project_count)}</span>
   </div>`;
-  // sentinel
-  h += `<h2 style="margin-top:16px">sentinel</h2><div class="kv">
-    <span class="k">state</span><span class="v ${senCls}">${esc(sen.state)}</span>
-    <span class="k">heartbeat age</span><span class="v">${sen.heartbeat_age==null?'—':esc(sen.heartbeat_age)+'s'}</span>
-    <span class="k">pid</span><span class="v">${sen.pid==null?'—':esc(sen.pid)+(sen.pid_alive?' (live)':' (dead)')}</span>
-  </div>`;
-  // watcher beacon
-  h += `<h2 style="margin-top:16px">setsweep-watch beacon</h2>`;
-  h += w ? `<div class="kv">
-      <span class="k">status</span><span class="v ${w.status==='ok'?'ok':'bad'}">${esc(w.status)}</span>
-      <span class="k">last run</span><span class="v">${esc(w.last_run)}</span>
-      <span class="k">rows written</span><span class="v">${esc(w.rows_written)}</span>
-    </div>` : `<span class="mono-dim">— not present —</span>`;
+  // Fleet-local panels (sentinel, watch beacon, persona family, desk-events) only when
+  // settings.admin.fleet_panels is true — default off for a public install.
+  if(fleet){
+    const sen = a.sentinel || {}, w = a.watcher;
+    const senCls = {live:'ok', stale:'warnv', down:'bad'}[sen.state] || '';
+    h += `<h2 style="margin-top:16px">sentinel</h2><div class="kv">
+      <span class="k">state</span><span class="v ${senCls}">${esc(sen.state)}</span>
+      <span class="k">heartbeat age</span><span class="v">${sen.heartbeat_age==null?'—':esc(sen.heartbeat_age)+'s'}</span>
+      <span class="k">pid</span><span class="v">${sen.pid==null?'—':esc(sen.pid)+(sen.pid_alive?' (live)':' (dead)')}</span>
+    </div>`;
+    h += `<h2 style="margin-top:16px">setsweep-watch beacon</h2>`;
+    h += w ? `<div class="kv">
+        <span class="k">status</span><span class="v ${w.status==='ok'?'ok':'bad'}">${esc(w.status)}</span>
+        <span class="k">last run</span><span class="v">${esc(w.last_run)}</span>
+        <span class="k">rows written</span><span class="v">${esc(w.rows_written)}</span>
+      </div>` : `<span class="mono-dim">— not present —</span>`;
+  }
   // projects
   h += `<h2 style="margin-top:16px">projects</h2>`;
   const ps = a.projects || [];
@@ -4082,24 +4086,26 @@ async function loadAdminDebug(){
     }
     h += `</table>`;
   } else h += `<span class="mono-dim">— none —</span>`;
-  // persona-rebuild family status (Xanadu) — whole-family progress, not just the queue
-  const famProj = ps.find(p => p.persona_family);
-  if(famProj && famProj.persona_family){
-    const f = famProj.persona_family;
-    const pct = f.total ? Math.round(100*f.rebuilt/f.total) : 0;
-    h += `<h2 style="margin-top:16px">persona rebuild — ${esc(famProj.name)}</h2><div class="kv">
-      <span class="k">rebuilt (BODY+SOURCES)</span><span class="v ${f.rebuilt===f.total?'ok':''}">${esc(f.rebuilt)} / ${esc(f.total)} (${pct}%)</span>
-      <span class="k">pending</span><span class="v">${esc(f.pending)}</span>
-      <span class="k">curiosity seeded</span><span class="v">${esc(f.curiosity)}</span>
-    </div>`;
+  if(fleet){
+    const famProj = ps.find(p => p.persona_family);
+    if(famProj && famProj.persona_family){
+      const f = famProj.persona_family;
+      const pct = f.total ? Math.round(100*f.rebuilt/f.total) : 0;
+      h += `<h2 style="margin-top:16px">persona rebuild — ${esc(famProj.name)}</h2><div class="kv">
+        <span class="k">rebuilt (BODY+SOURCES)</span><span class="v ${f.rebuilt===f.total?'ok':''}">${esc(f.rebuilt)} / ${esc(f.total)} (${pct}%)</span>
+        <span class="k">pending</span><span class="v">${esc(f.pending)}</span>
+        <span class="k">curiosity seeded</span><span class="v">${esc(f.curiosity)}</span>
+      </div>`;
+    }
   }
   // settings dump
   h += `<h2 style="margin-top:16px">settings.json</h2><pre class="adump">${esc(JSON.stringify(a.settings, null, 2))}</pre>`;
-  // events
-  h += `<h2 style="margin-top:16px">desk-events.log (last 20)</h2>`;
-  h += (a.events && a.events.length)
-    ? `<pre class="adump evlog">${esc(a.events.join('\n'))}</pre>`
-    : `<span class="mono-dim">— empty —</span>`;
+  if(fleet){
+    h += `<h2 style="margin-top:16px">desk-events.log (last 20)</h2>`;
+    h += (a.events && a.events.length)
+      ? `<pre class="adump evlog">${esc(a.events.join('\n'))}</pre>`
+      : `<span class="mono-dim">— empty —</span>`;
+  }
   box.innerHTML = h;
 }
 

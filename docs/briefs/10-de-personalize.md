@@ -5,7 +5,7 @@ repo: setsweep-core
 touches: [egress.py, server.py (or kits/prompts/ after brief 04), kits/_base.md, kits/frameworks/egress.md, _Status.md, settings handling]
 risk: run-critical
 depends-on: [01]
-status: open
+status: done
 ---
 
 ## Context
@@ -62,3 +62,17 @@ reading the assembled prompts for fleet terms.
 
 `status: done`; RELEASE.md's de-personalization checklist marks the code items done
 (docs items live in brief 17); note the settings schema addition in API.md.
+
+## Closing note (2026-07-22)
+
+Shipped product surfaces are clean of fleet names. Remaining audit hits are justified:
+
+| Hit | Why it stays |
+|---|---|
+| `test_egress` personal route strings | Asserts that *settings overlays* still work for Charles |
+| `INSTALL.md` / brief 20 `~/Seafile/...` | Retirement checklist for dead PATH shims |
+| `CLAUDE.md` "moved from Seafile" | One-line migration history |
+| `docs/briefs/10`, `docs/RELEASE.md` audit lists | Describe the problem; historical |
+
+Charles's local `settings.json` (gitignored) carries `egress.routes` +
+`admin.fleet_panels: true` + `persona_family_relpath`.

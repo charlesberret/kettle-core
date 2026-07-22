@@ -248,7 +248,16 @@ enforcement is a strict no-op. Unknown providers are treated as the weakest case
 | POST | `/api/chat` | **NDJSON** |
 | POST | `/api/compact` | **NDJSON** |
 | POST | `/api/clear-session` | JSON |
-| GET/POST | `/api/settings` | JSON — POST deep-merges `curator` / `agents` / `curator.menu` |
+| GET/POST | `/api/settings` | JSON — POST deep-merges `curator` / `agents` / `curator.menu` / `egress` / `admin` |
+
+Settings groups added for public installs (brief 10):
+
+- `egress.routes` — map of egress kind → route hint string. Product defaults are
+  neutral (`peers`, `escalation`, `launch`, `domain`, `approval` → `peers`). Personal
+  fleet names belong here, not in code.
+- `admin.fleet_panels` — boolean, default false. When true, `/api/admin` includes
+  sentinel / desk-events / watcher beacon. Optional persona-family scan runs only when
+  `admin.persona_family_relpath` is also set (relative path under a project root).
 | GET | `/api/curator/catalog` | Canonical model catalog, menu checkmarks, provider readiness, `visible` desk list |
 
 ### Tier 3 — founding
