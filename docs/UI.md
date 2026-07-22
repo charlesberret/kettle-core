@@ -63,6 +63,26 @@ Shared kit: `.btn` + `.btn-sm` / `.btn-md` + role (`.btn-default` | `.btn-primar
   Do not paint the whole pane secondary gray — only the subheaders.
 - Do not auto-inject the brief into chat on file select — brief lives in this pane.
 
+## Shared UI copy (all viewports)
+
+Patron-facing **strings** must not drift between web, desktop, and the plugin Desk.
+
+| Role | Location |
+|------|----------|
+| **Canonical** | `static/ui-copy.js` → `window.SETSWEEP_UI_COPY` (served as `/ui-copy.js`) |
+| **Plugin mirror** | `setsweep-plugin/packages/vscode/src/uiCopy.ts` → `UI_COPY` |
+| **Desktop** | inherits web (same static files via sidecar) |
+
+**Rule:** change a sitting string once in `ui-copy.js`, update `uiCopy.ts` in the same
+session, reinstall the VSIX. Prefer reading from the catalog (`uic('chatPlaceholder')` /
+`UI_COPY.chatPlaceholder`) over hardcoding new prose in HTML/TS.
+
+**Test:** `test_ui_copy.py` asserts core keys exist and, when the plugin path is present
+on disk, that key sets match.
+
+Longer term (Phase 6 / monorepo): ship one npm package of strings both trees import so
+mirroring is automatic. Until then, dual files + the test are the process.
+
 ## Founding / add project (brief 22)
 
 - Add-project **hot path:** name + folder only. Kit, max depth, and notes live under

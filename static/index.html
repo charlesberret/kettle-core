@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <!-- Bump this when sitting UI changes; title shows it so we can confirm the shell loaded. -->
-<meta name="setsweep-ui" content="2026-07-22e">
-<title>setsweep · ui-2026-07-22e</title>
+<meta name="setsweep-ui" content="2026-07-22f">
+<title>setsweep · ui-2026-07-22f</title>
 <style>
   /*
    * Type & chrome roles — single source of sitting hierarchy.
@@ -822,7 +822,7 @@
   <div id="chat-live" class="sr-only" aria-live="polite" aria-atomic="true"></div>
   <div id="spin"><span id="spinlabel">working…</span><span class="spin-elapsed" id="spinelapsed"></span></div>
   <div id="chatbar">
-    <textarea id="chatin" placeholder=""></textarea>
+    <textarea id="chatin" placeholder="Chat with the Setsweep agent…"></textarea>
   </div>
 </div>
 
@@ -1154,7 +1154,16 @@
 <script src="/themes.js"></script>
 <script src="/marked.min.js"></script>
 <script src="/purify.min.js"></script>
+<script src="/ui-copy.js"></script>
 <script>
+/* Canonical UI strings — static/ui-copy.js (window.SETSWEEP_UI_COPY). Keep in
+   sync with setsweep-plugin packages/vscode/src/uiCopy.ts — see docs/UI.md. */
+const UIC = (typeof SETSWEEP_UI_COPY !== 'undefined' && SETSWEEP_UI_COPY) || {};
+function uic(key, fallback){
+  const v = UIC[key];
+  return (typeof v === 'string' && v) ? v : fallback;
+}
+
 /* running in-memory JS error log — the diagnostics tab renders the last
    ~30, most recent first; the banner stays as the loud, immediate signal */
 const JSERR = [];
@@ -1363,9 +1372,10 @@ function renderQueue(){
     const hint = document.createElement('div');
     hint.className = 'qfounding-hint';
     hint.innerHTML =
-      '<strong>founding</strong>' +
-      'The curator is in the agent pane. Answer there, then <em>draft proposal ✓</em> when ready. ' +
-      'The queue fills after you approve the desk proposal.';
+      '<strong>' + esc(uic('foundingQueueHintTitle', 'founding')) + '</strong>' +
+      esc(uic('foundingQueueHintBody',
+        'The curator is in the agent pane. Answer there, then draft proposal ✓ when ready. ' +
+        'The queue fills after you approve the desk proposal.'));
     qlist.appendChild(hint);
     syncChrome();
     return;
@@ -1374,8 +1384,9 @@ function renderQueue(){
     const hint = document.createElement('div');
     hint.className = 'qfounding-hint';
     hint.innerHTML =
-      '<strong>desk proposal</strong>' +
-      'Edit the proposal in the center pane, then <em>approve</em> to found the desk and stock the first queue.';
+      '<strong>' + esc(uic('proposingQueueHintTitle', 'desk proposal')) + '</strong>' +
+      esc(uic('proposingQueueHintBody',
+        'Edit the proposal in the center pane, then approve to found the desk and stock the first queue.'));
     qlist.appendChild(hint);
     syncChrome();
     return;
@@ -3316,8 +3327,8 @@ function setFoundingChrome(on){
   const p = PROJECTS.find(x => x.id === PROJECT);
   if($('ivpname')) $('ivpname').textContent = p ? p.name : (PROJECT || '');
   $('chatin').placeholder = on
-    ? 'Chat with your agent about the interview questions…'
-    : '';
+    ? uic('chatPlaceholderFounding', 'Chat with the Setsweep agent…')
+    : uic('chatPlaceholder', 'Chat with the Setsweep agent…');
   if(on){
     try { $('chatin').focus({ preventScroll: true }); }
     catch(_){ $('chatin').focus(); }
@@ -3332,8 +3343,8 @@ function setProposingChrome(on){
     clearProposalGuideChrome();
   }
   $('chatin').placeholder = on
-    ? 'ask to revise the proposal — or edit it in the center pane · then Approve'
-    : '';
+    ? uic('chatPlaceholderProposing', 'Ask to revise the proposal — or edit it, then approve')
+    : uic('chatPlaceholder', 'Chat with the Setsweep agent…');
   if(on) $('chatin').focus();
 }
 function enterInterview(opts){
@@ -4706,6 +4717,9 @@ function wireAdmin(){
     syncBehaviorInputs(); applyMdToggle(); wireAdmin();
     applyCols(); applySplit();
     initDividers();
+    if($('chatin')) $('chatin').placeholder = uic('chatPlaceholder', 'Chat with the Setsweep agent…');
+    if($('commentin')) $('commentin').placeholder = uic('commentPlaceholder',
+      'a note for the sweep, tied to this file — Enter saves · Shift+Enter newline · Esc cancels');
     $('metaedit').onclick = toggleMetaEdit;
     if($('metatab-brief')) $('metatab-brief').onclick = () => setMetaPane('brief');
     if($('metatab-info')) $('metatab-info').onclick = () => setMetaPane('info');
