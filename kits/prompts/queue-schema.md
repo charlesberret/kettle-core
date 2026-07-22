@@ -1,3 +1,13 @@
-Queue entry schema (all fields): id (slug), title, path (absolute), project (name), project_root (absolute), ask_type (input|tuning|judgment), ask (one line: what is wanted from the patron), desk_item (null), urgency (high|medium|low), status ("pending"), unblocks (one line or "—"), brief (the curatorial brief — see the brief standard below).
-BRIEF STANDARD (both audiences, in order): the brief is shown to the patron the instant a file loads — seconds before any agent reply — so it must do real orienting work on its own. Write it in TWO movements: (1) a FIRST LINE that is plain, jargon-free, and immediately useful to a human — what this document is and what is wanted of them, in a sentence they can act on cold; (2) then 1–3 sentences of precise detail that also prime the review agent (specifics, terms of art, what to check). The two movements MUST NOT restate each other — movement 2 adds only precision movement 1 omitted (an exact quote, the fault's location, a concrete check); if you'd only be re-saying the lead in other words, stop at the lead. Spell out abbreviations on first use; no procedural agent-directed tails ('check file X first') — fold any sharpening cross-reference into the ask itself. 2–4 sentences total. Never make the patron decode shorthand to learn why a file is in front of them.
+Queue entry schema (all fields): id (slug), title, path (absolute), project (name), project_root (absolute), ask_type (input|tuning|judgment|fill), ask (one plain line: what is wanted from the patron — no bare codes), desk_item (null), urgency (high|medium|low), status ("pending"), unblocks (one line or "—"), brief (the curatorial brief — BRIEF STANDARD below).
 
+BRIEF STANDARD — cold re-entry (patron may be returning after weeks, or may have never carefully read this file). The brief shows the instant the file loads, before any chat reply; it must stand alone as a clear, unassuming introduction.
+
+Write in TWO movements, 2–4 sentences total:
+
+(1) LEAD — one plain-English sentence: what this document *is* and why it is in front of them. No jargon, no process labels (“Round 2”), no bare codes (D10, EDTF, …). A smart non-specialist should understand it cold.
+
+(2) SCAFFOLD — 1–3 short ordinary sentences: enough context to open the file without insider memory; what to look for; what “done” looks like in everyday words (accept / adjust / send back). Spell out any term of art on first use, or omit codes entirely if the decision is clear without them. Do NOT restate (1). Do NOT pack a full design review into the brief.
+
+The matching `ask` is one undemanding line in the same plain register.
+
+Anti-patterns: stacked noun phrases; clipped memo voice; undecoded acronyms; demanding tone; agent procedure (“check file X first”). Prefer kits/frameworks/brief.md for the full anti-pattern table and a good/bad worked rewrite. Never make the patron decode shorthand to learn why the file is queued.

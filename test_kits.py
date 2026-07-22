@@ -56,6 +56,21 @@ class KitsTest(unittest.TestCase):
             except (IndexError, KeyError, ValueError) as exc:
                 self.fail(f"{path.name} does not format cleanly: {exc}")
 
+    def test_brief_standard_is_cold_reentry(self):
+        """Briefs must orient a cold or returning patron — not insider memo voice."""
+        schema = (self.shipped / "prompts" / "queue-schema.md").read_text(encoding="utf-8")
+        self.assertIn("cold re-entry", schema.lower())
+        self.assertIn("plain-English", schema)
+        self.assertNotIn("terms of art", schema)
+        brief = (self.shipped / "frameworks" / "brief.md").read_text(encoding="utf-8")
+        self.assertIn("vibe-coded", brief)
+        self.assertIn("Good (cold re-entry)", brief)
+        self.assertIn("Bad (insider)", brief)
+        base = (self.shipped / "_base.md").read_text(encoding="utf-8")
+        self.assertIn("vibe-coded", base)
+        self.assertIn("unassuming introduction", base)
+        self.assertIn("kits/frameworks/brief.md", base)
+
     # ---- resolution ----
 
     def test_resolve_kind(self):

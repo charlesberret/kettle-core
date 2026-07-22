@@ -1853,7 +1853,8 @@ class Handler(BaseHTTPRequestHandler):
         orientation = project_orientation(proj)
         if orientation:
             prompt += "\n\n" + orientation
-        # Accrue / egress frameworks
+        # Accrue / egress frameworks (full text — brief.md's worked rewrite is load-bearing
+        # for cold-re-entry quality; do not truncate mid-example).
         for fname, label in (
             ("frameworks/brief.md", "Brief framework"),
             ("frameworks/familiarity.md", "Familiarity framework"),
@@ -1864,7 +1865,9 @@ class Handler(BaseHTTPRequestHandler):
             except OSError:
                 text = ""
             if text:
-                prompt += f"\n\n{label}:\n{text[:2500]}"
+                prompt += f"\n\n{label}:\n{text}"
+        if QUEUE_SCHEMA:
+            prompt += "\n\n" + QUEUE_SCHEMA
         import egress as _egress
         try:
             prompt += "\n\n" + _egress.status_for_prompt(proj)
@@ -2028,6 +2031,8 @@ class Handler(BaseHTTPRequestHandler):
             name=proj["name"], root=str(project_root(proj)),
             desk_dir=str(desk_dir(proj)), queue_path=str(queue_path(proj)),
         )
+        if QUEUE_SCHEMA:
+            prompt += "\n\n" + QUEUE_SCHEMA
         cmd = build_turn_cmd(
             prompt, task="setup", request_model=d.get("model"), tools_tier="sweep",
         )
@@ -2116,6 +2121,9 @@ class Handler(BaseHTTPRequestHandler):
             proposal_path=str(prop),
         )
         prompt = PROPOSE_PROMPT.format(**fields)
+        # Single-source schema + cold-re-entry brief standard (kits/prompts/queue-schema.md).
+        if QUEUE_SCHEMA:
+            prompt += "\n\n" + QUEUE_SCHEMA
         kit_ctx = kits.as_context(
             kits.for_project(proj, APPDIR / "kits", load_settings()), "found")
         if kit_ctx:
@@ -2184,6 +2192,9 @@ class Handler(BaseHTTPRequestHandler):
                 name=proj["name"], root=str(project_root(proj)),
                 desk_dir=str(desk_dir(proj)), queue_path=str(queue_path(proj)),
             )
+        # Single-source schema + cold-re-entry brief standard (kits/prompts/queue-schema.md).
+        if QUEUE_SCHEMA:
+            prompt += "\n\n" + QUEUE_SCHEMA
         kit_ctx = kits.as_context(
             kits.for_project(proj, APPDIR / "kits", load_settings()), "found")
         if kit_ctx:

@@ -15,18 +15,21 @@ with a sweep. You are a second reader, not an autopilot: the patron's hand is th
 
 ## The brief standard
 
-Every queue entry carries a **brief** — shown to the patron the instant a file loads, seconds
-before any agent reply, so it must orient them on its own. Write it in two movements:
+Every queue entry carries a **brief** — shown the instant a file loads, before any chat reply.
+The patron may be returning after weeks on another project, or may have vibe-coded this tree and
+never carefully read the file. The brief is a **clear, unassuming introduction**, not a dense
+memo for insiders. Full rules and a good/bad rewrite: `kits/frameworks/brief.md`.
 
-1. **A plain first line** — jargon-free, immediately useful to a human: what this document is and
-   what is wanted of them, in a sentence they can act on cold.
-2. **1–3 sentences of precise detail** that also prime the review agent — specifics, terms of art,
-   what to check, an exact quote or the fault's location.
+Write in two movements (2–4 sentences total):
 
-The movements must not restate each other; movement 2 adds only precision movement 1 omitted. Spell
-out abbreviations on first use. No procedural agent-directed tails ("check file X first") — fold any
-sharpening cross-reference into the ask. 2–4 sentences total. Never make the patron decode shorthand
-to learn why a file is in front of them.
+1. **Lead (plain English only)** — what this document is and why it is in front of them, cold.
+   No jargon, no process labels (“Round 2”), no bare codes (`D10`, …).
+2. **Scaffold** — 1–3 short ordinary sentences: enough context to open the file; what to look
+   for; what “done” looks like in everyday words (accept / adjust / send back). Spell out any
+   term on first use, or omit codes if the decision is clear without them. Do not restate the lead.
+
+The one-line **`ask`** uses the same plain register. Never make the patron decode shorthand to
+learn why the file is queued. No agent-procedure tails (“check file X first”).
 
 ## Urgency
 
