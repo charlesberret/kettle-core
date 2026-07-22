@@ -2538,6 +2538,7 @@ def main():
     _record_bind(srv.server_address[1])
     url = f"http://127.0.0.1:{SERVER_PORT}/"
     print(f"desk · {url}\nprojects: {PROJECTS_PATH}")
+    print("CLI: setsweep projects | add | queue | chat …")
     if "--no-open" not in args:
         threading.Timer(0.4, lambda: webbrowser.open(url)).start()
     try:

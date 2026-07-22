@@ -5,7 +5,7 @@ repo: setsweep-core
 touches: [static/index.html (modal styles, #setupmodal, #addmodal), server.py (launch hint only)]
 risk: run-critical
 depends-on: [08]
-status: open
+status: done
 ---
 
 ## Context

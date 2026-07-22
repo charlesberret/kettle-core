@@ -61,6 +61,8 @@ setsweep add <dir>    # register a project from the CLI
 setsweep projects     # list registered projects
 ```
 
+A bare launch prints the desk URL and a one-line CLI hint (`CLI: setsweep projects | add | queue | chat …`), so the windowless half of the product is discoverable from the terminal.
+
 Both modes share one fixed port (4242). At launch the app pings the port (`/api/ping` identity
 beacon) and retires a previous setsweep still holding it — but only on a verified ping answer,
 never on a stale pidfile — so a bookmarked tab can't talk to an orphaned server running old code.
