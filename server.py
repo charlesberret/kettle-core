@@ -284,6 +284,11 @@ ACCRUE_PROMPT = _load_prompt(
     "Accrue and restock {name} at {root}. Update {queue_path} and {desk_dir}; "
     "record the result in {session_log}.",
 )
+REFRESH_BRIEFS_PROMPT = _load_prompt(
+    "refresh-briefs.md",
+    "Rewrite cold-re-entry briefs and asks for every entry in {queue_path} "
+    "for {name} at {root} (desk {desk_dir}). Do not restock or archive.",
+)
 SWEEP_PROMPT = _load_prompt(
     "sweep.md",
     "Review and sweep {name} at {root}. Use {ledger}; maintain {desk_dir}, "
@@ -686,6 +691,55 @@ def scope_note(proj: dict) -> str:
             f"director{'y level' if d == 1 else 'y levels'} of the root — {detail}. Deeper "
             "subtrees are out of scope; do not trawl them. If the patron explicitly points you at a "
             "deeper file you may open that one file, but do not expand the desk's scope to its subtree.")
+
+
+def build_refresh_briefs_prompt(proj: dict) -> str | None:
+    """Prompt for rewriting brief+ask on the current queue only.
+
+    Returns None when the queue is empty (caller should short-circuit). Shared by
+    POST /api/refresh-briefs and `setsweep refresh-briefs`.
+    """
+    entries = load_queue(proj).get("entries") or []
+    if not entries:
+        return None
+    prompt = REFRESH_BRIEFS_PROMPT.format(
+        name=proj["name"],
+        root=str(project_root(proj)),
+        desk_dir=str(desk_dir(proj)),
+        queue_path=str(queue_path(proj)),
+    )
+    handbook = base_handbook()
+    if handbook:
+        prompt += "\n\n" + handbook
+    orientation = project_orientation(proj)
+    if orientation:
+        prompt += "\n\n" + orientation
+    try:
+        brief_fw = (APPDIR / "kits" / "frameworks" / "brief.md").read_text(
+            encoding="utf-8").strip()
+    except OSError:
+        brief_fw = ""
+    if brief_fw:
+        prompt += "\n\nBrief framework:\n" + brief_fw
+    if QUEUE_SCHEMA:
+        prompt += "\n\n" + QUEUE_SCHEMA
+    inv = [{
+        "id": e.get("id"),
+        "title": e.get("title"),
+        "path": e.get("path"),
+        "status": e.get("status"),
+        "ask": e.get("ask"),
+        "brief": e.get("brief"),
+    } for e in entries]
+    prompt += (
+        "\n\n---\nCURRENT QUEUE ENTRIES (rewrite brief+ask for each; preserve ids/paths):\n"
+        + json.dumps(inv, indent=2, ensure_ascii=False)
+        + "\n---\n"
+    )
+    sc = scope_note(proj)
+    if sc:
+        prompt += "\n\n" + sc
+    return prompt
 
 
 def session_path(proj: dict) -> Path:
@@ -1582,6 +1636,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.compact(d)
             elif url.path == "/api/sweep":
                 self.sweep(d)
+            elif url.path == "/api/refresh-briefs":
+                self.refresh_briefs(d)
             elif url.path == "/api/projects/add":
                 self.add_project(d)
             elif url.path == "/api/projects/delete":
@@ -1774,6 +1830,32 @@ class Handler(BaseHTTPRequestHandler):
             session_id=sid, tools_tier="chat",
         )
         self.run_curator(cmd, str(project_root(proj)), prior_sid=sid)
+
+    def refresh_briefs(self, d):
+        """Rewrite brief + ask on the current queue only (no close, archive, or restock)."""
+        proj = get_project(d.get("project"))
+        built = build_refresh_briefs_prompt(proj)
+        if built is None:
+            self.stream_idle("Queue is empty — nothing to refresh.")
+            return
+        prompt = built
+        sid = session_id_for_curator(
+            proj=proj, model=current_curator().model_for("setup", d.get("model")),
+        )
+        cmd = build_turn_cmd(
+            prompt, task="setup", request_model=d.get("model"),
+            session_id=sid, name=session_name(proj), tools_tier="sweep",
+        )
+
+        def persist(new_sid):
+            kw = {"session_id": new_sid, "name": session_name(proj)}
+            m = current_curator().model_for("setup", d.get("model"))
+            if m:
+                kw["model"] = m
+            save_session(proj, **kw)
+
+        self.run_curator(cmd, str(project_root(proj)), prior_sid=sid, persist=persist,
+                         role="curator")
 
     def sweep(self, d):
         proj = get_project(d.get("project"))

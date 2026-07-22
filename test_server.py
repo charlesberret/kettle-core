@@ -420,6 +420,25 @@ class HelperTests(Base):
         self.assertIn("rounds.md", out)
         self.assertIn("Never transmit", out)
 
+    def test_build_refresh_briefs_prompt_empty_and_stocked(self):
+        proj = self.proj()
+        self.assertIsNone(server.build_refresh_briefs_prompt(proj))
+        (self.root / "memo.md").write_text("decision memo\n")
+        self.write_queue([{
+            "id": "memo",
+            "path": str(self.root / "memo.md"),
+            "status": "pending",
+            "ask": "Accept D10",
+            "brief": "Round 2 founder decision on D10 and GREASE.",
+        }])
+        prompt = server.build_refresh_briefs_prompt(proj)
+        self.assertIsNotNone(prompt)
+        self.assertIn("cold re-entry", prompt.lower())
+        self.assertIn("CURRENT QUEUE ENTRIES", prompt)
+        self.assertIn("memo", prompt)
+        self.assertIn("D10", prompt)  # old brief still listed for rewrite
+        self.assertIn(str(server.queue_path(proj)), prompt)
+
     def test_sweep_precomputed_context_includes_diffs(self):
         (self.root / "alpha.md").write_text("alpha body\n")
         (self.root / "beta.md").write_text("beta body\n")

@@ -37,8 +37,9 @@ class KitsTest(unittest.TestCase):
             "accrue.md", "bootstrap.md", "context-block.md", "default-role.md",
             "found-legacy.md", "found.md", "founding-live-reporting.md",
             "interview-kickoff.md", "interview-role.md", "propose.md",
-            "queue-schema.md", "sweep.md", "sweep-verbosity-normal.md",
-            "sweep-verbosity-quiet.md", "sweep-verbosity-verbose.md",
+            "queue-schema.md", "refresh-briefs.md", "sweep.md",
+            "sweep-verbosity-normal.md", "sweep-verbosity-quiet.md",
+            "sweep-verbosity-verbose.md",
         }
         paths = sorted(prompt_dir.glob("*.md"))
         self.assertEqual({path.name for path in paths}, expected)

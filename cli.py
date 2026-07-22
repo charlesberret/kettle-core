@@ -22,6 +22,7 @@ your edits where the lineage reconciler can see them.
   setsweep sweep-status <project>  mechanical CLOSE readiness (quiet / judgment / accrue)
   setsweep sweep-close  <project>  quiet CLOSE: stage · archive · thin session log
   setsweep sweep-archive <project>  archive queue entries (after judgment)
+  setsweep refresh-briefs <project> rewrite cold-re-entry briefs on the current queue
   setsweep egress <project>        stage a desk egress memo (.setsweep/outbound/)
   setsweep egress-status <project> list staged egress memos
   setsweep doctor                  install health (which setsweep, py-modules mapping)
@@ -415,6 +416,47 @@ def cmd_queue(args) -> int:
     return 0
 
 
+def cmd_refresh_briefs(args) -> int:
+    """Rewrite brief + ask on every entry currently in the queue (no archive/restock)."""
+    proj = server.get_project(args.project)
+    prompt = server.build_refresh_briefs_prompt(proj)
+    if prompt is None:
+        print(f"{proj['id']}: queue empty — nothing to refresh")
+        return 0
+    n = len(server.load_queue(proj).get("entries") or [])
+    sid = server.load_session(proj).get("session_id")
+    cfg = server.current_curator()
+    cmd = server.build_turn_cmd(
+        prompt, task="setup", request_model=args.model,
+        session_id=sid, name=server.session_name(proj), tools_tier="sweep",
+    )
+    rt = runtime.Runtime(server.agent_bin(), server.desk_dir(proj) / "sessions",
+                         provider=cfg.provider)
+    print(f"· refreshing briefs on {proj['id']} — {n} entr"
+          f"{'y' if n == 1 else 'ies'} …\n")
+    for ev in rt.spawn(prompt, cwd=str(server.project_root(proj)), session_id=sid,
+                       role="refresh-briefs", cmd=cmd):
+        t = ev["t"]
+        if t == "text":
+            sys.stdout.write(ev["s"]); sys.stdout.flush()
+        elif t == "tool":
+            sys.stdout.write(f"\n  ⚙ {ev['s']}\n"); sys.stdout.flush()
+        elif t == "model":
+            new = ev.get("session")
+            if new and new != sid:
+                sid = new
+                server.save_session(proj, session_id=sid, name=server.session_name(proj))
+        elif t == "done":
+            u = ev.get("usage") or {}
+            print(f"\n  [ctx {_k(u.get('context'))}/{_k(u.get('window'))} · ${ev.get('cost') or 0:.3f}]")
+            if ev.get("error"):
+                print(f"  [agent error: {ev['error']}]")
+        elif t == "error":
+            print(f"\n  [error: {ev['s']}]")
+    print(f"\nnext:  setsweep queue {proj['id']}")
+    return 0
+
+
 def cmd_open(args) -> int:
     proj = server.get_project(args.project)
     entry = server.find_entry(server.load_queue(proj), args.id)
@@ -609,13 +651,14 @@ def main(argv=None) -> int:
                "  setsweep doctor                      # install health\n"
                "  setsweep sweep-status setsweep\n"
                "  setsweep sweep-close  setsweep\n"
+               "  setsweep refresh-briefs setsweep\n"
                "  setsweep egress setsweep --kind launch --topic go-ahead --body '…'\n"
                "  setsweep egress-status setsweep\n")
     # not required: a bare `setsweep` should greet with the menu, not error out
     sub = ap.add_subparsers(
         dest="cmd",
         metavar="{projects,add,init,found,queue,open,lineage,bind,chat,doctor,"
-                "sweep-status,sweep-close,sweep-archive,egress,egress-status}")
+                "sweep-status,sweep-close,sweep-archive,refresh-briefs,egress,egress-status}")
     sub.add_parser("projects", help="list registered desks").set_defaults(fn=cmd_projects)
     sub.add_parser(
         "doctor",
@@ -649,6 +692,13 @@ def main(argv=None) -> int:
     sa.add_argument("--approved-only", action="store_true",
                     help="archive approved entries only (inbox close)")
     sa.set_defaults(fn=cmd_sweep_archive)
+    rb = sub.add_parser(
+        "refresh-briefs",
+        help="rewrite cold-re-entry briefs on the current queue (no restock)",
+    )
+    rb.add_argument("project")
+    rb.add_argument("--model", default=None)
+    rb.set_defaults(fn=cmd_refresh_briefs)
     eg = sub.add_parser("egress", help="stage a desk egress memo under .setsweep/outbound/")
     eg.add_argument("project")
     eg.add_argument("--kind", required=True, choices=sorted(egress.KINDS))

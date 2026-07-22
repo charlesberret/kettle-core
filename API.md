@@ -145,7 +145,7 @@ Success shapes vary today (see Stability notes). Prefer:
 | `done` | `cost?`, `ctx?`, `usage?`, `error?` | Turn finished |
 | `error` | `s` | Process / parse failure |
 
-**Streaming routes:** `POST /api/chat`, `/api/compact`, `/api/sweep`, `/api/bootstrap`, `/api/interview`, `/api/propose`, `/api/found`.
+**Streaming routes:** `POST /api/chat`, `/api/compact`, `/api/sweep`, `/api/refresh-briefs`, `/api/bootstrap`, `/api/interview`, `/api/propose`, `/api/found`.
 
 Every established NDJSON stream ends with exactly one terminal `done` event. Failures
 emit `error` immediately before `done`; no event follows `done`. If the curator process
@@ -237,6 +237,7 @@ enforcement is a strict no-op. Unknown providers are treated as the weakest case
 | POST | `/api/approve` | required | Bookmark only — not the commit |
 | POST | `/api/comment` | required | |
 | POST | `/api/sweep` | required | **NDJSON** — mechanical close-kit first when quiet; accrue-only or full judgment prompt otherwise |
+| POST | `/api/refresh-briefs` | required | **NDJSON** — rewrite `brief` + `ask` on the current queue only (cold re-entry standard; no archive/restock) |
 
 ### Tier 2 — full sitting
 
@@ -247,6 +248,7 @@ enforcement is a strict no-op. Unknown providers are treated as the weakest case
 | GET/POST | `/api/chatlog` | JSON |
 | POST | `/api/chat` | **NDJSON** |
 | POST | `/api/compact` | **NDJSON** |
+| POST | `/api/refresh-briefs` | **NDJSON** — current-queue brief rewrite only |
 | POST | `/api/clear-session` | JSON |
 | GET/POST | `/api/settings` | JSON — POST deep-merges `curator` / `agents` / `curator.menu` / `egress` / `admin` |
 
