@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <!-- Bump this when sitting UI changes; title shows it so we can confirm the shell loaded. -->
-<meta name="setsweep-ui" content="2026-07-22c">
-<title>setsweep · ui-2026-07-22c</title>
+<meta name="setsweep-ui" content="2026-07-22d">
+<title>setsweep · ui-2026-07-22d</title>
 <style>
   /*
    * Type & chrome roles — single source of sitting hierarchy.
@@ -271,17 +271,17 @@
     background:color-mix(in srgb, var(--link) 11%, var(--panel2));
   }
   #meta .meta-tab .mt-ico { display:block; width:14px; height:14px; }
-  /* Meta pane uses the same type roles as the rest of the sitting (docs/UI.md).
-     Labels = --text-label; values = --text-secondary. Never pure --fg for brief copy. */
+  /* Meta pane (docs/UI.md): labels gray, values primary white — not all gray. */
   #meta dt, #meta .t-label {
     color:var(--text-label); font-size:11px; text-transform:uppercase; letter-spacing:.1em;
     margin-top:9px; font-weight:600;
   }
-  #meta dd { margin:2px 0 0; word-break:break-word; color:var(--text-secondary); }
+  #meta dd { margin:2px 0 0; word-break:break-word; color:var(--text-primary); }
   #meta dt.meta2, #meta dd.meta2 { font-size:12px; margin-top:6px; }
-  #meta dd.meta2 { color:var(--text-secondary); }
+  #meta dd.meta2 { color:var(--text-primary); }
+  /* Ask / brief bodies: primary ink; only the dt label stays gray */
   #meta .brief-ask, #meta .brief-body {
-    color:var(--text-secondary); font-size:13px; line-height:1.5; margin:4px 0 0;
+    color:var(--text-primary); font-size:13px; line-height:1.5; margin:4px 0 0;
     white-space:pre-wrap; word-break:break-word;
   }
   #meta .brief-ask { font-size:13.5px; line-height:1.45; }
@@ -1490,10 +1490,10 @@ function renderMeta(e){
   // brief pane (default) — ask + curator brief for this entry
   const ask = (e.ask || '').trim() || '—';
   const brief = (e.brief || '').trim() || '(no brief prepared)';
-  // Type roles: dt → --text-label; brief-ask/body → --text-secondary (docs/UI.md).
+  // Type roles: dt label gray; ask/brief body primary (docs/UI.md).
   $('metadl').innerHTML =
-    `<dt class="t-label">ask</dt><dd class="brief-ask t-secondary">${esc(ask)}</dd>` +
-    `<dt class="t-label">brief</dt><dd class="brief-body t-secondary">${esc(brief)}</dd>` +
+    `<dt class="t-label">ask</dt><dd class="brief-ask t-primary">${esc(ask)}</dd>` +
+    `<dt class="t-label">brief</dt><dd class="brief-body t-primary">${esc(brief)}</dd>` +
     (e.ask_type ? `<dt class="t-label">type</dt><dd class="meta2"><span class="qtag">${esc(e.ask_type)}</span></dd>` : '');
   renderSittingDiff(e);
   linkifyWikilinks($('metadl'));

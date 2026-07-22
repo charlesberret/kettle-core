@@ -88,23 +88,23 @@ class SittingUiConventions(unittest.TestCase):
             "--text-label must not be a bare --dim alias",
         )
 
-    def test_brief_pane_uses_secondary_not_primary_ink(self):
+    def test_brief_pane_labels_gray_bodies_primary(self):
+        """Subheaders gray; ask/brief body text primary (readable)."""
         css = INDEX.read_text(encoding="utf-8")
-        # Brief values must not reintroduce pure --fg as their color.
         self.assertRegex(
             css,
-            r"\.brief-ask[^{]*\{[^}]*color:\s*var\(--text-secondary\)",
-            "brief-ask must use --text-secondary (docs/UI.md)",
+            r"#meta dt[^{]*\{[^}]*--text-label",
+            "meta labels must use --text-label",
         )
         self.assertRegex(
             css,
-            r"\.brief-body[^{]*\{[^}]*color:\s*var\(--text-secondary\)",
-            "brief-body must use --text-secondary (docs/UI.md)",
+            r"\.brief-ask[^{]*\{[^}]*color:\s*var\(--text-primary\)",
+            "brief-ask body must use --text-primary (docs/UI.md)",
         )
-        self.assertNotRegex(
+        self.assertRegex(
             css,
-            r"\.brief-ask\s*\{[^}]*color:\s*var\(--fg\)",
-            "brief-ask must not use raw --fg",
+            r"\.brief-body[^{]*\{[^}]*color:\s*var\(--text-primary\)",
+            "brief-body must use --text-primary (docs/UI.md)",
         )
 
     def test_diff_badges_colored_globally(self):

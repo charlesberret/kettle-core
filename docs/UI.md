@@ -56,7 +56,9 @@ Shared kit: `.btn` + `.btn-sm` / `.btn-md` + role (`.btn-default` | `.btn-primar
 ## Meta pane (brief / info)
 
 - Default tab: **brief** (ask + brief).
-- Labels use `--text-label`; ask and brief *bodies* use `--text-secondary` (not primary white).
+- **Labels** (`ask`, `brief`, `path`, …): `--text-label` (gray).
+- **Bodies** (the ask sentence, the brief paragraph, path values): `--text-primary` (readable white).
+  Do not paint the whole pane secondary gray — only the subheaders.
 - Do not auto-inject the brief into chat on file select — brief lives in this pane.
 
 ## Founding / add project (brief 22)
