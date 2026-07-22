@@ -1,8 +1,8 @@
 # Setsweep — Platforms & Viewports
 
-*Companion to [`ROADMAP.md`](../ROADMAP.md). Current-state claims below: **2026-07-22**.
-Refresh this file when a viewport ships a ritual change (founding, add-project, sitting
-chrome). Stale matrices are how desktop “falls behind” without anyone forking it.*
+*Companion to [`ROADMAP.md`](../ROADMAP.md). Current-state claims below: **2026-07-22**
+(brief 22 founding parity). Refresh this file when a viewport ships a ritual change.
+Stale matrices are how desktop “falls behind” without anyone forking it.*
 
 ## What a viewport is
 
@@ -48,19 +48,19 @@ Same ritual, every graphical viewport. Cells: **same** (matches canonical web) �
 
 | Ritual | Web | Desktop | Plugin | CLI |
 |--------|-----|---------|--------|-----|
-| Discover / start core | same | same (sidecar) | **better** (auto-start default) | n/a |
-| First-run curator setup | same (setup modal) | same | host settings + core settings deep-link | ambient CLI auth |
-| Add / register project | same (multi-field modal) | same | host folder + API | `setsweep add` |
-| Founding interview | same (right pane + founding head) | same | **better** (fixed Desk founding pane, confirm card) | `setsweep found` / chat |
-| Confirm card → proposal | same | same | same (shared confirm-card logic) | n/a |
+| Discover / start core | same | same (sidecar) | same (auto-start default → live `:4242`) | n/a |
+| First-run curator setup | same (setup modal, hard gate) | same | host settings + core settings deep-link | ambient CLI auth |
+| Add / register project | same (name + folder hot path; kit/depth/note under *more options*) | same | host-only folder pick + API | `setsweep add` |
+| Founding interview | same (right pane + founding head; empty queue orients to agent) | same | same ritual (Desk layout; fixed founding stream) | `setsweep found` / chat |
+| Confirm card → proposal | same | same | same (confirm-card logic) | n/a |
 | Proposal approve → found | same | same | same | n/a |
 | Sitting (approve / comment / sweep) | same | same | same (Desk ritual buttons) | partial |
-| Type hierarchy (gray chrome) | same (UI.md) | same | **gap** (Desk CSS separate) | n/a |
+| Type hierarchy (gray chrome) | same (UI.md) | same | **gap** (Desk CSS still separate) | n/a |
 | Brief on file select | left brief tab; no auto chat dump | same | Desk brief region | n/a |
 
-**Priority debt:** rows where plugin is **better** and web/desktop are **gap** on
-*perceived* polish (add-project modal density, founding presentation) — close via
-**brief 22**, not by special-casing desktop.
+**Closed (brief 22):** web/desktop add-project and founding entry match the Desk quality bar
+(minimal hot path, interview in-agent, empty-state orientation). Remaining optional debt:
+plugin Desk CSS vs UI.md tokens.
 
 ## Founding / first-run parity (track owner: brief 22)
 

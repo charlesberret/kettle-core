@@ -52,6 +52,16 @@ Shared kit: `.btn` + `.btn-sm` / `.btn-md` + role (`.btn-default` | `.btn-primar
 - Labels use `--text-label`; ask and brief *bodies* use `--text-secondary` (not primary white).
 - Do not auto-inject the brief into chat on file select — brief lives in this pane.
 
+## Founding / add project (brief 22)
+
+- Add-project **hot path:** name + folder only. Kit, max depth, and notes live under
+  *more options* (collapsed by default).
+- Name may be derived from the folder basename when left blank.
+- After add, land in **founding chrome** (agent pane interview + project-list empty-state),
+  not a blank three-pane with no orientation.
+- Empty queue during founding/proposing uses `.qfounding-hint` with `--text-secondary` body
+  and `--text-label` strong headers — same type ladder as the rest of the sitting.
+
 ## Checklist before merging UI
 
 - [ ] Every new string maps to a type role in the table above.

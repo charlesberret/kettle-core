@@ -51,10 +51,10 @@ setsweep doctor
 
 1. **Register a folder**  
    `setsweep add ~/path/to/a-project`  
-   Or open the web UI (`setsweep --web`) and use **＋ add project**.
-2. **Founding interview** — select the project; the right pane runs a read-only interview.
-   When ready, **Finish ✓** drafts a desk proposal into the editor.
-3. **Edit the proposal**, then **Approve** — the curator founds charter, memory, and the
+   Or open the web UI (`setsweep --web`) → **＋ Project** (name + folder; more options for kit).
+2. **Founding interview** — the agent pane runs a read-only interview immediately after add.
+   When ready, **draft proposal ✓** writes a desk proposal into the editor.
+3. **Edit the proposal**, then **approve** — the curator founds charter, memory, and the
    first content queue.
 4. **First sitting** — open a queue entry, read the brief, edit if needed, **comment**,
    **Approve**. Keyboard: Tab/arrows in the queue, Enter to open; ⌘E toggles reading/source.
@@ -120,12 +120,13 @@ HTTP contract: [`API.md`](./API.md).
 
 ## Founding a project
 
-**Founding is talk → proposal → approve, not a silent bootstrap.** When you add a project, the
-curator surveys its files and interviews you in the agent chat (kit prompt list + open discussion:
-status, direction, fences, priorities, **sweep actions**). **Finish ✓** drafts one editable
-**desk proposal** (`.setsweep/DESK-PROPOSAL.md`) and loads it in the center pane. You edit freely
-(and can still chat to revise it). **Approve** on that proposal hands it back to the curator, who
-digests *your* text and founds the desk:
+**Founding is talk → proposal → approve, not a silent bootstrap.** When you add a project (web:
+name + folder; desktop same UI; CLI `setsweep add`), the curator surveys its files and interviews
+you in the **agent pane** (kit prompt list + open discussion: status, direction, fences,
+priorities, **sweep actions**). **Draft proposal ✓** writes one editable **desk proposal**
+(`.setsweep/DESK-PROPOSAL.md`) into the center pane. You edit freely (and can still chat to revise
+it). **Approve** on that proposal hands it back to the curator, who digests *your* text and founds
+the desk:
 
 1. **Charter** (`PROJECT.md`) — from the approved proposal (your wording wins).
 2. **Memory seed** (`MEMORY.md`) — only stated and file-attested preferences, never invented.

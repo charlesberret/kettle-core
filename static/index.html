@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <!-- Bump this when sitting UI changes; title shows it so we can confirm the shell loaded. -->
-<meta name="setsweep-ui" content="2026-07-22a">
-<title>setsweep · ui-2026-07-22a</title>
+<meta name="setsweep-ui" content="2026-07-22b">
+<title>setsweep · ui-2026-07-22b</title>
 <style>
   /*
    * Type & chrome roles — single source of sitting hierarchy.
@@ -328,7 +328,26 @@
                     border-radius:5px; font:13px var(--ui-font); padding:8px 11px; }
   #addmodal input:focus, #setupmodal input:focus, #addmodal select:focus,
   #setupmodal select:focus, #sweepconfirm select:focus { outline:none; border-color:var(--acc); }
-  #addmodal .mnote, #setupmodal .mnote { color:var(--dim); font-size:12px; line-height:1.55; }
+  #addmodal .mnote, #setupmodal .mnote { color:var(--text-secondary); font-size:12px; line-height:1.55; }
+  /* Add project — hot path is name + folder; kit/depth/note under more options (brief 22) */
+  #addmodal .add-hot { display:flex; flex-direction:column; gap:10px; margin:0 0 12px; }
+  #addmodal .add-pathrow { display:flex; gap:8px; align-items:center; }
+  #addmodal .add-pathrow input { flex:1; min-width:0; }
+  #addmodal .add-advanced { margin:0 0 12px; border:1px solid var(--line); border-radius:6px;
+                            padding:0; background:var(--panel); }
+  #addmodal .add-advanced > summary {
+    list-style:none; cursor:pointer; padding:8px 12px; color:var(--text-label);
+    font-size:11px; font-weight:600; letter-spacing:.08em; text-transform:uppercase;
+    user-select:none;
+  }
+  #addmodal .add-advanced > summary::-webkit-details-marker { display:none; }
+  #addmodal .add-advanced[open] > summary { border-bottom:1px solid var(--line); }
+  #addmodal .add-advanced-body { padding:10px 12px 12px; display:flex; flex-direction:column; gap:8px; }
+  #addmodal .add-advanced-body .kitsel, #addmodal .add-advanced-body .kitnote { width:100%; }
+  .qfounding-hint { padding:18px 14px; color:var(--text-secondary); font-size:12.5px; line-height:1.55; }
+  .qfounding-hint strong { color:var(--text-label); font-weight:600; display:block;
+                           margin-bottom:6px; text-transform:uppercase; letter-spacing:.08em;
+                           font-size:11px; }
   .kitsel { display:block; width:100%; box-sizing:border-box; margin:6px 0 0;
             background:var(--panel2); color:var(--fg); border:1px solid var(--line);
             border-radius:4px; font:13px var(--ui-font); padding:6px 8px; }
@@ -776,23 +795,33 @@
 <div id="addbg">
   <div id="addmodal" role="dialog" aria-modal="true" aria-labelledby="addmodal-h">
     <h2 id="addmodal-h">add project</h2>
-    <input id="addname" placeholder="name" spellcheck="false">
-    <input id="addroot" placeholder="folder (absolute or ~/ path)" spellcheck="false">
-    <button id="addbrowse" class="btn btn-sm btn-ghost" type="button">browse…</button>
-    <select id="addkit" class="kitsel" required title="the curator's kind playbook — auto-detected from the folder; confirm or override">
-      <option value="">select project type…</option>
-      <option value="writing">writing</option>
-      <option value="code">code</option>
-      <option value="records">records</option>
-      <option value="knowledge">knowledge</option>
-    </select>
-    <input id="adddepth" class="kitsel" type="number" min="0" step="1" placeholder="max depth (0 or blank = whole tree)" title="how many directory levels below the root to review — 1 = root files only, 2 = + one subdir level, 0/blank = unlimited">
-    <textarea id="addnote" class="kitnote" spellcheck="false" placeholder="additional notes (optional) — conventions to honor, things never to touch, tools or corpora the curator should use, what you most want a second reader for"></textarea>
-    <div class="mnote">the founding curator surveys the folder and interviews you in the agent chat; finish ✓ drafts a proposal you edit and approve to found the desk</div>
+    <p class="mnote" style="margin:0 0 12px">Name a folder under your home. The interview starts in the agent pane — finish ✓ drafts a proposal you edit and approve.</p>
+    <div class="add-hot">
+      <input id="addname" placeholder="name" spellcheck="false" aria-label="project name">
+      <div class="add-pathrow">
+        <input id="addroot" placeholder="folder (absolute or ~/ path)" spellcheck="false" aria-label="project folder">
+        <button id="addbrowse" class="btn btn-sm btn-ghost browse" type="button" title="choose folder">browse…</button>
+      </div>
+    </div>
+    <details class="add-advanced">
+      <summary>more options</summary>
+      <div class="add-advanced-body">
+        <select id="addkit" class="kitsel" title="curator kit — optional; leave general if unsure" aria-label="project kit">
+          <option value="">general</option>
+          <option value="writing">writing</option>
+          <option value="code">code</option>
+          <option value="records">records</option>
+          <option value="knowledge">knowledge</option>
+          <option value="inbox">inbox</option>
+        </select>
+        <input id="adddepth" class="kitsel" type="number" min="0" step="1" placeholder="max depth (blank = whole tree)" title="directory levels under the root to review" aria-label="max depth">
+        <textarea id="addnote" class="kitnote" spellcheck="false" placeholder="optional notes for the curator — fences, conventions, what you want a second reader for" aria-label="founding notes"></textarea>
+      </div>
+    </details>
     <div class="mrow">
       <span style="flex:1"></span>
       <button id="addcancel" class="btn btn-md btn-ghost" title="Esc">cancel</button>
-      <button id="addgo" class="btn btn-md btn-primary" title="⌘Enter">add &amp; interview</button>
+      <button id="addgo" class="btn btn-md btn-primary" title="⌘Enter">start interview</button>
     </div>
   </div>
 </div>
@@ -1288,12 +1317,35 @@ function diffBadge(d){
 function renderQueue(){
   const order = {high:0, medium:1, low:2};
   const queueHandled = e => (e.status === 'approved' || e.status === 'rework') ? 1 : 0;
-  const list = [...Q.entries].sort((a,b) =>
+  const entries = (Q && Q.entries) ? Q.entries : [];
+  const list = [...entries].sort((a,b) =>
     queueHandled(a) - queueHandled(b) || (order[a.urgency]??9)-(order[b.urgency]??9));
   const qlist = $('qlist');
   qlist.innerHTML = '';
   qlist.setAttribute('role', 'listbox');
   qlist.setAttribute('aria-label', 'project queue');
+  // Founding with no content yet — orient the patron to the agent pane (brief 22).
+  if(!list.length && document.body.classList.contains('founding')){
+    const hint = document.createElement('div');
+    hint.className = 'qfounding-hint';
+    hint.innerHTML =
+      '<strong>founding</strong>' +
+      'The curator is in the agent pane. Answer there, then <em>draft proposal ✓</em> when ready. ' +
+      'The queue fills after you approve the desk proposal.';
+    qlist.appendChild(hint);
+    syncChrome();
+    return;
+  }
+  if(!list.length && document.body.classList.contains('proposing')){
+    const hint = document.createElement('div');
+    hint.className = 'qfounding-hint';
+    hint.innerHTML =
+      '<strong>desk proposal</strong>' +
+      'Edit the proposal in the center pane, then <em>approve</em> to found the desk and stock the first queue.';
+    qlist.appendChild(hint);
+    syncChrome();
+    return;
+  }
   for(const e of list){
     const d = document.createElement('div');
     d.className = 'qitem' + (cur && e.id===cur.id ? ' active':'') + (e.status==='approved' ? ' approved':'')
@@ -3069,28 +3121,54 @@ function kitImport(){
   addMsg('sys', 'kit JSON loaded into the editor — click save or save as to keep it');
 }
 
+/** Suggest a display name from a folder path (folder basename, title-cased). */
+function nameFromRootPath(root){
+  const base = (root || '').replace(/\/+$/, '').split('/').pop() || '';
+  if(!base) return '';
+  return base.replace(/[-_]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
 function openAddProj(){
   $('addname').value = ''; $('addroot').value = '';
   $('addkit').value = ''; $('addnote').value = ''; $('adddepth').value = '';
+  const adv = document.querySelector('#addmodal .add-advanced');
+  if(adv) adv.open = false;
   $('addbg').classList.add('open');
-  $('addname').focus();
+  // Folder first when a native picker exists; otherwise name.
+  try { (nativePicker() ? $('addroot') : $('addname')).focus(); } catch(_){ $('addname').focus(); }
 }
 function closeAddProj(){ $('addbg').classList.remove('open'); }
 async function submitAddProj(){
-  const name = $('addname').value.trim(), root = $('addroot').value.trim();
-  if(!name || !root) return;
+  let name = $('addname').value.trim(), root = $('addroot').value.trim();
+  if(!root){
+    addMsg('err', 'add a folder path (absolute or ~/…)');
+    try { $('addroot').focus(); } catch(_){}
+    return;
+  }
+  if(!name){
+    name = nameFromRootPath(root);
+    $('addname').value = name;
+  }
+  if(!name){ addMsg('err', 'give the project a name'); return; }
   if(busy){ addMsg('err', 'agent busy — wait for the current stream to finish'); return; }
   let added;
-  try { added = await jpost('/api/projects/add',
-        {name, root, kit: $('addkit').value, note: $('addnote').value.trim(), max_depth: $('adddepth').value}); }
-  catch(err){ addMsg('err', 'add project failed: ' + err); return; }  // modal stays open to correct
+  try {
+    added = await jpost('/api/projects/add', {
+      name, root,
+      kit: ($('addkit') && $('addkit').value) || '',
+      note: ($('addnote') && $('addnote').value.trim()) || '',
+      max_depth: ($('adddepth') && $('adddepth').value) || '',
+    });
+  } catch(err){ addMsg('err', 'add project failed: ' + err); return; }  // modal stays open to correct
   closeAddProj();
   try {
     const pj = await jget('/api/projects');
     PROJECTS = pj.projects; HOMEDIR = pj.home || HOMEDIR;
     PROJECT = added.id;
     renderProjOptions();
-    await loadProject(added.id);  // detects the unfounded desk and opens the interview
+    // Lands in founding chrome via loadProject → enterInterview (brief 22).
+    await loadProject(added.id);
+    try { $('chatin').focus({ preventScroll: true }); } catch(_){ try { $('chatin').focus(); } catch(__){} }
   } catch(err){ addMsg('err', String(err)); return; }
 }
 
@@ -3121,6 +3199,17 @@ function syncBrowseButtons(){
 window.addEventListener('pywebviewready', syncBrowseButtons);
 syncBrowseButtons();
 if($('addbrowse')) $('addbrowse').onclick = () => pickFolderInto('addroot', 'addname');
+// Name from folder path when the patron types/pastes a root (mirrors browse auto-name).
+if($('addroot')){
+  $('addroot').addEventListener('change', () => {
+    const n = $('addname');
+    if(n && !n.value.trim()) n.value = nameFromRootPath($('addroot').value);
+  });
+  $('addroot').addEventListener('blur', () => {
+    const n = $('addname');
+    if(n && !n.value.trim()) n.value = nameFromRootPath($('addroot').value);
+  });
+}
 /* ================= founding interview (agent chat) =================
    Phase A: survey + prompt list + open discussion (read-only interview).
    Phase B (finish ✓): write DESK-PROPOSAL.md, load it in the editor (proposing).
@@ -3158,19 +3247,20 @@ function enterInterview(opts){
   opts = opts || {};
   if(opts.form){ openAddProj(); return; }   // first project: use the add-project modal
   setFoundingChrome(true);
+  renderQueue();  // founding empty-state in the project list
   // Kick off only when this load has no interview turns in the restored chat yet.
   const hasTurns = !!$('chat').querySelector('.msg.agent, .msg.user');
   if(!hasTurns){
     if(opts.resume){
-      const start = addMsg('sys', 'Beginning interview…');
+      const start = addMsg('sys', 'Continuing interview…');
       if(start) start.id = 'interview-start';
       lockInterviewScroll();  // freeze before any stream tokens arrive
       ivTurn('(the patron has returned to the interview — restate in two plain lines where things stand and what you still need; no dense status dump)');
     } else {
       const p = PROJECTS.find(x => x.id === PROJECT);
       // Status lines are logged but hidden for the freeze (iv-pre-hide).
-      addMsg('sys', 'Registered ' + (p ? p.name : PROJECT) + ' in Setsweep.');
-      addMsg('sys', 'Reading contents…');
+      addMsg('sys', 'Registered ' + (p ? p.name : PROJECT) + ' — interview starts in this pane.');
+      addMsg('sys', 'Reading the folder…');
       const start = addMsg('sys', 'Beginning interview…');
       if(start) start.id = 'interview-start';
       // Freeze BEFORE the long survey stream — growth below cannot move the view.
@@ -3178,7 +3268,7 @@ function enterInterview(opts){
       ivTurn('');
     }
   } else if(opts.resume){
-    addMsg('sys', 'Interview in progress — continue below, or finish ✓ when ready.');
+    addMsg('sys', 'Interview in progress — continue below, or draft proposal ✓ when ready.');
   }
   // Promote any restored GFM confirmation blurb into interactive ticks.
   let upgraded = false;
@@ -3572,15 +3662,25 @@ async function loadProject(pid){
   exitInterview();
   setProposingChrome(false);
   if(unfounded){
+    setFoundingChrome(true);  // so renderQueue can show the founding empty-state
+    if(typeof setMetaPane === 'function') setMetaPane('brief');
+    $('metadl').innerHTML =
+      '<dt class="t-label">founding</dt>' +
+      '<dd class="brief-body t-secondary">Answer the curator in the agent pane. ' +
+      'When ready, use <em>draft proposal ✓</em> — you will edit the proposal here, then approve to found the desk.</dd>';
+    $('editor').placeholder = 'founding interview — work in the agent pane on the right';
     renderQueue();
-    $('metadl').innerHTML = '<dd style="color:var(--dim)">project founding in progress — answer the curator in the agent chat</dd>';
-    $('editor').placeholder = 'founding in progress — the interview is in the agent chat';
     enterInterview({resume: ivst.status === 'interviewing'});
     return;
   }
   if(proposing){
-    renderQueue();
+    setProposingChrome(true);
+    if(typeof setMetaPane === 'function') setMetaPane('brief');
+    $('metadl').innerHTML =
+      '<dt class="t-label">proposal</dt>' +
+      '<dd class="brief-body t-secondary">Edit the desk proposal in the center pane, then <em>approve</em> to found the desk and load the first queue batch.</dd>';
     $('editor').placeholder = 'desk proposal — edit, then approve to found';
+    renderQueue();
     await enterProposing(pid);
     return;
   }

@@ -5,7 +5,7 @@ repo: setsweep-core
 touches: [static/index.html, docs/PLATFORMS.md, docs/UI.md, README founding section; plugin only if web catches up and Desk still diverges]
 risk: run-critical
 depends-on: [08, 21]
-status: open
+status: done
 ---
 
 ## Context
@@ -91,3 +91,15 @@ the sitting the way the Desk did. `docs/UI.md` covers type hierarchy; this brief
 - If plugin Desk CSS still diverges on type hierarchy, file a small plugin brief or
   extend 16 — do not block core merge.
 - Note in `_Status.md` that desktop founding tracks web.
+
+## Closing note (2026-07-22)
+
+| Step | Plugin | Web / desktop (after this brief) |
+|------|--------|----------------------------------|
+| Start core | auto-start `:4242` | `setsweep --web` / Electron sidecar |
+| Add project | host folder + API | modal: **name + folder**; kit/depth/note under *more options*; name auto from path |
+| Interview | Desk founding pane | right pane + founding head; queue empty-state points to agent |
+| Proposal | editor + approve | same |
+| Found | first queue batch | same |
+
+Desktop inherits web static only — rebuild sidecar for packaged `.app`.

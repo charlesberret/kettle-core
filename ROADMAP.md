@@ -77,10 +77,10 @@ committed in batches; plugin `main` carries auto-start + Desk sitting.
 | **Watchers / fence / metrics** | Duplicate watchers (12), containment ambition (19), full doctor (18). | Phases 1 / 5 / 6 |
 
 **Open briefs (grep is source of truth):**  
-`02 05 11 12 13 15 16 18 19 22` — plus any new ones. Done: `01 03 04 06 07 08 09 10 14 17 20 21`.
+`02 05 11 12 13 15 16 18 19` — plus any new ones. Done: `01 03 04 06 07 08 09 10 14 17 20 21 22`.
 
 **Near-term order for public GitHub (web + CLI first):**  
-22 (founding parity into web → desktop free) → 05 (API harden) when supervised → 11/15 packaging when ready.
+05 (API harden) when supervised → 11/15 packaging when ready.
 
 ## The arc
 
@@ -171,10 +171,9 @@ the marketplace; a viewport detects version skew and says so.
   `.setsweep/runtime/` — brief 17 (screenshots optional polish later).
 - ✅ Sitting type hierarchy (`docs/UI.md`, `--text-*` tokens) — process guard against
   chrome/body color drift.
-- **Open:** **viewport founding / first-run parity** — web is canonical; plugin Desk is
-  the quality bar for in-panel interview; desktop inherits web (brief **22**). Without
-  this, public installs and the `.app` keep the multi-box add-project popup while Cursor
-  feels like a different product.
+- ✅ **Viewport founding / first-run parity** — web add-project hot path + founding
+  empty-states aligned with Desk quality bar; desktop inherits (brief **22**). Optional
+  follow-on: plugin Desk CSS vs `docs/UI.md` tokens.
 
 **Exit test:** someone who has never seen the project installs it, founds a desk on a
 real folder (same ritual in web or desktop), and completes a sitting without asking a
