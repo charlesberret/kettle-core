@@ -42,3 +42,9 @@ settings.json
 # created when agents run in isolation. Nothing here is shared project config today —
 # if that changes (e.g. a committed .claude/settings.json), add a negation below.
 .claude/
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key
+.beads/proxieddb/
