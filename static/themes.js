@@ -20,7 +20,7 @@ const IFACE_DARK = {
   acc: '--ansi-3', link: '--ansi-4',
   activebg: '--ansi-8', selection: '--ansi-4',
   good: '--ansi-2', warn: '--ansi-1',
-  urghigh: '--ansi-1', urgmed: '--ansi-3', urglow: '--ansi-8',
+  urghigh: '--ansi-1', urgmed: '--ansi-3', urglow: '--ansi-2',  // low urgency = green
 };
 
 const IFACE_LIGHT = {
@@ -29,7 +29,7 @@ const IFACE_LIGHT = {
   acc: '--ansi-4', link: '--ansi-4',
   activebg: '--ansi-7', selection: '--ansi-12',
   good: '--ansi-2', warn: '--ansi-1',
-  urghigh: '--ansi-1', urgmed: '--ansi-3', urglow: '--ansi-8',
+  urghigh: '--ansi-1', urgmed: '--ansi-3', urglow: '--ansi-2',
 };
 
 /** Preset solid % for interface roles (below 100 mixes toward white in dark / black in light). */

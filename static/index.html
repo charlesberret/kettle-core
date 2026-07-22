@@ -31,7 +31,7 @@
     --acc:var(--ansi-3); --link:var(--ansi-4);
     --activebg:var(--ansi-8); --selection:var(--ansi-4);
     --good:var(--ansi-2); --warn:var(--ansi-1);
-    --urghigh:var(--ansi-1); --urgmed:var(--ansi-3); --urglow:var(--ansi-8);
+    --urghigh:var(--ansi-1); --urgmed:var(--ansi-3); --urglow:var(--ansi-2);
     /* ---- legacy aliases (derived from interface roles above) ---- */
     --dim:var(--muted); --blue:var(--link); --burnt:var(--warn);
     /* ---- fonts: mono interface, sans body (overridable in admin) ---- */
@@ -121,14 +121,18 @@
   .btn:disabled { opacity: .38; pointer-events: none; cursor: default; }
   .btn-sm { height: var(--btn-h-sm); min-height: var(--btn-h-sm); padding: 0 var(--btn-px-sm); font-size: var(--btn-fs-sm); }
   .btn-md { height: var(--btn-h-md); min-height: var(--btn-h-md); padding: 0 var(--btn-px-md); font-size: var(--btn-fs-md); }
-  .btn-default { background: var(--panel2); color: var(--fg); border-color: var(--line); }
-  .btn-default:hover { border-color: var(--acc); background: var(--panel); }
-  .btn-primary { background: var(--fg); color: var(--bg); border-color: var(--fg); font-weight: 600; }
+  .btn-default { background: var(--panel2); color: var(--fg); border-color: var(--line);
+                 text-transform: lowercase; letter-spacing: .01em; }
+  .btn-default:hover { border-color: var(--acc); background: var(--panel); color: var(--fg); }
+  .btn-primary { background: var(--fg); color: var(--bg); border-color: var(--fg); font-weight: 600;
+                 text-transform: lowercase; letter-spacing: .01em; }
   .btn-primary:hover { filter: brightness(1.06); }
-  .btn-ghost { background: transparent; color: var(--dim); border-color: var(--line); }
+  .btn-ghost { background: transparent; color: var(--dim); border-color: var(--line);
+               text-transform: lowercase; letter-spacing: .01em; }
   .btn-ghost:hover { color: var(--fg); border-color: var(--acc); }
-  .btn-icon { width: var(--btn-h-sm); min-width: var(--btn-h-sm); padding: 0; font-size: 14px; }
-  .btn-emphasis { font-weight: 600; }
+  .btn-icon { width: var(--btn-h-sm); min-width: var(--btn-h-sm); padding: 0; font-size: 14px;
+              text-transform: none; letter-spacing: 0; }
+  .btn-emphasis { font-weight: 600; color: var(--fg); }
   .btn.arm { color: var(--warn); font-weight: 600; }
   .btn-signature {
     margin-left: auto; font-size: 11px; font-weight: 600; letter-spacing: .16em;
@@ -149,17 +153,21 @@
   .qitem:focus { outline:none; }
   .qitem:focus-visible { box-shadow: inset 0 0 0 2px var(--acc); }
   .qitem .t { display:flex; gap:8px; align-items:baseline; }
-  /* urgency: color + letter so it is not color-only (brief 09 a11y) */
-  .dot { min-width:14px; height:14px; border-radius:3px; flex:none; align-self:center;
-         display:inline-flex; align-items:center; justify-content:center;
-         font-size:9px; font-weight:700; line-height:1; letter-spacing:0;
-         color:var(--c-black, #16171a); background:var(--dim); }
-  .dot.high { background:var(--urghigh); } .dot.medium { background:var(--urgmed); } .dot.low { background:var(--urglow); }
+  /* urgency: color-only squares (a11y via aria-label/title); low = green */
+  .dot { width:8px; height:8px; min-width:8px; border-radius:2px; flex:none; align-self:center;
+         display:inline-block; background:var(--dim); font-size:0; line-height:0;
+         overflow:hidden; text-indent:-999px; }
+  .dot.high { background:var(--urghigh); }
+  .dot.medium { background:var(--urgmed); }
+  .dot.low { background:var(--urglow, var(--good)); }
   .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden;
              clip:rect(0,0,0,0); white-space:nowrap; border:0; }
-  .qname { flex:1 1 auto; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .qtag { flex:none; font-size:9.5px; color:var(--muted); border:1px solid var(--muted);
-          border-radius:4px; padding:0 5px; letter-spacing:.06em; }
+  .qname { flex:1 1 auto; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+           color:var(--fg); font-size:13px; }
+  /* ask_type chip — distinct from body text (tuning / judgment / …) */
+  .qtag { flex:none; font-size:9.5px; color:var(--dim); background:var(--panel2);
+          border:1px solid var(--line); border-radius:4px; padding:1px 6px;
+          letter-spacing:.04em; text-transform:lowercase; font-weight:500; }
   .qsum { color:var(--dim); font-size:12px; margin-left:16px; white-space:nowrap;
           overflow:hidden; text-overflow:ellipsis; }
   .qitem.approved { opacity:.38; }
@@ -213,10 +221,26 @@
   .msg.guide strong { color: var(--acc); font-weight: 700; }
   #meta { flex:1 1 40%; min-height:0; overflow-y:auto; border-top:2px solid var(--line);
           padding:0 14px 12px; font-size:13px; }
-  #meta h1 { padding:12px 0 8px; }
-  #meta dt { color:var(--fg); font-size:11px; text-transform:uppercase; letter-spacing:.1em; margin-top:9px; }
-  #meta dd { margin:2px 0 0; word-break:break-word; color:var(--dim); }
+  #meta h1 { padding:10px 0 8px; display:flex; align-items:center; gap:6px; }
+  #meta .meta-tabs { display:inline-flex; align-items:center; gap:4px; }
+  #meta .meta-tab {
+    box-sizing:border-box; width:26px; height:26px; padding:0; border-radius:5px;
+    border:1px solid var(--line); background:var(--panel2); color:var(--dim);
+    cursor:pointer; display:inline-flex; align-items:center; justify-content:center;
+    font-family:var(--ui-font); font-size:12px; font-weight:600; line-height:1;
+  }
+  #meta .meta-tab:hover { color:var(--fg); border-color:var(--acc); }
+  #meta .meta-tab.active { color:var(--fg); border-color:var(--acc);
+    background:color-mix(in srgb, var(--acc) 14%, var(--panel2)); }
+  #meta .meta-tab .mt-ico { display:block; width:14px; height:14px; }
+  #meta dt { color:var(--dim); font-size:11px; text-transform:uppercase; letter-spacing:.1em;
+             margin-top:9px; font-weight:600; }
+  #meta dd { margin:2px 0 0; word-break:break-word; color:var(--fg); }
   #meta dt.meta2, #meta dd.meta2 { font-size:12px; margin-top:6px; }
+  #meta dd.meta2 { color:var(--dim); }
+  #meta .brief-ask { color:var(--fg); font-size:13.5px; line-height:1.45; margin:4px 0 0; }
+  #meta .brief-body { color:var(--dim); font-size:13px; line-height:1.5; margin:6px 0 0;
+                      white-space:pre-wrap; word-break:break-word; }
   /* inbox: the source item a drafted response answers (paired with the draft's path) */
   #meta .src { color:var(--link); }
 
@@ -334,11 +358,13 @@
   #sweepthrust:focus { outline:none; border-color:var(--good); }
   #model { background:var(--panel2); color:var(--fg); border:1px solid var(--line); border-radius:4px;
            font:11px var(--ui-font); padding:1px 4px; }
+  #agentsettings { margin-left:6px; flex:none; }
   #ctxbar { margin-left:auto; width:116px; height:18px; border:1px solid var(--line); border-radius:6px;
             position:relative; cursor:pointer; overflow:hidden; flex:none; }
   #ctxfill { display:block; height:100%; width:0%; min-width:0; background:var(--good); transition:width .3s; }
   #ctxbar .ctxlabel { position:absolute; inset:0; display:none; align-items:center; justify-content:center;
-                      font-size:10.5px; letter-spacing:.02em; white-space:nowrap; color:var(--fg); background:var(--panel2); }
+                      font-size:10.5px; letter-spacing:.04em; text-transform:lowercase;
+                      white-space:nowrap; color:var(--dim); background:var(--panel2); }
   #ctxbar:hover .ctxlabel { display:flex; }
   #ctxcost { font-size:11px; opacity:.6; margin-left:8px; font-variant-numeric:tabular-nums; }
 
@@ -607,31 +633,49 @@
                         color:var(--slot-cmthead, var(--fg)); font-size:12px; margin-bottom:4px; }
 
   /* semantic colour slots (overridable element colours; fall back to palette) */
-  #comment { color:var(--slot-comment, var(--link)); }
+  /* midfoot actions use the shared .btn kit — do not recolor #comment alone */
+  #comment.has { /* noted: small chip via ::after, keep button text on --fg */ }
   .notedot { display:inline-block; width:8px; height:8px; border-radius:50%;
              background:var(--slot-comment, var(--link)); flex:none; align-self:center; }
   #comment.has::after { content:''; display:inline-block; width:7px; height:7px;
     border-radius:50%; background:var(--slot-comment, var(--link));
     margin-left:7px; vertical-align:middle; }
   #fnote { color:var(--slot-comment, var(--link)); display:none; }
-  .msg.ctx .ctxbody { color:var(--slot-ctxbody, var(--fg)); }
+  .msg.ctx .ctxhead { color:var(--dim); font-size:12px; }
+  .msg.ctx .ctxbody { color:var(--slot-ctxbody, var(--dim)); }
   .msg.ctx .ctxhead .fpath { color:var(--link); }
   .msg.agent { color:var(--slot-agent, var(--muted)); }
   .msg.user { color:var(--slot-user, var(--link)); }
-  #queue h1, #meta h1, #right h1 { color:var(--acc); }
+  /* Pane headers stay dim so body content / controls carry the weight */
+  #queue h1, #meta h1, #right h1 { color:var(--dim); font-weight:600; }
+  #right h1 .agent-label { color:var(--dim); }
+  #right h1 #model { color:var(--fg); }
 </style>
 </head>
 <body>
 
 <div id="left">
   <div id="queue">
-    <h1>queue <select id="proj"></select><button id="reloadbtn" class="btn btn-sm btn-icon btn-ghost" title="reload the queue">↻</button><button id="sweepbtn" class="btn btn-sm btn-signature" title="close the sitting — apply rulings, diff &amp; assess the batch, fix/flag ripples, log the session, restock the queue">sweep</button></h1>
+    <h1>project <select id="proj"></select><button id="reloadbtn" class="btn btn-sm btn-icon btn-ghost" title="reload the queue">↻</button><button id="sweepbtn" class="btn btn-sm btn-signature" title="close the sitting — apply rulings, diff &amp; assess the batch, fix/flag ripples, log the session, restock the queue">sweep</button></h1>
     <div id="qlist"></div>
   </div>
   <div id="divQ" class="hdivider" title="drag to resize"></div>
   <div id="meta">
-    <h1>info <span style="flex:1"></span>
-      <span id="metabar"><button id="metaedit" class="btn btn-sm btn-default" title="edit fields">edit</button></span></h1>
+    <h1>
+      <span class="meta-tabs" role="tablist" aria-label="entry pane">
+        <button type="button" id="metatab-brief" class="meta-tab active" role="tab" aria-selected="true"
+                title="Brief and ask" aria-label="Brief and ask">
+          <svg class="mt-ico" viewBox="0 0 14 14" aria-hidden="true" focusable="false">
+            <path fill="currentColor" d="M2.5 1.2h6.2l2.8 2.8V12.8H2.5V1.2zm6.2 0v2.8h2.8"/>
+            <path fill="none" stroke="currentColor" stroke-width="1.1" d="M4.2 7h5.6M4.2 9.2h5.6M4.2 4.8h3.2"/>
+          </svg>
+        </button>
+        <button type="button" id="metatab-info" class="meta-tab" role="tab" aria-selected="false"
+                title="Info" aria-label="Info">i</button>
+      </span>
+      <span style="flex:1"></span>
+      <span id="metabar"><button id="metaedit" class="btn btn-sm btn-default" title="edit fields">edit</button></span>
+    </h1>
     <dl id="metadl"><dd style="color:var(--dim)">select a file</dd></dl>
   </div>
 </div>
@@ -668,7 +712,7 @@
   <div id="midfoot">
     <button id="comment" class="btn btn-sm btn-default" title="leave a note on this file for the agent to address during the sweep">comment</button>
     <span style="flex:1"></span>
-    <button id="approve" class="btn btn-sm btn-default btn-emphasis" title="mark as finished/reviewed — your pass on this file is complete">Approve</button>
+    <button id="approve" class="btn btn-sm btn-default btn-emphasis" title="mark as finished/reviewed — your pass on this file is complete">approve</button>
   </div>
   <div id="mirror" aria-hidden="true"></div>
 </div>
@@ -689,6 +733,8 @@
     <option value="opus">Opus</option>
     <option value="fable">Fable</option>
   </select>
+  <button type="button" id="agentsettings" class="btn btn-sm btn-icon btn-ghost"
+          title="settings" aria-label="settings">⚙</button>
   <span id="ctxbar" title="context used — click to clear this session"><span id="ctxfill"></span><span class="ctxlabel">context</span></span></h1>
   <div id="chat"></div>
   <div id="chat-live" class="sr-only" aria-live="polite" aria-atomic="true"></div>
@@ -1218,8 +1264,7 @@ function renderQueue(){
   const qlist = $('qlist');
   qlist.innerHTML = '';
   qlist.setAttribute('role', 'listbox');
-  qlist.setAttribute('aria-label', 'review queue');
-  const urgLetter = {high:'H', medium:'M', low:'L'};
+  qlist.setAttribute('aria-label', 'project queue');
   for(const e of list){
     const d = document.createElement('div');
     d.className = 'qitem' + (cur && e.id===cur.id ? ' active':'') + (e.status==='approved' ? ' approved':'')
@@ -1238,9 +1283,8 @@ function renderQueue(){
       ? (dash > 0 ? e.title.slice(dash + 3) : (e.title || e.ask || ''))
       : (e.note || e.ask || '');
     const urg = e.urgency || '';
-    const letter = urgLetter[urg] || '·';
     const urgLabel = urg ? (urg + ' urgency') : 'urgency unset';
-    d.innerHTML = `<div class="t"><span class="dot ${esc(urg)}" title="${esc(urgLabel)}" aria-label="${esc(urgLabel)}">${letter}</span>
+    d.innerHTML = `<div class="t"><span class="dot ${esc(urg)}" title="${esc(urgLabel)}" aria-label="${esc(urgLabel)}"></span>
         <span class="qname" title="${esc(e.path || e.title || '')}">${esc(fname)}</span>${e.comment ? `<span class="notedot" title="${esc(e.comment)}"></span>` : ''}${diffBadge(e.diff)}</div>
         <div class="qsum" title="${esc(e.title || '')}">${e.ask_type ? `<span class="qtag">${esc(e.ask_type)}</span> ` : ''}${esc(tsum)}${e.desk_item ? ' · desk #' + esc(e.desk_item) : ''}</div>`;
     d.onclick = () => select(e.id);
@@ -1293,18 +1337,51 @@ const META_OPTS = {
   urgency: ['high', 'medium', 'low'],
   ask_type: ['input', 'tuning', 'judgment', 'fill'],
 };
+/** Left lower pane: 'brief' (ask + brief, default) or 'info' (status/path/diff). */
+let metaPane = 'brief';
+
+function setMetaPane(mode){
+  metaPane = mode === 'info' ? 'info' : 'brief';
+  const b = $('metatab-brief'), i = $('metatab-info');
+  if(b){ b.classList.toggle('active', metaPane === 'brief'); b.setAttribute('aria-selected', metaPane === 'brief' ? 'true' : 'false'); }
+  if(i){ i.classList.toggle('active', metaPane === 'info'); i.setAttribute('aria-selected', metaPane === 'info' ? 'true' : 'false'); }
+  // Edit mode only makes sense on the info fields
+  if(metaPane === 'brief' && metaEditing){
+    metaEditing = false;
+    if($('metaedit')) $('metaedit').textContent = 'edit';
+  }
+  if($('metaedit')) $('metaedit').style.display = (metaPane === 'info' && cur) ? '' : 'none';
+  renderMeta(cur);
+}
+
 function renderMeta(e){
-  $('metaedit').style.display = e ? '' : 'none';
-  if(!e){ $('metadl').innerHTML = '<dd style="color:var(--dim)">select a file</dd>'; renderSittingDiff(null); return; }
-  if(metaEditing){ renderMetaEdit(e); return; }
+  if($('metaedit')) $('metaedit').style.display = (metaPane === 'info' && e) ? '' : 'none';
+  if(!e){
+    $('metadl').innerHTML = '<dd style="color:var(--dim)">select a file</dd>';
+    renderSittingDiff(null);
+    return;
+  }
+  if(metaPane === 'info'){
+    if(metaEditing){ renderMetaEdit(e); return; }
+    $('metadl').innerHTML =
+      `<dt class="meta2">status</dt><dd class="meta2">${esc(e.status)} · ${esc(e.urgency)} · ${esc(e.ask_type||'—')}</dd>` +
+      `<dt class="meta2">changes</dt><dd class="meta2" id="metachanges">${diffLine(e.diff)}</dd>` +
+      `<dt class="meta2">path</dt><dd class="meta2">${esc(relPath(e.path))}</dd>` +
+      `<dt class="meta2">words</dt><dd class="meta2" id="metawords">${wordCount()}</dd>`;
+    renderSittingDiff(e);
+    linkifyWikilinks($('metadl'));
+    const vd = $('viewdiff'); if(vd) vd.onclick = (ev) => { ev.preventDefault(); toggleDiffView(e); };
+    return;
+  }
+  // brief pane (default) — ask + curator brief for this entry
+  const ask = (e.ask || '').trim() || '—';
+  const brief = (e.brief || '').trim() || '(no brief prepared)';
   $('metadl').innerHTML =
-    `<dd class="meta2">${esc(e.status)} · ${esc(e.urgency)} · ${esc(e.ask_type||'—')}</dd>` +
-    `<dt class="meta2">changes</dt><dd class="meta2" id="metachanges">${diffLine(e.diff)}</dd>` +
-    `<dt class="meta2">path</dt><dd class="meta2">${esc(relPath(e.path))}</dd>` +
-    `<dt class="meta2">words</dt><dd class="meta2" id="metawords">${wordCount()}</dd>`;
+    `<dt>ask</dt><dd class="brief-ask">${esc(ask)}</dd>` +
+    `<dt>brief</dt><dd class="brief-body">${esc(brief)}</dd>` +
+    (e.ask_type ? `<dt>type</dt><dd class="meta2"><span class="qtag">${esc(e.ask_type)}</span></dd>` : '');
   renderSittingDiff(e);
   linkifyWikilinks($('metadl'));
-  const vd = $('viewdiff'); if(vd) vd.onclick = (ev) => { ev.preventDefault(); toggleDiffView(e); };
 }
 function renderSittingDiff(e){
   const el = $('sittingdiff');
@@ -1364,6 +1441,8 @@ function renderMetaEdit(e){
 function toggleMetaEdit(){
   if(!cur) return;
   if(metaEditing){ saveMeta(); return; }
+  // Field edit lives on the info tab
+  if(metaPane !== 'info') setMetaPane('info');
   metaEditing = true; $('metaedit').textContent = 'save'; renderMeta(cur);
 }
 async function saveMeta(){
@@ -1439,13 +1518,8 @@ async function select(id){
   setMode('reading');
   refreshEditorChrome();
   pendingMsgs = [];
-  // the transcript persists across file switches — append this file's context entry
-  // (skip only if it would duplicate the transcript's latest entry, e.g. on reload)
-  const ctxText = relPath(cur.path) + '\n' + (cur.brief || '(no brief prepared)');
-  const lastLogged = CHATLOG[CHATLOG.length - 1];
-  if(!(lastLogged && lastLogged.cls === 'ctx' && lastLogged.text === ctxText)){
-    addCtx(relPath(cur.path), cur.brief || '(no brief prepared)');
-  }
+  // Brief lives in the left pane (brief tab). Do not auto-print into chat on select —
+  // the stream stays for conversation; ask+brief are always one glance away in Project.
 }
 
 function setDirty(v){ dirty = v; $('dirty').style.display = v ? 'inline' : 'none'; }
@@ -4410,6 +4484,9 @@ function wireAdmin(){
     applyCols(); applySplit();
     initDividers();
     $('metaedit').onclick = toggleMetaEdit;
+    if($('metatab-brief')) $('metatab-brief').onclick = () => setMetaPane('brief');
+    if($('metatab-info')) $('metatab-info').onclick = () => setMetaPane('info');
+    if($('agentsettings')) $('agentsettings').onclick = () => openAdmin();
     // Gate 1 (DESIGN): hard block until curator CLI is chosen and on PATH.
     if(!SETTINGS.agents && SETTINGS.model){ SETTINGS.agents = {...agentDefaults(), chat: SETTINGS.model}; }
     syncModelBar();
