@@ -27,6 +27,14 @@ class EntrypointTest(unittest.TestCase):
         call.assert_called_once_with(["queue", "desk"])
         web.assert_not_called()
 
+    def test_doctor_dispatches_to_cli(self):
+        with mock.patch.object(cli, "main", return_value=0) as call, \
+                mock.patch.object(server, "main") as web:
+            code = setsweep_main.main(["doctor"])
+        self.assertEqual(code, 0)
+        call.assert_called_once_with(["doctor"])
+        web.assert_not_called()
+
     def test_web_flags_dispatch_to_server(self):
         with mock.patch.object(server, "main", return_value=None) as web:
             code = setsweep_main.main(["--web"])

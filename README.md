@@ -59,7 +59,10 @@ setsweep              # browser / server mode  (default)
 setsweep --web        # same — http://127.0.0.1:4242
 setsweep add <dir>    # register a project from the CLI
 setsweep projects     # list registered projects
+setsweep doctor       # install health (PATH + editable mapping)
 ```
+
+Canonical install is `~/.setsweep-venv` with one PATH shim — see [`INSTALL.md`](./INSTALL.md).
 
 A bare launch prints the desk URL and a one-line CLI hint (`CLI: setsweep projects | add | queue | chat …`), so the windowless half of the product is discoverable from the terminal.
 

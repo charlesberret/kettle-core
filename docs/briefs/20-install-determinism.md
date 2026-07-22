@@ -5,7 +5,7 @@ repo: setsweep-core
 touches: [INSTALL.md, pyproject.toml, docs (doctor spec in brief 18)]
 risk: normal
 depends-on: []
-status: open
+status: done
 ---
 
 ## Context

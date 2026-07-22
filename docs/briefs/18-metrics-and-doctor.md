@@ -31,13 +31,17 @@ needs before an alpha cohort exists.
 2. **`setsweep metrics`**: prints the RELEASE.md tables (stability / success /
    usability) for a date range, from the local file. This is how the patron reads their
    own telemetry.
-3. **`setsweep doctor`**: checks, in order — Python + package version and install mode;
+3. **`setsweep doctor`**: checks, in order — **install seed already from brief 20**
+   (`cli.install_doctor_checks`: which `setsweep` on PATH vs `~/.setsweep-venv`,
+   extra PATH hits, every `py-modules` name importable and present in the installed
+   `top_level`); then expand with Python + package version and install mode;
    registry readable and desks intact (queue.json parses, desk dirs exist); server
    reachable + version match (the brief-11 ping field) + auth token present; curator
    CLI resolves (`curator.provider_readiness()` exists) plus a real auth probe — new
    work in this brief; today curator.py only has static auth hints; beacon
    freshness (watch, metrics). Table output, nonzero exit on failure, and a docs
-   pointer per failing row. Doctor is read-only — it never repairs.
+   pointer per failing row. Doctor is read-only — it never repairs. Extend
+   `cmd_doctor` / `install_doctor_checks` rather than rewriting.
 4. Tests: metrics writes from a stubbed sweep; doctor against a broken scratch setup
    (dead server, missing CLI) asserting the right rows go red.
 

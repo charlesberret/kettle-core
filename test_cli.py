@@ -236,6 +236,45 @@ class CliTests(unittest.TestCase):
         self.assertNotIn("--name", cmd)
         self.assertIn("grok-4.5", cmd)
 
+    def test_install_doctor_flags_stale_mapping_and_path_extras(self):
+        """Brief 20: doctor catches PATH strays and py-modules missing from top_level."""
+        canon = Path("/tmp/fake-venv/bin/setsweep")
+        rows = cli.install_doctor_checks(
+            path_hits=[
+                Path("/opt/homebrew/bin/setsweep"),
+                Path("/Users/me/.local/bin/setsweep"),
+            ],
+            py_modules=["cli", "server", "egress", "sweepkit"],
+            top_level=["cli", "server"],  # egress + sweepkit missing → stale MAPPING
+            canonical=canon,
+        )
+        by_name = {r["name"]: r for r in rows}
+        self.assertFalse(by_name["setsweep-on-path"]["ok"])
+        self.assertFalse(by_name["setsweep-path-extras"]["ok"])
+        self.assertIn("extra on PATH", by_name["setsweep-path-extras"]["detail"])
+        self.assertFalse(by_name["install-mapping"]["ok"])
+        self.assertIn("egress", by_name["install-mapping"]["detail"])
+        self.assertIn("sweepkit", by_name["install-mapping"]["detail"])
+        # Real modules remain importable in this process even when top_level is stale.
+        self.assertTrue(by_name["py-modules-importable"]["ok"])
+
+    def test_install_doctor_green_when_canonical_and_mapped(self):
+        modules = cli._py_modules_from_pyproject()
+        self.assertIn("egress", modules)
+        rows = cli.install_doctor_checks(
+            path_hits=[cli.CANONICAL_SETSWEEP],
+            py_modules=modules,
+            top_level=list(modules),
+            canonical=cli.CANONICAL_SETSWEEP,
+        )
+        self.assertTrue(all(r["ok"] for r in rows), rows)
+        code, out, err = self.run_cli(["doctor"])
+        # Live PATH may have strays — command must run and print a table either way.
+        self.assertIn(code, (0, 1))
+        self.assertEqual(err, "")
+        self.assertIn("setsweep-on-path", out)
+        self.assertIn("py-modules-importable", out)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

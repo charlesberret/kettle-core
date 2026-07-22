@@ -13,6 +13,7 @@ One command, two viewports onto the same desk:
   setsweep chat    <project> [id]   talk to the resident curator│
   setsweep sweep-status|close|archive   mechanical CLOSE helpers│
   setsweep egress|egress-status         desk → ecosystem staging┘
+  setsweep doctor                   install health (PATH + py-modules)
   setsweep --help                   this message
 
 The native macOS window lives in the separate setsweep-desktop Electron shell.
@@ -21,6 +22,7 @@ Routing keeps web/server as the default; the CLI subcommands go through `cli.py`
 import sys
 
 CLI_CMDS = {"projects", "add", "init", "found", "queue", "open", "lineage", "bind", "chat",
+            "doctor",
             "sweep-status", "sweep-close", "sweep-archive", "egress", "egress-status"}
 
 

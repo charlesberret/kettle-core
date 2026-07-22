@@ -24,16 +24,20 @@ your edits where the lineage reconciler can see them.
   setsweep sweep-archive <project>  archive queue entries (after judgment)
   setsweep egress <project>        stage a desk egress memo (.setsweep/outbound/)
   setsweep egress-status <project> list staged egress memos
+  setsweep doctor                  install health (which setsweep, py-modules mapping)
 
 Run: python3 cli.py <command> …    (PROJECTS via DESK_PROJECTS env, same as the server)
 """
 from __future__ import annotations
 
 import argparse
+import importlib.metadata
+import importlib.util
 import json
 import os
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 import egress
@@ -42,10 +46,191 @@ import runtime
 import server
 import sweepkit
 
+# Canonical install (brief 20). Doctor flags any other winner on PATH.
+CANONICAL_VENV = Path.home() / ".setsweep-venv"
+CANONICAL_SETSWEEP = CANONICAL_VENV / "bin" / "setsweep"
+DIST_NAME = "setsweep"
+
 
 def _k(n) -> str:
     n = int(n or 0)
     return f"{n/1000:.0f}k" if n >= 1000 else str(n)
+
+
+def _which_all(cmd: str = "setsweep") -> list[Path]:
+    """Every executable `cmd` on PATH, in resolution order (no duplicates)."""
+    seen: set[str] = set()
+    out: list[Path] = []
+    for raw in os.environ.get("PATH", "").split(os.pathsep):
+        if not raw:
+            continue
+        candidate = Path(raw).expanduser() / cmd
+        try:
+            if not candidate.is_file() or not os.access(candidate, os.X_OK):
+                continue
+            key = str(candidate.resolve()) if candidate.exists() else str(candidate)
+        except OSError:
+            key = str(candidate)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(candidate)
+    return out
+
+
+def _py_modules_from_pyproject(path: Path | None = None) -> list[str]:
+    """Read the setuptools py-modules list from pyproject.toml (source of truth)."""
+    if path is None:
+        # Prefer the live source tree next to this module (editable install).
+        path = Path(__file__).resolve().parent / "pyproject.toml"
+    if not path.is_file():
+        return []
+    data = tomllib.loads(path.read_text(encoding="utf-8"))
+    modules = data.get("tool", {}).get("setuptools", {}).get("py-modules") or []
+    return [str(m) for m in modules]
+
+
+def _installed_top_level(dist_name: str = DIST_NAME) -> list[str] | None:
+    """Names recorded in the installed distribution's top_level.txt, or None if missing."""
+    try:
+        dist = importlib.metadata.distribution(dist_name)
+    except importlib.metadata.PackageNotFoundError:
+        return None
+    text = dist.read_text("top_level.txt")
+    if text is None:
+        return None
+    return [line.strip() for line in text.splitlines() if line.strip()]
+
+
+def install_doctor_checks(
+    *,
+    path_hits: list[Path] | None = None,
+    py_modules: list[str] | None = None,
+    top_level: list[str] | None | object = ...,
+    canonical: Path = CANONICAL_SETSWEEP,
+) -> list[dict]:
+    """Read-only install health rows for `setsweep doctor` (brief 20; expanded by brief 18).
+
+    Each row: {name, ok, detail, docs}. `ok` False means doctor should exit nonzero.
+    """
+    rows: list[dict] = []
+    hits = path_hits if path_hits is not None else _which_all("setsweep")
+    modules = py_modules if py_modules is not None else _py_modules_from_pyproject()
+    if top_level is ...:
+        top_level = _installed_top_level()
+
+    # --- which setsweep ---
+    if not hits:
+        rows.append({
+            "name": "setsweep-on-path",
+            "ok": False,
+            "detail": "no `setsweep` on PATH",
+            "docs": "INSTALL.md § Canonical install",
+        })
+    else:
+        first = hits[0]
+        try:
+            resolved = first.resolve()
+            canon = canonical.expanduser().resolve()
+            is_canon = resolved == canon
+        except OSError:
+            resolved = first
+            is_canon = False
+        rows.append({
+            "name": "setsweep-on-path",
+            "ok": is_canon,
+            "detail": (
+                f"resolves to {first}"
+                + (f" → {resolved}" if resolved != first else "")
+                + ("" if is_canon else f" (canonical is {canonical})")
+            ),
+            "docs": "INSTALL.md § Canonical install",
+        })
+        extras = hits[1:]
+        if extras:
+            rows.append({
+                "name": "setsweep-path-extras",
+                "ok": False,
+                "detail": f"{len(extras)} extra on PATH: "
+                          + ", ".join(str(p) for p in extras),
+                "docs": "INSTALL.md § PATH retirement checklist",
+            })
+        else:
+            rows.append({
+                "name": "setsweep-path-extras",
+                "ok": True,
+                "detail": "single setsweep on PATH",
+                "docs": "INSTALL.md § Canonical install",
+            })
+
+    # --- py-modules importable + present in installed top_level ---
+    if not modules:
+        rows.append({
+            "name": "py-modules-list",
+            "ok": False,
+            "detail": "could not read tool.setuptools.py-modules from pyproject.toml",
+            "docs": "INSTALL.md § Reinstall rule",
+        })
+        return rows
+
+    rows.append({
+        "name": "py-modules-list",
+        "ok": True,
+        "detail": f"{len(modules)} modules in pyproject.toml",
+        "docs": "pyproject.toml py-modules",
+    })
+
+    if top_level is None:
+        rows.append({
+            "name": "install-mapping",
+            "ok": False,
+            "detail": f"distribution {DIST_NAME!r} not installed in this interpreter "
+                      f"({sys.executable})",
+            "docs": "INSTALL.md § Reinstall rule",
+        })
+    else:
+        missing_map = [m for m in modules if m not in top_level]
+        if missing_map:
+            rows.append({
+                "name": "install-mapping",
+                "ok": False,
+                "detail": "py-modules missing from installed top_level (reinstall editable): "
+                          + ", ".join(missing_map),
+                "docs": "INSTALL.md § Reinstall rule",
+            })
+        else:
+            rows.append({
+                "name": "install-mapping",
+                "ok": True,
+                "detail": "installed top_level covers py-modules",
+                "docs": "INSTALL.md § Reinstall rule",
+            })
+
+    missing_import = []
+    for name in modules:
+        try:
+            spec = importlib.util.find_spec(name)
+        except (ImportError, ModuleNotFoundError, ValueError):
+            spec = None
+        if spec is None:
+            missing_import.append(name)
+    if missing_import:
+        rows.append({
+            "name": "py-modules-importable",
+            "ok": False,
+            "detail": "not importable (stale editable MAPPING?): "
+                      + ", ".join(missing_import),
+            "docs": "INSTALL.md § Reinstall rule",
+        })
+    else:
+        rows.append({
+            "name": "py-modules-importable",
+            "ok": True,
+            "detail": f"all {len(modules)} py-modules importable",
+            "docs": "INSTALL.md § Reinstall rule",
+        })
+
+    return rows
 
 
 def _resolve(proj: dict, path: str) -> Path:
@@ -389,6 +574,26 @@ def cmd_egress_status(args) -> int:
     return 0
 
 
+def cmd_doctor(_args) -> int:
+    """Install health (brief 20). Brief 18 expands with server/curator/beacon rows."""
+    rows = install_doctor_checks()
+    width = max((len(r["name"]) for r in rows), default=8)
+    failed = 0
+    for r in rows:
+        mark = "ok" if r["ok"] else "FAIL"
+        if not r["ok"]:
+            failed += 1
+        print(f"  {mark:4}  {r['name']:<{width}}  {r['detail']}")
+        if not r["ok"] and r.get("docs"):
+            print(f"        → {r['docs']}")
+    print()
+    if failed:
+        print(f"doctor: {failed} check(s) failed — see INSTALL.md")
+        return 1
+    print("doctor: all install checks green")
+    return 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
         prog="setsweep", description="CLI viewport over the desk.",
@@ -401,6 +606,7 @@ def main(argv=None) -> int:
                "  setsweep open    setsweep refounding-merge\n"
                "  setsweep chat    setsweep               # talk to the desk\n"
                "  setsweep chat    setsweep <entry-id>    # about one file\n"
+               "  setsweep doctor                      # install health\n"
                "  setsweep sweep-status setsweep\n"
                "  setsweep sweep-close  setsweep\n"
                "  setsweep egress setsweep --kind launch --topic go-ahead --body '…'\n"
@@ -408,9 +614,13 @@ def main(argv=None) -> int:
     # not required: a bare `setsweep` should greet with the menu, not error out
     sub = ap.add_subparsers(
         dest="cmd",
-        metavar="{projects,add,init,found,queue,open,lineage,bind,chat,"
+        metavar="{projects,add,init,found,queue,open,lineage,bind,chat,doctor,"
                 "sweep-status,sweep-close,sweep-archive,egress,egress-status}")
     sub.add_parser("projects", help="list registered desks").set_defaults(fn=cmd_projects)
+    sub.add_parser(
+        "doctor",
+        help="install health: which setsweep, py-modules mapping (brief 20; brief 18 expands)",
+    ).set_defaults(fn=cmd_doctor)
     a = sub.add_parser("add", help="register a folder as a desk")
     a.add_argument("path"); a.add_argument("--name", default=None); a.set_defaults(fn=cmd_add)
     i = sub.add_parser("init", help="register the current folder as a desk")
