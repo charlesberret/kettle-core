@@ -280,8 +280,13 @@ def apply_curator_selection(
         if prov_in not in KNOWN_PROVIDERS:
             raise ValueError(f"unknown curator provider: {prov_in}")
         patch["curator"]["provider"] = prov_in
+        # Always pair provider with its default CLI unless the caller overrides
+        # command explicitly. Leaving a stale "claude" command under provider=grok
+        # made sweeps run Claude with Grok stream flags (streaming-json vs stream-json).
         if command and str(command).strip():
             patch["curator"]["command"] = str(command).strip()
+        else:
+            patch["curator"]["command"] = DEFAULT_COMMAND.get(prov_in, "claude")
 
     if mid:
         effective = prov_in or resolve_curator(cur).provider
@@ -686,8 +691,16 @@ def resolve_curator(settings: Optional[dict] = None) -> CuratorConfig:
         provider = "claude"
 
     command = str(block.get("command") or "").strip()
+    default_cmd = DEFAULT_COMMAND.get(provider, "claude")
     if not command:
-        command = DEFAULT_COMMAND.get(provider, "claude")
+        command = default_cmd
+    elif (
+        command in DEFAULT_COMMAND_VALUES
+        and command != default_cmd
+        and provider != "cli"
+    ):
+        # Stale default of another provider (e.g. command=claude under provider=grok).
+        command = default_cmd
 
     models = default_models_for(provider)
     if provider in ("claude", "cli"):
