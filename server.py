@@ -2634,10 +2634,16 @@ def main():
     port = DEFAULT_PORT
     if explicit_port:
         port = int(args[args.index("--port") + 1])
-    elif prepare_bind(port, replace=replace) is None:
+    # Always run the circuit-breaker — including with explicit --port — so
+    # `setsweep --web --port 4242 --replace` (plugin Restart Core) actually
+    # retires the predecessor. Previously --port skipped prepare_bind and
+    # hit "Address already in use" while the stale process kept serving.
+    claimed = prepare_bind(port, replace=replace)
+    if claimed is None:
         url = f"http://127.0.0.1:{port}/"
         print(f"setsweep already running at {url} — deferring (pass --replace to restart)")
         return 0
+    port = claimed
 
     try:
         srv = ThreadingHTTPServer(("127.0.0.1", port), Handler)
