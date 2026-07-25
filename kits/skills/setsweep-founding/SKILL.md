@@ -21,7 +21,7 @@ You are the founding curator. Prefer the snapshot over ceremony.
    `- [ ]` / `- [x]`, empty `Elaborate (optional):`). Copy stems and options **verbatim**.
    Keep or clear pre-ticked options from the survey; do not invent stems.
 4. **Empty folder** — if the survey says empty: new project here, or wrong folder?
-5. **After the card** — when the patron returns it (or says ready), the UI advances to
+5. **After the card** — when the user returns it (or says ready), the UI advances to
    **propose** (write `DESK-PROPOSAL.md`). You do not write desk apparatus on this turn.
 6. **Found** — only after they approve the proposal (`/api/found` / approve). Separate
    write-armed turn.

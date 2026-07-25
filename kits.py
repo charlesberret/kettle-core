@@ -19,7 +19,7 @@ KINDS = ["writing", "code", "records", "knowledge", "inbox"]
 # (kit wins on conflict). Sweep-actions is shared so inbox and non-inbox alike can opt in.
 #
 # Wording discipline: this card is the product's first impression, answered before the
-# patron has learned any Setsweep vocabulary. Stems and options must be self-explanatory —
+# user has learned any Setsweep vocabulary. Stems and options must be self-explanatory —
 # no internal terms (sitting, sweep, egress, corpus), no slash piles, no example dumps.
 # One axis per question; single-choice where the axis must be crisp; every option should
 # change what the desk actually does. Card mechanics are stated once by the UI, never
@@ -63,7 +63,7 @@ BASE_INTERVIEW = [
         "stem": "What should I never change without asking?",
         "multi": True,
         "options": [
-            "Nothing in particular — ordinary care is enough",
+            "Project files are fair game for agent editing",
             "Records and logs that only ever grow",
             "Wording that is already published or final",
             "Secrets, credentials, and personal data",
@@ -175,9 +175,8 @@ def _is_other_option(label: str) -> bool:
     return "elaborate" in s
 
 
-def _render_stems(stems: list, prechecks: dict | None = None) -> str:
-    """Render stems as GFM checklist. *prechecks* maps stem id → option labels to pre-tick."""
-    prechecks = prechecks or {}
+def _render_stems(stems: list) -> str:
+    """Render stems as a blank GFM checklist for the user to answer."""
     lines = []
     for i, s in enumerate(stems, 1):
         # Ids stay in GFM for the desk parser; the UI hides the [id] chrome. Checkboxes
@@ -185,13 +184,11 @@ def _render_stems(stems: list, prechecks: dict | None = None) -> str:
         one = "" if s.get("multi") else " (choose one)"
         sid = s.get("id", "")
         lines.append(f"{i}. [{sid}] {s.get('stem', '')}{one}")
-        checked = set(prechecks.get(sid) or [])
         for opt in s.get("options") or []:
             if _is_other_option(str(opt)):
                 continue
-            mark = "x" if str(opt) in checked else " "
-            lines.append(f"   - [{mark}] {opt}")
-        lines.append("   Elaborate (optional):")  # leave blank — patron only
+            lines.append(f"   - [ ] {opt}")
+        lines.append("   Elaborate (optional):")  # leave blank — user only
     return "\n".join(lines)
 
 
@@ -212,14 +209,15 @@ def card_has_required_stems(text: str, kit=None) -> list[str]:
     return missing
 
 
-def as_context(kit, mode: str, *, prechecks: dict | None = None) -> str:
+def as_context(kit, mode: str) -> str:
     """Render a kit into an injectable context block for an agent mode:
       'review' → lens + urgency
       'sweep' → self-checks
       'found' → first-queue heuristic
       'interview' → MCQ stems (base + kit), for survey-then-confirm founding
     Returns '' for no kit or an empty section, so callers can inject unconditionally.
-    *prechecks* (interview only): stem id → option labels already ticked from core survey.
+    Interview options always start unchecked. Survey heuristics shape the curator's
+    opening prose; they never answer the user's confirmation card.
     """
     if not kit and mode != "interview":
         return ""
@@ -247,22 +245,22 @@ def as_context(kit, mode: str, *, prechecks: dict | None = None) -> str:
         stems = interview_stems(kit)
         body = (
             "Founding prompt list — emit these as a GFM markdown checklist in chat "
-            "(### N. [id] stem, then - [ ] / - [x] options, then `Elaborate (optional):` "
+            "(### N. [id] stem, then - [ ] options, then `Elaborate (optional):` "
             "with the line left EMPTY). Copy stems and options VERBATIM, keeping the "
             "(choose one) tag on single-choice stems; add no other per-question "
             "instruction text — no '(pick all that apply)', no restating how checkboxes "
             "work. Never pre-fill Elaborate with survey commentary, coaching, or "
-            "paraphrases — only the patron writes free response. "
+            "paraphrases — only the user writes free response. "
             "Do NOT add an 'Other (elaborate)' checkbox option — free response is the "
             "Elaborate field alone. "
-            "The desk UI turns the checklist into interactive ticks. Options already "
-            "marked - [x] below are core-survey suggestions — keep or clear them. "
-            "You have NO tools; do not claim you will re-read files. "
+            "The desk UI turns the checklist into interactive ticks. Emit every option "
+            "as - [ ] unchecked — the user answers from a blank card (do not pre-check "
+            "from the survey). You have NO tools; do not claim you will re-read files. "
             "Leave room for open discussion after the list. "
-            "Finish ✓ later drafts one DESK-PROPOSAL.md for the patron to edit and approve — "
+            "Finish ✓ later drafts one DESK-PROPOSAL.md for the user to edit and approve — "
             "do not write the full desk yet. Do not re-ask core themes the survey already "
             "answered.\n"
-            + _render_stems(stems, prechecks)
+            + _render_stems(stems)
         )
         if kit and kit.get("lens"):
             body = ("Kit default lens (accept unless they delta it):\n" + kit["lens"]

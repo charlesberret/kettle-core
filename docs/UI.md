@@ -41,11 +41,26 @@ white as body text. Always mix toward `--bg` for gray chrome.
 7. **Diff badges** color `.qdiff .add` / `.del` with good/warn in **both** midbar and queue.
 8. **Icon-only chrome** (reload, settings): `.btn-icon.btn-ghost` is borderless — no box around glyphs.
 
+## Titles, heds, subheds
+
+User-facing **titles, headings, and subheadings** use **Title Case** across web,
+plugin Desk, and generated desk documents (e.g. **Desk Proposal**, **Beginning Interview**,
+**Desk Confirmation Card**, **Found Desk**, **Add Project**).
+
+- Markdown document heds written by the curator (`#` / `##` in `DESK-PROPOSAL.md`,
+  egress notes, etc.) follow the same rule — prompts name the headings in Title Case.
+- Queue entry **titles** (not body `ask`/`brief` prose) are Title Case.
+- Mid-sentence product names of those actions match Title Case when referred to as
+  the control or document name.
+
 ## Buttons
 
 Shared kit: `.btn` + `.btn-sm` / `.btn-md` + role (`.btn-default` | `.btn-primary` | `.btn-ghost` | `.btn-signature`).
 
-- Default / primary / ghost labels: **lowercase**, same font as the rest of the UI.
+- Ordinary default / primary / ghost labels: **lowercase**, same font as the rest of the UI
+  (e.g. `sweep`, `approve` in midfoot chrome).
+- **Named signature actions that are also titles** (e.g. **Found Desk**, **Draft Proposal ✓**,
+  **Start Interview**) stay Title Case so they match their hed/title role.
 - Do not recolor a single midfoot action (e.g. `#comment`) with `--link` — it breaks the kit.
 - Signature actions (sweep) may keep uppercase tracking; that is intentional emphasis.
 
@@ -65,7 +80,7 @@ Shared kit: `.btn` + `.btn-sm` / `.btn-md` + role (`.btn-default` | `.btn-primar
 
 ## Shared UI copy (all viewports)
 
-Patron-facing **strings** must not drift between web, desktop, and the plugin Desk.
+User-facing **strings** must not drift between web, desktop, and the plugin Desk.
 
 | Role | Location |
 |------|----------|
@@ -76,8 +91,10 @@ Patron-facing **strings** must not drift between web, desktop, and the plugin De
 **Workflow**
 
 1. Edit `setsweep-core/static/ui-copy.js` only.
-2. In the plugin package: `npm run sync-ui-copy` (also runs on `precompile` / `prepackage`).
-3. Rebuild / reinstall the VSIX if needed.
+2. In the plugin package: `npm run sync-ui-copy`, then commit the generated snapshot.
+3. Run `npm run check-ui-copy` against the intended core checkout.
+4. Ordinary plugin compile/package consumes the committed snapshot and stays
+   sibling-independent; rebuild/reinstall the VSIX if needed.
 
 `SETSWEEP_SRC` (core root) or `SETSWEEP_UI_COPY` (path to `ui-copy.js`) override discovery
 when the repos are not siblings.

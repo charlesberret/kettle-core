@@ -244,7 +244,7 @@ def write_session_log_stub(
 
 
 def publish_approval_egress(proj: dict, entries: list[dict] | None = None) -> dict[str, Any]:
-    """Stage a kind:approval egress memo so fleet/other agents see patron gates.
+    """Stage a kind:approval egress memo so fleet/other agents see user gates.
 
     Lists approved entries (cleared) and remaining pending entries (still blocked).
     No-op (returns published=False) when there is nothing useful to say.
@@ -260,7 +260,7 @@ def publish_approval_egress(proj: dict, entries: list[dict] | None = None) -> di
 
     day = date.today().isoformat()
     lines = [
-        f"Patron sitting closed via Setsweep for project `{proj.get('id')}` ({proj.get('name')}).",
+        f"User sitting closed via Setsweep for project `{proj.get('id')}` ({proj.get('name')}).",
         "",
         "## Approved this sitting (peers may treat these as cleared)",
     ]

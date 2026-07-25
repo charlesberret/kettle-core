@@ -1,6 +1,6 @@
-Queue entry schema (all fields): id (slug), title, path (absolute), project (name), project_root (absolute), ask_type (input|tuning|judgment|fill), ask (one plain line: what is wanted from the patron — no bare codes), desk_item (null), urgency (high|medium|low), status ("pending"), unblocks (one line or "—"), brief (the curatorial brief — BRIEF STANDARD below).
+Queue entry schema (all fields): id (slug), title, path (absolute), project (name), project_root (absolute), ask_type (input|tuning|judgment|fill), ask (one plain line: what is wanted from the user — no bare codes), desk_item (null), urgency (high|medium|low), status ("pending"), unblocks (one line or "—"), brief (the curatorial brief — BRIEF STANDARD below).
 
-BRIEF STANDARD — cold re-entry (patron may be returning after weeks, or may have never carefully read this file). The brief shows the instant the file loads, before any chat reply; it must stand alone as a clear, unassuming introduction.
+BRIEF STANDARD — cold re-entry (user may be returning after weeks, or may have never carefully read this file). The brief shows the instant the file loads, before any chat reply; it must stand alone as a clear, unassuming introduction.
 
 Write in TWO movements, 2–4 sentences total:
 
@@ -10,4 +10,4 @@ Write in TWO movements, 2–4 sentences total:
 
 The matching `ask` is one undemanding line in the same plain register.
 
-Anti-patterns: stacked noun phrases; clipped memo voice; undecoded acronyms; demanding tone; agent procedure (“check file X first”). Prefer kits/frameworks/brief.md for the full anti-pattern table and a good/bad worked rewrite. Never make the patron decode shorthand to learn why the file is queued.
+Anti-patterns: stacked noun phrases; clipped memo voice; undecoded acronyms; demanding tone; agent procedure (“check file X first”). Prefer kits/frameworks/brief.md for the full anti-pattern table and a good/bad worked rewrite. Never make the user decode shorthand to learn why the file is queued.

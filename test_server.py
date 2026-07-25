@@ -26,6 +26,7 @@ from contextlib import redirect_stderr
 from pathlib import Path
 
 import server
+import setsweep_contract
 
 
 def _http(method, url, body=None):
@@ -314,7 +315,7 @@ class HelperTests(Base):
         server.ensure_snapshots(self.proj(), q)
         snap = server.runtime_dir(self.proj()) / "snapshots" / "e1.orig"
         self.assertEqual(snap.read_text(), "original")
-        f.write_text("edited later")                            # patron edits the file
+        f.write_text("edited later")                            # user edits the file
         server.ensure_snapshots(self.proj(), q)
         self.assertEqual(snap.read_text(), "original")          # first sight wins; not overwritten
 
@@ -394,7 +395,7 @@ class HelperTests(Base):
     def test_project_orientation_includes_curator_memory(self):
         desk = self.root / ".setsweep"
         (desk / "PROJECT.md").write_text("the charter")
-        (desk / "MEMORY.md").write_text("- 2026-06-11: patron prefers serial commas")
+        (desk / "MEMORY.md").write_text("- 2026-06-11: user prefers serial commas")
         out = server.project_orientation(self.proj())
         self.assertIn("the charter", out)
         self.assertIn("prefers serial commas", out)
@@ -554,9 +555,9 @@ class EndpointTests(Base):
         import lineage
         f = self.root / "alpha.md"
         s, _ = _http("POST", f"{self.base}/api/save",
-                     {"path": str(f), "content": "patron's own edit\n"})
+                     {"path": str(f), "content": "user's own edit\n"})
         self.assertEqual(s, 200)
-        self.assertEqual(f.read_text(), "patron's own edit\n")
+        self.assertEqual(f.read_text(), "user's own edit\n")
         recs = lineage.read_record(self.root)
         self.assertTrue(any(r["actor_kind"] == "user" and "alpha.md" in r["files"]
                             for r in recs), "editor save should log a user edit")
@@ -864,7 +865,7 @@ class EndpointTests(Base):
         self.assertEqual(len(alpha["comment_history"]), 2)
         self.assertEqual(alpha["comment_history"][0]["text"], "fix the TKs")
 
-    def test_sweep_injects_patron_comments_from_log(self):
+    def test_sweep_injects_user_comments_from_log(self):
         server.comments_log_path(self.proj()).write_text(
             "2026-06-29\talpha\tfix the TKs\n"
             "2026-06-29\talpha\talso check tone\n"
@@ -872,9 +873,9 @@ class EndpointTests(Base):
         cmds = self._capture_cmds()
         self._post_stream("/api/sweep", {"project": "t"})
         prompt = cmds[-1][cmds[-1].index("-p") + 1]
-        self.assertIn("PATRON COMMENTS", prompt)
-        self.assertIn("Patron comment for this entry: fix the TKs", prompt)
-        self.assertIn("Patron comment for this entry: also check tone", prompt)
+        self.assertIn("USER COMMENTS", prompt)
+        self.assertIn("User comment for this entry: fix the TKs", prompt)
+        self.assertIn("User comment for this entry: also check tone", prompt)
         self.assertIn("comments.log", prompt)
 
     def test_approve_marks_and_logs(self):
@@ -976,13 +977,13 @@ class EndpointTests(Base):
         # desk-proposal alone must not heal to founded (propose phase ≠ founded)
         prop = server.proposal_path(self.proj())
         prop.parent.mkdir(parents=True, exist_ok=True)
-        prop.write_text("# Desk proposal\nidentity here\n")
+        prop.write_text("# Desk Proposal\nidentity here\n")
         self.write_queue([{
             "id": server.PROPOSAL_ENTRY_ID,
             "status": "pending",
             "path": str(prop),
             "founding_phase": "proposal",
-            "title": "Desk proposal",
+            "title": "Desk Proposal",
         }])
         server.save_session(self.proj(), status="proposing", session_id="s-prop")
         self.assertFalse(server.mark_founded_if_filed(self.proj()))
@@ -1008,7 +1009,7 @@ class EndpointTests(Base):
         # Pre-write proposal so propose() can stamp proposing even if the stub writes nothing
         prop = server.proposal_path(self.proj())
         prop.parent.mkdir(parents=True, exist_ok=True)
-        prop.write_text("# Desk proposal\n")
+        prop.write_text("# Desk Proposal\n")
         saved = server.CLAUDE
         server.CLAUDE = str(stub)
         try:
@@ -1023,7 +1024,7 @@ class EndpointTests(Base):
     def test_approve_proposal_returns_founding_flag(self):
         prop = server.proposal_path(self.proj())
         prop.parent.mkdir(parents=True, exist_ok=True)
-        prop.write_text("# Desk proposal\nedited by patron\n")
+        prop.write_text("# Desk Proposal\nedited by user\n")
         self.write_queue([{
             "id": server.PROPOSAL_ENTRY_ID,
             "status": "pending",
@@ -1158,12 +1159,12 @@ class EndpointTests(Base):
                 calls.append(list(argv))
                 if call == 1:  # finish interview -> proposal entry
                     proposal = server.proposal_path(proj)
-                    proposal.write_text("# Desk proposal\nPatron intent.\n")
+                    proposal.write_text("# Desk Proposal\nUser intent.\n")
                     server.atomic_write(server.queue_path(proj), json.dumps({
                         "curated": "proposal ready",
                         "entries": [{
                             "id": server.PROPOSAL_ENTRY_ID,
-                            "title": "Desk proposal",
+                            "title": "Desk Proposal",
                             "path": str(proposal),
                             "status": "pending",
                             "founding_phase": "proposal",
@@ -1174,7 +1175,7 @@ class EndpointTests(Base):
                     desk = server.desk_dir(proj)
                     for name, text in {
                         "PROJECT.md": "# Lifecycle charter\n",
-                        "MEMORY.md": "# Memory\n- Patron intent wins.\n",
+                        "MEMORY.md": "# Memory\n- User intent wins.\n",
                         "FAMILIARITY.md": "# Familiarity\n- draft.md is first.\n",
                         "SWEEP-ACTIONS.md": "# Sweep actions\n- Ordinary close.\n",
                     }.items():
@@ -1810,6 +1811,12 @@ class EndpointTests(Base):
         s, j = _http("GET", f"{self.base}/api/ping")
         self.assertEqual(s, 200)
         self.assertEqual(j["app"], "setsweep")
+        self.assertEqual(j["version"], setsweep_contract.core_version())
+        self.assertEqual(j["api_version"], setsweep_contract.API_VERSION)
+        self.assertEqual(
+            j["desk_schema_version"],
+            setsweep_contract.DESK_SCHEMA_VERSION,
+        )
         self.assertEqual(j["port"], self.port)
         self.assertEqual(j["pid"], os.getpid())   # server rides in-process here
         self.assertTrue(j.get("started"), "started must be set on every bind path")

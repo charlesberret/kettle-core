@@ -5,7 +5,7 @@ Also shapes the one-line `ask` field.
 
 ## Who the brief is for
 
-The patron may have been deep in another project for weeks, or may have **vibe-coded** this
+The user may have been deep in another project for weeks, or may have **vibe-coded** this
 tree and never carefully read the file. The brief must work for both: a clear, unassuming
 introduction to **what this file is** and **what they are being asked to do**, with no
 assumption that they remember internal codenames, round numbers, or prior memos.
@@ -81,4 +81,4 @@ changes would break rebuilds that depend on exact file identity.”
 - No procedural agent tails.  
 - Prefer `FAMILIARITY.md` for structure you already know; do not re-derive the corpus map
   in every brief.  
-- Never make the patron decode shorthand to learn why the file is in front of them.
+- Never make the user decode shorthand to learn why the file is in front of them.

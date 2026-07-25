@@ -1,7 +1,7 @@
 # Setsweep — Platforms & Viewports
 
-*Companion to [`ROADMAP.md`](../ROADMAP.md). Current-state claims below: **2026-07-22**
-(brief 22 founding parity). Refresh this file when a viewport ships a ritual change.
+*Companion to [`ROADMAP.md`](../ROADMAP.md). Current-state claims below: **2026-07-25**
+(brief 23 regression-bar checkpoint). Refresh this file when a viewport ships a ritual change.
 Stale matrices are how desktop “falls behind” without anyone forking it.*
 
 ## What a viewport is
@@ -11,7 +11,7 @@ state of its own (the desk is files in `.setsweep/`; the wire contract is
 [`API.md`](../API.md)). Viewports differ only in how much of the contract they speak and
 how they host chrome.
 
-| Level | What the patron can do | API surface |
+| Level | What the user can do | API surface |
 |---|---|---|
 | **A — attach + read** | Find the live core, see the queue and briefs | Discovery (`server.json` → `:4242`), `GET /api/ping`, `/api/projects`, `/api/queue`, `/api/file` |
 | **B — full sitting** | Approve, comment, diffs, sweep, chat | Tiers 1–2 writes + NDJSON streams |
@@ -38,31 +38,37 @@ plugin only if it still diverges). Do not invent an Electron-only wizard.
 |---|---|---|---|---|
 | **Web** (`static/index.html`) | yes | yes | yes | Reference sitting: kits, lineage, admin, themes, UI.md type roles. |
 | **Desktop** (Electron) | yes | yes | yes | Same UI as web via sidecar. Gaps = **web gaps** + distribution (brief 15). |
-| **VS Code / Cursor** (plugin ≥0.6.4) | yes | yes | yes | Auto-starts core on `:4242`. Full Desk sitting; founding **in-panel** (quality bar for C). No full kits/lineage/admin parity with web. |
+| **VS Code / Cursor** (plugin source checkpoint) | yes | yes | candidate | Founding/compact/activity repairs exist in the current source tree, but the packaged VSIX and manual provider matrix remain release gates. No full kits/lineage/admin parity with web. |
 | **CLI** | yes | partial | yes | `found` / `queue` / `chat` / sweep helpers; no graphical approve/comment. |
 
 ## Ritual parity matrix (the real product)
 
-Same ritual, every graphical viewport. Cells: **same** (matches canonical web) ·
-**better** (ahead of web — must fold back) · **gap** · **host-only** (OK) · **n/a**.
+Same ritual, every graphical viewport. Cells: **same** (matches canonical web and
+has current verification) · **candidate** (implemented/automated, packaged or manual
+verification pending) · **better** (ahead of web — must fold back) · **gap** ·
+**host-only** (OK) · **n/a**.
 
 | Ritual | Web | Desktop | Plugin | CLI |
 |--------|-----|---------|--------|-----|
 | Discover / start core | same | same (sidecar) | same (auto-start default → live `:4242`) | n/a |
 | First-run curator setup | same (setup modal, hard gate) | same | host settings + core settings deep-link | ambient CLI auth |
 | Add / register project | same (name + folder hot path; kit/depth/note under *more options*) | same | host-only folder pick + API | `setsweep add` |
-| Founding interview | same (right pane + founding head; empty queue orients to agent) | same | same ritual (Desk layout; fixed founding stream) | `setsweep found` / chat |
-| Confirm card → proposal | same | same | same (confirm-card logic) | n/a |
-| Proposal approve → found | same | same | same | n/a |
-| Sitting (approve / comment / sweep) | same | same | same (Desk ritual buttons) | partial |
+| Founding interview | same (right pane + founding head; empty queue orients to agent) | same source | candidate (Desk layout + adapter checks; packaged/provider walk pending) | `setsweep found` / chat |
+| Confirm card → proposal | same (blank-card parser + route chain in core CI) | same source | candidate | n/a |
+| Proposal approve → found | same (proposal action + `/api/found` chain in core CI) | same source | candidate | n/a |
+| Chat activity + compact | same (activity chrome + `/api/compact` in core CI) | same source | candidate | partial |
+| Sitting (approve / comment / sweep) | same | same source | candidate (Desk ritual buttons) | partial |
 | Type hierarchy (gray chrome) | same (UI.md) | same | **gap** (Desk CSS still separate) | n/a |
 | Brief on file select | left brief tab; no auto chat dump | same | Desk brief region | n/a |
 
-**Closed (brief 22):** web/desktop add-project and founding entry match the Desk quality bar
-(minimal hot path, interview in-agent, empty-state orientation). Remaining optional debt:
-plugin Desk CSS vs UI.md tokens.
+**Brief 22 closed the entry-design gap:** web/desktop add-project and founding entry
+match the Desk quality bar (minimal hot path, interview in-agent, empty-state
+orientation). **Brief 23 is in progress:** core now mechanically guards the canonical
+route chain, blank card, activity chrome, compact, and proposal action; packaged
+plugin/provider walkthroughs remain unclaimed. Plugin Desk CSS vs UI.md tokens also
+remains a gap.
 
-## Founding / first-run parity (track owner: brief 22)
+## Founding / first-run parity (entry design: brief 22; regression bar: brief 23)
 
 ### Canonical state machine (all viewports)
 
@@ -127,7 +133,7 @@ No listen-on-0.0.0.0. After brief **05** (auth token), remote = **tunnel guidanc
 
 ## Multi-user server edition (Phase 7 — horizon)
 
-**Not now.** Through 1.0, Setsweep is a **personal** instrument: one patron, one machine
+**Not now.** Through 1.0, Setsweep is a **personal** instrument: one user, one machine
 (or one tunnel they control), many thin viewports. Shared state across web / plugin /
 desktop is the single-desk model, not multi-tenancy.
 
@@ -143,12 +149,16 @@ like “open the port”:
 
 Do not implement multi-user isolation as a side effect of adapter work (Obsidian, MCP).
 When the phase is greenlit, add briefs under Phase 7; until then, concurrent viewports
-for **one** patron remain the only supported multi-client pattern.
+for **one** user remain the only supported multi-client pattern.
 
 ## Maintenance rule
 
 When you change a ritual in any viewport:
 
 1. Update the **ritual parity matrix** above.  
-2. If web and plugin diverge, open or extend a brief — do not leave “better” stranded.  
-3. Re-date the subtitle of this file.
+2. Run `python3 -m pytest test_frontend.py` for the core/reference web and the
+   corresponding adapter tests in the changed viewport.
+3. Run `python3 tools/check_family.py` from core to check identity and declared
+   compatibility across sibling checkouts.
+4. If web and plugin diverge, open or extend a brief — do not leave “better” stranded.
+5. Re-date the subtitle and distinguish automation from manual/package evidence.

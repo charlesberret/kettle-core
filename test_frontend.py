@@ -3,7 +3,7 @@
 static/index.html is run-critical: a syntax error anywhere in its single 3,300-line
 inline script prevents even the error handler's own registration, producing the
 blank-window-with-no-repair-path CLAUDE.md warns about (brief 08). There is no build
-step, so nothing else parses the JS before a patron loads it.
+step, so nothing else parses the JS before a user loads it.
 
 This gate extracts every inline <script> block from index.html plus every .js file
 shipped under static/ and runs `node --check` (syntax only) on each. Where node is on
@@ -37,6 +37,19 @@ def inline_scripts(html: str):
         if body.strip():
             blocks.append((i, body))
     return blocks
+
+
+def function_source(html: str, name: str) -> str:
+    """Return one top-level JS function through the next function declaration."""
+    match = re.search(
+        rf"(?:^|\n)(?:async\s+)?function\s+{re.escape(name)}\s*\([^)]*\)\s*\{{"
+        rf".*?(?=\n(?:async\s+)?function\s+[A-Za-z_$]|\Z)",
+        html,
+        re.DOTALL,
+    )
+    if not match:
+        raise AssertionError(f"missing top-level JavaScript function {name}()")
+    return match.group(0)
 
 
 def node_check(source: str) -> subprocess.CompletedProcess:
@@ -111,6 +124,60 @@ class SittingUiConventions(unittest.TestCase):
         css = INDEX.read_text(encoding="utf-8")
         self.assertRegex(css, r"\.qdiff\s+\.add[^{]*\{[^}]*--good")
         self.assertRegex(css, r"\.qdiff\s+\.del[^{]*\{[^}]*--warn")
+
+
+class ViewportRitualRegressionBar(unittest.TestCase):
+    """Structural CI bar for the canonical reference-web sitting state machine.
+
+    These checks do not claim a manual provider/browser walkthrough. They make
+    accidental deletion or disconnection of a founding/sitting step fail the
+    ordinary core suite, giving every adapted viewport a stable baseline.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.html = INDEX.read_text(encoding="utf-8")
+
+    def function(self, name: str) -> str:
+        return function_source(self.html, name)
+
+    def test_founding_routes_form_one_reference_web_chain(self):
+        self.assertIn("'/api/interview'", self.function("ivTurn"))
+
+        propose = self.function("finishInterview")
+        self.assertIn("'/api/propose'", propose)
+        self.assertIn("enterProposing(pid)", propose)
+
+        approve = self.function("approve")
+        self.assertIn("'/api/approve'", approve)
+        self.assertIn("isProposalEntry(cur)", approve)
+        self.assertIn("foundFromProposal()", approve)
+
+        found = self.function("foundFromProposal")
+        self.assertIn("'/api/found'", found)
+        self.assertIn("revealQueue(pid", found)
+
+    def test_proposal_phase_keeps_the_found_action_visible(self):
+        self.assertRegex(
+            self.html,
+            r"body\.proposing\s+#approve\s*\{",
+            "proposal phase must visibly promote the action that founds the desk",
+        )
+        proposing = self.function("setProposingChrome")
+        self.assertIn("classList.toggle('proposing'", proposing)
+        self.assertNotIn("pointerEvents = 'none'", proposing)
+        self.assertIn("ab.textContent = 'Found Desk'", self.function("showProposalGuide"))
+
+    def test_confirmation_card_is_blank_for_the_user(self):
+        parse = self.function("parseConfirmCard")
+        self.assertIn("checked: false", parse)
+        self.assertNotRegex(parse, r"checked:\s*/x/i")
+
+    def test_activity_updates_chrome_and_compact_stays_connected(self):
+        stream = self.function("pipeStream")
+        self.assertIn("ev.t === 'activity'", stream)
+        self.assertIn("setSpinLabel", stream)
+        self.assertIn("'/api/compact'", self.function("runCompact"))
 
 
 @unittest.skipIf(NODE is None, "node not on PATH — frontend syntax gate skipped")

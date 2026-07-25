@@ -12,7 +12,7 @@ STEPS:
    c. Rewrite `ask` to one undemanding plain line in the same register (no bare codes).
    d. Leave every other field untouched.
 3. Write the updated queue JSON back to {queue_path} (same top-level shape; preserve `curated` and any extra keys; only `brief`/`ask` change on entries).
-4. Live-report as you go (patron may be watching): name each id when you rewrite it; end with a 2–4 line recap of how many briefs you refreshed and any file you could not read.
+4. Live-report as you go (user may be watching): name each id when you rewrite it; end with a 2–4 line recap of how many briefs you refreshed and any file you could not read.
 
 HARD RULES:
 - Plain English lead; no process labels (“Round 2”), no bare codes (D10, EDTF, …).

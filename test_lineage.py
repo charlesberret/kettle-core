@@ -4,7 +4,7 @@
 Stdlib only (unittest). Run:  python3 test_lineage.py
 
 The load-bearing rule, pinned in test_unclaimed_change_is_unattributed_not_user: a change
-no working-record entry claims is UNATTRIBUTED, never silently 'user' — the patron's
+no working-record entry claims is UNATTRIBUTED, never silently 'user' — the user's
 2026-06-18 ruling against trust-by-default.
 """
 import tempfile
@@ -56,8 +56,8 @@ class LineageTest(unittest.TestCase):
         self.assertEqual(st["changes"][0]["by"], "dramaturge")
 
     def test_user_claim_attributes_to_user(self):
-        (self.tmp / "b.md").write_text("the patron edited this in the desk\n")
-        lineage.log_edit(self.tmp, actor="patron", actor_kind="user", files=["b.md"])
+        (self.tmp / "b.md").write_text("the user edited this in the desk\n")
+        lineage.log_edit(self.tmp, actor="user", actor_kind="user", files=["b.md"])
         st = lineage.status(self.tmp)
         self.assertEqual(st["counts"], {"agent": 0, "user": 1, "unattributed": 0})
 
@@ -73,7 +73,7 @@ class LineageTest(unittest.TestCase):
         # the record is append-ordered, so a later entry overwrites an earlier claim
         (self.tmp / "a.md").write_text("v2\n")
         lineage.log_edit(self.tmp, actor="agent-x", actor_kind="agent", files=["a.md"])
-        lineage.log_edit(self.tmp, actor="patron", actor_kind="user", files=["a.md"])
+        lineage.log_edit(self.tmp, actor="user", actor_kind="user", files=["a.md"])
         self.assertEqual(lineage.status(self.tmp)["changes"][0]["status"], "user")
 
     # ---- resolve + re-baseline ----
@@ -81,7 +81,7 @@ class LineageTest(unittest.TestCase):
     def test_resolve_then_attributed_then_accept_clears(self):
         (self.tmp / "a.md").write_text("out-of-band\n")
         self.assertEqual(lineage.status(self.tmp)["changes"][0]["status"], "unattributed")
-        lineage.resolve(self.tmp, "a.md", actor_kind="user")      # patron resolves
+        lineage.resolve(self.tmp, "a.md", actor_kind="user")      # user resolves
         self.assertEqual(lineage.status(self.tmp)["changes"][0]["status"], "user")
         lineage.accept_baseline(self.tmp)                          # mark seen
         self.assertEqual(lineage.status(self.tmp)["changed"], 0)
@@ -111,11 +111,11 @@ class LineageTest(unittest.TestCase):
         self.assertEqual(st["changes"][0]["by"], "sweep")
 
     def test_user_edit_auto_logged_reconciles_as_user(self):
-        (self.tmp / "a.md").write_text("the patron typed this in the editor\n")
+        (self.tmp / "a.md").write_text("the user typed this in the editor\n")
         lineage.log_user_edit(self.tmp, [str(self.tmp / "a.md")])
         st = lineage.status(self.tmp)
         self.assertEqual(st["changes"][0]["status"], "user")
-        self.assertEqual(st["changes"][0]["by"], "patron")
+        self.assertEqual(st["changes"][0]["by"], "user")
 
     # ---- the binding directive ----
 

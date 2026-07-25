@@ -21,7 +21,7 @@ unwired; no CI — the currently installed app was built from a **dirty** core t
 `^/resources`); `setsweep-sidecar.spec` hiddenimports lists only server/runtime/lineage/
 kits — `curator`, `sweepkit`, `egress` bundle today by bytecode-scan luck, and core's
 habit of lazy function-level imports makes that luck expire silently; sidecar crash
-mid-session shows a dialog and quits, costing the patron their window; darwin-arm64
+mid-session shows a dialog and quits, costing the user their window; darwin-arm64
 only; Info.plist ships Electron boilerplate (NSAllowsArbitraryLoads, camera/mic usage
 strings for features that don't exist).
 

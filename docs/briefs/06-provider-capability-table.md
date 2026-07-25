@@ -16,7 +16,7 @@ makes them. On Grok, the "read-only" interview tier maps to `--allow Bash` +
 founding interview under `provider: grok` can execute arbitrary shell, including writes.
 Grok write tiers use `--permission-mode bypassPermissions` with open Bash
 (runtime.py:~535–544), far broader than the Claude allowlist the docs describe. Nothing
-tells the patron; nothing refuses. The tier table in API.md reads as a guarantee the
+tells the user; nothing refuses. The tier table in API.md reads as a guarantee the
 implementation cannot keep on every provider.
 
 > **From brief 03 (done):** the tool tiers are now single-sourced in
@@ -24,7 +24,7 @@ implementation cannot keep on every provider.
 > provider from settings via `build_turn_cmd`, so a capability table added here has one
 > authority to derive from. The `sweep` tier deliberately keeps `Bash(rm:*)` /
 > `Bash(python3:*)` (live posture; rm/python3 escape the Edit fence — flagged for the
-> patron, not changed unattended). API.md now has a "Tool tiers" section to extend with
+> user, not changed unattended). API.md now has a "Tool tiers" section to extend with
 > the per-provider matrix.
 
 ## Task

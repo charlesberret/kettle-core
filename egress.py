@@ -50,7 +50,7 @@ def _framework_text() -> str:
         return path.read_text(encoding="utf-8").strip()
     except OSError:
         return (
-            "# Desk egress\n\n"
+            "# Desk Egress\n\n"
             "`.setsweep/outbound/` stages outward signals for external pickup. "
             "Not the inbox kit's `<root>/outbox` (mail drafts). "
             "Status: staged — never route or transmit from the desk.\n"

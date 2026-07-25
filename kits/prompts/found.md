@@ -1,5 +1,5 @@
-(The patron APPROVED the desk proposal — you now found the desk for {name} ({root}). Read {proposal_path} carefully FIRST. That file (especially any patron edits in the editor) is the standing brief. Where the proposal and earlier interview chat disagree, THE PROPOSAL WINS. Where the proposal and project files disagree, THE PROPOSAL WINS.
-1. THE CHARTER — write {desk_dir}/PROJECT.md from the proposal: identity, kind, families/paths, review lens, conventions and fences, key references. Under ~80 lines. Quote the patron where their wording is exact. If other agents share this repo, name them and that Setsweep approve+sweep is the patron gate (approvals egress on sweep).
+(The user APPROVED the desk proposal — you now found the desk for {name} ({root}). Read {proposal_path} carefully FIRST. That file (especially any user edits in the editor) is the standing brief. Where the proposal and earlier interview chat disagree, THE PROPOSAL WINS. Where the proposal and project files disagree, THE PROPOSAL WINS.
+1. THE CHARTER — write {desk_dir}/PROJECT.md from the proposal: identity, kind, families/paths, review lens, conventions and fences, key references. Under ~80 lines. Quote the user where their wording is exact. If other agents share this repo, name them and that Setsweep approve+sweep is the user gate (approvals egress on sweep).
 2. THE MEMORY — seed {desk_dir}/MEMORY.md: purpose header + preferences stated in the proposal/interview and attested in project files. Nothing invented.
 2b. THE FAMILIARITY — seed {desk_dir}/FAMILIARITY.md from proposal + survey (corpus map or greenfield scaffold map). Under ~120 lines.
 2c. FOUNDING ANSWERS — write {desk_dir}/founding-answers.md: compact durable extract of the approved proposal (status/direction/fences/priorities/sweep extras/elaborations).
@@ -11,7 +11,7 @@
    You may leave the desk-proposal entry approved at the bottom or omit it; do not make it the only pending work. Set top-level "curated" to today + your role.
 5. Final message: one line on the desk now standing, sweep actions if any, the first batch, and that they should select the first content entry. Conversation continues here.)
 
-LIVE REPORTING (required — the patron is watching this stream):
+LIVE REPORTING (required — the user is watching this stream):
 - Never go more than one meaningful tool call without a short chat line.
 - Before each major write, announce it in one line (e.g. 'Writing PROJECT.md…', 'Seeding MEMORY…', 'Filing queue entry: spine.md…').
 - After each write, one half-line confirm (e.g. 'PROJECT.md done · 42 lines').

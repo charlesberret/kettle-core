@@ -226,15 +226,8 @@ def as_prompt_block(survey: dict[str, Any]) -> str:
             lines.append(text.rstrip() or "(empty)")
             lines.append(f"--- end {name} ---")
 
-    pre = survey.get("suggested_prechecks") or {}
-    if pre:
-        lines.append(
-            "Suggested pre-checks (use only if they still look right after the samples; "
-            "copy option text VERBATIM onto the card as - [x]):"
-        )
-        for stem_id, opts in pre.items():
-            for o in opts:
-                lines.append(f"  [{stem_id}] {o}")
+    # Survey heuristics stay internal to the prose opening — never instruct pre-ticking
+    # the confirmation card (blank card for the user).
 
     lines.append(
         "If empty/greenfield: open with new-project vs wrong-folder; scaffold only if they want."

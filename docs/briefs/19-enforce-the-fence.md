@@ -10,7 +10,7 @@ status: open
 
 ## Context
 
-Setsweep's thesis is a boundary: agents prepare, the patron rules. But three of the
+Setsweep's thesis is a boundary: agents prepare, the user rules. But three of the
 invariants that express it are enforced by **prompt**, not architecture — writes stay
 inside the project root, append-only records are never mutated, the desk never transmits.
 All three are requests, not guarantees.

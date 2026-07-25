@@ -54,12 +54,10 @@ class TestBuildSurvey(unittest.TestCase):
 
 
 class TestCardStems(unittest.TestCase):
-    def test_prechecks_render_as_checked(self):
-        text = kits._render_stems(
-            kits.BASE_INTERVIEW[:1],
-            {"status": ["Brand new — starting from scratch"]},
-        )
-        self.assertIn("- [x] Brand new — starting from scratch", text)
+    def test_card_starts_blank(self):
+        text = kits._render_stems(kits.BASE_INTERVIEW[:1])
+        self.assertNotIn("- [x]", text)
+        self.assertIn("- [ ] Brand new — starting from scratch", text)
         self.assertIn("- [ ] In motion — active work under way", text)
 
     def test_card_has_required_stems(self):

@@ -23,15 +23,15 @@ That fixed the symptom. Verification on 2026-07-21 found the underlying conditio
 
 And `~/.setsweep-venv/bin/setsweep` — the canonical install (see the ruling below) — is not on PATH at all. So "reinstall editable" is ambiguous by construction: it fixes whichever install you happen to target, while another may still shadow it. This is the same shape as brief 12's duplicate watcher, and the same shape as the anaconda-on-PATH story in the fleet charter: an accident of resolution order hardened into behavior.
 
-## Patron ruling (2026-07-21)
+## User ruling (2026-07-21)
 
-`~/.setsweep-venv` is the **canonical** install. Exactly one shim on PATH should point at it. The agent proposes a retirement list for the strays but **deletes nothing from PATH itself** — removing a binary from the patron's PATH is a patron action.
+`~/.setsweep-venv` is the **canonical** install. Exactly one shim on PATH should point at it. The agent proposes a retirement list for the strays but **deletes nothing from PATH itself** — removing a binary from the user's PATH is a user action.
 
 ## Task
 
 Document the canonical install in `INSTALL.md`: `~/.setsweep-venv`, with a single PATH shim pointing at `~/.setsweep-venv/bin/setsweep` and the editable install rooted at the canonical repo path (`~/cloud/git-projects/setsweep-core`, reachable via the `~/Repos` symlink).
 
-Propose — do not execute — the retirement list. The `~/Seafile/Code/bin/setsweep` shim is a dead post-migration path and is the clear first cut; the homebrew and `~/.local/bin` console scripts shadow the venv and should go once the shim is in place. Present this to the patron as a checklist of commands they run, not something the agent runs.
+Propose — do not execute — the retirement list. The `~/Seafile/Code/bin/setsweep` shim is a dead post-migration path and is the clear first cut; the homebrew and `~/.local/bin` console scripts shadow the venv and should go once the shim is in place. Present this to the user as a checklist of commands they run, not something the agent runs.
 
 Document the reinstall rule where it will actually be seen: adding a module to `pyproject.toml` `py-modules` requires reinstalling editable, or the finder MAPPING goes stale and the CLI breaks at import. Put a one-line comment beside the `py-modules` list itself, not only in `INSTALL.md`.
 
@@ -41,7 +41,7 @@ Make it self-detecting, folding into brief 18's `setsweep doctor`: report which 
 
 `INSTALL.md` currently carries uncommitted path-migration edits (the `~/Seafile` → `~/cloud/sync` sweep). Those must land before this brief edits `INSTALL.md`, or the two changes entangle — treat that commit as this brief's true prerequisite even though the frontmatter lists no dep.
 
-The CLI stays stdlib-only; nothing here adds a dependency. Do not delete anything from the patron's PATH without an explicit go-ahead.
+The CLI stays stdlib-only; nothing here adds a dependency. Do not delete anything from the user's PATH without an explicit go-ahead.
 
 ## Done when
 
@@ -53,4 +53,4 @@ The CLI stays stdlib-only; nothing here adds a dependency. Do not delete anythin
 
 ## Afterwards
 
-Set `status: done`; brief 18 inherits the doctor checks; note any shim retirement the patron approves in the fleet ops-log.
+Set `status: done`; brief 18 inherits the doctor checks; note any shim retirement the user approves in the fleet ops-log.

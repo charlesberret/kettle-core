@@ -11,7 +11,7 @@ Python backend (`server.py`, `runtime.py`, `lineage.py`, `kits.py`, `cli.py`, `c
 launcher shim (`setsweep_main.py`). No third-party *runtime* dependencies — the server and CLI
 viewport are stdlib-only. Single-file frontend at `static/index.html` (plus vendored
 `marked.min.js`, `purify.min.js`, `themes.js`, fonts). Three-pane layout: agent-curated queue ·
-patron's editor · project-aware review agent.
+user's editor · project-aware review agent.
 
 **Sitting UI conventions:** [`docs/UI.md`](./docs/UI.md) — type hierarchy (`--text-heading` /
 `--text-label` / `--text-secondary` / `--text-primary`), buttons, urgency, meta pane. **Read
@@ -35,7 +35,7 @@ changes. Wire contract: [`API.md`](./API.md).
 
 **Chat write tools (interim):** `/api/chat` grants Edit/Write under `--permission-mode acceptEdits`,
 fenced to the project root — same write tier as sweep for always-on implementation when the
-patron asks. Founding interview is tool-less (core survey) until Finish/Found.
+user asks. Founding interview is tool-less (core survey) until Finish/Found.
 
 Server listens on `http://127.0.0.1:4242/` (`DEFAULT_PORT = 4242` in `server.py`). A second launch
 defers if the current instance is healthy; pass `--replace` or use `Setsweep.app` to force a
@@ -50,7 +50,7 @@ The `.setsweep/` directory under each *project* holds that desk’s files. This 
 
 ## Invariants / Run-critical
 
-These files, if broken, take the app offline while the patron is in it. **Handoff only — never
+These files, if broken, take the app offline while the user is in it. **Handoff only — never
 edit from within Setsweep itself.** Draft a handoff to an external agent with full context,
 tests, and recovery steps.
 
@@ -74,7 +74,7 @@ Planning: `ROADMAP.md` + `docs/briefs/` — update a brief’s `status:` when yo
 - Flat-layout package; install editable (`pip install -e .`) so `static/` resolves from the repo
   root. Canonical venv: `~/.setsweep-venv` — see `INSTALL.md` and `setsweep doctor`.
 - Architecture invariants hold: localhost-only, file-fence on every route, append-only records
-  never auto-mutated, patron's words beat the files, memory is distillation, every automated
+  never auto-mutated, user's words beat the files, memory is distillation, every automated
   actor beats a healthbeacon. Full list in [`ARCHITECTURE.md`](./ARCHITECTURE.md).
 - Dominant workflow is drive-by: prefer fast, targeted, self-contained changes.
 - Before touching `server.py` or `static/index.html`, check git status and coordinate with any

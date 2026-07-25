@@ -25,6 +25,9 @@ Authoritative implementation: `server.py`. Contract tests: `test_server.py`.
 ```json
 {
   "app": "setsweep",
+  "version": "0.2.0",
+  "api_version": 0,
+  "desk_schema_version": 0,
   "pid": 12345,
   "port": 4242,
   "started": "2026-07-11T14:00:00-0400",
@@ -33,6 +36,14 @@ Authoritative implementation: `server.py`. Contract tests: `test_server.py`.
   "curator": { "provider": "claude", "command": "claude", "command_resolved": "...", "command_exists": true, "models": {} }
 }
 ```
+
+`version` is the core package version single-sourced from `pyproject.toml`.
+`api_version` identifies the localhost HTTP/NDJSON contract;
+`desk_schema_version` identifies the durable `.setsweep/` file format. The
+contract versions are integers. Version `0` means pre-stable: viewports should
+still declare which values they support and report skew clearly instead of
+guessing at an unfamiliar route or file shape. A move to `1` is the explicit
+compatibility promise.
 
 ### `GET /api/curator/catalog`
 
@@ -51,7 +62,7 @@ Single source of truth for desk/settings model UIs:
 }
 ```
 
-- `menu` = patron checkmarks (`settings.curator.menu`); seeded to Claude sonnet/opus/haiku when missing.
+- `menu` = user checkmarks (`settings.curator.menu`); seeded to Claude sonnet/opus/haiku when missing.
 - `visible` = checked ∩ CLI-on-PATH, always including the active chat model (`forced: true` when needed).
 
 - Set on **every** bind path (`start_server` and `main` / sidecar) via `_record_bind`.
@@ -91,7 +102,7 @@ When desktop falls back to an ephemeral port, the plugin finds it via `server.js
 |----------|---------|
 | `none` | No session / not started |
 | `interviewing` | Founding interview in progress (tool-less chat over core survey) |
-| `proposing` | `DESK-PROPOSAL.md` drafted; patron edits/approves |
+| `proposing` | `DESK-PROPOSAL.md` drafted; user edits/approves |
 | `founded` | Curator filed ≥1 *content* queue entry (proposal alone does not count) |
 
 `GET /api/interview` also returns:
@@ -103,7 +114,7 @@ When desktop falls back to an ephemeral port, the plugin finds it via `server.js
 Rule: **content entries on disk ⇒ desk is founded**. A sole `desk-proposal` entry keeps status
 `proposing`. Prefer `has_entries || status === "founded"` in viewports.
 
-Flow: `POST /api/interview` → `POST /api/propose` (finish) → patron edits → `POST /api/approve`
+Flow: `POST /api/interview` → `POST /api/propose` (finish) → user edits → `POST /api/approve`
 on the proposal (`founding: true`) → `POST /api/found` (digest proposal + first batch).
 
 Idempotency: `POST /api/interview`, `/api/propose`, `/api/found`, and `/api/bootstrap` short-circuit
@@ -141,6 +152,7 @@ Success shapes vary today (see Stability notes). Prefer:
 | `model` | `s`, `session?` | Model / session id |
 | `text` | `s` | Assistant text chunk |
 | `tool` | `s`, `tool?`, `path?` | Tool use hint |
+| `activity` | `s`, `kind?` | Coarse working-state hint for chrome (for example `thinking…`); never provider reasoning text |
 | `usage` | `context`, `peak`, `window`, … | Live context meter |
 | `done` | `cost?`, `ctx?`, `usage?`, `error?` | Turn finished |
 | `error` | `s` | Process / parse failure |
@@ -206,7 +218,7 @@ provider **actually** guarantees under the argv `runtime.tools_argv` builds:
 **Founding interview (`/api/interview`)** is the trust ceremony and is **tool-less for every
 provider**: core runs a deterministic survey (`survey.py` → `.setsweep/runtime/survey.json`)
 and injects it into the first turn. The curator only rephrases the snapshot into a plain
-opening + confirmation card — no shell, no writes. Patrons never see provider capability
+opening + confirmation card — no shell, no writes. Users never see provider capability
 essays for founding.
 
 **Legacy / optional enforcement.** `read_only_unavailable` (HTTP 409) remains for callers that

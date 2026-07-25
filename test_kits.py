@@ -58,7 +58,7 @@ class KitsTest(unittest.TestCase):
                 self.fail(f"{path.name} does not format cleanly: {exc}")
 
     def test_brief_standard_is_cold_reentry(self):
-        """Briefs must orient a cold or returning patron — not insider memo voice."""
+        """Briefs must orient a cold or returning user — not insider memo voice."""
         schema = (self.shipped / "prompts" / "queue-schema.md").read_text(encoding="utf-8")
         self.assertIn("cold re-entry", schema.lower())
         self.assertIn("plain-English", schema)
@@ -179,7 +179,7 @@ class KitsTest(unittest.TestCase):
 
 
 class RegisterTest(unittest.TestCase):
-    """Registration + scope helpers (kit assignment is the patron's explicit pick now —
+    """Registration + scope helpers (kit assignment is the user's explicit pick now —
     there is no auto-detection)."""
     def setUp(self):
         import server

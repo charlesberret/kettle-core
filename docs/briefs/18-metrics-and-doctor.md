@@ -12,7 +12,7 @@ status: open
 
 Phase 5's rule is that the beta go/no-go gets decided from evidence, and the evidence
 layer doesn't exist yet. The design constraints are already settled (ROADMAP "Decisions
-taken", RELEASE.md): **no phone-home, ever** — measurement is local files the patron
+taken", RELEASE.md): **no phone-home, ever** — measurement is local files the user
 owns; and invariant 6 — every automated actor beats a healthbeacon — gives the pattern
 to extend. Meanwhile support's first question ("is it installed right, is the server up,
 is the curator authed?") has no one-command answer, which is what a support channel
@@ -29,7 +29,7 @@ needs before an alpha cohort exists.
    frontend boot-error beacon (one POST from the brief-08 banner). Writes are
    best-effort and never raise into the request path.
 2. **`setsweep metrics`**: prints the RELEASE.md tables (stability / success /
-   usability) for a date range, from the local file. This is how the patron reads their
+   usability) for a date range, from the local file. This is how the user reads their
    own telemetry.
 3. **`setsweep doctor`**: checks, in order — **install seed already from brief 20**
    (`cli.install_doctor_checks`: which `setsweep` on PATH vs `~/.setsweep-venv`,
@@ -51,7 +51,7 @@ needs before an alpha cohort exists.
 
 - No network I/O anywhere in this brief beyond localhost ping in doctor.
 - Metrics must be off-switchable (`settings metrics.enabled: false`) and the file
-  trivially deletable — patron ownership is the whole design.
+  trivially deletable — user ownership is the whole design.
 - Event volume stays boring: per-sitting events, never per-token.
 
 ## Done when

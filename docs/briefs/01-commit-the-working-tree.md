@@ -31,13 +31,13 @@ newest layer of the product.
    with grep first).
 3. Commit the slices with honest messages. Push the branch to the remote.
 4. Confirm whether `codex/shore-up-system` should merge to `main` — if the tests are
-   green and the app boots, propose the merge to the patron rather than deciding alone.
+   green and the app boots, propose the merge to the user rather than deciding alone.
 
 ## Constraints
 
 - Commit only; do not rewrite, rebase, or "clean up" code while committing.
 - Do not touch the live server or port 4242.
-- If any hunk looks like an experiment rather than intended work, ask the patron instead
+- If any hunk looks like an experiment rather than intended work, ask the user instead
   of guessing — this tree carries weeks of in-flight decisions.
 
 ## Done when

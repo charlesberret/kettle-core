@@ -7,14 +7,14 @@ says how the building stays sound — tests, CI, debugging systems, code health.
 
 ## Where testing stands
 
-The suite is honest about what it is: 249 tests as of brief 14 (run `python3 -m pytest
+The suite is honest about what it is: 309 tests at the 2026-07-25 alignment checkpoint (run `python3 -m pytest
 --collect-only -q` for the live number), written with stdlib `unittest` + `urllib` and
 run by pytest. Product runtime remains stdlib-only; the `dev` extra adds pytest,
 coverage.py, and pytest-cov for measurement and CI. No custom fixtures are required.
 Every suite redirects module globals into a tempdir; the real registry, settings, and
 desk are never touched.
 
-`test_server.py` carries roughly half the suite (117 tests) and is the crown jewel: a
+`test_server.py` carries roughly half the suite (130 tests) and is the crown jewel: a
 real HTTP server booted on an ephemeral port via `start_server(0)` — never 4242 — plus a
 shell-script stub curator (`_stub_claude`) and a Popen-capturing fake (`_capture_cmds`)
 that exercise the streaming endpoints end to end. The stub harness already covers the
@@ -30,15 +30,16 @@ serverless add/init/projects/queue/egress paths and current Runtime handoff; wat
 entrypoint routing tests pin their beacons and dispatch. Regression tests are annotated
 with the incident they pin — keep doing that.
 
-Coverage is measured in CI and locally with `python -m pytest --cov`. The brief-14
-baseline is 80% total; every shipped Python module is at or above 62%. CI rejects any
-module below 60% and publishes the full table in the job summary.
+Coverage is measured in CI and locally with `python -m pytest --cov`. At the
+2026-07-25 checkpoint it is 78% total and every measured Python module is at least
+61%. CI rejects any module below 60% and publishes the full table in the job summary.
 
 Now the holes, named:
 
-- **The frontend: 4,254 lines, zero tests.** The one file whose breakage takes the app
-  offline while the patron is in it has no harness at all — not even a smoke test that
-  the page parses.
+- **The frontend still lacks a real browser smoke.** Eleven structural tests now run
+  `node --check`, pin UI type conventions, and connect the canonical founding/activity/
+  compact ritual. They catch syntax and disconnected-hop regressions, not browser focus,
+  rendering, or an installed viewport. One Playwright boot/queue/settings smoke remains.
 - **The suite is serial-only.** Tests monkeypatch module globals and even
   `subprocess.Popen` in place; this is safe under a single runner and breaks under
   pytest-xdist. That is a documented constraint, not a bug — do not parallelize the
@@ -57,10 +58,9 @@ What to build, in the order the briefs sequence it:
 2. **The e2e lifecycle test** (brief 14, landed). It drives register → interview →
    propose → approve → found → chat → approve → sweep → close against the stub and is
    now executable documentation for the founding state machine.
-3. **Frontend, in three steps.** First the extract-and-node-check syntax gate (brief
-   08) — pull the inline script, run `node --check`, fail CI on a parse error; this
-   closes the blank-window class structurally. Then the injection corpus against the
-   sanitizer (brief 09). Then `data-testid` attributes and exactly ONE Playwright smoke:
+3. **Frontend, in three steps.** The extract-and-node-check syntax gate (brief
+   08), sanitizer coverage (brief 09), and structural ritual bar (brief 23) are landed.
+   Next add `data-testid` attributes and exactly ONE Playwright smoke:
    boot → queue renders → settings opens. Position: unit-test the pure functions by
    extracting them into plain `.js` files — we do not adopt a JS framework test stack.
    The frontend stays no-build; the tests respect that.
@@ -77,14 +77,14 @@ What to build, in the order the briefs sequence it:
 
 ## CI
 
-Core now has `.github/workflows/test.yml`: PRs and this working branch run the serial
+Core now has `.github/workflows/test.yml`: PRs, `main`, and this working branch run the serial
 suite with coverage on Python 3.11/3.14 across Ubuntu and macOS, enforce the per-module
-floor, and publish the coverage table. The plugin and desktop still need their own
-workflows; no repo has a release workflow yet.
+floor, and publish the coverage table. Plugin and desktop have source-level CI lanes;
+no repository has a signed/package release workflow yet.
 
 | Repo | PR lane | Nightly / release |
 |---|---|---|
-| **core** | pytest + coverage on Python 3.11 and 3.14 × ubuntu and macos; wheel-install smoke joins after brief 11; the `node --check` frontend gate joins after brief 08 | A later nightly can reuse the same full matrix |
+| **core** | pytest + coverage on Python 3.11 and 3.14 × ubuntu and macos, including `node --check` and the reference-web ritual bar; wheel-install smoke joins after brief 11 | A later nightly can reuse the same full matrix |
 | **plugin** | compile, tests, `vsce package` producing the VSIX as an artifact | — |
 | **desktop** | build + sidecar smoke on macOS (the smoke script exists; CI just runs it) | Release job on tags, refusing to stamp a build from a dirty core tree (brief 15) — the currently installed app was built dirty, which is exactly the failure this closes |
 
@@ -135,7 +135,7 @@ makes it work:
 
 The run-critical discipline, restated. `server.py`, `static/index.html`,
 `setsweep_main.py`, `projects.json`, and `settings.json` are the files whose breakage
-takes the live app down while the patron is in it. They are edited only by an external
+takes the live app down while the user is in it. They are edited only by an external
 session — never from inside Setsweep itself — that runs the tests before and after the
 change. Never bind, signal, or curl port 4242 from any tooling; tests boot on ephemeral
 ports, as `test_server.py` already does.

@@ -97,6 +97,23 @@ class TestNormalize(unittest.TestCase):
         self.assertEqual(done["cost"], 0.42)
         self.assertIsNone(done["error"])
 
+    def test_grok_thought_emits_activity(self):
+        """Grok streaming-json has no tool events — thought must surface as activity."""
+        lines = [
+            _ev({"type": "thought", "data": "Scanning"}),
+            _ev({"type": "text", "data": "Done."}),
+            _ev({"type": "end", "sessionId": "g1",
+                 "usage": {"input_tokens": 10, "output_tokens": 2}}),
+        ]
+        evs = list(normalize(lines))
+        kinds = [e["t"] for e in evs]
+        self.assertIn("activity", kinds)
+        act = next(e for e in evs if e["t"] == "activity")
+        self.assertEqual(act.get("kind"), "thought")
+        self.assertEqual(act.get("s"), "thinking…")
+        self.assertNotIn("Scanning", str(act))
+        self.assertIn("text", kinds)
+
     def test_tool_use_carries_name_and_path(self):
         # consumers auto-log file edits off these structured fields
         lines = [_ev({"type": "assistant", "message": {"content": [
@@ -234,7 +251,7 @@ class TestDialectArgv(unittest.TestCase):
             _ev({"type": "assistant", "message": {"content": [
                 {"type": "text", "text": "Writing the desk proposal and queueing it from your ticks."}]}}),
             _ev({"type": "assistant", "message": {"content": [
-                {"type": "text", "text": "Desk proposal filed — edit it next."}]}}),
+                {"type": "text", "text": "Desk Proposal filed — edit it next."}]}}),
         ]
         texts = [e["s"] for e in normalize(lines) if e["t"] == "text"]
         self.assertEqual(texts[0], "checking how proposals are shaped in this setup.")

@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <!-- Bump this when sitting UI changes; title shows it so we can confirm the shell loaded. -->
-<meta name="setsweep-ui" content="2026-07-22f">
-<title>setsweep · ui-2026-07-22f</title>
+<meta name="setsweep-ui" content="2026-07-25a">
+<title>setsweep · ui-2026-07-25a</title>
 <style>
   /*
    * Type & chrome roles — single source of sitting hierarchy.
@@ -486,11 +486,10 @@
     flex:1; min-width:0; line-height:1.35; font-size:13px;
     overflow-wrap:anywhere; word-break:break-word;
   }
-  .msg.confirm-card .cc-elab-label { display:block; margin-top:6px; font-size:12px; color:var(--dim); }
-  .msg.confirm-card .cc-elab { display:block; width:100%; box-sizing:border-box; margin-top:4px; min-height:44px;
+  .msg.confirm-card .cc-elab { display:block; width:100%; box-sizing:border-box; margin-top:8px; min-height:44px;
                                background:var(--bg); color:var(--fg); border:1px solid var(--line); border-radius:5px;
                                padding:6px 8px; font:inherit; resize:vertical; }
-  .msg.confirm-card .cc-elab::placeholder { color:transparent; opacity:0; }
+  .msg.confirm-card .cc-elab::placeholder { color:var(--dim); opacity:0.85; }
   .msg.confirm-card .cc-actions { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:10px; }
   .msg.confirm-card .cc-hint { font-size:12px; color:var(--dim); }
   /* Soft blue glow on Confirm — draws the eye without shouting */
@@ -738,7 +737,7 @@
 
 <div id="left">
   <div id="queue">
-    <h1>project <select id="proj"></select><button id="reloadbtn" class="btn btn-sm btn-icon btn-ghost" title="reload the queue">↻</button><button id="sweepbtn" class="btn btn-sm btn-signature" title="close the sitting — apply rulings, diff &amp; assess the batch, fix/flag ripples, log the session, restock the queue">sweep</button></h1>
+    <h1>Project <select id="proj"></select><button id="reloadbtn" class="btn btn-sm btn-icon btn-ghost" title="reload the queue">↻</button><button id="sweepbtn" class="btn btn-sm btn-signature" title="close the sitting — apply rulings, diff &amp; assess the batch, fix/flag ripples, log the session, restock the queue">sweep</button></h1>
     <div id="qlist"></div>
   </div>
   <div id="divQ" class="hdivider" title="drag to resize"></div>
@@ -746,7 +745,7 @@
     <h1>
       <span class="meta-tabs" role="tablist" aria-label="entry pane">
         <button type="button" id="metatab-brief" class="meta-tab active" role="tab" aria-selected="true"
-                title="Brief and ask" aria-label="Brief and ask">
+                title="Brief and Ask" aria-label="Brief and Ask">
           <svg class="mt-ico" viewBox="0 0 14 14" aria-hidden="true" focusable="false">
             <path fill="currentColor" d="M2.5 1.2h6.2l2.8 2.8V12.8H2.5V1.2zm6.2 0v2.8h2.8"/>
             <path fill="none" stroke="currentColor" stroke-width="1.1" d="M4.2 7h5.6M4.2 9.2h5.6M4.2 4.8h3.2"/>
@@ -806,17 +805,17 @@
     <span class="ivtitle">founding interview · <span id="ivpname"></span></span>
     <span class="ivacts">
       <button id="ivskip" type="button" class="btn btn-sm btn-ghost" title="leave founding for later — open the project as-is (no charter or queue yet); reselect it to resume founding">skip for now</button>
-      <button id="ivfinish" type="button" class="btn btn-sm btn-ghost" title="skip remaining chat and draft the desk proposal now">draft proposal ✓</button>
+      <button id="ivfinish" type="button" class="btn btn-sm btn-ghost" title="skip remaining chat and draft the desk proposal now">Draft Proposal ✓</button>
     </span>
   </div>
-  <h1><span class="agent-label">agent</span> <select id="model">
+  <h1><span class="agent-label">Agent</span> <select id="model">
     <option value="haiku">Haiku</option>
     <option value="sonnet">Sonnet</option>
     <option value="opus">Opus</option>
     <option value="fable">Fable</option>
   </select>
   <button type="button" id="agentsettings" class="btn btn-sm btn-icon btn-ghost"
-          title="settings" aria-label="settings">⚙</button>
+          title="Settings" aria-label="Settings">⚙</button>
   <span id="ctxbar" title="context used — click to clear this session"><span id="ctxfill"></span><span class="ctxlabel">context</span></span></h1>
   <div id="chat"></div>
   <div id="chat-live" class="sr-only" aria-live="polite" aria-atomic="true"></div>
@@ -828,8 +827,8 @@
 
 <div id="addbg">
   <div id="addmodal" role="dialog" aria-modal="true" aria-labelledby="addmodal-h">
-    <h2 id="addmodal-h">add project</h2>
-    <p class="mnote" style="margin:0 0 12px">Name a folder under your home. The interview starts in the agent pane — finish ✓ drafts a proposal you edit and approve.</p>
+    <h2 id="addmodal-h">Add Project</h2>
+    <p class="mnote" style="margin:0 0 12px">Name a folder under your home. The interview starts in the agent pane — finish ✓ drafts a proposal you edit, then use Found Desk.</p>
     <div class="add-hot">
       <input id="addname" placeholder="name" spellcheck="false" aria-label="project name">
       <div class="add-pathrow">
@@ -862,7 +861,7 @@
 
 <div id="setupbg">
   <div id="setupmodal" role="dialog" aria-modal="true" aria-labelledby="setupmodal-h">
-    <h2 id="setupmodal-h">set up Setsweep</h2>
+    <h2 id="setupmodal-h">Set Up Setsweep</h2>
     <div class="mnote">Pick the agent CLI that runs founding, chat, and sweeps. Setsweep never stores API keys — sign in to the CLI or set its key in your shell.</div>
     <div class="mrow" style="margin-bottom:8px">
       <span class="lbl">provider</span>
@@ -884,7 +883,7 @@
 
 <div id="sweepbg" style="position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:21;">
   <div id="sweepconfirm" role="dialog" aria-modal="true" aria-labelledby="sweepconfirm-h">
-    <h2 id="sweepconfirm-h">sweep the desk?</h2>
+    <h2 id="sweepconfirm-h">Sweep the Desk?</h2>
     <div style="font-size:13px;color:var(--fg)">Closes the sitting: applies ticked rulings (launches become logged directives), diffs and assesses every reviewed entry, fixes or flags ripples, writes the session log, and restocks the queue.</div>
     <label><input type="checkbox" id="sweepnoask"> don't ask again (button becomes a 5-second undo instead)</label>
     <textarea id="sweepthrust" spellcheck="false" placeholder="a steer for this pass — what's most on your mind as you close the sitting. the agent reads it first (optional · ⌘Enter sweeps)"></textarea>
@@ -898,7 +897,7 @@
 <div id="admin" role="dialog" aria-modal="true" aria-labelledby="admin-title">
   <div id="adminstick">
     <div id="adminhead">
-      <h1 id="admin-title">settings</h1>
+      <h1 id="admin-title">Settings</h1>
       <span class="spacer"></span>
       <button id="adminreload" class="btn btn-sm btn-ghost" title="reload the app">⟳ reload</button>
       <button id="adminclose" class="btn btn-sm btn-icon btn-ghost" title="Esc">✕</button>
@@ -935,7 +934,7 @@
       </section>
 
       <section class="ap-block">
-        <h2>ANSI colors</h2>
+        <h2>ANSI Colors</h2>
         <div class="ap-scroll">
           <table class="ap-table">
             <thead><tr><th>#</th><th>name</th><th></th><th>hex</th></tr></thead>
@@ -946,14 +945,14 @@
       </section>
 
       <section class="ap-block">
-        <h2>Text colors</h2>
+        <h2>Text Colors</h2>
         <p class="ap-hint">Chat voice colors — your messages default to link blue for scanability in the agent stream. Editor · section head tints markdown heading lines in source view; inline markers (**, #, etc.) follow secondary text.</p>
         <div class="ap-rolelist" id="slotrows"></div>
         <div class="ap-actions"><button id="slotreset" type="button" class="btn btn-sm btn-default">reset text colors</button></div>
       </section>
 
       <section class="ap-block">
-        <h2>Interface colors</h2>
+        <h2>Interface Colors</h2>
         <p class="ap-hint">Roles grouped by job: surfaces establish depth, text roles set legibility tiers, emphasis draws the eye to chrome and links, state signals selection and feedback. Solid % tints toward white (dark) or black (light). Text roles are contrast-checked against canvas and surfaces at apply time.</p>
         <div class="ap-rolelist" id="ifacerows"></div>
         <div class="ap-actions"><button id="ifacereset" type="button" class="btn btn-sm btn-default">reset interface colors</button></div>
@@ -969,7 +968,7 @@
       </section>
 
       <section class="ap-block">
-        <h2>Saved themes</h2>
+        <h2>Saved Themes</h2>
         <div class="ap-saved-row">
           <input type="text" id="palname" placeholder="name this theme" spellcheck="false">
           <button id="palsave" type="button" class="btn btn-sm btn-default">save</button>
@@ -999,16 +998,16 @@
 
   <div class="asec" data-tab="behavior">
     <label class="achk"><input type="checkbox" id="optHlLine">
-      <span class="ctext"><span class="ctitle">highlight current line</span>
+      <span class="ctext"><span class="ctitle">Highlight Current Line</span>
       <span class="cdesc">the editor's highlight band follows the caret as you move it</span></span></label>
     <label class="achk"><input type="checkbox" id="optMd">
-      <span class="ctext"><span class="ctitle">markdown syntax highlighting</span>
+      <span class="ctext"><span class="ctitle">Markdown Syntax Highlighting</span>
       <span class="cdesc">the syntax backdrop behind the editor; off makes text plain --fg (kill-switch)</span></span></label>
     <label class="achk"><input type="checkbox" id="optSweepConfirm">
-      <span class="ctext"><span class="ctitle">sweep confirmation</span>
+      <span class="ctext"><span class="ctitle">Sweep Confirmation</span>
       <span class="cdesc">ask before sweeping; off turns the button into a 5-second undo</span></span></label>
     <label class="achk"><input type="checkbox" id="optAutoSweep">
-      <span class="ctext"><span class="ctitle">auto-sweep when queue is done</span>
+      <span class="ctext"><span class="ctitle">Auto-Sweep When Queue Is Done</span>
       <span class="cdesc">when every entry is approved, open the sweep flow automatically; off keeps sweep manual (recommended)</span></span></label>
     <div class="arow"><span class="lbl">sweep report</span>
       <select id="optSweepVerbosity" title="how talkative the curator is during a live sweep">
@@ -1016,15 +1015,15 @@
         <option value="normal">normal — phase + entry progress (default)</option>
         <option value="verbose">verbose — live play-by-play</option>
       </select></div>
-    <div class="arow mono-dim" style="font-size:11px;margin-top:-4px">how much the curator narrates while sweeping; the patron watches the stream live</div>
+    <div class="arow mono-dim" style="font-size:11px;margin-top:-4px">how much the curator narrates while sweeping; the user watches the stream live</div>
     <label class="achk"><input type="checkbox" id="optUnwrap">
-      <span class="ctext"><span class="ctitle">unwrap hard-wrapped paragraphs</span>
+      <span class="ctext"><span class="ctitle">Unwrap Hard-Wrapped Paragraphs</span>
       <span class="cdesc">on open, join fixed-width-wrapped prose into one line per paragraph for comfortable editing (skips code, lists, tables, headings); saving keeps the unwrapped form</span></span></label>
     <label class="achk"><input type="checkbox" id="optCtxCompact">
-      <span class="ctext"><span class="ctitle">context-bar click compacts</span>
+      <span class="ctext"><span class="ctitle">Context-Bar Click Compacts</span>
       <span class="cdesc">clicking the context bar runs /compact on the file's session (summarize-and-continue, keeps the thread); off makes the click clear the session instead (throw it away, fresh start next message)</span></span></label>
     <label class="achk"><input type="checkbox" id="optAutoCompact">
-      <span class="ctext"><span class="ctitle">auto-compact the session</span>
+      <span class="ctext"><span class="ctitle">Auto-Compact the Session</span>
       <span class="cdesc">the project session threads interview→found→chat→sweep and bloats fast (the founding survey alone runs 100s of K). On: compact automatically after founding and after each sweep, and when context exceeds 70% of the model window — keeps the single thread lean. Off: compact only when you click the bar.</span></span></label>
     <div class="arow"><span class="lbl">autosave interval</span>
       <input type="number" id="optAutosave" min="3" max="600" step="1"> <span class="mono-dim">seconds</span></div>
@@ -1062,19 +1061,19 @@
   </div>
 
   <div class="asec" data-tab="diagnostics">
-    <h2>server &amp; background</h2>
+    <h2>Server &amp; Background</h2>
     <div class="arow"><button id="adminrefresh" class="btn btn-sm btn-default">↻ refresh</button>
       <span id="adminstamp" class="mono-dim"></span></div>
     <div id="admindebug" style="margin-top:10px"></div>
   </div>
 
   <div class="asec" data-tab="diagnostics">
-    <h2>lineage</h2>
+    <h2>Lineage</h2>
     <div id="lineagebox" style="margin-top:6px"></div>
   </div>
 
   <div class="asec" data-tab="diagnostics">
-    <h2>javascript errors</h2>
+    <h2>JavaScript Errors</h2>
     <div class="arow"><button id="errclear" class="btn btn-sm btn-default">clear</button>
       <span class="mono-dim">most recent first (last ~30)</span></div>
     <div id="errlistbox" class="errlist" style="margin-top:8px"></div>
@@ -1367,15 +1366,15 @@ function renderQueue(){
   qlist.innerHTML = '';
   qlist.setAttribute('role', 'listbox');
   qlist.setAttribute('aria-label', 'project queue');
-  // Founding with no content yet — orient the patron to the agent pane (brief 22).
+  // Founding with no content yet — orient the user to the agent pane (brief 22).
   if(!list.length && document.body.classList.contains('founding')){
     const hint = document.createElement('div');
     hint.className = 'qfounding-hint';
     hint.innerHTML =
-      '<strong>' + esc(uic('foundingQueueHintTitle', 'founding')) + '</strong>' +
+      '<strong>' + esc(uic('foundingQueueHintTitle', 'Founding')) + '</strong>' +
       esc(uic('foundingQueueHintBody',
-        'The curator is in the agent pane. Answer there, then draft proposal ✓ when ready. ' +
-        'The queue fills after you approve the desk proposal.'));
+        'The curator is in the agent pane. Answer there, then Draft Proposal ✓ when ready. ' +
+        'The queue fills after you use Found Desk on the proposal.'));
     qlist.appendChild(hint);
     syncChrome();
     return;
@@ -1384,9 +1383,9 @@ function renderQueue(){
     const hint = document.createElement('div');
     hint.className = 'qfounding-hint';
     hint.innerHTML =
-      '<strong>' + esc(uic('proposingQueueHintTitle', 'desk proposal')) + '</strong>' +
+      '<strong>' + esc(uic('proposingQueueHintTitle', 'Desk Proposal')) + '</strong>' +
       esc(uic('proposingQueueHintBody',
-        'Edit the proposal in the center pane, then approve to found the desk and stock the first queue.'));
+        'Edit the proposal in the editor, then press Found Desk to found the desk and stock the first queue.'));
     qlist.appendChild(hint);
     syncChrome();
     return;
@@ -2213,7 +2212,7 @@ function unlockInterviewScroll(){
   if(chat){
     chat.classList.remove('interview-loading');
     // Keep pre-banner lines collapsed so the view stays on the interview block.
-    // (They're still in the DOM / chatlog; expand only if the patron scrolls up later
+    // (They're still in the DOM / chatlog; expand only if the user scrolls up later
     //  — for now leave them hidden to avoid a jump.)
     chat.scrollTop = 0;
   }
@@ -2277,8 +2276,9 @@ function parseConfirmCard(text){
       if(om){
         const label = om[2].trim();
         // Drop legacy "Other (elaborate)" checkboxes — free response is the Elaborate field.
+        // Always blank for the user — agent/survey pre-ticks read as "already answered."
         if(!isOtherOptionLabel(label))
-          options.push({ checked: /x/i.test(om[1]), label });
+          options.push({ checked: false, label });
         i++; continue;
       }
       const em = t.match(ELAB_RE);
@@ -2301,14 +2301,14 @@ function parseConfirmCard(text){
       i++;
     }
     if(options.length){
-      // Agent-prefilled elaborate is always noise; patron fills free response empty.
+      // Agent-prefilled elaborate is always noise; user fills free response empty.
       sections.push({ num, id, stem, multi: !single, options, elaborate: '' });
     }
   }
   return { preamble, sections, epilogue: lines.slice(i).join('\n').trim() };
 }
 function serializeConfirmCard(card){
-  const parts = ['## Desk confirmation (patron ticks)', ''];
+  const parts = ['## Desk Confirmation (User Answers)', ''];
   for(const s of card.sections || []){
     parts.push(`### ${s.num}. [${s.id}] ${s.stem}`);
     for(const o of s.options || []) parts.push(`- [${o.checked ? 'x' : ' '}] ${o.label}`);
@@ -2338,13 +2338,13 @@ function ensureInterviewStartAnchor(beforeNode){
     anchor = document.createElement('div');
     anchor.id = 'interview-start';
     anchor.className = 'msg sys';
-    anchor.textContent = 'Beginning interview…';
+    anchor.textContent = 'Beginning Interview…';
     // Keep transcript honest when we synthesize the banner for restored cards
-    if(!restoring) logChat('sys', 'Beginning interview…');
+    if(!restoring) logChat('sys', 'Beginning Interview…');
   } else {
     anchor.id = 'interview-start';
     if(!/beginning interview/i.test(anchor.textContent || ''))
-      anchor.textContent = 'Beginning interview…';
+      anchor.textContent = 'Beginning Interview…';
   }
   // Always sit the banner immediately above the card so tool spam / survey
   // preamble is not stuck between the title line and the pretty questions.
@@ -2364,7 +2364,7 @@ function renderConfirmCard(host, card){
   host.textContent = '';
   // Drop survey preamble on the card — banner + questions is the whole screen.
   const title = document.createElement('h2'); title.className = 'cc-title';
-  title.textContent = 'Desk confirmation card'; host.appendChild(title);
+  title.textContent = 'Desk Confirmation Card'; host.appendChild(title);
   card.sections.forEach((sec, si) => {
     const wrap = document.createElement('div'); wrap.className = 'cc-section';
     wrap.dataset.num = sec.num || String(si + 1);
@@ -2386,18 +2386,16 @@ function renderConfirmCard(host, card){
       const span = document.createElement('span'); span.textContent = opt.label || '';
       lab.appendChild(span); wrap.appendChild(lab);
     });
-    const elabLab = document.createElement('label'); elabLab.className = 'cc-elab-label';
-    elabLab.textContent = 'Elaborate (optional)';
     const elab = document.createElement('textarea'); elab.className = 'cc-elab'; elab.rows = 2;
-    elab.value = '';  // always empty for patron free response
-    elab.placeholder = '';  // empty — typing here IS the "other" answer
+    elab.value = '';  // always empty for user free response
+    elab.placeholder = 'Elaborate (optional)';  // label lives in the field
     elab.setAttribute('aria-label', 'Elaborate (optional)');
-    elabLab.appendChild(elab); wrap.appendChild(elabLab);
+    wrap.appendChild(elab);
     host.appendChild(wrap);
   });
   const actions = document.createElement('div'); actions.className = 'cc-actions';
   const send = document.createElement('button'); send.type = 'button';
-  send.className = 'btn btn-sm btn-primary cc-confirm'; send.textContent = 'Confirm & draft proposal';
+  send.className = 'btn btn-sm btn-primary cc-confirm'; send.textContent = 'Confirm & Draft Proposal';
   send.onclick = async () => {
     const sections = Array.from(host.querySelectorAll('.cc-section')).map(wrap => ({
       num: wrap.dataset.num || '',
@@ -2411,8 +2409,19 @@ function renderConfirmCard(host, card){
     }));
     const text = serializeConfirmCard({ preamble: '', sections, epilogue: '' });
     send.disabled = true;
-    addMsg('user', text);
-    // Send ticks into the interview session, then auto-advance to proposal (no Finish gate).
+    // Clear interview questions from chat — ticks still go to the API; the card is clutter once submitted.
+    const chat = $('chat');
+    for(const el of [...chat.querySelectorAll('.msg.confirm-card')]) el.remove();
+    for(const el of [...chat.querySelectorAll('.msg.user')]){
+      if(looksLikeConfirmCard(el.textContent || '')) el.remove();
+    }
+    for(const el of [...chat.querySelectorAll('.msg.agent')]){
+      if(looksLikeConfirmCard(el.textContent || el.innerText || '')) el.remove();
+    }
+    const kick = chat.querySelector('#interview-start');
+    if(kick) kick.remove();
+    addMsg('sys', 'Answers submitted — drafting the Desk Proposal…');
+    // Send ticks into the interview session (not painted as a user bubble), then auto-advance.
     await ivTurn(text);
     if(document.body.classList.contains('founding') && !busy){
       await finishInterview();
@@ -2502,6 +2511,11 @@ async function pipeStream(r, out, opts){
         if(busy) setSpinLabel(note);
         if((ev.tool === 'Edit' || ev.tool === 'Write') && ev.path) wrote.push(ev.path);
       }
+      else if(ev.t === 'activity'){
+        // Providers without discrete tool events still report coarse work activity.
+        // Keep it in chrome rather than flooding the user's transcript.
+        if(busy) setSpinLabel(String(ev.s || '').trim() || 'working');
+      }
       else if(ev.t === 'model'){ if(trackCtx){ CTX_WINDOW = windowFor(ev.s); setCtxBar(CTX_USED); } }
       else if(ev.t === 'usage'){ if(trackCtx && ev.context != null) setCtxBar(ev.context); }  // live, per message
       else if(ev.t === 'done'){
@@ -2515,11 +2529,11 @@ async function pipeStream(r, out, opts){
     logChat('agent', agentAcc);
     const upgraded = maybeUpgradeConfirmCard(agentNode, agentAcc);
     // If upgrade failed but we were in pending state, fall back to readable text so
-    // the patron is never stuck with only "Preparing interview questions…".
+    // the user is never stuck with only "Preparing interview questions…".
     if(!upgraded && agentNode.classList.contains('cc-pending')){
       agentNode.className = 'msg agent';
       agentNode.textContent = agentAcc;
-      // Failed upgrade — release freeze so the patron can read the plaintext.
+      // Failed upgrade — release freeze so the user can read the plaintext.
       if(interviewScrollLock) unlockInterviewScroll();
       else chatScrollToBottom();
     }
@@ -3303,7 +3317,7 @@ function syncBrowseButtons(){
 window.addEventListener('pywebviewready', syncBrowseButtons);
 syncBrowseButtons();
 if($('addbrowse')) $('addbrowse').onclick = () => pickFolderInto('addroot', 'addname');
-// Name from folder path when the patron types/pastes a root (mirrors browse auto-name).
+// Name from folder path when the user types/pastes a root (mirrors browse auto-name).
 if($('addroot')){
   $('addroot').addEventListener('change', () => {
     const n = $('addname');
@@ -3318,8 +3332,8 @@ if($('addroot')){
    Phase A: survey + prompt list + open discussion (read-only interview).
    Phase B (finish ✓): write DESK-PROPOSAL.md, load it in the editor (proposing).
    Phase C (approve proposal): curator digests the edited proposal, founds desk, first batch.
-   Chat stays live through B so the patron can ask for proposal revisions. */
-const SKIPPED_FOUNDING = new Set();   // desks the patron chose to open un-founded this session
+   Chat stays live through B so the user can ask for proposal revisions. */
+const SKIPPED_FOUNDING = new Set();   // desks the user chose to open un-founded this session
 function setFoundingChrome(on){
   document.body.classList.toggle('founding', !!on);
   if(on) document.body.classList.remove('proposing');
@@ -3343,7 +3357,7 @@ function setProposingChrome(on){
     clearProposalGuideChrome();
   }
   $('chatin').placeholder = on
-    ? uic('chatPlaceholderProposing', 'Ask to revise the proposal — or edit it, then approve')
+    ? uic('chatPlaceholderProposing', 'Ask to revise the proposal — or edit it, then Found Desk')
     : uic('chatPlaceholder', 'Chat with the Setsweep agent…');
   if(on) $('chatin').focus();
 }
@@ -3359,20 +3373,20 @@ function enterInterview(opts){
       const start = addMsg('sys', 'Continuing interview…');
       if(start) start.id = 'interview-start';
       lockInterviewScroll();  // freeze before any stream tokens arrive
-      ivTurn('(the patron has returned to the interview — restate in two plain lines where things stand and what you still need; no dense status dump)');
+      ivTurn('(the user has returned to the interview — restate in two plain lines where things stand and what you still need; no dense status dump)');
     } else {
       const p = PROJECTS.find(x => x.id === PROJECT);
       // Status lines are logged but hidden for the freeze (iv-pre-hide).
       addMsg('sys', 'Registered ' + (p ? p.name : PROJECT) + ' — interview starts in this pane.');
       addMsg('sys', 'Reading the folder…');
-      const start = addMsg('sys', 'Beginning interview…');
+      const start = addMsg('sys', 'Beginning Interview…');
       if(start) start.id = 'interview-start';
       // Freeze BEFORE the long survey stream — growth below cannot move the view.
       lockInterviewScroll();
       ivTurn('');
     }
   } else if(opts.resume){
-    addMsg('sys', 'Interview in progress — continue below, or draft proposal ✓ when ready.');
+    addMsg('sys', 'Interview in progress — continue below, or Draft Proposal ✓ when ready.');
   }
   // Promote any restored GFM confirmation blurb into interactive ticks.
   let upgraded = false;
@@ -3404,7 +3418,7 @@ async function ivTurn(m){
   }
   busy = false; hideSpin();
   // If the stream finished without a confirm card (open chat turn mid-founding),
-  // release the freeze so the patron can scroll freely again.
+  // release the freeze so the user can scroll freely again.
   if(interviewScrollLock && !$('chat').querySelector('.msg.confirm-card'))
     unlockInterviewScroll();
   if(document.body.classList.contains('founding')){
@@ -3413,8 +3427,8 @@ async function ivTurn(m){
   }
 }
 const PROPOSAL_GUIDE =
-  'Proposal is in the center pane — edit freely, talk here if something’s wrong, '
-  + 'then click Approve when it reads true.';
+  'Desk Proposal is in the center pane — edit freely, co-write here if anything’s off, '
+  + 'then use Found Desk only when it matches your project, needs, and expectations.';
 
 function showProposalGuide(){
   // One highlighted callout (avoid stacking on re-enter)
@@ -3423,27 +3437,32 @@ function showProposalGuide(){
   const last = $('chat').querySelector('.msg.guide:last-child');
   if(last){
     last.innerHTML =
-      'Proposal is in the <strong>center pane</strong> — edit freely, talk here if something’s wrong, '
-      + 'then click <strong>Approve</strong> when it reads true.';
+      '<strong>Desk Proposal</strong> is open in the <strong>center pane</strong> — that file is the document of record. '
+      + 'Read it, edit anything that doesn’t fit, and chat here to revise or co-write sections. '
+      + 'When it suits your project, needs, and expectations, press <strong>Found Desk</strong> '
+      + '(the highlighted Approve control) to found the desk and stock the first queue. No rush.';
   }
   const ab = $('approve');
   if(ab){
-    ab.title = 'Approve this desk proposal — founds the project from your edited text';
-    ab.textContent = 'Approve proposal';
+    ab.title = 'Found this desk from your edited proposal';
+    ab.textContent = 'Found Desk';
   }
 }
 function clearProposalGuideChrome(){
   const ab = $('approve');
   if(ab){
     ab.title = 'mark as finished/reviewed — your pass on this file is complete';
-    ab.textContent = 'Approve';
+    ab.textContent = 'approve';
   }
 }
 async function finishInterview(){
   if(busy) return;
   const pid = PROJECT;
   exitInterview();
-  addMsg('sys', 'Drafting desk proposal…');
+  // Avoid stacking a second drafting banner if the card submit already added one.
+  const hasDraftBanner = [...$('chat').querySelectorAll('.msg.sys')].some(
+    el => /drafting the Desk Proposal/i.test(el.textContent || ''));
+  if(!hasDraftBanner) addMsg('sys', 'Answers submitted — drafting the Desk Proposal…');
   busy = true; showSpin(); $('sweepbtn').disabled = true;
   try {
     const r = await fetch('/api/propose', {method:'POST',
@@ -3469,7 +3488,7 @@ async function enterProposing(pid){
       showProposalGuide();
       $('metadl').innerHTML =
         '<dd class="proposal-next" style="color:var(--acc);font-weight:600">'
-        + 'Desk proposal — edit in the center, then <strong>Approve</strong> to found the desk'
+        + 'Desk Proposal — edit in the center, then <strong>Approve</strong> to found the desk'
         + '</dd>';
     } else {
       addMsg('sys', 'no proposal entry filed — see the report above; try draft proposal again or reselect the project.');
@@ -3771,7 +3790,7 @@ async function loadProject(pid){
     $('metadl').innerHTML =
       '<dt class="t-label">founding</dt>' +
       '<dd class="brief-body t-secondary">Answer the curator in the agent pane. ' +
-      'When ready, use <em>draft proposal ✓</em> — you will edit the proposal here, then approve to found the desk.</dd>';
+      'When ready, use <em>Draft Proposal ✓</em> — you will edit the proposal here, then use Found Desk.</dd>';
     $('editor').placeholder = 'founding interview — work in the agent pane on the right';
     renderQueue();
     enterInterview({resume: ivst.status === 'interviewing'});
@@ -3782,8 +3801,9 @@ async function loadProject(pid){
     if(typeof setMetaPane === 'function') setMetaPane('brief');
     $('metadl').innerHTML =
       '<dt class="t-label">proposal</dt>' +
-      '<dd class="brief-body t-secondary">Edit the desk proposal in the center pane, then <em>approve</em> to found the desk and load the first queue batch.</dd>';
-    $('editor').placeholder = 'desk proposal — edit, then approve to found';
+      '<dd class="brief-body t-secondary">Edit the desk proposal in the center pane, then use <em>Found Desk</em> to load the first queue batch.</dd>';
+    $('editor').placeholder = uic(
+      'editorPlaceholderProposing', 'desk proposal — edit, then Found Desk to found');
     renderQueue();
     await enterProposing(pid);
     return;
@@ -3791,7 +3811,7 @@ async function loadProject(pid){
   $('editor').placeholder = 'select a file from the queue';
   renderQueue();
   // no file auto-loads on launch or project change: selecting a file is what fires the
-  // agent read, so an auto-loaded first file burns tokens before the patron has
+  // agent read, so an auto-loaded first file burns tokens before the user has
   // chosen. Leave the center panel clear (editor shows its placeholder) until a pick.
   if(contentEnts.some(e => e.status!=='approved'))
     $('metadl').innerHTML = '<dd style="color:var(--dim)">select a file from the queue</dd>';
@@ -4440,12 +4460,12 @@ async function loadAdminDebug(){
   if(fleet){
     const sen = a.sentinel || {}, w = a.watcher;
     const senCls = {live:'ok', stale:'warnv', down:'bad'}[sen.state] || '';
-    h += `<h2 style="margin-top:16px">sentinel</h2><div class="kv">
+    h += `<h2 style="margin-top:16px">Sentinel</h2><div class="kv">
       <span class="k">state</span><span class="v ${senCls}">${esc(sen.state)}</span>
       <span class="k">heartbeat age</span><span class="v">${sen.heartbeat_age==null?'—':esc(sen.heartbeat_age)+'s'}</span>
       <span class="k">pid</span><span class="v">${sen.pid==null?'—':esc(sen.pid)+(sen.pid_alive?' (live)':' (dead)')}</span>
     </div>`;
-    h += `<h2 style="margin-top:16px">setsweep-watch beacon</h2>`;
+    h += `<h2 style="margin-top:16px">Setsweep-Watch Beacon</h2>`;
     h += w ? `<div class="kv">
         <span class="k">status</span><span class="v ${w.status==='ok'?'ok':'bad'}">${esc(w.status)}</span>
         <span class="k">last run</span><span class="v">${esc(w.last_run)}</span>
@@ -4453,10 +4473,10 @@ async function loadAdminDebug(){
       </div>` : `<span class="mono-dim">— not present —</span>`;
   }
   // projects
-  h += `<h2 style="margin-top:16px">projects</h2>`;
+  h += `<h2 style="margin-top:16px">Projects</h2>`;
   const ps = a.projects || [];
   if(ps.length){
-    h += `<table class="ptable"><tr><th>project</th><th>entries</th><th>status</th><th>comments</th><th>snapshots</th><th>chatlog</th><th>sessions</th></tr>`;
+    h += `<table class="ptable"><tr><th>Project</th><th>Entries</th><th>Status</th><th>Comments</th><th>Snapshots</th><th>Chatlog</th><th>Sessions</th></tr>`;
     for(const p of ps){
       const st = Object.entries(p.status||{}).map(([k,v])=>`${esc(k)}:${esc(v)}`).join(' ') || '—';
       h += `<tr><td>${esc(p.name)}${p.error?` <span class="v bad">err</span>`:''}</td>
@@ -4471,7 +4491,7 @@ async function loadAdminDebug(){
     if(famProj && famProj.persona_family){
       const f = famProj.persona_family;
       const pct = f.total ? Math.round(100*f.rebuilt/f.total) : 0;
-      h += `<h2 style="margin-top:16px">persona rebuild — ${esc(famProj.name)}</h2><div class="kv">
+      h += `<h2 style="margin-top:16px">Persona Rebuild — ${esc(famProj.name)}</h2><div class="kv">
         <span class="k">rebuilt (BODY+SOURCES)</span><span class="v ${f.rebuilt===f.total?'ok':''}">${esc(f.rebuilt)} / ${esc(f.total)} (${pct}%)</span>
         <span class="k">pending</span><span class="v">${esc(f.pending)}</span>
         <span class="k">curiosity seeded</span><span class="v">${esc(f.curiosity)}</span>
@@ -4481,7 +4501,7 @@ async function loadAdminDebug(){
   // settings dump
   h += `<h2 style="margin-top:16px">settings.json</h2><pre class="adump">${esc(JSON.stringify(a.settings, null, 2))}</pre>`;
   if(fleet){
-    h += `<h2 style="margin-top:16px">desk-events.log (last 20)</h2>`;
+    h += `<h2 style="margin-top:16px">desk-events.log (Last 20)</h2>`;
     h += (a.events && a.events.length)
       ? `<pre class="adump evlog">${esc(a.events.join('\n'))}</pre>`
       : `<span class="mono-dim">— empty —</span>`;

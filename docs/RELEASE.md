@@ -9,7 +9,7 @@ reference briefs in [`docs/briefs/`](briefs/) by number.*
 Setsweep is a privacy-respecting tool, and its measurement is built the same way.
 **No phone-home, no analytics endpoint, ever** — that decision is taken in the roadmap
 and it is not revisited here. Metrics are files under `~/.cache/setsweep/` that the
-patron owns, reads with the tool, and shares only by deliberate action. Nothing leaves
+user owns, reads with the tool, and shares only by deliberate action. Nothing leaves
 the machine unless a human copies it out.
 
 This is enough. The audience before 1.0 is small by design: Charles's own desks, then
@@ -22,7 +22,7 @@ firehose, because every number comes with a person who can explain it.
 Three families. Each metric is a definition and a source, so the number is checkable,
 not vibes.
 
-**Stability** — does the instrument stay up while the patron is in it?
+**Stability** — does the instrument stay up while the user is in it?
 
 | Metric | Definition | Source |
 |---|---|---|
@@ -40,7 +40,7 @@ not vibes.
 | Founding completion rate | Foundings started → desks founded | interview-start vs. founded events |
 | Time-to-first-approved-entry | New desk founded → first approve | founded and approve event timestamps |
 | Approvals per sitting | Entries ruled on per sitting | approve events per sitting |
-| Quiet-close ratio | Mechanical closes / all sweeps — measures how much judgment the desk successfully reserves for the patron | sweep events tagged mechanical vs. curator |
+| Quiet-close ratio | Mechanical closes / all sweeps — measures how much judgment the desk successfully reserves for the user | sweep events tagged mechanical vs. curator |
 
 **Usability** — where does the tool make people work for it?
 

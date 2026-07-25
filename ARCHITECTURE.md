@@ -7,10 +7,10 @@ contributors.
 ## Thesis
 
 Setsweep is a **review instrument**. Agents prepare and propagate; the human reviewer
-(the *patron*) reads and rules. Context is paid for once by a per-project *curator* and
+(the *user*) reads and rules. Context is paid for once by a per-project *curator* and
 delivered pre-packed (the *brief*). Rulings are applied outward mechanically by a
-*sweep*. Nothing asks the patron to re-derive what an agent already knows; nothing lets
-an agent rule on what is the patron’s to rule.
+*sweep*. Nothing asks the user to re-derive what an agent already knows; nothing lets
+an agent rule on what is the user’s to rule.
 
 ## Desk-is-files; the app is a viewport
 
@@ -66,17 +66,17 @@ Founding no longer depends on per-provider read-only shell modes.
 1. **Register** a folder (`setsweep add` or in-app add) — seeds an empty desk + queue
    “awaiting founding.”
 2. **Survey** — core maps the folder deterministically (no curator CLI).
-3. **Interview** — tool-less curator chat over that snapshot; patron’s words beat the files.
+3. **Interview** — tool-less curator chat over that snapshot; user’s words beat the files.
 4. **Propose** — Finish drafts `.setsweep/DESK-PROPOSAL.md` into the editor.
-5. **Approve proposal** — curator digests *patron-edited* text and founds the desk
+5. **Approve proposal** — curator digests *user-edited* text and founds the desk
    (charter, memory, first queue batch).
-6. **Sitting** — patron works the queue: read, comment, approve/rework.
+6. **Sitting** — user works the queue: read, comment, approve/rework.
 7. **Sweep** — closes the sitting: apply rulings, assess diffs, restock queue, stage egress.
 
 ## Lineage
 
 Edits are attributed as **agent**, **user**, or **unattributed** — never guessed. Agents
-do not relabel patron claims. CLI: `setsweep lineage` / `setsweep bind`. HTTP:
+do not relabel user claims. CLI: `setsweep lineage` / `setsweep bind`. HTTP:
 `/api/lineage` and related resolve endpoints. See also the desk’s own ledger files.
 
 ## Invariants (non-negotiable)
@@ -86,15 +86,15 @@ do not relabel patron claims. CLI: `setsweep lineage` / `setsweep bind`. HTTP:
 2. **Append-only records are never auto-mutated.** Rulings ledgers are applied exactly as
    written; launch-type rulings are logged as directives, never executed by the sweep.
 3. **The curator never invents:** briefs are honest; memory records only what is attested
-   (by files or by the patron’s own words); empty queues say so.
-4. **The patron’s answers beat the files** where they disagree — and the charter records
-   the patron’s words, not a paraphrase, where they were exact.
+   (by files or by the user’s own words); empty queues say so.
+4. **The user’s answers beat the files** where they disagree — and the charter records
+   the user’s words, not a paraphrase, where they were exact.
 5. **Memory is distillation, not log:** bounded (~80 lines), revisable, evidence-backed;
    the session log holds the particulars.
 6. **Every background actor writes a healthbeacon;** silent failure is a bug by
    definition.
-7. **No artifact attributes a choice to the patron without lineage citation.** Default
-   attribution is prototype/agent unless a dated patron action says otherwise.
+7. **No artifact attributes a choice to the user without lineage citation.** Default
+   attribution is prototype/agent unless a dated user action says otherwise.
 
 ## Security surface (summary)
 
@@ -121,5 +121,6 @@ and meta-pane rules: [`docs/UI.md`](./docs/UI.md). Desktop does not fork that fi
 | [`INSTALL.md`](./INSTALL.md) | Install, PATH, reinstall rule |
 | [`API.md`](./API.md) | HTTP contract for viewports |
 | [`ROADMAP.md`](./ROADMAP.md) | Phased plan and release ladder |
+| [`docs/REPOSITORIES.md`](./docs/REPOSITORIES.md) | Repo ownership, compatibility, cross-repo changes |
 | [`docs/RELEASE.md`](./docs/RELEASE.md) | Measurement and gates |
 | [`kits/README.md`](./kits/README.md) | Curator playbooks |

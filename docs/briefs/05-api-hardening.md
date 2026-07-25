@@ -13,7 +13,7 @@ status: open
 The server binds 127.0.0.1 and stops there: no auth token, no Origin check, no Host
 validation, and `read_body` ignores Content-Type (server.py:1553–1555). Browsers happily
 send cross-origin `text/plain` POSTs without preflight, and DNS-rebinding defeats
-same-origin assumptions — so any web page the patron visits can, in principle, drive
+same-origin assumptions — so any web page the user visits can, in principle, drive
 `POST /api/save` (arbitrary file write under every registered root), `/api/sweep`
 (spawns a write-armed agent), or `/api/open-link`. Localhost bind is the only barrier.
 Separately, the error envelope has sharp edges: malformed JSON → 500 not 400, POST lacks

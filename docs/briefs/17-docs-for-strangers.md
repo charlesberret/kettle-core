@@ -30,7 +30,7 @@ all; every cross-repo pointer is a Charles-local path; no doc gives a clone URL.
    tiers, the durable-vs-runtime split with the sync-exclusion rule, lineage
    attribution (agent/user/unattributed, never guessed), the founding state machine.
    Not a history document — the current shape, ~150 lines.
-2. **Glossary** in README: sitting, desk, patron, curator, founding, kit, brief,
+2. **Glossary** in README: sitting, desk, user, curator, founding, kit, brief,
    approve-vs-sweep, egress, ledger, viewport. One crisp sentence each.
 3. **Quickstart**: the ten-minute path (install → `setsweep add` → founding interview →
    edit proposal → approve → first sitting → sweep), with 2–3 screenshots.
@@ -44,7 +44,7 @@ all; every cross-repo pointer is a Charles-local path; no doc gives a clone URL.
 ## Constraints
 
 - ARCHITECTURE.md summarizes DESIGN.md; it must not contradict it. Where the dossier
-  records patron rulings (founding reveal order, intake design), the public doc states
+  records user rulings (founding reveal order, intake design), the public doc states
   the behavior without the biographical narrative.
 - Vocabulary stays — the product's language is a feature — but every term earns a
   definition at first public contact (the interview-wording lesson, applied to docs).

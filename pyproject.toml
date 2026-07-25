@@ -32,7 +32,7 @@ setsweep-watch = "setsweep_watch:main"   # the inbox folder-watch — run on a s
 # tree restructured under a package + package-data for static/ — deferred (see INSTALL.md).
 # After adding a name here: reinstall editable (`pip install -e .`) or the finder MAPPING
 # goes stale and the CLI raises ModuleNotFoundError for the new module.
-py-modules = ["setsweep_main", "server", "runtime", "lineage", "cli", "kits", "curator", "sweepkit", "egress", "survey", "setsweep_watch"]
+py-modules = ["setsweep_main", "setsweep_contract", "server", "runtime", "lineage", "cli", "kits", "curator", "sweepkit", "egress", "survey", "setsweep_watch"]
 
 [tool.ruff]
 line-length = 100

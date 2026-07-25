@@ -32,7 +32,7 @@ flags to a foreign CLI or silently spawns Claude against the user's configured p
 3. Decide deliberately (don't inherit by accident) whether the sweep tier *should* hold
    `Bash(rm:*)` and `Bash(python3:*)` — a Python script escapes the edit fence by
    construction. If they stay, add one comment stating why; if they go, update
-   runtime.py and its tests. Surface the question to the patron if unclear.
+   runtime.py and its tests. Surface the question to the user if unclear.
 
 ## Constraints
 

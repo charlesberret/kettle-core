@@ -38,6 +38,7 @@ import kits     # curator kits: the per-kind playbook (lens · urgency · first-
 import lineage  # who-edited-what: agent edits self-record to the desk's working record
 import runtime  # viewport-neutral agent adapter: spawn · usage normalizer · session ledger
 import curator as curator_mod  # pluggable curator backends (claude CLI default)
+import setsweep_contract  # core/API/desk-schema identity for every viewport
 import survey as survey_mod  # deterministic founding survey (tool-less interview Phase A)
 import sweepkit  # mechanical sweep close-kit (status · archive · stage · thin log)
 
@@ -356,7 +357,7 @@ PROPOSAL_FILENAME = "DESK-PROPOSAL.md"
 
 INTERVIEW_ROLE = _load_prompt(
     "interview-role.md",
-    "Interview the patron to found the {name} desk at {root}. Survey read-only, ask only "
+    "Interview the user to found the {name} desk at {root}. Survey read-only, ask only "
     "what the files cannot answer, and explain that approval is the founding gate.",
 )
 INTERVIEW_KICKOFF = _load_prompt(
@@ -380,7 +381,7 @@ FOUND_LEGACY_PROMPT = _load_prompt(
 )
 DEFAULT_ROLE = _load_prompt(
     "default-role.md",
-    "Help the patron review {path} in {project}. Use this brief: {brief}. The ask is: {ask}.",
+    "Help the user review {path} in {project}. Use this brief: {brief}. The ask is: {ask}.",
 )
 CONTEXT_BLOCK = _load_prompt(
     "context-block.md",
@@ -515,8 +516,8 @@ def enrich_queue_comments(proj: dict, q: dict) -> None:
         e["comment_history"] = list(hist.get(eid, [])) if eid else []
 
 
-def sweep_patron_comments_block(comments_map: dict[str, list[dict[str, str]]], entries: list[dict]) -> str:
-    """Format patron notes for queue entries — injected into the sweep prompt verbatim."""
+def sweep_user_comments_block(comments_map: dict[str, list[dict[str, str]]], entries: list[dict]) -> str:
+    """Format user notes for queue entries — injected into the sweep prompt verbatim."""
     lines: list[str] = []
     for e in entries:
         eid = e.get("id")
@@ -531,7 +532,7 @@ def sweep_patron_comments_block(comments_map: dict[str, list[dict[str, str]]], e
         title = e.get("title") or Path(str(e.get("path") or eid)).name
         lines.append(f"Entry `{eid}` ({title}):")
         for t in texts:
-            lines.append(f"- Patron comment for this entry: {t}")
+            lines.append(f"- User comment for this entry: {t}")
         lines.append("")
     return "\n".join(lines).rstrip()
 
@@ -568,7 +569,7 @@ def safe_path(p: str, base: Path | None = None) -> Path:
 def load_queue(proj: dict) -> dict:
     """Read queue.json. Retries once on FileNotFoundError — the curator Write tool
     may briefly unlink/truncate the file while restocking after a sweep, and a
-    concurrent /api/queue (viewport refresh) must not 404 the patron for that race."""
+    concurrent /api/queue (viewport refresh) must not 404 the user for that race."""
     qp = queue_path(proj)
     with QUEUE_LOCK:
         for attempt in (0, 1):
@@ -603,14 +604,14 @@ def mutate_queue(proj: dict, fn) -> dict:
 
 def project_orientation(proj: dict) -> str:
     """The curator's standing context, injected into every agent the app spawns:
-    PROJECT.md (charter), MEMORY.md (patron prefs / rulings), FAMILIARITY.md
+    PROJECT.md (charter), MEMORY.md (user prefs / rulings), FAMILIARITY.md
     (project-centered expertise), SWEEP-ACTIONS.md (extra close-of-sitting work).
     Identity lives in these files, not in any one session: any fresh agent that reads
     them IS the curator."""
     desk = desk_dir(proj)
     sections = (
         ("PROJECT.md", 2500, "Project orientation (PROJECT.md, curator-maintained)"),
-        ("MEMORY.md", 2000, "Curator memory (MEMORY.md — rulings already made and patron "
+        ("MEMORY.md", 2000, "Curator memory (MEMORY.md — rulings already made and user "
                             "preferences already learned; honor these without re-asking)"),
         ("FAMILIARITY.md", 3000, "Project familiarity (FAMILIARITY.md — accrued map of this "
                                  "corpus: families, roles, paths, relationships, pitfalls; "
@@ -682,7 +683,7 @@ def base_handbook() -> str:
 def scope_note(proj: dict) -> str:
     """A soft scope bound injected into the curator's prompts when a project sets max_depth.
     It shapes what the curator surveys / queues / attributes; it is not a hard read-fence —
-    a deeper file the patron points at can still be opened. '' when unbounded."""
+    a deeper file the user points at can still be opened. '' when unbounded."""
     d = proj.get("max_depth")
     if not isinstance(d, int) or d < 1:
         return ""
@@ -690,7 +691,7 @@ def scope_note(proj: dict) -> str:
               else f"the root folder plus {d - 1} level(s) of subdirectories")
     return (f"Project scope (max depth {d}): survey, queue, and attribute only files within {d} "
             f"director{'y level' if d == 1 else 'y levels'} of the root — {detail}. Deeper "
-            "subtrees are out of scope; do not trawl them. If the patron explicitly points you at a "
+            "subtrees are out of scope; do not trawl them. If the user explicitly points you at a "
             "deeper file you may open that one file, but do not expand the desk's scope to its subtree.")
 
 
@@ -1077,7 +1078,7 @@ def register_project(name: str, root: str, kit: str | None = None,
         "name": name,
         "root": root_raw.rstrip("/") or root_raw,  # ~-form preserved as given
     }
-    if kit in kits.KINDS:                          # the patron's pick (no auto-detection)
+    if kit in kits.KINDS:                          # the user's pick (no auto-detection)
         proj["kit"] = kit
     try:
         depth = int(max_depth)
@@ -1106,7 +1107,7 @@ def register_project(name: str, root: str, kit: str | None = None,
 def refound_desk(proj: dict) -> dict:
     """Reset a project's desk to the pristine UNFOUNDED seed so its founding interview runs
     again on next selection. The whole old desk (charter, memory, runtime, queue, transcript)
-    is copied to a machine-local backup first; the patron's founding note is carried into the
+    is copied to a machine-local backup first; the user's founding note is carried into the
     fresh seed so the rerun keeps their steer."""
     desk = desk_dir(proj)
     note = ""
@@ -1436,6 +1437,7 @@ class Handler(BaseHTTPRequestHandler):
                 cfg = current_curator()
                 self.send_json({
                     "app": "setsweep",
+                    **setsweep_contract.identity(),
                     "pid": os.getpid(),
                     "port": SERVER_PORT,
                     "started": SERVER_STARTED,
@@ -1545,7 +1547,7 @@ class Handler(BaseHTTPRequestHandler):
                 tmp = p.with_name(p.name + ".desk-tmp")
                 tmp.write_text(d["content"], encoding="utf-8")
                 tmp.replace(p)  # atomic write; rely on your VCS/sync layer for version history
-                proj = project_for_path(p)            # the patron's own edit → user lineage
+                proj = project_for_path(p)            # the user's own edit → user lineage
                 if proj:
                     try:
                         lineage.log_user_edit(project_root(proj), [str(p)])
@@ -1755,7 +1757,7 @@ class Handler(BaseHTTPRequestHandler):
         # The entry is OPTIONAL: a project-level turn (no file selected — e.g. answering a
         # question the sweep raised) carries no active-file context block, but still resumes
         # the project session. Only look up an entry when an id is supplied. This is what
-        # lets the patron reply when nothing is open (the sweep leaves no current file).
+        # lets the user reply when nothing is open (the sweep leaves no current file).
         entry = None
         eid = d.get("id")
         proposing = desk_is_proposing(proj)
@@ -1774,7 +1776,7 @@ class Handler(BaseHTTPRequestHandler):
                 ) + message
             if proposing and is_proposal_entry(entry) and (not sid or switched):
                 message = (
-                    "[Founding proposal phase] The patron is editing the desk proposal. "
+                    "[Founding proposal phase] The user is editing the desk proposal. "
                     "Revise that file with Edit/Write when they ask. Do NOT write PROJECT.md, "
                     "MEMORY.md, or found the full desk until they click approve.\n\n"
                 ) + message
@@ -1804,7 +1806,7 @@ class Handler(BaseHTTPRequestHandler):
             if proposing:
                 sysprompt += (
                     "\n\nFounding proposal phase: help refine DESK-PROPOSAL.md only until "
-                    "the patron approves it."
+                    "the user approves it."
                 )
 
         cmd = build_turn_cmd(
@@ -1899,7 +1901,7 @@ class Handler(BaseHTTPRequestHandler):
 
         accrue_only = bool(close.get("ok") and close.get("needs_accrue"))
         queue_entries = load_queue(proj).get("entries", [])
-        patron_comments = sweep_patron_comments_block(parse_comments_log(cl_path), queue_entries)
+        user_comments = sweep_user_comments_block(parse_comments_log(cl_path), queue_entries)
 
         if accrue_only:
             prompt = ACCRUE_PROMPT.format(
@@ -1923,11 +1925,11 @@ class Handler(BaseHTTPRequestHandler):
                 comments_log_path=str(cl_path),
             )
             prompt += (
-                "\n\n---\nPATRON COMMENTS (from "
+                "\n\n---\nUSER COMMENTS (from "
                 + str(cl_path)
                 + " — treat each line as mandatory review input for that entry):\n\n"
             )
-            prompt += patron_comments if patron_comments else "(no comments on file for current queue entries)"
+            prompt += user_comments if user_comments else "(no comments on file for current queue entries)"
             prompt += "\n---\n"
             prompt += "\n" + sweep_precomputed_context(proj, queue_entries)
             prompt += "\n" + sweepkit.status_for_prompt(proj)
@@ -2015,7 +2017,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({"error": str(e)}, 400)
             return
         note = str(d.get("note") or "").strip()
-        if note:                       # the patron's founding steer → woven into the charter at found
+        if note:                       # the user's founding steer → woven into the charter at found
             save_session(proj, founding_note=note)
         # Flat fields kept for the web UI (`added.id`); `project` + `ok` for typed clients.
         self.send_json({"ok": True, "project": proj, "home": str(HOME), **proj})
@@ -2144,7 +2146,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         if desk_is_proposing(proj):
             self.stream_idle(
-                "Desk proposal is ready — edit it in the center pane, talk here to revise, "
+                "Desk Proposal is ready — edit it in the center pane, talk here to revise, "
                 "approve when it matches your intent.")
             return
         # Tool-less interview: no provider read_only refuse — survey is core-side.
@@ -2159,17 +2161,18 @@ class Handler(BaseHTTPRequestHandler):
             role += "\n\n" + survey_mod.as_prompt_block(snap)
             note = (load_session(proj).get("founding_note") or "").strip()
             if note:
-                role += ("\n\nThe patron left a founding note — project-specific quirks and needs "
+                role += ("\n\nThe user left a founding note — project-specific quirks and needs "
                          "to honor; weave them into the prompt list (as defaults / deltas), "
                          "not as blank interrogation:\n" + note)
             kit = kits.for_project(proj, APPDIR / "kits", load_settings())
-            pre = snap.get("suggested_prechecks") if isinstance(snap, dict) else None
-            kit_ctx = kits.as_context(kit, "interview", prechecks=pre)
+            # Do not pre-tick the card from survey heuristics — blank for the user.
+            # Survey text (as_prompt_block) still guides the opening prose.
+            kit_ctx = kits.as_context(kit, "interview")
             if kit_ctx:
                 role += "\n\n" + kit_ctx
             else:
                 role += "\n\n" + kits.as_context(
-                    {"name": "general", "interview": []}, "interview", prechecks=pre)
+                    {"name": "general", "interview": []}, "interview")
             sc = scope_note(proj)
             if sc:
                 role += "\n\n" + sc
@@ -2225,11 +2228,11 @@ class Handler(BaseHTTPRequestHandler):
         iv_kit = kits.for_project(proj, APPDIR / "kits", load_settings())
         iv_ctx = kits.as_context(iv_kit or {"name": "general", "interview": []}, "interview")
         if iv_ctx:
-            prompt += ("\n\nHonor the interview prompt list / patron ticks when drafting "
+            prompt += ("\n\nHonor the interview prompt list / user answers when drafting "
                        "the proposal:\n" + iv_ctx)
         note = (load_session(proj).get("founding_note") or "").strip()
         if note:
-            prompt += ("\n\nPatron's founding note (honor in the proposal):\n" + note)
+            prompt += ("\n\nUser's founding note (honor in the proposal):\n" + note)
         sc = scope_note(proj)
         if sc:
             prompt += "\n\n" + sc
@@ -2296,19 +2299,19 @@ class Handler(BaseHTTPRequestHandler):
         if has_proposal:
             prompt += (
                 "\n\nCRITICAL: Re-read the proposal file on disk immediately before writing "
-                "desk files — the patron may have edited it in the center pane after you "
+                "desk files — the user may have edited it in the center pane after you "
                 "drafted it. Their on-disk text is authoritative."
             )
         else:
             iv_kit = kits.for_project(proj, APPDIR / "kits", load_settings())
             iv_ctx = kits.as_context(iv_kit or {"name": "general", "interview": []}, "interview")
             if iv_ctx:
-                prompt += ("\n\nUse the interview confirmation card (and the patron's ticks/"
+                prompt += ("\n\nUse the interview confirmation card (and the user's ticks/"
                            "elaborations in this session) when writing founding-answers.md and "
                            "SWEEP-ACTIONS.md:\n" + iv_ctx)
         note = (load_session(proj).get("founding_note") or "").strip()
         if note:
-            prompt += ("\n\nPatron's founding note (honor in the charter and first queue):\n"
+            prompt += ("\n\nUser's founding note (honor in the charter and first queue):\n"
                        + note)
         sc = scope_note(proj)
         if sc:
@@ -2613,7 +2616,7 @@ def start_server_preferred(port: int = DEFAULT_PORT,
     """Claim the fixed port (daemon thread).
 
     Circuit-breaker (2026-06-13): a bare launch must NEVER kill a healthy, CURRENT
-    predecessor — that turned every stray relaunch into the patron's window vanishing
+    predecessor — that turned every stray relaunch into the user's window vanishing
     mid-sitting. We retire a responding setsweep predecessor ONLY if it is stale
     (started before the current code) or the launch is explicit (`--replace`).
 

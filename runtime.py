@@ -195,7 +195,12 @@ def _normalize_event(ev: dict, meter: UsageMeter,
         return
 
     if t == "thought":
-        return  # reasoning stream — desk pane stays on the reply
+        # Grok streams reasoning as thought tokens and does not emit discrete tool
+        # events in streaming-json. Surface only a coarse activity signal: provider
+        # reasoning text is not part of the public viewport contract.
+        if ev.get("data"):
+            yield {"t": "activity", "s": "thinking…", "kind": "thought"}
+        return
 
     if t == "end":
         sid = ev.get("sessionId") or ev.get("session_id")
@@ -437,7 +442,7 @@ SHELL_SWEEP = [
     "Bash(diff:*)",
     # Restock/archive often shells through when Write is sticky — keep these tight.
     "Bash(mkdir:*)", "Bash(mv:*)", "Bash(cp:*)", "Bash(rm:*)", "Bash(tee:*)",
-    # python/python3 removed 2026-07-20 (patron ruling). Evidence: no prompt under
+    # python/python3 removed 2026-07-20 (user ruling). Evidence: no prompt under
     # kits/ ever referenced them, and an interpreter is the widest possible escape —
     # one line writes anywhere the user can.
     #

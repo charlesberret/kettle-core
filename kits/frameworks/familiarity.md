@@ -1,6 +1,6 @@
 # Familiarity framework
 
-`FAMILIARITY.md` is project-centered expertise. It compounds across restocks so briefs improve over time. It is **not** patron preferences (those live in `MEMORY.md`) and **not** a sitting transcript (session logs).
+`FAMILIARITY.md` is project-centered expertise. It compounds across restocks so briefs improve over time. It is **not** user preferences (those live in `MEMORY.md`) and **not** a sitting transcript (session logs).
 
 ## Suggested shape (adapt; keep under ~120 lines)
 

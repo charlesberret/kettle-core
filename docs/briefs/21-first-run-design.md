@@ -10,7 +10,7 @@ status: done
 
 ## Context
 
-Bare `setsweep` launches the web client, and the first thing a new user meets is the "set up Setsweep" modal (`#setupmodal`). From the 2026-07-21 plugin-sitting handoff, with the patron's own read: it is functionally right — provider selection, per-role models, and an honest "Setsweep never stores API keys" line — but it looks like a debugging form. The layout is dense, the label column crowds the controls ("curatorial setup", "session chat"), the selects are stock and unstyled, and a heavy block of prose sits above it.
+Bare `setsweep` launches the web client, and the first thing a new user meets is the "set up Setsweep" modal (`#setupmodal`). From the 2026-07-21 plugin-sitting handoff, with the user's own read: it is functionally right — provider selection, per-role models, and an honest "Setsweep never stores API keys" line — but it looks like a debugging form. The layout is dense, the label column crowds the controls ("curatorial setup", "session chat"), the selects are stock and unstyled, and a heavy block of prose sits above it.
 
 This is the same argument as the founding interview, applied one screen earlier. The setup modal is the product's actual first impression, and right now it undersells a tool whose whole thesis is careful, deliberate work. Before this goes on GitHub for strangers, the first screen has to read as a product.
 

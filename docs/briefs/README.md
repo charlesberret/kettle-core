@@ -31,7 +31,7 @@ own `status`).
   `projects.json`, `settings.json`) get edited only by an external session that runs the
   tests before and after — never from inside Setsweep itself.
 - DESIGN §5 invariants are non-negotiable: localhost-only, file-fence on every route,
-  append-only records never auto-mutated, patron's words beat files, memory is
+  append-only records never auto-mutated, user's words beat files, memory is
   distillation, every automated actor beats a healthbeacon.
 - A brief that discovers its premise is stale updates the brief (and this index), then
   proceeds or stops — it never forces a stale plan onto fresh code.
@@ -62,6 +62,7 @@ own `status`).
 | 20 | [One setsweep — install determinism](20-install-determinism.md) | core | 3 | — |
 | 21 | [First-run design pass (web)](21-first-run-design.md) | core | 4 | 08 |
 | 22 | [Viewport founding parity](22-viewport-founding-parity.md) | core | 4 | 08, 21 |
+| 23 | [Viewport ritual regression bar](23-viewport-ritual-regression-bar.md) | core + plugin | 4 | 22 |
 
 Status board: a brief's `status` frontmatter is the truth; this table stays status-free
 so it never lies. `grep -l "status: open" docs/briefs/*.md` is the live to-do list.

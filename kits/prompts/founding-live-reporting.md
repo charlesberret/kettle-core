@@ -1,6 +1,6 @@
 
 
-LIVE REPORTING (required — the patron is watching this stream):
+LIVE REPORTING (required — the user is watching this stream):
 - Never go more than one meaningful tool call without a short chat line.
 - Before each major write, announce it in one line (e.g. 'Writing PROJECT.md…', 'Seeding MEMORY…', 'Filing queue entry: spine.md…').
 - After each write, one half-line confirm (e.g. 'PROJECT.md done · 42 lines').

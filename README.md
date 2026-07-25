@@ -16,12 +16,13 @@ your edits and approvals are then applied outward mechanically by a *sweep*.
 
 Architecture (invariants, tool tiers, desk layout): [`ARCHITECTURE.md`](./ARCHITECTURE.md).  
 Roadmap and briefs: [`ROADMAP.md`](./ROADMAP.md), [`docs/briefs/`](./docs/briefs/).
+Repository ownership and compatibility: [`docs/REPOSITORIES.md`](./docs/REPOSITORIES.md).
 
 ## Glossary
 
 | Term | Meaning |
 |------|---------|
-| **Patron** | You — the human reviewer who reads and rules. |
+| **User** | You — the human reviewer who reads and rules (never “patron”). Prefer the person’s name when higher-level agent config supplies one; otherwise “user” / “you.” |
 | **Curator** | Per-project agent *identity in files* (`.setsweep/`), not a chat session; any fresh agent that reads those files *is* the curator. |
 | **Desk** | The files under `<project>/.setsweep/` that *are* the application state. |
 | **Viewport** | Any UI over the desk (browser, CLI, desktop shell, editor plugin). |
@@ -164,7 +165,7 @@ desk unfounded until you reselect the project.
 - **Review agent** — each turn spawns the active curator CLI in the project root
   (Claude `stream-json`, Grok `streaming-json`, Codex `--json`, Gemini `stream-json`) with
   project-fenced edits when the tier allows. Prefer fenced proposals for small emendations
-  (**→ editor** / **copy**); implement on disk when the patron asks. Interview stays
+  (**→ editor** / **copy**); implement on disk when the user asks. Interview stays
   read-only until Finish/Found. Sessions persist per project. Switch provider in Admin →
   Agents (`curator.provider`: `claude` | `grok` | `chatgpt` | `gemini`).
 - **Approve** — marks the entry approved and logs it. Approve is a bookmark; the sweep is the

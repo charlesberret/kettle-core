@@ -15,12 +15,12 @@ strangers can use. Detail lives in the companion documents — this file is the 
 ## North star
 
 Setsweep is a **review instrument for human–agent coworking**. Agents prepare and
-propagate; the patron reads and rules. As agents write more of every codebase and corpus,
+propagate; the user reads and rules. As agents write more of every codebase and corpus,
 the scarce resource is no longer production — it is deliberate human judgment. Setsweep
 concentrates that judgment: a curator pays the context cost once and delivers it pre-packed
-(the brief), the patron rules once, and the ruling is applied outward mechanically (the
-sweep). Nothing asks the patron to re-derive what an agent already knows; nothing lets an
-agent rule on what is the patron's to rule.
+(the brief), the user rules once, and the ruling is applied outward mechanically (the
+sweep). Nothing asks the user to re-derive what an agent already knows; nothing lets an
+agent rule on what is the user's to rule.
 
 What it could become: **the standing desk between a person and every fast-moving project
 they steward** — code, writing, records, knowledge, inboxes — with the person's attention
@@ -34,15 +34,15 @@ and viewports wherever the person already works (browser, editor, desktop, notes
    legible. (DESIGN §3.)
 2. **Viewports over a local core.** One localhost server, many thin clients. The wire
    contract (`API.md`) is the product's real platform surface.
-3. **Provider-agnostic curation.** The curator is whichever agent CLI the patron runs —
+3. **Provider-agnostic curation.** The curator is whichever agent CLI the user runs —
    Claude, Codex, Gemini, Grok — behind one narrow adapter (`runtime.py`).
 4. **Attribution as a feature.** `agent · user · unattributed`, never guessed
    (`lineage.py`). "Who decided this?" is a query, not an archaeology dig. No adjacent
    tool offers this; it is a headline, not a footnote.
-5. **The patron's hand is the only authority.** Approve is a bookmark; sweep is the
+5. **The user's hand is the only authority.** Approve is a bookmark; sweep is the
    commit; egress stages and never transmits. These asymmetries are the product.
 6. **Invariants survive rewrites.** DESIGN §5 verbatim: localhost-only, file-fence on
-   every route, append-only records never auto-mutated, patron's words beat the files,
+   every route, append-only records never auto-mutated, user's words beat the files,
    memory is distillation, every automated actor beats a healthbeacon.
 7. **The fence should be real.** Today the project-root boundary is enforced by prompt,
    not architecture — a tool allowlist names binaries, it cannot bound where they write
@@ -52,14 +52,16 @@ and viewports wherever the person already works (browser, editor, desktop, notes
    of the division of labor this product exists to enforce. Ladder and first increment:
    [brief 19](docs/briefs/19-enforce-the-fence.md).
 
-## Where it stands (2026-07-22, honest)
+## Where it stands (2026-07-25, honest)
 
-**Strong:** stdlib-only core with ~280 tests; file fence and circuit breaker solid;
+**Strong:** stdlib-only core with 309 tests at this checkpoint; file fence and circuit breaker solid;
 provider-neutral stream normalization; kit system; lineage; egress; install determinism
 (`~/.setsweep-venv`, `setsweep doctor` seed); de-personalized defaults; public docs
-(`ARCHITECTURE.md`, README glossary/quickstart, `docs/UI.md` type hierarchy); three
-viewports (web, Electron desktop, VS Code/Cursor plugin) plus CLI. Plugin auto-starts
-the live core on `:4242` (v0.6.4). Desktop loads the same `static/index.html` as the
+(`ARCHITECTURE.md`, README glossary/quickstart, `docs/UI.md` type hierarchy); core-owned
+package/API/desk-schema identity on `/api/ping`; a structural reference-web ritual bar; three
+viewports (web, Electron desktop, VS Code/Cursor plugin) plus CLI. Plugin source at
+v0.6.65 auto-starts the live core on `:4242`; packaged-install verification is still a
+brief-23 gate. Desktop loads the same `static/index.html` as the
 web — no forked sitting UI.
 
 **Landed since the 2026-07-17 snapshot (briefs):** 01, 03, 04, 06, 07, 08, 09, 10, 14,
@@ -70,17 +72,16 @@ committed in batches; plugin `main` carries auto-start + Desk sitting.
 
 | Gap | Why it hurts | Track |
 |-----|--------------|--------|
-| **Founding UX split** | Plugin Desk has an in-panel interview; web/desktop still use multi-field add/setup modals. Desktop *looks* behind because it is the web sitting. | **Brief 22** + PLATFORMS parity matrix |
-| **No living parity bar** | Improvements land on whichever viewport is open; siblings drift (type scale, founding, first-run). | PLATFORMS.md ritual matrix; UI.md for chrome |
+| **Viewport release proof incomplete** | Core and adapter structural bars catch disconnected ritual hops, but they do not prove an installed VSIX, browser focus, or real-provider founding. | **Brief 23** + PLATFORMS evidence labels |
 | **HTTP unauthenticated** | Localhost-only is the only barrier (brief 05 still open). | Phase 2 |
 | **Packaging** | Editable install works; wheel/pipx (11), signed DMG (15), marketplace VSIX polish still open. | Phase 3 |
 | **Watchers / fence / metrics** | Duplicate watchers (12), containment ambition (19), full doctor (18). | Phases 1 / 5 / 6 |
 
 **Open briefs (grep is source of truth):**  
-`02 05 11 12 13 15 16 18 19` — plus any new ones. Done: `01 03 04 06 07 08 09 10 14 17 20 21 22`.
+`02 05 11 12 13 15 16 18 19` — plus brief 23 (`in-progress`). Done: `01 03 04 06 07 08 09 10 14 17 20 21 22`.
 
 **Near-term order for public GitHub (web + CLI first):**  
-05 (API harden) when supervised → 11/15 packaging when ready.
+finish 23's packaged/manual matrix → 05 (API harden) when supervised → 11/15 packaging.
 
 ## The arc
 
@@ -111,8 +112,9 @@ Every duplicated fact is a future drift bug. Collapse them while the codebase is
   `kits/prompts/*.md`, loaded like `kits/_base.md` already is; add the
   format-every-prompt smoke test (brief 04).
 - Watchers: one `setsweep-watch`, provider-aware, with seen-state migration (brief 12).
-- Version: single-source from `pyproject.toml`, surfaced in `/api/ping` and `--help`
-  (inside brief 11) so viewports can detect skew.
+- Version: package/API/desk-schema identity is single-sourced from `pyproject.toml` +
+  `setsweep_contract.py` and surfaced in `/api/ping`; `--help`/wheel packaging remains
+  inside brief 11.
 - Doctrine: brief standard and egress discipline each stated in one home, referenced
   elsewhere (folded into briefs 04 and 10).
 
@@ -210,9 +212,9 @@ Post-beta expansion, ordered by evidence of demand. Full analysis in `docs/PLATF
   bash-utility layer that lets tool-less local models do real curator work.
 - Re-founding as merge, not amnesia (DESIGN §4) — needs a real design.
 
-### Phase 7 — Multi-user server (horizon; after single-patron 1.0)
+### Phase 7 — Multi-user server (horizon; after single-user 1.0)
 
-**Deferred.** Today's product is one patron, one machine, many viewports on one local
+**Deferred.** Today's product is one user, one machine, many viewports on one local
 core. Shared live activity across those viewports is intentional (desk-is-files), not a
 multi-user design.
 
@@ -263,13 +265,13 @@ How this roadmap stays true instead of rotting:
   only if bundle size or memory becomes a beta complaint.
 - **Remote (non-localhost) viewports wait for Phase 2 auth**, and then arrive as tunnel
   guidance, not as a listening-on-0.0.0.0 flag.
-- **Multi-user / hub server is Phase 7 only** — after single-patron 1.0. One person,
+- **Multi-user / hub server is Phase 7 only** — after single-user 1.0. One person,
   many viewports on one local core remains the product through beta; JupyterHub-style
   shared hosting is deferred, not denied.
-- **No phone-home telemetry, ever.** Measurement is local files the patron owns; sharing
-  them is a patron action (see `docs/RELEASE.md`).
+- **No phone-home telemetry, ever.** Measurement is local files the user owns; sharing
+  them is a user action (see `docs/RELEASE.md`).
 
-## Open questions for the patron
+## Open questions for the user
 
 Inherited from DESIGN §6 and still genuinely open: multi-desk sittings (unified queue
 across projects, or one-desk-at-a-time as a feature?); the curator's voice (named persona

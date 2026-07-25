@@ -32,7 +32,7 @@ the sitting the way the Desk did. `docs/UI.md` covers type hierarchy; this brief
 
 1. **Map the two flows side by side** (checklist in the brief’s Verify section): plugin
    `beginFounding` + Desk founding view vs web `#addmodal` / `#setupmodal` / `#foundinghead`
-   / interview stream. List every step the patron takes; mark which should stay host-only
+   / interview stream. List every step the user takes; mark which should stay host-only
    (e.g. VS Code folder picker).
 
 2. **Redesign web first-run + add-project toward the Desk quality bar**, without
@@ -49,7 +49,7 @@ the sitting the way the Desk did. `docs/UI.md` covers type hierarchy; this brief
    rebuild step is easy to miss.
 
 4. **Plugin:** only change if the web ritual now *exceeds* Desk and Desk would confuse
-   patrons — or if Desk still invents a second state machine. Prefer folding Desk
+   users — or if Desk still invents a second state machine. Prefer folding Desk
    presentation improvements *into* web first. Optional follow-on: align Desk CSS with
    UI.md tokens (out of scope unless cheap).
 
@@ -69,7 +69,7 @@ the sitting the way the Desk did. `docs/UI.md` covers type hierarchy; this brief
 
 ## Done when
 
-- A patron on **web** and on **desktop** (same core build) can add a folder and complete
+- A user on **web** and on **desktop** (same core build) can add a folder and complete
   founding without hitting a dense multi-box form that the plugin path avoids.
 - State machine remains `none → interviewing → proposing → founded` from the API.
 - PLATFORMS ritual matrix updated; brief status `done`.

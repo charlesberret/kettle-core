@@ -2,7 +2,7 @@
 
 A **kit** arms a project's resident curator. `_base.md` is the shared handbook every curator
 reads; each `<kind>.json` here is a **kind playbook** layered on top, and a project picks one at
-founding (its `kit` field in `projects.json`) — the patron chooses; there is no auto-detection.
+founding (its `kit` field in `projects.json`) — the user chooses; there is no auto-detection.
 
 The **five** kinds are cut on one axis — the **review posture** the curator takes:
 

@@ -1,16 +1,16 @@
 """Setsweep lineage — who edited what: agent vs. user vs. unattributed.
 
-Implements the model in `LINEAGE.md` (Revision 1; patron ruling 2026-06-18): track agent
+Implements the model in `LINEAGE.md` (Revision 1; user ruling 2026-06-18): track agent
 edits against user edits over a desk's files, with an honest `unattributed` residual for
 changes that happened outside the app and can't be confirmed. Two plain files in the desk:
 
-  .setsweep/working-record.jsonl  — append-only; agents (and the app, for the patron's
+  .setsweep/working-record.jsonl  — append-only; agents (and the app, for the user's
                                       own saves) log each edit-batch as it happens
   .setsweep/lineage-baseline.json  — the last reconciled state: {ts, files: {rel: hash}}
 
 The reconciler compares the tree against the baseline. A change a working-record entry
 claims (since the baseline) is attributed to that entry's actor; an **unclaimed** change is
-`unattributed` and surfaced for the patron to resolve at the desk — trust-by-default
+`unattributed` and surfaced for the user to resolve at the desk — trust-by-default
 ("unlogged ⇒ user") is rejected, because it would manufacture the false authorship this
 exists to prevent. Content hashes are the dependency-free v1 change-detector; git can back
 it later behind the same interface.
@@ -116,7 +116,7 @@ def save_baseline(root: Path | str, manifest: dict) -> dict:
 
 def accept_baseline(root: Path | str, excludes: Optional[set] = None,
                     git: bool = False, max_depth: Optional[int] = None) -> dict:
-    """Mark the current tree as the reconciled baseline (the patron has seen it). When
+    """Mark the current tree as the reconciled baseline (the user has seen it). When
     `git` is on, also commit a watermarked snapshot to the separate lineage history."""
     m = save_baseline(root, {"ts": _now(), "files": snapshot(root, excludes, max_depth)})
     if git:
@@ -255,9 +255,9 @@ def log_agent_edits(root: Path | str, abs_paths: Iterable[str], actor: str = "ag
                     summary=summary or f"{actor}: edited {len(rels)} file(s)")
 
 
-def log_user_edit(root: Path | str, abs_paths: Iterable[str], actor: str = "patron",
-                  session: str = "", summary: str = "patron save (editor)") -> Optional[dict]:
-    """Log the patron's own in-app edits (a middle-pane save) as a user batch — the other
+def log_user_edit(root: Path | str, abs_paths: Iterable[str], actor: str = "user",
+                  session: str = "", summary: str = "user save (editor)") -> Optional[dict]:
+    """Log the user's own in-app edits (a middle-pane save) as a user batch — the other
     half of in-app attribution, the counterpart to log_agent_edits."""
     rels = _relativize(root, abs_paths)
     if not rels:
@@ -267,10 +267,10 @@ def log_user_edit(root: Path | str, abs_paths: Iterable[str], actor: str = "patr
 
 
 def resolve(root: Path | str, path: str, actor_kind: str = "user",
-            actor: str = "patron", summary: str = "desk-resolve", git: bool = False) -> dict:
-    """Record the patron's resolution of an unattributed change (a patron action — the
+            actor: str = "user", summary: str = "desk-resolve", git: bool = False) -> dict:
+    """Record the user's resolution of an unattributed change (a user action — the
     authoritative attribution). Appends a claim so the next reconcile attributes it; the
-    patron then accepts the baseline to clear it from 'changed since'."""
+    user then accepts the baseline to clear it from 'changed since'."""
     rec = log_edit(root, actor=actor, actor_kind=actor_kind, files=[path], summary=summary)
     if git:
         git_snapshot(root, f"lineage: {path} resolved as {actor_kind} by {actor}")

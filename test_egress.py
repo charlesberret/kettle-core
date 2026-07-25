@@ -84,7 +84,7 @@ class EgressTests(unittest.TestCase):
             self.proj(),
             kind="approval",
             topic="sitting-approvals",
-            body="Patron approved ROADMAP.md.",
+            body="User approved ROADMAP.md.",
         )
         body = Path(result["path"]).read_text()
         self.assertIn("**Kind:** approval", body)
