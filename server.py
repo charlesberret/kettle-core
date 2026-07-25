@@ -6,9 +6,10 @@ working directory) and a queue file (<root>/.setsweep/queue.json by convention).
 right-pane agent is the active curator CLI in headless mode (Claude: stream-json;
 Grok Build CLI: streaming-json), run in the active project's root with
 Read/Glob/Grep/Edit/Write under acceptEdits (project-fenced);
-interview stays read-only until finish drafts DESK-PROPOSAL.md; approve of that
-entry runs the write-armed found. Each queue entry's curatorial brief is injected as
-system-prompt context so the agent starts aligned without re-reading the file.
+founding interview is tool-less (core survey snapshot) until finish drafts
+DESK-PROPOSAL.md; approve of that entry runs the write-armed found. Each queue
+entry's curatorial brief is injected as system-prompt context so the agent starts
+aligned without re-reading the file.
 
 Run standalone (web mode):  python3 server.py [--port 4242] [--no-open]
 Bundled (Electron .app):     PyInstaller sidecar; set DESK_PROJECTS for the registry path.
@@ -37,6 +38,7 @@ import kits     # curator kits: the per-kind playbook (lens · urgency · first-
 import lineage  # who-edited-what: agent edits self-record to the desk's working record
 import runtime  # viewport-neutral agent adapter: spawn · usage normalizer · session ledger
 import curator as curator_mod  # pluggable curator backends (claude CLI default)
+import survey as survey_mod  # deterministic founding survey (tool-less interview Phase A)
 import sweepkit  # mechanical sweep close-kit (status · archive · stage · thin log)
 
 HOME = Path.home()
@@ -181,14 +183,12 @@ READ_ONLY_UNAVAILABLE = "read_only_unavailable"
 
 
 def read_only_capability_error() -> dict | None:
-    """Pre-stream guard for read-only turns (the founding interview / discussion phase).
+    """Pre-stream guard for shell-bearing *read-only* tiers (legacy / optional callers).
 
-    A tier is only as safe as the provider makes it: some curator CLIs (Grok today) cannot
-    offer a genuinely read-only tier — their read-only mode still permits shell and writes
-    (see runtime.PROVIDER_CAPABILITIES). The founding interview is the trust ceremony, so
-    when the active provider cannot guarantee read-only we REFUSE (pre-stream 4xx) unless
-    the patron has explicitly acknowledged the downgrade via
-    `curator.allow_unfenced_readonly: true`. Returns an error dict to send, or None to allow.
+    Founding interview is tool-less (core survey + empty allowlist) for every provider, so
+    ``/api/interview`` no longer calls this. Kept for callers that still request a
+    shell-bearing read-only posture: when the active provider cannot guarantee it, REFUSE
+    unless ``curator.allow_unfenced_readonly: true``. Returns an error dict, or None to allow.
     """
     settings = load_settings()
     cfg = curator_mod.resolve_curator(settings)
@@ -202,10 +202,10 @@ def read_only_capability_error() -> dict | None:
         "error": READ_ONLY_UNAVAILABLE,
         "provider": cfg.provider,
         "message": (
-            f"The founding interview must be read-only, but the active curator ({label}) "
-            f"cannot guarantee a read-only tier — its read-only mode still permits shell "
-            f"and writes. Switch to a provider that fences read-only (claude, chatgpt, or "
-            f"gemini), or set curator.allow_unfenced_readonly: true to proceed anyway."
+            f"This turn needs a read-only tool tier, but the active curator ({label}) "
+            f"cannot guarantee one — its explore mode still permits shell and writes. "
+            f"Switch to a provider that fences read-only (claude, chatgpt, or gemini), "
+            f"or set curator.allow_unfenced_readonly: true to proceed anyway."
         ),
         "options": [
             "switch curator.provider to claude, chatgpt, or gemini",
@@ -347,9 +347,10 @@ BOOTSTRAP_PROMPT = _load_prompt(
 )
 
 # ---- the founding interview (agent chat, multi-turn) ----
-# Phase A (interview): read-only survey + prompt list + open discussion.
-# Phase B (finish → propose): write ONE DESK-PROPOSAL.md and queue it for the editor.
-# Phase C (approve proposal → found): digest the *edited* proposal, write the desk, first batch.
+# Phase A (survey): core builds a deterministic snapshot (survey.py) — no curator tools.
+# Phase B (interview): tool-less curator turn — opening + confirmation card + discussion.
+# Phase C (finish → propose): write ONE DESK-PROPOSAL.md and queue it for the editor.
+# Phase D (approve proposal → found): digest the *edited* proposal, write the desk, first batch.
 PROPOSAL_ENTRY_ID = "desk-proposal"
 PROPOSAL_FILENAME = "DESK-PROPOSAL.md"
 
@@ -841,6 +842,20 @@ def save_session(proj: dict, **fields) -> dict:
 # back-compat shims: the interview is now just the project session's first phase
 def interview_path(proj: dict) -> Path:
     return session_path(proj)
+
+
+def survey_path(proj: dict) -> Path:
+    """Durable founding survey snapshot (Phase A) under the project runtime dir."""
+    return runtime_dir(proj) / "survey.json"
+
+
+def ensure_founding_survey(proj: dict) -> dict:
+    """Build and persist a deterministic survey for the founding interview."""
+    snap = survey_mod.build_survey(project_root(proj))
+    sp = survey_path(proj)
+    sp.parent.mkdir(parents=True, exist_ok=True)
+    atomic_write(sp, survey_mod.dump(snap))
+    return snap
 
 
 def load_interview(proj: dict) -> dict:
@@ -2121,7 +2136,7 @@ class Handler(BaseHTTPRequestHandler):
         self.run_curator(cmd, str(project_root(proj)))
         mark_founded_if_filed(proj)
 
-    # ---- the founding interview: read-only survey + conversation (agent chat) ----
+    # ---- the founding interview: core survey + tool-less conversation ----
     def interview(self, d):
         proj = get_project(d.get("project"))
         if desk_is_founded(proj):
@@ -2132,31 +2147,29 @@ class Handler(BaseHTTPRequestHandler):
                 "Desk proposal is ready — edit it in the center pane, talk here to revise, "
                 "approve when it matches your intent.")
             return
-        # The founding interview runs the read-only tier — refuse pre-stream if the active
-        # provider cannot guarantee it (unless the patron acknowledged the downgrade).
-        guard = read_only_capability_error()
-        if guard is not None:
-            self.send_json(guard, 409)
-            return
-        notice = read_only_downgrade_notice()
+        # Tool-less interview: no provider read_only refuse — survey is core-side.
         sid = session_id_for_curator(
             proj=proj, model=current_curator().model_for("chat", d.get("model")),
         )
         message = str(d.get("message") or "").strip() or INTERVIEW_KICKOFF
         role = None
-        if not sid:  # first turn creates the named project session (read-only this phase)
+        if not sid:  # first turn: build survey, open named project session (no tools)
+            snap = ensure_founding_survey(proj)
             role = INTERVIEW_ROLE.format(name=proj["name"], root=str(project_root(proj)))
+            role += "\n\n" + survey_mod.as_prompt_block(snap)
             note = (load_session(proj).get("founding_note") or "").strip()
             if note:
                 role += ("\n\nThe patron left a founding note — project-specific quirks and needs "
                          "to honor; weave them into the prompt list (as defaults / deltas), "
                          "not as blank interrogation:\n" + note)
             kit = kits.for_project(proj, APPDIR / "kits", load_settings())
-            kit_ctx = kits.as_context(kit, "interview")
+            pre = snap.get("suggested_prechecks") if isinstance(snap, dict) else None
+            kit_ctx = kits.as_context(kit, "interview", prechecks=pre)
             if kit_ctx:
                 role += "\n\n" + kit_ctx
             else:
-                role += "\n\n" + kits.as_context({"name": "general", "interview": []}, "interview")
+                role += "\n\n" + kits.as_context(
+                    {"name": "general", "interview": []}, "interview", prechecks=pre)
             sc = scope_note(proj)
             if sc:
                 role += "\n\n" + sc
@@ -2177,8 +2190,7 @@ class Handler(BaseHTTPRequestHandler):
                 kw["model"] = m
             save_session(proj, **kw)
 
-        self.run_curator(cmd, str(project_root(proj)), prior_sid=sid, persist=persist,
-                         notice=notice)
+        self.run_curator(cmd, str(project_root(proj)), prior_sid=sid, persist=persist)
 
     # ---- finish interview: write DESK-PROPOSAL.md + single queue entry (not full found) ----
     def propose(self, d):

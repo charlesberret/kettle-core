@@ -54,23 +54,24 @@ Wire contract: [`API.md`](./API.md).
 
 | Tier | Used for | Grant |
 |------|----------|--------|
-| read-only | founding interview (until Finish) | Read / Glob / Grep (+ read-only shell where the provider supports it) |
+| interview (tool-less) | founding interview (until Finish) | no tools — core survey snapshot only (`survey.py`) |
 | project-write | review chat, sweep, found/finish | Edit / Write under `acceptEdits`, fenced to the project root |
 | never | anyone | network beyond localhost; auto-mutation of append-only records; paths outside the fence |
 
-Provider quirks (e.g. whether a real read-only mode exists) are single-sourced in
-`runtime.PROVIDER_CAPABILITIES`.
+Provider quirks for *write* tiers are single-sourced in `runtime.PROVIDER_CAPABILITIES`.
+Founding no longer depends on per-provider read-only shell modes.
 
 ## Founding state machine
 
 1. **Register** a folder (`setsweep add` or in-app add) — seeds an empty desk + queue
    “awaiting founding.”
-2. **Interview** — read-only curator chat; patron’s words beat the files.
-3. **Propose** — Finish drafts `.setsweep/DESK-PROPOSAL.md` into the editor.
-4. **Approve proposal** — curator digests *patron-edited* text and founds the desk
+2. **Survey** — core maps the folder deterministically (no curator CLI).
+3. **Interview** — tool-less curator chat over that snapshot; patron’s words beat the files.
+4. **Propose** — Finish drafts `.setsweep/DESK-PROPOSAL.md` into the editor.
+5. **Approve proposal** — curator digests *patron-edited* text and founds the desk
    (charter, memory, first queue batch).
-5. **Sitting** — patron works the queue: read, comment, approve/rework.
-6. **Sweep** — closes the sitting: apply rulings, assess diffs, restock queue, stage egress.
+6. **Sitting** — patron works the queue: read, comment, approve/rework.
+7. **Sweep** — closes the sitting: apply rulings, assess diffs, restock queue, stage egress.
 
 ## Lineage
 

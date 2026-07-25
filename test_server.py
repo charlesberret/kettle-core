@@ -669,7 +669,7 @@ class EndpointTests(Base):
         s, j = _http("GET", f"{self.base}/api/ping")
         self.assertEqual(s, 200)
         caps = j["curator"]["capabilities"]
-        # default provider is claude — guarantees read-only + fenced writes
+        # default provider is claude — interview tool-less + fenced writes on chat/sweep
         self.assertTrue(caps["read_only_tier"])
         self.assertTrue(caps["fenced_writes"])
 
@@ -678,21 +678,36 @@ class EndpointTests(Base):
         self.assertIn("capabilities", cat["active"])
         by_id = {p["id"]: p for p in cat["providers"]}
         self.assertTrue(by_id["claude"]["capabilities"]["read_only_tier"])
-        self.assertFalse(by_id["grok"]["capabilities"]["read_only_tier"])
+        # Grok interview is tool-less (core survey); write tiers still unfenced
+        self.assertTrue(by_id["grok"]["capabilities"]["read_only_tier"])
+        self.assertFalse(by_id["grok"]["capabilities"]["fenced_writes"])
 
-    def test_interview_refused_when_provider_cannot_guarantee_read_only(self):
-        # Grok's read-only tier still permits shell/writes → the founding interview refuses
-        # pre-stream with a 409 naming the options, no override set.
-        self._write_settings({"curator": {"provider": "grok", "command": "grok"}})
-        s, j = _http("POST", f"{self.base}/api/interview",
-                     {"project": "t", "message": "hi"})
-        self.assertEqual(s, 409)
-        self.assertEqual(j["error"], "read_only_unavailable")
-        self.assertEqual(j["provider"], "grok")
-        self.assertTrue(j["options"])
+    def test_interview_tool_less_proceeds_for_grok(self):
+        # Founding interview is tool-less for every provider — no 409 refuse for Grok.
+        stub = self.tmp / "grok-stub"
+        stub.write_text(
+            "#!/bin/sh\n"
+            f"echo '{self._init(sid='sid-grok')}'\n"
+            f"echo '{self._say('opening from survey')}'\n"
+            f"echo '{self._result()}'\n"
+        )
+        stub.chmod(0o755)
+        self._write_settings({"curator": {"provider": "grok", "command": str(stub)}})
+        s, body = self._post_stream("/api/interview", {"project": "t", "message": "hi"})
+        self.assertEqual(s, 200)
+        ev = self._events(body)
+        self.assertTrue(any(e.get("t") == "text" and "opening from survey" in (e.get("s") or "")
+                            for e in ev), f"events={ev}")
+        self.assertFalse(any("read-only downgrade" in (e.get("s") or "") for e in ev))
+        # Phase A survey snapshot is written for the desk
+        sp = server.survey_path(self.proj())
+        self.assertTrue(sp.is_file(), f"expected survey at {sp}")
+        snap = json.loads(sp.read_text())
+        self.assertTrue(snap.get("ok"))
+        self.assertIn("top_level", snap)
 
-    def test_interview_readonly_enforcement_is_noop_for_claude(self):
-        # Default provider claude guarantees read-only — the guard must never fire.
+    def test_interview_tool_less_for_claude(self):
+        # Default provider claude — tool-less interview, no downgrade notice.
         self._stub_claude(self._init(sid="sid-iv"), self._say("surveying"), self._result())
         s, body = self._post_stream("/api/interview", {"project": "t", "message": "hi"})
         self.assertEqual(s, 200)
@@ -700,25 +715,17 @@ class EndpointTests(Base):
         self.assertTrue(any(e.get("t") == "text" and "surveying" in (e.get("s") or "")
                             for e in ev))
         self.assertFalse(any("read-only downgrade" in (e.get("s") or "") for e in ev))
+        self.assertTrue(server.survey_path(self.proj()).is_file())
 
-    def test_interview_proceeds_with_override_and_notes_downgrade(self):
-        stub = self.tmp / "grok-stub"
-        stub.write_text(
-            "#!/bin/sh\n"
-            f"echo '{self._init(sid='sid-grok')}'\n"
-            f"echo '{self._say('surveying')}'\n"
-            f"echo '{self._result()}'\n"
-        )
-        stub.chmod(0o755)
-        self._write_settings({"curator": {
-            "provider": "grok", "command": str(stub),
-            "allow_unfenced_readonly": True,
-        }})
-        s, body = self._post_stream("/api/interview", {"project": "t", "message": "hi"})
-        self.assertEqual(s, 200)
-        ev = self._events(body)
-        self.assertTrue(any("read-only downgrade" in (e.get("s") or "") for e in ev),
-                        f"expected a downgrade notice in the stream: {ev}")
+    def test_read_only_capability_error_still_names_options_when_weak(self):
+        # Guard remains for non-interview callers when guarantees_read_only is false.
+        from unittest.mock import patch
+        self._write_settings({"curator": {"provider": "claude", "command": "claude"}})
+        with patch.object(server.runtime, "guarantees_read_only", return_value=False):
+            err = server.read_only_capability_error()
+        self.assertIsNotNone(err)
+        self.assertEqual(err["error"], "read_only_unavailable")
+        self.assertTrue(err["options"])
 
     def test_kits_get_lists_defaults(self):
         s, j = _http("GET", f"{self.base}/api/kits")

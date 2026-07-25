@@ -126,9 +126,9 @@ Everything a stranger's machine — or a hostile web page — could do to a desk
 - API hardening: per-boot bearer token written to `~/.cache/setsweep/server.json` (the
   discovery file is the natural channel), reject cross-origin requests, normalize the
   error envelope, stop leaking `repr(e)` (brief 05).
-- Provider capability table: declare per-provider guarantees; refuse or loudly warn when
-  a turn's required tier is unavailable — today a Grok founding interview silently runs
-  with open Bash under a "read-only" tier (brief 06).
+- Provider capability table: declare per-provider guarantees (brief 06). Founding
+  interview is tool-less via core survey (all providers); write-tier honesty for Grok
+  open Bash remains for chat/sweep.
 - Curator watchdog: idle-timeout kill so a hung CLI can never pin a handler thread;
   stub-curator tests for hang and client-disconnect (brief 07).
 - Frontend survivability: error banner bootstraps from its own tiny script; guarded

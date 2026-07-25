@@ -90,7 +90,7 @@ When desktop falls back to an ephemeral port, the plugin finds it via `server.js
 | `status` | Meaning |
 |----------|---------|
 | `none` | No session / not started |
-| `interviewing` | Founding interview in progress (chat, read-only) |
+| `interviewing` | Founding interview in progress (tool-less chat over core survey) |
 | `proposing` | `DESK-PROPOSAL.md` drafted; patron edits/approves |
 | `founded` | Curator filed ≥1 *content* queue entry (proposal alone does not count) |
 
@@ -165,7 +165,7 @@ path that arms a turn.
 
 | Tier | Used by | Write? | Powers (abstract) |
 |------|---------|--------|-------------------|
-| `interview` | founding interview (`/api/interview`) | no | Read · Glob · Grep + read-only shell |
+| `interview` | founding interview (`/api/interview`) | no | **none** (tool-less; core survey snapshot) |
 | `chat` | — (reserved) | yes (`acceptEdits`) | Read/Glob/Grep/Edit/Write + narrow shell |
 | `agent` | review chat (`/api/chat`, `setsweep chat`) | yes (`acceptEdits`) | Edit/Write + everyday shell kit (`mv`/`cp`) |
 | `sweep` | founding/found, sweep (`/api/found`, `/api/sweep`, `setsweep found`) | yes (`acceptEdits`) | Edit/Write + `mkdir`/`mv`/`cp`/`rm`/`tee` |
@@ -195,28 +195,24 @@ A tier is only as real as the provider's CLI makes it. These booleans (source:
 `/api/curator/catalog` `active.capabilities` + each `providers[]` entry) state what each
 provider **actually** guarantees under the argv `runtime.tools_argv` builds:
 
-| Provider | `read_only_tier` | `tool_allowlist` | `resume` | `effort` | `fenced_writes` |
+| Provider | `read_only_tier` (interview) | `tool_allowlist` | `resume` | `effort` | `fenced_writes` (write tiers) |
 |----------|:---:|:---:|:---:|:---:|:---:|
-| claude   | ✅ | ✅ | ✅ | ✅ | ✅ |
-| cli      | ✅ | ✅ | ✅ | ✅ | ✅ |
+| claude   | ✅ tool-less (`--allowedTools` empty) | ✅ | ✅ | ✅ | ✅ |
+| cli      | ✅ tool-less | ✅ | ✅ | ✅ | ✅ |
 | chatgpt (codex) | ✅ (`--sandbox read-only`) | ❌ (sandbox, not allowlist) | ✅ | ✅ | ✅ (`workspace-write`) |
 | gemini   | ✅ (`--approval-mode plan`) | ❌ | ✅ | ❌ (no effort flag) | ✅ |
-| grok     | ❌ (`--always-approve --allow Bash`) | ❌ | ✅ | ✅ | ❌ (bypassPermissions + open Bash) |
+| grok     | ✅ tool-less (`--permission-mode plan`, no Bash) | ❌ | ✅ | ✅ | ❌ (bypassPermissions + open Bash on chat/sweep) |
 
-`read_only_tier` is the load-bearing one: the founding interview (`/api/interview`) runs the
-read-only tier and is the trust ceremony.
+**Founding interview (`/api/interview`)** is the trust ceremony and is **tool-less for every
+provider**: core runs a deterministic survey (`survey.py` → `.setsweep/runtime/survey.json`)
+and injects it into the first turn. The curator only rephrases the snapshot into a plain
+opening + confirmation card — no shell, no writes. Patrons never see provider capability
+essays for founding.
 
-**Enforcement.** When a read-only turn is requested and the active provider's
-`read_only_tier` is `false`, the route **refuses pre-stream** with
-
-```
-HTTP 409  { "error": "read_only_unavailable", "provider": "...", "message": "...", "options": [...] }
-```
-
-The stream never starts (viewports show a normal error, not a hung turn). To proceed anyway,
-set `curator.allow_unfenced_readonly: true` in settings — the turn then runs and its stream
-opens with a `[read-only downgrade]` notice. For `provider: claude` (the default) this
-enforcement is a strict no-op. Unknown providers are treated as the weakest case (refused).
+**Legacy / optional enforcement.** `read_only_unavailable` (HTTP 409) remains for callers that
+request a shell-bearing read-only posture from a provider that cannot guarantee it, unless
+`curator.allow_unfenced_readonly: true` (stream opens with a `[read-only downgrade]` notice).
+`/api/interview` does not use that path.
 
 ---
 

@@ -35,7 +35,7 @@ changes. Wire contract: [`API.md`](./API.md).
 
 **Chat write tools (interim):** `/api/chat` grants Edit/Write under `--permission-mode acceptEdits`,
 fenced to the project root — same write tier as sweep for always-on implementation when the
-patron asks. Founding interview stays read-only until Finish/Found.
+patron asks. Founding interview is tool-less (core survey) until Finish/Found.
 
 Server listens on `http://127.0.0.1:4242/` (`DEFAULT_PORT = 4242` in `server.py`). A second launch
 defers if the current instance is healthy; pass `--replace` or use `Setsweep.app` to force a

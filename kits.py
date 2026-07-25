@@ -175,28 +175,52 @@ def _is_other_option(label: str) -> bool:
     return "elaborate" in s
 
 
-def _render_stems(stems: list) -> str:
+def _render_stems(stems: list, prechecks: dict | None = None) -> str:
+    """Render stems as GFM checklist. *prechecks* maps stem id → option labels to pre-tick."""
+    prechecks = prechecks or {}
     lines = []
     for i, s in enumerate(stems, 1):
         # Ids stay in GFM for the desk parser; the UI hides the [id] chrome. Checkboxes
         # already read as multi, so only single-choice stems carry a tag — "(choose one)".
         one = "" if s.get("multi") else " (choose one)"
-        lines.append(f"{i}. [{s.get('id', '')}] {s.get('stem', '')}{one}")
+        sid = s.get("id", "")
+        lines.append(f"{i}. [{sid}] {s.get('stem', '')}{one}")
+        checked = set(prechecks.get(sid) or [])
         for opt in s.get("options") or []:
             if _is_other_option(str(opt)):
                 continue
-            lines.append(f"   - [ ] {opt}")
+            mark = "x" if str(opt) in checked else " "
+            lines.append(f"   - [{mark}] {opt}")
         lines.append("   Elaborate (optional):")  # leave blank — patron only
     return "\n".join(lines)
 
 
-def as_context(kit, mode: str) -> str:
+def card_has_required_stems(text: str, kit=None) -> list[str]:
+    """Return stem ids missing from *text* (soft validation of the confirmation card).
+
+    Looks for ``[id]`` markers the UI/parser expect. Empty list means all base+kit
+    stems appear. Used after interview turns; does not block the stream.
+    """
+    body = text or ""
+    missing = []
+    for s in interview_stems(kit):
+        sid = s.get("id") or ""
+        if not sid:
+            continue
+        if f"[{sid}]" not in body:
+            missing.append(sid)
+    return missing
+
+
+def as_context(kit, mode: str, *, prechecks: dict | None = None) -> str:
     """Render a kit into an injectable context block for an agent mode:
       'review' → lens + urgency
       'sweep' → self-checks
       'found' → first-queue heuristic
       'interview' → MCQ stems (base + kit), for survey-then-confirm founding
-    Returns '' for no kit or an empty section, so callers can inject unconditionally."""
+    Returns '' for no kit or an empty section, so callers can inject unconditionally.
+    *prechecks* (interview only): stem id → option labels already ticked from core survey.
+    """
     if not kit and mode != "interview":
         return ""
     name = (kit or {}).get("name", "general")
@@ -231,12 +255,14 @@ def as_context(kit, mode: str) -> str:
             "paraphrases — only the patron writes free response. "
             "Do NOT add an 'Other (elaborate)' checkbox option — free response is the "
             "Elaborate field alone. "
-            "The desk UI turns the checklist into interactive ticks. Pre-check options the "
-            "survey already supports. Leave room for open discussion after the list. "
+            "The desk UI turns the checklist into interactive ticks. Options already "
+            "marked - [x] below are core-survey suggestions — keep or clear them. "
+            "You have NO tools; do not claim you will re-read files. "
+            "Leave room for open discussion after the list. "
             "Finish ✓ later drafts one DESK-PROPOSAL.md for the patron to edit and approve — "
             "do not write the full desk yet. Do not re-ask core themes the survey already "
             "answered.\n"
-            + _render_stems(stems)
+            + _render_stems(stems, prechecks)
         )
         if kit and kit.get("lens"):
             body = ("Kit default lens (accept unless they delta it):\n" + kit["lens"]

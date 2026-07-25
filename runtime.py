@@ -447,12 +447,13 @@ SHELL_SWEEP = [
     # needs an OS sandbox around the curator process — docs/briefs/19-enforce-the-fence.md.
 ]
 
-SHELL_INTERVIEW = [
-    "Bash(ls:*)", "Bash(cat:*)", "Bash(head:*)", "Bash(tail:*)",
-    "Bash(rg:*)", "Bash(fd:*)", "Bash(find:*)", "Bash(wc:*)",
-]
+# Interview is tool-less: core precomputes a survey snapshot (survey.py) and injects it.
+# SHELL_INTERVIEW retained only as documentation of the *former* explore allowlist.
+SHELL_INTERVIEW: list[str] = []
 
 # Tier name → (permission_mode | None, allow list, deny list)
+# interview: empty allow + empty deny → tools_argv special-cases a true no-tools posture
+# for every provider (founding trust ceremony without provider-specific refuse UX).
 TOOL_TIERS: dict[str, tuple[Optional[str], list[str], list[str]]] = {
     "agent": (
         "acceptEdits",
@@ -471,8 +472,8 @@ TOOL_TIERS: dict[str, tuple[Optional[str], list[str], list[str]]] = {
     ),
     "interview": (
         None,
-        ["Read", "Glob", "Grep", *SHELL_INTERVIEW],
-        ["NotebookEdit"],
+        [],
+        [],
     ),
 }
 
@@ -483,14 +484,12 @@ TOOL_TIERS: dict[str, tuple[Optional[str], list[str], list[str]]] = {
 # wish it did. Kept beside TOOL_TIERS / tools_argv so a change to the builder and a change
 # to this claim land in one diff (test_runtime cross-checks the load-bearing ones).
 #
-#   read_only_tier — the interview/read-only tier genuinely cannot write or run shell.
-#       claude/cli: explicit --allowedTools (Read/Glob/Grep only, no Edit/Write/open Bash);
-#       chatgpt: --sandbox read-only; gemini: --approval-mode plan (no execution).
-#       grok: NO — its read-only tier is `--always-approve --allow Bash`, i.e. arbitrary
-#       shell including writes (see the grok branch of tools_argv). This is the one the
-#       founding interview must be able to trust.
-#   tool_allowlist — access is gated by a per-tool allowlist (claude/cli) rather than a
-#       coarse sandbox / approval mode (chatgpt/gemini) or open Bash (grok).
+#   read_only_tier — the interview tier genuinely cannot write or run shell.
+#       Founding interview is tool-less for every provider (core survey snapshot); so
+#       all listed providers report True. Chat/sweep write posture is separate
+#       (see fenced_writes).
+#   tool_allowlist — write/chat tiers gated by a per-tool allowlist (claude/cli) rather
+#       than a coarse sandbox / approval mode (chatgpt/gemini) or open Bash (grok).
 #   resume — threads a prior session (--resume / `exec resume`).
 #   effort — honors a reasoning-effort flag (EFFORT_BY_PROVIDER is non-empty; gemini none).
 #   fenced_writes — write tiers stay inside the project cwd (allowlist or workspace
@@ -499,7 +498,7 @@ TOOL_TIERS: dict[str, tuple[Optional[str], list[str], list[str]]] = {
 PROVIDER_CAPABILITIES: dict[str, dict[str, bool]] = {
     "claude":  {"read_only_tier": True,  "tool_allowlist": True,  "resume": True, "effort": True,  "fenced_writes": True},
     "cli":     {"read_only_tier": True,  "tool_allowlist": True,  "resume": True, "effort": True,  "fenced_writes": True},
-    "grok":    {"read_only_tier": False, "tool_allowlist": False, "resume": True, "effort": True,  "fenced_writes": False},
+    "grok":    {"read_only_tier": True,  "tool_allowlist": False, "resume": True, "effort": True,  "fenced_writes": False},
     "chatgpt": {"read_only_tier": True,  "tool_allowlist": False, "resume": True, "effort": True,  "fenced_writes": True},
     "gemini":  {"read_only_tier": True,  "tool_allowlist": False, "resume": True, "effort": False, "fenced_writes": True},
 }
@@ -547,6 +546,19 @@ def tools_argv(tier: str, provider: str = "claude") -> list[str]:
     mode, allow, deny = spec
     write = mode == "acceptEdits"
 
+    # Tool-less founding interview: survey is precomputed by core (survey.py).
+    # No open shell, no always-approve — pure generation under every provider.
+    if tier == "interview":
+        if provider == "chatgpt":
+            return ["--sandbox", "read-only"]
+        if provider == "gemini":
+            return ["--approval-mode", "plan", "--skip-trust"]
+        if provider == "grok":
+            # plan = no project writes; no --allow Bash / --always-approve
+            return ["--permission-mode", "plan"]
+        # Claude / cli: empty allowlist (no tools registered for the turn)
+        return ["--allowedTools"]
+
     if provider == "chatgpt":
         # Codex: sandbox policy stands in for tool allowlists
         if not write and not allow:
@@ -559,7 +571,7 @@ def tools_argv(tier: str, provider: str = "claude") -> list[str]:
         # Gemini: approval-mode ≈ Claude permission-mode
         if write:
             return ["--approval-mode", "auto_edit", "--skip-trust"]
-        if allow:  # interview / read-only
+        if allow:  # read-only with tools
             return ["--approval-mode", "plan", "--skip-trust"]
         return ["--skip-trust"]
 

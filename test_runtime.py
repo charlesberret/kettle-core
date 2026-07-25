@@ -335,11 +335,18 @@ class TestProviderCapabilities(unittest.TestCase):
                 f"{provider}: PROVIDER_CAPABILITIES.read_only_tier disagrees with tools_argv",
             )
 
-    def test_grok_cannot_guarantee_read_only(self):
-        self.assertFalse(runtime.guarantees_read_only("grok"))
+    def test_grok_interview_is_tool_less_but_writes_unfenced(self):
+        # Interview: no open Bash / always-approve → read_only_tier True.
+        # Chat/sweep still bypassPermissions + Bash → fenced_writes False.
+        self.assertTrue(runtime.guarantees_read_only("grok"))
         caps = runtime.capabilities_for("grok")
         self.assertFalse(caps["fenced_writes"])
         self.assertFalse(caps["tool_allowlist"])
+        argv = tools_argv("interview", "grok")
+        self.assertNotIn("Bash", argv)
+        self.assertNotIn("--always-approve", argv)
+        self.assertIn("--permission-mode", argv)
+        self.assertIn("plan", argv)
 
     def test_claude_family_guarantees_read_only_and_fenced_writes(self):
         for p in ("claude", "cli"):

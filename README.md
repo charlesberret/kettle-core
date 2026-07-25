@@ -52,7 +52,7 @@ setsweep doctor
 1. **Register a folder**  
    `setsweep add ~/path/to/a-project`  
    Or open the web UI (`setsweep --web`) → **＋ Project** (name + folder; more options for kit).
-2. **Founding interview** — the agent pane runs a read-only interview immediately after add.
+2. **Founding interview** — core surveys the folder, then a tool-less interview runs after add.
    When ready, **draft proposal ✓** writes a desk proposal into the editor.
 3. **Edit the proposal**, then **approve** — the curator founds charter, memory, and the
    first content queue.
@@ -255,7 +255,7 @@ live-applied and persisted.
   exactly your **registered project roots** (each gated under `$HOME` at registration) — nothing
   else by default. To widen it (e.g. a notes vault whose `[[wikilinks]]` cross project boundaries),
   set `SETSWEEP_ALLOWED_ROOTS` to an `os.pathsep`-separated list of extra base roots.
-- **Two tool tiers.** The founding interview is read-only; review chat, the sweep, and founding
+- **Two tool tiers.** The founding interview is tool-less (core survey snapshot); review chat, the sweep, and founding
   finish/bootstrap get project-write tools fenced to the project root (`acceptEdits`). Append-only
   records are never auto-mutated. (Chat writes are interim always-on; a future chat-window
   redesign may add real permission UX.)
