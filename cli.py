@@ -5,15 +5,18 @@ Proof of DESIGN.md §3 ("the desk is the application; the app is a viewport"): t
 runs **no HTTP server**. It shares the web app's logic only through the desk helpers in
 `server.py` (importing them is side-effect-free) and the agent adapter in `runtime.py`.
 The desk is plain files in `<root>/.kettle/`; this renders and drives them from the
-terminal — and edits go through your own `$EDITOR`, which is less to build and captures
-your edits where the lineage reconciler can see them.
+terminal. Edits use the **built-in TUI editor** (syntax-colored from the active Kettle
+theme pack) so a sitting does not depend on an external `$EDITOR`. Pass ``--external``
+to open ``$EDITOR`` instead when you want your own tools.
 
   kettle projects                list registered desks
   kettle add     <folder>        register a folder as a desk (first-run)
   kettle init                    register the current folder as a desk
   kettle found   <project>       curator founds the desk: charter, memory, first queue
   kettle queue   <project>       show a desk's queue
-  kettle open    <project> <id>  show the brief, then open the file in $EDITOR
+  kettle open    <project> <id>  show the brief, then edit the file (built-in TUI)
+  kettle edit    <project> <id>  same as open (explicit name for the built-in editor)
+  kettle themes                  list bundled + user color themes (marquee: kettle)
   kettle lineage <project>       who edited what: agent / user / unattributed
   kettle bind    <project>       add the lineage directive to the project's CLAUDE.md
   kettle chat    <project> [id]  converse with the resident curator — resumes the
@@ -457,7 +460,19 @@ def cmd_refresh_briefs(args) -> int:
     return 0
 
 
+def _entry_header(entry: dict) -> str:
+    title = entry.get("title") or Path(entry.get("path", "")).name
+    return f"[{entry.get('id')}] {title}"
+
+
+def _open_external(path: Path) -> int:
+    editor = os.environ.get("EDITOR") or "vi"
+    print(f"opening {path} in {editor} …")
+    return subprocess.call([editor, str(path)])
+
+
 def cmd_open(args) -> int:
+    """Show brief context, then edit the entry file (built-in TUI by default)."""
     proj = server.get_project(args.project)
     entry = server.find_entry(server.load_queue(proj), args.id)
     print(f"[{entry['id']}] {entry.get('title') or Path(entry['path']).name}")
@@ -466,9 +481,55 @@ def cmd_open(args) -> int:
     if entry.get("brief"):
         print(f"brief: {' '.join(str(entry['brief']).split())}")
     path = _resolve(proj, entry["path"])
-    editor = os.environ.get("EDITOR") or "vi"
-    print(f"\nopening {path} in {editor} …")
-    return subprocess.call([editor, str(path)])
+    if getattr(args, "external", False):
+        return _open_external(path)
+
+    import theme_catalog
+    import tui_editor
+
+    try:
+        settings = server.load_settings()
+    except Exception:
+        settings = {}
+    if not isinstance(settings, dict):
+        settings = {}
+    theme_id = getattr(args, "theme", None) or theme_catalog.active_theme_id_from_settings(settings)
+    header = _entry_header(entry)
+    print(f"\nbuilt-in editor · theme {theme_id} · ^S save · ^Q quit · ^W $EDITOR\n")
+    code = tui_editor.edit_file(path, theme_id=theme_id, header=header)
+    if code == 2:
+        return _open_external(path)
+    if code == 3:
+        print("no tty for built-in editor — falling back to $EDITOR", file=sys.stderr)
+        return _open_external(path)
+    return 0 if code in (0, 1) else code
+
+
+def cmd_edit(args) -> int:
+    """Alias for open — explicit name for the built-in review editor."""
+    return cmd_open(args)
+
+
+def cmd_themes(args) -> int:
+    """List bundled and user theme packs; mark the marquee default."""
+    import theme_catalog
+
+    default = theme_catalog.default_theme_id()
+    print(f"default (marquee): {default}")
+    print(f"bundled dir:       {theme_catalog.bundled_themes_dir()}")
+    print(f"user dir:          {theme_catalog.user_themes_dir()}")
+    print()
+    for tid in theme_catalog.list_theme_ids():
+        try:
+            pack = theme_catalog.load_theme(tid)
+        except (OSError, ValueError) as e:
+            print(f"  {tid:16}  (error: {e})")
+            continue
+        mark = "*" if tid == default or pack.get("marquee") else " "
+        src = pack.get("_source", "?")
+        print(f" {mark} {tid:16}  {pack.get('label', tid):20}  [{src}]")
+    print("\n* marquee / default    place custom packs as <id>.json in the user dir")
+    return 0
 
 
 # ---------- the curator conversation ----------
@@ -646,6 +707,8 @@ def main(argv=None) -> int:
                "  kettle init                        # register the current folder\n"
                "  kettle queue   kettle\n"
                "  kettle open    kettle refounding-merge\n"
+               "  kettle edit    kettle refounding-merge\n"
+               "  kettle themes\n"
                "  kettle chat    kettle               # talk to the desk\n"
                "  kettle chat    kettle <entry-id>    # about one file\n"
                "  kettle doctor                      # install health\n"
@@ -657,9 +720,10 @@ def main(argv=None) -> int:
     # not required: a bare `kettle` should greet with the menu, not error out
     sub = ap.add_subparsers(
         dest="cmd",
-        metavar="{projects,add,init,found,queue,open,lineage,bind,chat,doctor,"
+        metavar="{projects,add,init,found,queue,open,edit,themes,lineage,bind,chat,doctor,"
                 "sweep-status,sweep-close,sweep-archive,refresh-briefs,egress,egress-status}")
     sub.add_parser("projects", help="list registered desks").set_defaults(fn=cmd_projects)
+    sub.add_parser("themes", help="list bundled and user color themes").set_defaults(fn=cmd_themes)
     sub.add_parser(
         "doctor",
         help="install health: which kettle, py-modules mapping (brief 20; brief 18 expands)",
@@ -677,8 +741,16 @@ def main(argv=None) -> int:
     b2 = sub.add_parser("bind", help="add the lineage directive to the project's CLAUDE.md")
     b2.add_argument("project"); b2.set_defaults(fn=cmd_bind)
     q = sub.add_parser("queue", help="show a desk's queue"); q.add_argument("project"); q.set_defaults(fn=cmd_queue)
-    o = sub.add_parser("open", help="open an entry's file in $EDITOR")
-    o.add_argument("project"); o.add_argument("id"); o.set_defaults(fn=cmd_open)
+    o = sub.add_parser("open", help="edit an entry's file (built-in TUI; --external for $EDITOR)")
+    o.add_argument("project"); o.add_argument("id")
+    o.add_argument("--external", action="store_true", help="open in $EDITOR instead of the built-in TUI")
+    o.add_argument("--theme", default=None, help="theme pack id (default: kettle / settings)")
+    o.set_defaults(fn=cmd_open)
+    e = sub.add_parser("edit", help="edit an entry's file in the built-in syntax-colored TUI")
+    e.add_argument("project"); e.add_argument("id")
+    e.add_argument("--external", action="store_true", help="open in $EDITOR instead")
+    e.add_argument("--theme", default=None, help="theme pack id (default: kettle / settings)")
+    e.set_defaults(fn=cmd_edit)
     c = sub.add_parser("chat", help="converse with the resident curator")
     c.add_argument("project"); c.add_argument("id", nargs="?")
     c.add_argument("--model", default=None); c.set_defaults(fn=cmd_chat)

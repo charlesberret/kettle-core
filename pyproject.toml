@@ -54,7 +54,7 @@ setsweep-watch = "kettle_watch:main"
 # tree restructured under a package + package-data for static/ — deferred (see INSTALL.md).
 # After adding a name here: reinstall editable (`pip install -e .`) or the finder MAPPING
 # goes stale and the CLI raises ModuleNotFoundError for the new module.
-py-modules = ["kettle_main", "kettle_contract", "server", "runtime", "lineage", "cli", "kits", "curator", "sweepkit", "egress", "survey", "kettle_watch"]
+py-modules = ["kettle_main", "kettle_contract", "server", "runtime", "lineage", "cli", "kits", "curator", "sweepkit", "egress", "survey", "kettle_watch", "theme_catalog", "syntax", "tui_editor"]
 
 [tool.ruff]
 line-length = 100

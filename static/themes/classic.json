@@ -1,0 +1,98 @@
+{
+  "schema_version": 1,
+  "id": "classic",
+  "label": "Classic ANSI",
+  "marquee": false,
+  "dark": {
+    "ansi": [
+      "#000000",
+      "#cd0000",
+      "#00cd00",
+      "#cdcd00",
+      "#0000ee",
+      "#cd00cd",
+      "#00cdcd",
+      "#e5e5e5",
+      "#7f7f7f",
+      "#ff0000",
+      "#00ff00",
+      "#ffff00",
+      "#5c5cff",
+      "#ff00ff",
+      "#00ffff",
+      "#ffffff"
+    ],
+    "iface": {
+      "bg": 0,
+      "fg": 7,
+      "muted": 7,
+      "panel": 0,
+      "panel2": 0,
+      "line": 8,
+      "acc": 3,
+      "link": 4,
+      "activebg": 8,
+      "selection": 4,
+      "good": 2,
+      "warn": 1,
+      "urghigh": 1,
+      "urgmed": 3,
+      "urglow": 2
+    },
+    "slots": {
+      "mdhead": 3,
+      "ctxhead": 7,
+      "ctxbody": 7,
+      "cmthead": 7,
+      "comment": 4,
+      "agent": 7,
+      "user": 4
+    }
+  },
+  "light": {
+    "ansi": [
+      "#ffffff",
+      "#cd0000",
+      "#00cd00",
+      "#cdcd00",
+      "#0000ee",
+      "#cd00cd",
+      "#00cdcd",
+      "#000000",
+      "#e5e5e5",
+      "#ff0000",
+      "#00ff00",
+      "#ffff00",
+      "#5c5cff",
+      "#ff00ff",
+      "#00ffff",
+      "#000000"
+    ],
+    "iface": {
+      "bg": 0,
+      "fg": 7,
+      "muted": 7,
+      "panel": 15,
+      "panel2": 15,
+      "line": 8,
+      "acc": 4,
+      "link": 4,
+      "activebg": 8,
+      "selection": 12,
+      "good": 2,
+      "warn": 1,
+      "urghigh": 1,
+      "urgmed": 3,
+      "urglow": 2
+    },
+    "slots": {
+      "mdhead": 4,
+      "ctxhead": 7,
+      "ctxbody": 7,
+      "cmthead": 7,
+      "comment": 4,
+      "agent": 7,
+      "user": 4
+    }
+  }
+}

@@ -1,0 +1,64 @@
+"""Theme catalog and pack validation."""
+
+from __future__ import annotations
+
+import json
+import tempfile
+import unittest
+from pathlib import Path
+from unittest import mock
+
+import theme_catalog
+
+
+class ThemeCatalog(unittest.TestCase):
+    def test_default_is_kettle_marquee(self):
+        self.assertEqual(theme_catalog.default_theme_id(), "kettle")
+        pack = theme_catalog.load_theme("kettle")
+        self.assertTrue(pack.get("marquee"))
+        self.assertEqual(len(pack["dark"]["ansi"]), 16)
+
+    def test_list_includes_bundled(self):
+        ids = theme_catalog.list_theme_ids()
+        self.assertIn("kettle", ids)
+        self.assertIn("nord", ids)
+        self.assertIn("tokyo-night", ids)
+
+    def test_resolve_role_hex(self):
+        pack = theme_catalog.load_theme("kettle")
+        bg = theme_catalog.resolve_role_hex(pack, "bg", dark=True)
+        fg = theme_catalog.resolve_role_hex(pack, "fg", dark=True)
+        self.assertTrue(bg.startswith("#"))
+        self.assertNotEqual(bg, fg)
+        # syntax aliases
+        comment = theme_catalog.resolve_role_hex(pack, "comment", dark=True)
+        self.assertTrue(comment.startswith("#"))
+
+    def test_user_theme_overrides_bundled_id(self):
+        pack = theme_catalog.load_theme("kettle")
+        with tempfile.TemporaryDirectory() as td:
+            udir = Path(td)
+            custom = {
+                "schema_version": 1,
+                "id": "kettle",
+                "label": "Custom Kettle",
+                "marquee": False,
+                "dark": pack["dark"],
+                "light": pack["light"],
+            }
+            (udir / "kettle.json").write_text(json.dumps(custom), encoding="utf-8")
+            with mock.patch.object(theme_catalog, "user_themes_dir", return_value=udir):
+                loaded = theme_catalog.load_theme("kettle")
+            self.assertEqual(loaded["label"], "Custom Kettle")
+            self.assertEqual(loaded["_source"], "user")
+
+    def test_invalid_pack_rejected(self):
+        with tempfile.TemporaryDirectory() as td:
+            bad = Path(td) / "bad.json"
+            bad.write_text(json.dumps({"id": "x"}), encoding="utf-8")
+            with self.assertRaises(ValueError):
+                theme_catalog.load_pack_file(bad)
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)

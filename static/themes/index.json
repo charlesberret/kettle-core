@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "default": "kettle",
+  "description": "Bundled color themes for Kettle sittings (web, desktop, CLI). Custom themes load from the user themes directory.",
+  "themes": [
+    "classic",
+    "gruvbox",
+    "kettle",
+    "material",
+    "nord",
+    "one-dark",
+    "solarized",
+    "tokyo-night"
+  ]
+}

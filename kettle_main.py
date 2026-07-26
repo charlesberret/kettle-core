@@ -21,7 +21,8 @@ Routing keeps web/server as the default; the CLI subcommands go through `cli.py`
 """
 import sys
 
-CLI_CMDS = {"projects", "add", "init", "found", "queue", "open", "lineage", "bind", "chat",
+CLI_CMDS = {"projects", "add", "init", "found", "queue", "open", "edit", "themes",
+            "lineage", "bind", "chat",
             "doctor",
             "sweep-status", "sweep-close", "sweep-archive", "refresh-briefs",
             "egress", "egress-status"}

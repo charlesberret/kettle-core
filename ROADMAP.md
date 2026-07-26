@@ -51,14 +51,23 @@ contracts are still at `0`.
 - Publish a deprecation window before removing the old command aliases or
   process identity.
 
+## Now: themes and the CLI sitting editor
+
+- Marquee **Kettle** theme pack plus bundled alternatives under `static/themes/`.
+- User-installable theme packs (shared by CLI and eventually web/desktop loaders).
+- Built-in **CLI TUI editor** with stdlib syntax coloring (`kettle open` / `edit`).
+- Deepen language tokenizers and wire web `renderBack` to the same role map.
+- Desktop continues to ship the core sitting (bundled themes in Appearance);
+  load file-based custom packs into the web UI as a follow-on.
+
 ## Next: reliable release surfaces
 
 - Stabilize the API and desk schemas at version `1` only after their contracts
   are documented and exercised by real adapters.
 - Finish packaged VS Code/Cursor and desktop smoke tests against exact core
   provenance.
-- Add a changelog and release checklist covering compatibility, security,
-  third-party notices, source archives, and clean-tree gates.
+- Keep the changelog and release checklist current with compatibility,
+  security, third-party notices, source archives, and clean-tree gates.
 - Validate a complete stranger path: install, found a real desk, review an
   entry, and close a sitting without maintainer help.
 

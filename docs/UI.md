@@ -4,19 +4,21 @@
 web, and **kettle-desktop** all load this file. Do not fork styles into the desktop
 repo or the VS Code Desk webview without a deliberate shared token plan.
 
-## Product palette (Kettle theme)
+## Product palette and theme packs
 
-Host-neutral brand colors live in **`static/kettle-palette.json`** (16 ANSI colors +
-interface/slot role indices for dark and light). That file is the source of truth for:
+Host-neutral **theme packs** live under **`static/themes/`** (marquee default:
+`kettle.json`). The shortcut **`static/kettle-palette.json`** mirrors the marquee
+pack for brand-only consumers. Full story: [`THEMES.md`](./THEMES.md).
 
 | Surface | Projection |
 |---------|------------|
-| Reference sitting / desktop | `static/themes.js` builtin `kettle` (must match; `test_palette.py`) |
-| VS Code / Cursor | `kettle-vscode` generates `themes/kettle-*-color-theme.json` via `npm run sync-palette` |
+| Reference sitting / desktop | `static/themes.js` builtins + Appearance UI |
+| Built-in CLI editor | `theme_catalog` + `syntax` + `tui_editor` |
+| VS Code / Cursor | `npm run sync-palette` from marquee palette |
 
-Adapters own host packing (workbench keys, TextMate scopes). They do **not** invent a
-second brand palette. After changing `kettle-palette.json`, update `themes.js` and
-regenerate adapter themes so drift checks stay green.
+Adapters own host packing. They do **not** invent a second brand palette.
+After changing the marquee pack, keep `themes.js` / `kettle-palette.json` aligned
+(`test_palette.py`) and regenerate VS Code themes.
 
 When you touch sitting chrome, **read this file first**. Fixing one panel and leaving a
 sibling panel on ad-hoc white text is a regression against these rules.

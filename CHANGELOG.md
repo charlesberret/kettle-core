@@ -10,6 +10,9 @@ and Desk schema have their own integer contract versions.
 - Renamed the product and canonical commands from Setsweep to Kettle.
 - New projects use `.kettle/` and the Kettle user registry.
 - Public documentation and repository routing now describe the Kettle family.
+- CLI `open` / `edit` use a built-in syntax-colored TUI editor by default
+  (theme packs under `static/themes/`; marquee default `kettle`). Pass
+  `--external` for `$EDITOR`.
 
 ### Compatibility
 

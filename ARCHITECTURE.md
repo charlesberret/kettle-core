@@ -44,9 +44,11 @@ the port fall back to an ephemeral port.
 | Viewport | Where |
 |----------|--------|
 | Browser / server | this repo — `kettle` / `kettle --web` |
-| CLI | this repo — `kettle projects \| queue \| chat \| …` |
-| macOS `.app` | sibling **kettle-desktop** |
+| CLI | this repo — `kettle projects \| queue \| open \| edit \| chat \| …` (built-in TUI editor) |
+| macOS `.app` | sibling **kettle-desktop** (loads core web UI + theme packs) |
 | VS Code / Cursor | sibling **kettle-vscode** |
+
+Theme packs (marquee **kettle** + bundled + user): [`docs/THEMES.md`](./docs/THEMES.md).
 
 Wire contract: [`API.md`](./API.md).
 

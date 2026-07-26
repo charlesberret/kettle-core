@@ -2,7 +2,7 @@
   "schema_version": 1,
   "id": "kettle",
   "label": "Kettle",
-  "description": "Host-neutral product palette. Source of truth for the Kettle brand colors across the reference web sitting, desktop shell, and editor color themes. themes.js builtin 'kettle' and adapter projections must match.",
+  "description": "Host-neutral product palette (marquee). Full pack: static/themes/kettle.json",
   "ansi_labels": [
     "black",
     "red",

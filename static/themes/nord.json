@@ -1,0 +1,98 @@
+{
+  "schema_version": 1,
+  "id": "nord",
+  "label": "Nord",
+  "marquee": false,
+  "dark": {
+    "ansi": [
+      "#2e3440",
+      "#bf616a",
+      "#a3be8c",
+      "#ebcb8b",
+      "#81a1c1",
+      "#b48ead",
+      "#88c0d0",
+      "#eceff4",
+      "#3b4252",
+      "#d08770",
+      "#b4d088",
+      "#f0d890",
+      "#5e81ac",
+      "#c895c8",
+      "#9dd0e0",
+      "#e5e9f0"
+    ],
+    "iface": {
+      "bg": 0,
+      "fg": 7,
+      "muted": 7,
+      "panel": 0,
+      "panel2": 0,
+      "line": 8,
+      "acc": 3,
+      "link": 4,
+      "activebg": 8,
+      "selection": 4,
+      "good": 2,
+      "warn": 1,
+      "urghigh": 1,
+      "urgmed": 3,
+      "urglow": 2
+    },
+    "slots": {
+      "mdhead": 3,
+      "ctxhead": 7,
+      "ctxbody": 7,
+      "cmthead": 7,
+      "comment": 4,
+      "agent": 7,
+      "user": 4
+    }
+  },
+  "light": {
+    "ansi": [
+      "#eceff4",
+      "#bf616a",
+      "#a3be8c",
+      "#ebcb8b",
+      "#5e81ac",
+      "#b48ead",
+      "#8fbcbb",
+      "#2e3440",
+      "#e5e9f0",
+      "#d08770",
+      "#a3be8c",
+      "#ebcb8b",
+      "#81a1c1",
+      "#b48ead",
+      "#88c0d0",
+      "#ffffff"
+    ],
+    "iface": {
+      "bg": 0,
+      "fg": 7,
+      "muted": 7,
+      "panel": 15,
+      "panel2": 15,
+      "line": 8,
+      "acc": 4,
+      "link": 4,
+      "activebg": 8,
+      "selection": 12,
+      "good": 2,
+      "warn": 1,
+      "urghigh": 1,
+      "urgmed": 3,
+      "urglow": 2
+    },
+    "slots": {
+      "mdhead": 4,
+      "ctxhead": 7,
+      "ctxbody": 7,
+      "cmthead": 7,
+      "comment": 4,
+      "agent": 7,
+      "user": 4
+    }
+  }
+}
