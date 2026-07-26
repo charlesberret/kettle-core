@@ -70,6 +70,18 @@ preset (`dark` / `light` with `--ansi-N` colors and role maps).
 One pack in web-shaped form (`label`, `dark`, `light`, `marquee`, `source`).
 Invalid ids return 400; missing packs return 404.
 
+### `POST /api/themes/install`
+
+Install a host-neutral theme pack into the user themes directory (same path the
+CLI reads). Body is the pack object (`schema_version`, `id`, `label`, `dark`,
+`light`, …).
+
+```json
+{ "ok": true, "id": "my-theme", "label": "My Theme", "path": "…/themes/my-theme.json", "pack": { "…": "web-shaped" }, "catalog": { "…": "metadata" } }
+```
+
+Validation errors return 400.
+
 ### `GET /api/curator/catalog`
 
 Single source of truth for desk/settings model UIs:

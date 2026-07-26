@@ -3,6 +3,8 @@
 Uses stdlib ``curses`` only. Colors come from ``theme_catalog``; tokenization
 from ``syntax``. This is intentionally a small, reliable editor for review
 edits before approve — not a Vim replacement.
+
+Features: syntax coloring, search (^F / n / N), large-file plain mode.
 """
 
 from __future__ import annotations
@@ -15,6 +17,10 @@ from pathlib import Path
 
 import syntax
 import theme_catalog
+
+# Soft limits: full-buffer highlighting is O(n); past these, use plain text.
+HIGHLIGHT_MAX_LINES = 8_000
+HIGHLIGHT_MAX_BYTES = 512_000
 
 # Map syntax roles → curses color pair ids (1-based; 0 is default).
 _PAIR = {
@@ -41,12 +47,10 @@ _PAIR = {
 def _hex_to_curses_rgb(hexv: str) -> tuple[int, int, int]:
     h = hexv.lstrip("#")
     r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
-    # curses uses 0–1000
     return r * 1000 // 255, g * 1000 // 255, b * 1000 // 255
 
 
 def _nearest_ansi16(hexv: str, ansi: list[str]) -> int:
-    """Fallback when terminal cannot redefine colors: map to nearest 0–15."""
     def rgb(h: str) -> tuple[int, int, int]:
         h = h.lstrip("#")
         return int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
@@ -72,13 +76,10 @@ def _init_colors(pack: dict, *, dark: bool) -> None:
     ansi = theme_catalog.ansi_colors(pack, dark=dark)
     can_custom = curses.can_change_color() and curses.COLORS >= 16
 
-    # pair 1..n: fg on default background (-1) for terminal-native bg
     roles = list(_PAIR.keys())
-    # stable pair assignment
     role_to_pair = {r: i + 1 for i, r in enumerate(dict.fromkeys(roles))}
 
     if can_custom:
-        # Reserve color numbers 16+ when possible, else overwrite 0-15 carefully
         base = 16 if curses.COLORS > 16 else 0
         color_ids: dict[str, int] = {}
         idx = base
@@ -110,7 +111,6 @@ def _init_colors(pack: dict, *, dark: bool) -> None:
             except curses.error:
                 curses.init_pair(pair, 7, -1)
 
-    # stash on module for attr()
     _init_colors.role_to_pair = role_to_pair  # type: ignore[attr-defined]
 
 
@@ -134,15 +134,29 @@ class Buffer:
     language: str = "text"
     message: str = ""
     readonly: bool = False
+    plain_highlight: bool = False
+    find_query: str = ""
+    find_mode: bool = False
+    find_buf: str = ""
     _tok_cache: list[list[tuple[str, str]]] | None = field(default=None, repr=False)
     _tok_dirty: bool = field(default=True, repr=False)
 
     @classmethod
     def load(cls, path: Path, *, language: str | None = None) -> Buffer:
-        text = path.read_text(encoding="utf-8") if path.is_file() else ""
+        raw = path.read_bytes() if path.is_file() else b""
+        text = raw.decode("utf-8", errors="replace") if raw else ""
         lines = text.splitlines() or [""]
         lang = language or syntax.language_for_path(path)
-        return cls(path=path, lines=lines, language=lang)
+        plain = len(lines) > HIGHLIGHT_MAX_LINES or len(raw) > HIGHLIGHT_MAX_BYTES
+        if plain:
+            lang = "text"
+        buf = cls(path=path, lines=lines, language=lang, plain_highlight=plain)
+        if plain:
+            buf.message = (
+                f"large file ({len(lines)} lines) — plain mode; "
+                f"^W external editor for full highlighting"
+            )
+        return buf
 
     def text(self) -> str:
         body = "\n".join(self.lines)
@@ -151,13 +165,17 @@ class Buffer:
     def touch(self) -> None:
         self.dirty = True
         self._tok_dirty = True
-        self.message = ""
+        if not self.find_mode:
+            self.message = ""
 
     def token_lines(self) -> list[list[tuple[str, str]]]:
         if self._tok_dirty or self._tok_cache is None:
-            self._tok_cache = syntax.tokenize_lines(
-                "\n".join(self.lines), language=self.language,
-            )
+            if self.plain_highlight:
+                self._tok_cache = [[("text", ln)] for ln in self.lines]
+            else:
+                self._tok_cache = syntax.tokenize_lines(
+                    "\n".join(self.lines), language=self.language,
+                )
             self._tok_dirty = False
         return self._tok_cache
 
@@ -177,6 +195,50 @@ class Buffer:
         self.row = max(0, min(self.row, len(self.lines) - 1))
         self.col = max(0, min(self.col, len(self.lines[self.row])))
 
+    def find_next(self, *, backward: bool = False, from_cursor: bool = True) -> None:
+        """Search for ``find_query``.
+
+        When *from_cursor* is true (default for ^G), start after the current
+        column so repeats advance. First search from the find prompt passes
+        ``from_cursor=False`` so a match under the caret is accepted.
+        """
+        q = self.find_query
+        if not q:
+            self.message = "no search — ^F to find"
+            return
+        n = len(self.lines)
+        if n == 0:
+            return
+        start_row, start_col = self.row, self.col
+        if backward:
+            r, c = start_row, (start_col - 1 if from_cursor else start_col)
+            if c < 0:
+                r -= 1
+                if r < 0:
+                    r = n - 1
+                c = len(self.lines[r])
+            for _ in range(n + 1):
+                line = self.lines[r]
+                idx = line.rfind(q, 0, c + 1) if c >= 0 else -1
+                if idx >= 0:
+                    self.row, self.col = r, idx
+                    self.message = f"find ↑ {q!r}"
+                    return
+                r = (r - 1) % n
+                c = len(self.lines[r])
+        else:
+            r, c = start_row, (start_col + 1 if from_cursor else start_col)
+            for _ in range(n + 1):
+                line = self.lines[r]
+                idx = line.find(q, c)
+                if idx >= 0:
+                    self.row, self.col = r, idx
+                    self.message = f"find ↓ {q!r}"
+                    return
+                r = (r + 1) % n
+                c = 0
+        self.message = f"not found: {q!r}"
+
 
 def _highlighted_line(buf: Buffer, row: int) -> list[tuple[str, str]]:
     lines = buf.token_lines()
@@ -192,7 +254,6 @@ def _draw(stdscr: "curses._CursesWindow", buf: Buffer, header: str) -> None:
     text_h = max(1, max_y - status_rows)
     gutter = max(3, len(str(len(buf.lines))) + 1)
 
-    # scroll
     if buf.row < buf.row_off:
         buf.row_off = buf.row
     if buf.row >= buf.row_off + text_h:
@@ -202,11 +263,11 @@ def _draw(stdscr: "curses._CursesWindow", buf: Buffer, header: str) -> None:
     if buf.col >= buf.col_off + max(1, max_x - gutter - 1):
         buf.col_off = buf.col - (max_x - gutter - 1) + 1
 
+    q = buf.find_query
     for y in range(text_h):
         r = buf.row_off + y
         if r >= len(buf.lines):
             break
-        # gutter
         ln = f"{r + 1}".rjust(gutter - 1) + " "
         try:
             stdscr.addstr(y, 0, ln[:max_x], _attr("lineno"))
@@ -214,7 +275,6 @@ def _draw(stdscr: "curses._CursesWindow", buf: Buffer, header: str) -> None:
             pass
         tokens = _highlighted_line(buf, r)
         x = gutter
-        # apply horizontal scroll by skipping col_off columns of pure text width
         skip = buf.col_off
         for kind, chunk in tokens:
             for ch in chunk:
@@ -231,26 +291,48 @@ def _draw(stdscr: "curses._CursesWindow", buf: Buffer, header: str) -> None:
             if x >= max_x:
                 break
 
-    # header / status
+        # Overlay search matches (reverse video) on this visible line.
+        if q:
+            line = buf.lines[r]
+            start = 0
+            while True:
+                idx = line.find(q, start)
+                if idx < 0:
+                    break
+                for k, mch in enumerate(q):
+                    vx = gutter + (idx + k - buf.col_off)
+                    if gutter <= vx < max_x:
+                        try:
+                            stdscr.addstr(y, vx, mch, curses.A_REVERSE | _attr("heading"))
+                        except curses.error:
+                            pass
+                start = idx + max(1, len(q))
+
     dirty = "*" if buf.dirty else " "
-    title = f" Kettle{dirty}  {buf.path.name}  [{buf.language}]"
+    plain = " plain" if buf.plain_highlight else ""
+    title = f" Kettle{dirty}  {buf.path.name}  [{buf.language}{plain}]"
     if header:
-        title = f" Kettle{dirty}  {header}"
+        title = f" Kettle{dirty}  {header}{plain}"
     bar = title[: max_x - 1].ljust(max_x - 1)
     try:
         stdscr.addstr(max_y - 2, 0, bar, _attr("heading") | curses.A_REVERSE)
     except curses.error:
         pass
-    help_l = buf.message or "^S save  ^Q quit  ^W external  arrows move  enter newline"
+
+    if buf.find_mode:
+        help_l = f"Find: {buf.find_buf}_   Enter ok · Esc cancel"
+    else:
+        help_l = buf.message or (
+            "^S save  ^Q quit  ^W external  ^F find  ^G next  ^D prev  arrows"
+        )
     try:
         stdscr.addstr(max_y - 1, 0, help_l[: max_x - 1].ljust(max_x - 1), _attr("status"))
     except curses.error:
         pass
 
-    # cursor
     cy = buf.row - buf.row_off
     cx = gutter + (buf.col - buf.col_off)
-    if 0 <= cy < text_h and gutter <= cx < max_x:
+    if 0 <= cy < text_h and gutter <= cx < max_x and not buf.find_mode:
         try:
             stdscr.move(cy, cx)
         except curses.error:
@@ -309,6 +391,7 @@ def _newline(buf: Buffer) -> None:
     buf.col = 0
     buf.touch()
 
+
 def _run(stdscr: "curses._CursesWindow", buf: Buffer, header: str, pack: dict, dark: bool) -> int:
     curses.raw()
     curses.curs_set(1)
@@ -319,6 +402,40 @@ def _run(stdscr: "curses._CursesWindow", buf: Buffer, header: str, pack: dict, d
         buf.clamp()
         _draw(stdscr, buf, header)
         ch = stdscr.get_wch()
+
+        # ── find prompt mode ──
+        if buf.find_mode:
+            if isinstance(ch, str):
+                o = ord(ch) if len(ch) == 1 else -1
+                if o in (27,):  # Esc as single char rare; use KEY
+                    pass
+                if ch == "\n" or o in (10, 13):
+                    buf.find_query = buf.find_buf
+                    buf.find_mode = False
+                    buf.find_next(backward=False, from_cursor=False)
+                    continue
+                if o in (127, 8):
+                    buf.find_buf = buf.find_buf[:-1]
+                    continue
+                if o == 27:
+                    buf.find_mode = False
+                    buf.message = "find cancelled"
+                    continue
+                if ch.isprintable():
+                    buf.find_buf += ch
+                    continue
+            else:
+                if ch == 27 or ch == curses.KEY_EXIT:
+                    buf.find_mode = False
+                    buf.message = "find cancelled"
+                elif ch == curses.KEY_BACKSPACE:
+                    buf.find_buf = buf.find_buf[:-1]
+                elif ch == curses.KEY_ENTER:
+                    buf.find_query = buf.find_buf
+                    buf.find_mode = False
+                    buf.find_next(backward=False, from_cursor=False)
+            continue
+
         if isinstance(ch, str):
             o = ord(ch) if len(ch) == 1 else -1
             if o == 17:  # ^Q
@@ -334,12 +451,23 @@ def _run(stdscr: "curses._CursesWindow", buf: Buffer, header: str, pack: dict, d
                 except OSError as e:
                     buf.message = f"save failed: {e}"
                 continue
-            if o == 23:  # ^W external editor
+            if o == 23:  # ^W external
                 return 2
-            if ch == "\n" or o == 10 or o == 13:
+            if o == 6:  # ^F find
+                buf.find_mode = True
+                buf.find_buf = buf.find_query
+                buf.message = ""
+                continue
+            if o == 7:  # ^G find next
+                buf.find_next(backward=False)
+                continue
+            if o == 4:  # ^D find previous (not EOF — we are in raw mode)
+                buf.find_next(backward=True)
+                continue
+            if ch == "\n" or o in (10, 13):
                 _newline(buf)
                 continue
-            if o in (127, 8):  # backspace
+            if o in (127, 8):
                 _backspace(buf)
                 continue
             if ch.isprintable():
@@ -377,6 +505,9 @@ def _run(stdscr: "curses._CursesWindow", buf: Buffer, header: str, pack: dict, d
                 _backspace(buf)
             elif ch == curses.KEY_ENTER:
                 _newline(buf)
+            elif ch == curses.KEY_FIND:
+                buf.find_mode = True
+                buf.find_buf = buf.find_query
     return 0
 
 
@@ -404,7 +535,6 @@ def edit_file(
         dark = theme_catalog.prefer_dark_mode()
     buf = Buffer.load(path, language=language)
 
-    # Ignore SIGINT inside the editor; ^C should not dump a traceback mid-draw.
     old = signal.signal(signal.SIGINT, signal.SIG_IGN)
     try:
         return curses.wrapper(lambda stdscr: _run(stdscr, buf, header, pack, dark))

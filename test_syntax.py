@@ -51,5 +51,22 @@ class Tokenizers(unittest.TestCase):
         self.assertEqual("".join(t for _, t in toks), src)
 
 
+class BufferFind(unittest.TestCase):
+    def test_find_next_wraps(self):
+        from tui_editor import Buffer
+        from pathlib import Path
+        import tempfile
+        with tempfile.TemporaryDirectory() as td:
+            p = Path(td) / "a.py"
+            p.write_text("alpha\nbeta alpha\ngamma\n", encoding="utf-8")
+            buf = Buffer.load(p)
+            buf.find_query = "alpha"
+            buf.row, buf.col = 0, 0
+            buf.find_next(backward=False, from_cursor=False)
+            self.assertEqual((buf.row, buf.col), (0, 0))
+            buf.find_next(backward=False, from_cursor=True)
+            self.assertEqual((buf.row, buf.col), (1, 5))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

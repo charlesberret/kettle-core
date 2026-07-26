@@ -73,6 +73,26 @@ class ThemeCatalog(unittest.TestCase):
         self.assertIn("kettle", cat["packs"])
         self.assertIn("--ansi-0", cat["packs"]["kettle"]["dark"]["colors"])
 
+    def test_install_user_pack(self):
+        base = theme_catalog.load_theme("kettle")
+        payload = {
+            "schema_version": 1,
+            "id": "unit-test-theme",
+            "label": "Unit Test Theme",
+            "marquee": False,
+            "dark": base["dark"],
+            "light": base["light"],
+        }
+        with tempfile.TemporaryDirectory() as td:
+            udir = Path(td)
+            with mock.patch.object(theme_catalog, "user_themes_dir", return_value=udir):
+                installed = theme_catalog.install_user_pack(payload)
+                self.assertEqual(installed["id"], "unit-test-theme")
+                self.assertEqual(installed["_source"], "user")
+                self.assertTrue((udir / "unit-test-theme.json").is_file())
+                ids = theme_catalog.list_theme_ids()
+                self.assertIn("unit-test-theme", ids)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -389,12 +389,17 @@
             padding:18px 22px 18px 14px; pointer-events:none; color:var(--text-primary);
             white-space:pre-wrap; overflow-wrap:break-word; word-break:normal;
             font:var(--ed-font,13.5px)/1.55 var(--ui-font); tab-size:4; }
-  #edback .mdhead { color:var(--slot-mdhead, color-mix(in srgb, var(--acc) 85%, var(--fg))); font-weight:600; }
-  #edback .mdsyn { color:var(--text-muted); }
-  #edback .mdcode { color:color-mix(in srgb, var(--link) 55%, var(--fg)); }
-  #edback .mdstr { color:color-mix(in srgb, var(--good) 55%, var(--fg)); }
-  #edback .mdkw { color:color-mix(in srgb, var(--acc) 70%, var(--fg)); }
-  #edback .mdcmt { color:var(--text-muted); font-style:italic; }
+  /* Syntax roles — same names as theme_catalog.SYNTAX_ROLE_DEFAULTS / CLI highlighter */
+  #edback .syn-heading, #edback .mdhead { color:var(--slot-mdhead, color-mix(in srgb, var(--acc) 85%, var(--fg))); font-weight:600; }
+  #edback .syn-operator, #edback .syn-punctuation, #edback .mdsyn { color:var(--text-muted); }
+  #edback .syn-string, #edback .mdcode, #edback .mdstr { color:color-mix(in srgb, var(--good) 62%, var(--fg)); }
+  #edback .syn-keyword, #edback .syn-storage, #edback .mdkw { color:color-mix(in srgb, var(--link) 72%, var(--fg)); }
+  #edback .syn-comment, #edback .mdcmt { color:var(--text-muted); font-style:italic; }
+  #edback .syn-number, #edback .syn-type { color:color-mix(in srgb, var(--acc) 75%, var(--fg)); }
+  #edback .syn-function, #edback .syn-property { color:color-mix(in srgb, var(--link) 55%, var(--fg)); }
+  #edback .syn-constant { color:color-mix(in srgb, var(--warn) 70%, var(--fg)); }
+  #edback .syn-escape { color:color-mix(in srgb, var(--link) 50%, var(--good)); }
+  #edback .syn-invalid { color:var(--warn); text-decoration:underline; }
   #mirror { position:absolute; visibility:hidden; left:-99999px; top:0; white-space:pre-wrap;
             overflow-wrap:break-word; word-break:normal; padding:0; border:0;
             font:var(--ed-font,13.5px)/1.55 var(--ui-font); tab-size:4; }
@@ -977,6 +982,14 @@
           <select id="palload"><option value="">— load a saved theme —</option></select>
           <button id="palapply" type="button" class="btn btn-sm btn-default">load</button>
           <button id="paldel" type="button" class="btn btn-sm btn-icon btn-ghost" title="delete the selected theme">✕</button>
+        </div>
+        <h2 style="margin-top:16px">Install Theme Pack</h2>
+        <p class="ap-hint">Paste a theme pack JSON (schema in core <code>static/themes/README.md</code>). Installs to the user themes directory and refreshes the menu — shared with the CLI.</p>
+        <textarea id="themePackJson" rows="5" spellcheck="false" placeholder='{ "schema_version": 1, "id": "my-theme", "label": "My Theme", "dark": { "ansi": […16], "iface": {…}, "slots": {…} }, "light": {…} }' style="width:100%;font:12px/1.4 var(--ui-font);resize:vertical"></textarea>
+        <div class="ap-actions" style="margin-top:8px">
+          <button id="themePackInstall" type="button" class="btn btn-sm btn-default">install pack</button>
+          <button id="themePackRefresh" type="button" class="btn btn-sm btn-ghost">refresh menu</button>
+          <span class="mono-dim" id="themePackStatus" style="font-size:11px;margin-left:8px"></span>
         </div>
       </section>
     </div>
@@ -1904,7 +1917,7 @@ function renderGutter(){
   $('gutter').innerHTML = html;
   syncGutter();
 }
-/* Light code coloring for source view (no extra deps). Keywords / strings / comments. */
+/* Light code coloring for source view — roles align with theme_catalog / CLI. */
 const CODE_KW = new Set((
   'and as assert async await break case catch class const continue def del elif else ' +
   'enum except export extends finally for from function if import in is lambda let ' +
@@ -1913,10 +1926,14 @@ const CODE_KW = new Set((
   'package interface struct map chan go defer select range func type var const'
 ).split(/\s+/));
 
+function synSpan(role, text){
+  return '<span class="syn-' + role + '">' + esc(text) + '</span>';
+}
+
 function colorCodeLine(line){
   // Whole-line comments first
   if(/^\s*(#|\/\/|\/\*|\*)/.test(line) && !/^\s*#\{/.test(line))
-    return '<span class="mdcmt">' + esc(line) + '</span>';
+    return synSpan('comment', line);
   let out = '', i = 0;
   const s = line;
   while(i < s.length){
@@ -1929,23 +1946,46 @@ function colorCodeLine(line){
         if(s[j] === q){ j++; break; }
         j++;
       }
-      out += '<span class="mdstr">' + esc(s.slice(i, j)) + '</span>';
+      out += synSpan('string', s.slice(i, j));
+      i = j;
+      continue;
+    }
+    // number
+    if(/[0-9]/.test(s[i]) && (i === 0 || !/[A-Za-z_]/.test(s[i-1]))){
+      let j = i + 1;
+      while(j < s.length && /[0-9.xXa-fA-F]/.test(s[j])) j++;
+      out += synSpan('number', s.slice(i, j));
       i = j;
       continue;
     }
     // line comment mid-line
     if(s[i] === '#' || (s[i] === '/' && s[i+1] === '/')){
-      out += '<span class="mdcmt">' + esc(s.slice(i)) + '</span>';
+      out += synSpan('comment', s.slice(i));
       break;
     }
-    // word (keyword or bare)
+    // word (keyword, function-ish, or bare)
     if(/[A-Za-z_]/.test(s[i])){
       let j = i + 1;
       while(j < s.length && /[A-Za-z0-9_]/.test(s[j])) j++;
       const w = s.slice(i, j);
-      out += CODE_KW.has(w)
-        ? '<span class="mdkw">' + esc(w) + '</span>'
-        : esc(w);
+      let k = j;
+      while(k < s.length && (s[k] === ' ' || s[k] === '\t')) k++;
+      if(CODE_KW.has(w)) out += synSpan('keyword', w);
+      else if(k < s.length && s[k] === '(') out += synSpan('function', w);
+      else if(/^[A-Z]/.test(w)) out += synSpan('type', w);
+      else out += esc(w);
+      i = j;
+      continue;
+    }
+    if('{}[](),.;:'.includes(s[i])){
+      out += synSpan('punctuation', s[i]);
+      i++;
+      continue;
+    }
+    if('+-*/%<>=!&|^~'.includes(s[i])){
+      let j = i + 1;
+      while(j < s.length && '+-*/%<>=!&|^~'.includes(s[j])) j++;
+      out += synSpan('operator', s.slice(i, j));
       i = j;
       continue;
     }
@@ -1970,20 +2010,20 @@ function renderBack(){
   const out = src.split('\n').map(line => {
     if(/^\s*(```|~~~)/.test(line)){
       fence = !fence;
-      return '<span class="mdsyn">' + esc(line) + '</span>';
+      return synSpan('punctuation', line);
     }
     if(fence || forceCode) return colorCodeLine(line);
     let m = line.match(/^(#{1,6} )(.*)$/);
-    if(m) return '<span class="mdhead"><span class="mdsyn">' + esc(m[1]) + '</span>' + esc(m[2]) + '</span>';
+    if(m) return '<span class="syn-heading"><span class="syn-punctuation">' + esc(m[1]) + '</span>' + esc(m[2]) + '</span>';
     let h = esc(line)
       .replace(/^(\s*(?:[-*+]|\d+\.) )(\[[ xX]\] )?/, (a, bullet, box) =>
-        '<span class="mdsyn">' + bullet + (box || '') + '</span>')
-      .replace(/^(&gt;\s*)/, '<span class="mdsyn">$1</span>')
-      .replace(/\*\*([^*\n]+)\*\*/g, '<span class="mdsyn">**</span><span class="mdhead">$1</span><span class="mdsyn">**</span>')
-      .replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, '$1<span class="mdsyn">*</span>$2<span class="mdsyn">*</span>')
-      .replace(/`([^`\n]+)`/g, '<span class="mdsyn">`</span><span class="mdcode">$1</span><span class="mdsyn">`</span>')
-      .replace(/\|/g, '<span class="mdsyn">|</span>');
-    if(/^(-{3,}|={3,})\s*$/.test(line)) h = '<span class="mdsyn">' + esc(line) + '</span>';
+        '<span class="syn-operator">' + bullet + (box || '') + '</span>')
+      .replace(/^(&gt;\s*)/, '<span class="syn-comment">$1</span>')
+      .replace(/\*\*([^*\n]+)\*\*/g, '<span class="syn-punctuation">**</span><span class="syn-heading">$1</span><span class="syn-punctuation">**</span>')
+      .replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, '$1<span class="syn-punctuation">*</span>$2<span class="syn-punctuation">*</span>')
+      .replace(/`([^`\n]+)`/g, '<span class="syn-punctuation">`</span><span class="syn-string">$1</span><span class="syn-punctuation">`</span>')
+      .replace(/\|/g, '<span class="syn-punctuation">|</span>');
+    if(/^(-{3,}|={3,})\s*$/.test(line)) h = synSpan('punctuation', line);
     return h;
   }).join('\n');
   $('edback').style.width = w + 'px';
@@ -4388,6 +4428,61 @@ function deletePalette(){
   SETTINGS.palettes = palettes; saveSettings({palettes}); buildPaletteSelect();
 }
 
+async function refreshThemeCatalogUI(){
+  const st = $('themePackStatus');
+  await loadThemeCatalog();
+  buildThemeControls();
+  applyTheme();
+  buildColorRows(); buildSlotRows(); buildIfaceRows();
+  if (st) st.textContent = 'theme menu refreshed';
+}
+
+async function installThemePack(){
+  const st = $('themePackStatus');
+  const ta = $('themePackJson');
+  if (!ta) return;
+  const raw = (ta.value || '').trim();
+  if (!raw) {
+    if (st) st.textContent = 'paste a theme pack JSON first';
+    ta.focus();
+    return;
+  }
+  let body;
+  try { body = JSON.parse(raw); }
+  catch (e) {
+    if (st) st.textContent = 'invalid JSON';
+    return;
+  }
+  if (st) st.textContent = 'installing…';
+  const res = await jpost('/api/themes/install', body);
+  if (res && res.pack && res.id) {
+    BUILTIN_THEMES[res.id] = {
+      label: res.pack.label || res.id,
+      dark: res.pack.dark,
+      light: res.pack.light,
+      marquee: !!res.pack.marquee,
+      source: 'user',
+    };
+    SETTINGS.builtinTheme = res.id;
+    SETTINGS.colors = {};
+    SETTINGS.slots = {};
+    SETTINGS.iface = {};
+    SETTINGS.ifaceOpacity = {};
+    SETTINGS.slotOpacity = {};
+    saveSettings({
+      builtinTheme: SETTINGS.builtinTheme,
+      colors: {}, slots: {}, iface: {}, ifaceOpacity: {}, slotOpacity: {},
+    });
+    buildThemeControls();
+    applyTheme();
+    buildColorRows(); buildSlotRows(); buildIfaceRows();
+    if (st) st.textContent = `installed ${res.id} → ${res.path || 'user themes'}`;
+    ta.value = '';
+  } else if (st) {
+    st.textContent = (res && res.error) || 'install failed';
+  }
+}
+
 function buildSizeRows(){
   const box = $('sizerows'); box.innerHTML = '';
   const s = SETTINGS.sizes || {}, w = SETTINGS.colWidths || COLW_DEFAULTS;
@@ -4699,6 +4794,15 @@ function wireAdmin(){
   $('ifacereset').onclick = resetIface;
   $('palsave').onclick = savePalette;
   $('palapply').onclick = applyPalette;
+  if ($('themePackInstall')) {
+    $('themePackInstall').onclick = () => installThemePack().catch(e => {
+      const st = $('themePackStatus');
+      if (st) st.textContent = String(e.message || e);
+    });
+  }
+  if ($('themePackRefresh')) {
+    $('themePackRefresh').onclick = () => refreshThemeCatalogUI().catch(() => {});
+  }
   $('paldel').onclick = deletePalette;
   $('optAutoSweep') && ($('optAutoSweep').onchange = () => saveSettings({autoSweep: $('optAutoSweep').checked}));
   $('optSweepVerbosity') && ($('optSweepVerbosity').onchange = () => saveSettings({sweepVerbosity: $('optSweepVerbosity').value}));

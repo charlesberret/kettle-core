@@ -1623,6 +1623,24 @@ class Handler(BaseHTTPRequestHandler):
                 })
             elif url.path == "/api/settings":
                 self.send_json(save_settings(d))
+            elif url.path == "/api/themes/install":
+                # Write a host-neutral pack into the user themes directory.
+                try:
+                    pack = theme_catalog.install_user_pack(d if isinstance(d, dict) else {})
+                except ValueError as e:
+                    self.send_json({"error": str(e)}, 400)
+                    return
+                except OSError as e:
+                    self.send_json({"error": f"could not write theme: {e}"}, 500)
+                    return
+                self.send_json({
+                    "ok": True,
+                    "id": pack.get("id"),
+                    "label": pack.get("label"),
+                    "path": pack.get("_path"),
+                    "pack": theme_catalog.pack_to_web(pack),
+                    "catalog": theme_catalog.catalog_payload(full=False),
+                })
             elif url.path == "/api/curator":
                 # Atomic curator selection: provider + model (+ optional effort) in one write.
                 # Preferred over partial PATCH /api/settings for the desk model menu.

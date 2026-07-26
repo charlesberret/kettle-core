@@ -69,6 +69,10 @@ packs in the user themes directory are the portable path shared with the CLI.
 | `GET /api/themes` | Catalog: default id, user_dir, theme metadata |
 | `GET /api/themes?full=1` | Same + `packs` map (web-shaped dark/light presets) |
 | `GET /api/themes/<id>` | One web-shaped pack |
+| `POST /api/themes/install` | Write a pack JSON into the user themes directory |
+
+Appearance → **Install Theme Pack** pastes JSON and calls install, then refreshes
+the menu (and selects the new id).
 
 ## Web appearance vs pack files
 

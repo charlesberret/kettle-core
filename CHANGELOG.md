@@ -12,7 +12,11 @@ and Desk schema have their own integer contract versions.
 - Public documentation and repository routing now describe the Kettle family.
 - CLI `open` / `edit` use a built-in syntax-colored TUI editor by default
   (theme packs under `static/themes/`; marquee default `kettle`). Pass
-  `--external` for `$EDITOR`.
+  `--external` for `$EDITOR`. Search with `^F` / `^G` / `^D`; large files use
+  plain mode.
+- Web/desktop load theme packs from `GET /api/themes` and can install custom
+  packs via Appearance or `POST /api/themes/install`.
+- Sitting source view uses shared syntax role classes aligned with the CLI.
 
 ### Compatibility
 

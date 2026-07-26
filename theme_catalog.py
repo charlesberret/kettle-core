@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -268,6 +269,31 @@ def pack_to_web(pack: dict[str, Any]) -> dict[str, Any]:
         "dark": mode(pack["dark"]),
         "light": mode(pack["light"]),
     }
+
+
+def install_user_pack(data: dict[str, Any]) -> dict[str, Any]:
+    """Validate and write a theme pack into the user themes directory.
+
+    Returns the loaded pack (with ``_path`` / ``_source``). Refuses to overwrite
+    a bundled id that is not already shadowed by a user file *unless* the
+    payload id matches — user packs may intentionally override bundled ids.
+    """
+    if not isinstance(data, dict):
+        raise ValueError("theme pack must be a JSON object")
+    pack = validate_pack(dict(data))
+    tid = str(pack["id"]).strip()
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}", tid):
+        raise ValueError("theme id must be 1–64 chars [A-Za-z0-9._-]")
+    pack["id"] = tid
+    # Never write internal keys
+    clean = {k: v for k, v in pack.items() if not str(k).startswith("_")}
+    udir = user_themes_dir()
+    udir.mkdir(parents=True, exist_ok=True)
+    path = udir / f"{tid}.json"
+    tmp = path.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(clean, indent=2) + "\n", encoding="utf-8")
+    tmp.replace(path)
+    return load_theme(tid)
 
 
 def catalog_payload(*, full: bool = False) -> dict[str, Any]:
