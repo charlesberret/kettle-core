@@ -45,6 +45,31 @@ still declare which values they support and report skew clearly instead of
 guessing at an unfamiliar route or file shape. A move to `1` is the explicit
 compatibility promise.
 
+### `GET /api/themes`
+
+Color theme catalog for the sitting Appearance menu, desktop shell, and CLI
+parity. Packs are host-neutral JSON under `static/themes/` plus the user themes
+directory (see `docs/THEMES.md`).
+
+```json
+{
+  "default": "kettle",
+  "user_dir": "/Users/you/Library/Application Support/Kettle/themes",
+  "themes": [
+    { "id": "kettle", "label": "Kettle", "marquee": true, "source": "bundled" },
+    { "id": "nord", "label": "Nord", "marquee": false, "source": "bundled" }
+  ]
+}
+```
+
+Query `full=1` includes a `packs` object mapping each id to the web-shaped
+preset (`dark` / `light` with `--ansi-N` colors and role maps).
+
+### `GET /api/themes/<id>`
+
+One pack in web-shaped form (`label`, `dark`, `light`, `marquee`, `source`).
+Invalid ids return 400; missing packs return 404.
+
 ### `GET /api/curator/catalog`
 
 Single source of truth for desk/settings model UIs:

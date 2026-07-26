@@ -41,6 +41,7 @@ import curator as curator_mod  # pluggable curator backends (claude CLI default)
 import kettle_contract  # core/API/desk-schema identity for every viewport
 import survey as survey_mod  # deterministic founding survey (tool-less interview Phase A)
 import sweepkit  # mechanical sweep close-kit (status · archive · stage · thin log)
+import theme_catalog  # bundled + user color theme packs (web, desktop, CLI)
 
 HOME = Path.home()
 
@@ -1486,6 +1487,24 @@ class Handler(BaseHTTPRequestHandler):
             elif url.path == "/api/settings":
                 # Always surface a normalized curator block (migration is read-side)
                 self.send_json(curator_mod.ensure_curator_settings(load_settings()))
+            elif url.path == "/api/themes":
+                # Color theme catalog for web/desktop Appearance and CLI parity.
+                full = (qs.get("full", ["0"])[0] or "0").lower() in ("1", "true", "yes")
+                self.send_json(theme_catalog.catalog_payload(full=full))
+            elif url.path.startswith("/api/themes/"):
+                tid = url.path[len("/api/themes/"):].strip("/")
+                if not tid or "/" in tid or ".." in tid or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", tid):
+                    self.send_json({"error": "invalid theme id"}, 400)
+                    return
+                try:
+                    pack = theme_catalog.load_theme(tid)
+                except FileNotFoundError:
+                    self.send_json({"error": "theme not found"}, 404)
+                    return
+                except ValueError as e:
+                    self.send_json({"error": str(e)}, 400)
+                    return
+                self.send_json(theme_catalog.pack_to_web(pack))
             elif url.path == "/api/curator/catalog":
                 self.send_json(curator_mod.build_catalog(load_settings()))
             elif url.path == "/api/admin":

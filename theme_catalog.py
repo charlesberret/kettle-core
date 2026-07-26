@@ -234,6 +234,69 @@ def syntax_color_table(pack: dict[str, Any], *, dark: bool = True) -> dict[str, 
     return {kind: resolve_role_hex(pack, kind, dark=dark) for kind in SYNTAX_ROLE_DEFAULTS}
 
 
+def pack_to_web(pack: dict[str, Any]) -> dict[str, Any]:
+    """Convert a pack to the shape expected by ``static/themes.js`` / the sitting UI.
+
+    ``dark`` / ``light`` each expose ``colors`` (``--ansi-N`` → hex), ``iface`` and
+    ``slots`` (role → ``--ansi-N``), matching the browser applyTheme() path.
+    """
+
+    def mode(block: dict[str, Any]) -> dict[str, Any]:
+        ansi = list(block["ansi"])
+        colors = {f"--ansi-{i}": ansi[i] for i in range(16)}
+        iface = {
+            str(k): f"--ansi-{int(v)}"
+            for k, v in (block.get("iface") or {}).items()
+        }
+        slots = {
+            str(k): f"--ansi-{int(v)}"
+            for k, v in (block.get("slots") or {}).items()
+        }
+        return {
+            "colors": colors,
+            "iface": iface,
+            "slots": slots,
+            "ifaceOpacity": dict(block.get("ifaceOpacity") or {}),
+            "slotOpacity": dict(block.get("slotOpacity") or {}),
+        }
+
+    return {
+        "id": pack.get("id"),
+        "label": pack.get("label"),
+        "marquee": bool(pack.get("marquee")),
+        "source": pack.get("_source", "bundled"),
+        "dark": mode(pack["dark"]),
+        "light": mode(pack["light"]),
+    }
+
+
+def catalog_payload(*, full: bool = False) -> dict[str, Any]:
+    """JSON for ``GET /api/themes`` (and ``?full=1`` including web-shaped packs)."""
+    themes_meta = []
+    packs: dict[str, Any] = {}
+    for tid in list_theme_ids():
+        try:
+            pack = load_theme(tid)
+        except (OSError, ValueError, FileNotFoundError):
+            continue
+        themes_meta.append({
+            "id": pack.get("id") or tid,
+            "label": pack.get("label") or tid,
+            "marquee": bool(pack.get("marquee")),
+            "source": pack.get("_source", "bundled"),
+        })
+        if full:
+            packs[tid] = pack_to_web(pack)
+    out: dict[str, Any] = {
+        "default": default_theme_id(),
+        "user_dir": str(user_themes_dir()),
+        "themes": themes_meta,
+    }
+    if full:
+        out["packs"] = packs
+    return out
+
+
 def prefer_dark_mode() -> bool:
     """Best-effort system appearance; default dark (marquee sitting)."""
     if env := os.environ.get("KETTLE_THEME_MODE"):

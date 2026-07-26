@@ -59,6 +59,20 @@ class ThemeCatalog(unittest.TestCase):
             with self.assertRaises(ValueError):
                 theme_catalog.load_pack_file(bad)
 
+    def test_pack_to_web_shape(self):
+        pack = theme_catalog.load_theme("kettle")
+        web = theme_catalog.pack_to_web(pack)
+        self.assertEqual(web["id"], "kettle")
+        self.assertIn("--ansi-0", web["dark"]["colors"])
+        self.assertTrue(web["dark"]["iface"]["bg"].startswith("--ansi-"))
+        self.assertTrue(web["dark"]["slots"]["mdhead"].startswith("--ansi-"))
+
+    def test_catalog_payload_full(self):
+        cat = theme_catalog.catalog_payload(full=True)
+        self.assertEqual(cat["default"], "kettle")
+        self.assertIn("kettle", cat["packs"])
+        self.assertIn("--ansi-0", cat["packs"]["kettle"]["dark"]["colors"])
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

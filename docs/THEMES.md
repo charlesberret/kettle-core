@@ -52,11 +52,23 @@ Keys: `^S` save · `^Q` quit · `^W` open in `$EDITOR` · arrows / home / end.
 Syntax roles (comment, string, keyword, …) map through the active pack’s ANSI
 palette via `theme_catalog.syntax_color_table`.
 
-## Desktop
+## Desktop and browser
 
-Desktop loads the core web UI; bundled builtins appear in Appearance → theme.
-Marquee default is **Kettle**. Saved themes in settings remain per-user snapshots;
-file-based custom packs (user dir) are the portable path shared with the CLI.
+Desktop loads the core web UI. On boot the sitting fetches:
+
+```http
+GET /api/themes?full=1
+```
+
+and merges packs into the Appearance → theme menu (marquee **Kettle** first,
+custom packs tagged). Saved color snapshots in `settings.json` still work; file
+packs in the user themes directory are the portable path shared with the CLI.
+
+| Route | Purpose |
+|-------|---------|
+| `GET /api/themes` | Catalog: default id, user_dir, theme metadata |
+| `GET /api/themes?full=1` | Same + `packs` map (web-shaped dark/light presets) |
+| `GET /api/themes/<id>` | One web-shaped pack |
 
 ## Web appearance vs pack files
 

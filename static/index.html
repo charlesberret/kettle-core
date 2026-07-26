@@ -3892,6 +3892,33 @@ function activeBuiltinTheme() {
   return BUILTIN_THEMES[id] || BUILTIN_THEMES.kettle;
 }
 
+/** Merge host-neutral packs from GET /api/themes?full=1 into BUILTIN_THEMES.
+ *  Keeps embedded themes.js as a fast fallback when the catalog is offline. */
+async function loadThemeCatalog(){
+  try {
+    const cat = await jget('/api/themes?full=1');
+    const packs = cat && cat.packs;
+    if (!packs || typeof packs !== 'object') return cat;
+    for (const [id, pack] of Object.entries(packs)) {
+      if (!pack || !pack.dark || !pack.light) continue;
+      BUILTIN_THEMES[id] = {
+        label: pack.label || id,
+        dark: pack.dark,
+        light: pack.light,
+        marquee: !!pack.marquee,
+        source: pack.source || 'bundled',
+      };
+    }
+    // Prefer catalog default when settings have no explicit theme yet.
+    if (!SETTINGS.builtinTheme && cat.default && BUILTIN_THEMES[cat.default]) {
+      SETTINGS.builtinTheme = cat.default;
+    }
+    return cat;
+  } catch (e) {
+    return null;
+  }
+}
+
 function builtinThemePreset() {
   const theme = activeBuiltinTheme();
   return theme[resolvedThemeMode()] || theme.dark;
@@ -3939,9 +3966,17 @@ function buildThemeControls(){
   if (!modeSel || !themeSel) return;
 
   modeSel.value = SETTINGS.themeMode || 'system';
-  themeSel.innerHTML = Object.entries(BUILTIN_THEMES).map(([id, t]) =>
-    `<option value="${esc(id)}"${id === (SETTINGS.builtinTheme || 'kettle') ? ' selected' : ''}>${esc(t.label)}</option>`
-  ).join('');
+  // Marquee kettle first, then the rest alphabetically by label.
+  const entries = Object.entries(BUILTIN_THEMES).sort((a, b) => {
+    if (a[0] === 'kettle') return -1;
+    if (b[0] === 'kettle') return 1;
+    return String(a[1].label || a[0]).localeCompare(String(b[1].label || b[0]));
+  });
+  themeSel.innerHTML = entries.map(([id, t]) => {
+    const star = (id === 'kettle' || t.marquee) ? ' ★' : '';
+    const src = t.source === 'user' ? ' (custom)' : '';
+    return `<option value="${esc(id)}"${id === (SETTINGS.builtinTheme || 'kettle') ? ' selected' : ''}>${esc(t.label || id)}${star}${src}</option>`;
+  }).join('');
 
   if (!modeSel.dataset.wired) {
     modeSel.dataset.wired = '1';
@@ -4728,6 +4763,8 @@ function wireAdmin(){
   try {
     phase = 'loading settings';
     try { SETTINGS = await jget('/api/settings'); } catch(e){ SETTINGS = {}; }
+    phase = 'loading theme catalog';
+    await loadThemeCatalog();
     phase = 'loading curator catalog';
     await refreshCuratorCatalog();
     applySettingsDefaults();
@@ -4735,6 +4772,8 @@ function wireAdmin(){
     migrateThemeSettings();
     applyTheme(); applySizes(); applyFonts();
     syncBehaviorInputs(); applyMdToggle(); wireAdmin();
+    // Rebuild Appearance theme list after catalog merge (wireAdmin may run first).
+    if (typeof buildThemeControls === 'function') buildThemeControls();
     applyCols(); applySplit();
     initDividers();
     if($('chatin')) $('chatin').placeholder = uic('chatPlaceholder', 'Chat with the Kettle agent…');
