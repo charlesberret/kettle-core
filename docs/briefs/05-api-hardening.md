@@ -1,7 +1,7 @@
 ---
 id: 05
 title: Harden the HTTP surface
-repo: setsweep-core
+repo: kettle-core
 touches: [server.py, static/index.html, API.md, test_server.py, plugin + desktop follow-ups]
 risk: run-critical
 depends-on: [01]
@@ -23,8 +23,8 @@ paths.
 ## Task
 
 1. **Per-boot token.** Generate a random token at bind, write it into
-   `~/.cache/setsweep/server.json` (mode 0600) beside the port — the discovery file the
-   viewports already read. Require it (header `X-Setsweep-Token`) on every `/api/`
+   `~/.cache/kettle/server.json` (mode 0600) beside the port — the discovery file the
+   viewports already read. Require it (header `X-Kettle-Token`) on every `/api/`
    request. The web frontend gets it via server-side injection into `index.html` at
    serve time (it is same-origin; a `<meta>` tag is enough). Desktop and plugin read the
    discovery file they already consume; CLI reads it the same way.

@@ -1,8 +1,8 @@
 ---
 id: 15
 title: Desktop distribution
-repo: setsweep-desktop
-touches: [package.json, forge config, scripts/, .github/workflows (new), main.js, setsweep-sidecar.spec]
+repo: kettle-desktop
+touches: [package.json, forge config, scripts/, .github/workflows (new), main.js, kettle-sidecar.spec]
 risk: normal
 depends-on: [01, 11]
 status: open
@@ -16,9 +16,9 @@ does not exist: no code signing or notarization (`osxSign:false` — a stranger'
 hits Gatekeeper's wall, and `install-app.sh`'s quarantine-strip only exists on the
 builder's machine); no updater; zip-only maker while maker-dmg sits installed but
 unwired; no CI — the currently installed app was built from a **dirty** core tree
-(version.json `setsweepDirty:true`), so bug reports may match no commit; the app is
+(version.json `kettleDirty:true`), so bug reports may match no commit; the app is
 317 MB with the 20 MB sidecar bundled **twice** (packagerConfig.ignore misses
-`^/resources`); `setsweep-sidecar.spec` hiddenimports lists only server/runtime/lineage/
+`^/resources`); `kettle-sidecar.spec` hiddenimports lists only server/runtime/lineage/
 kits — `curator`, `sweepkit`, `egress` bundle today by bytecode-scan luck, and core's
 habit of lazy function-level imports makes that luck expire silently; sidecar crash
 mid-session shows a dialog and quits, costing the user their window; darwin-arm64
@@ -30,7 +30,7 @@ strings for features that don't exist).
 1. **Sign + notarize:** Developer ID cert (the one external prerequisite), osxSign +
    osxNotarize in packagerConfig; wire maker-dmg.
 2. **CI:** GitHub Actions on tags — build sidecar, refuse to stamp when
-   `setsweepDirty:true` or when core isn't at a named ref, package, sign, notarize,
+   `kettleDirty:true` or when core isn't at a named ref, package, sign, notarize,
    attach DMG to a GitHub Release.
 3. **Updater:** update-electron-app against GitHub Releases (only meaningful after
    signing).

@@ -1,7 +1,7 @@
 ---
 id: 04
 title: Externalize the prompts
-repo: setsweep-core
+repo: kettle-core
 touches: [server.py, kits/prompts/ (new), test_server.py, test_kits.py]
 risk: run-critical
 depends-on: [01]

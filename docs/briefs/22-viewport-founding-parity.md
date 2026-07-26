@@ -1,7 +1,7 @@
 ---
 id: 22
 title: Viewport founding parity — web canonical, desktop inherits
-repo: setsweep-core
+repo: kettle-core
 touches: [static/index.html, docs/PLATFORMS.md, docs/UI.md, README founding section; plugin only if web catches up and Desk still diverges]
 risk: run-critical
 depends-on: [08, 21]
@@ -12,7 +12,7 @@ status: done
 
 As of 2026-07-22, the **plugin Desk** feels further ahead on founding new projects than
 the **desktop app**. That is not because Electron forked founding — desktop loads
-`setsweep-core/static/index.html` via the sidecar. The real split:
+`kettle-core/static/index.html` via the sidecar. The real split:
 
 | Path | Experience |
 |------|------------|
@@ -45,7 +45,7 @@ the sitting the way the Desk did. `docs/UI.md` covers type hierarchy; this brief
    - Honor `docs/UI.md` type roles for every new string (labels gray, no ad-hoc white).
 
 3. **Desktop:** no separate implementation. After web lands, rebuild or re-run sidecar
-   so the `.app` picks up `static/`. Document one line in setsweep-desktop README if the
+   so the `.app` picks up `static/`. Document one line in kettle-desktop README if the
    rebuild step is easy to miss.
 
 4. **Plugin:** only change if the web ritual now *exceeds* Desk and Desk would confuse
@@ -59,7 +59,7 @@ the sitting the way the Desk did. `docs/UI.md` covers type hierarchy; this brief
 ## Constraints
 
 - `static/index.html` is run-critical — suite + `node --check` / `test_frontend.py`
-  before and after; never edit from inside a live Setsweep sitting.
+  before and after; never edit from inside a live Kettle sitting.
 - Do not bind port 4242 from agent tooling.
 - Do not add an Electron-only founding dialog.
 - Do not break `GET/POST /api/interview`, `/api/propose`, `/api/found` contracts;
@@ -96,7 +96,7 @@ the sitting the way the Desk did. `docs/UI.md` covers type hierarchy; this brief
 
 | Step | Plugin | Web / desktop (after this brief) |
 |------|--------|----------------------------------|
-| Start core | auto-start `:4242` | `setsweep --web` / Electron sidecar |
+| Start core | auto-start `:4242` | `kettle --web` / Electron sidecar |
 | Add project | host folder + API | modal: **name + folder**; kit/depth/note under *more options*; name auto from path |
 | Interview | Desk founding pane | right pane + founding head; queue empty-state points to agent |
 | Proposal | editor + approve | same |

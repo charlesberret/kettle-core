@@ -1,4 +1,4 @@
-# Setsweep HTTP API
+# Kettle HTTP API
 
 Localhost contract for viewports (web UI, desktop sidecar, VS Code/Cursor plugin, future hosts).
 Authoritative implementation: `server.py`. Contract tests: `test_server.py`.
@@ -14,7 +14,7 @@ Authoritative implementation: `server.py`. Contract tests: `test_server.py`.
 | Mutations | **POST** only (no PUT/PATCH/DELETE) |
 | Errors | `{ "error": "<string>" }` with 400 / 403 / 404 / 500 |
 | Project scope | **`project` is required** on every project-scoped route (query or body). Omitting it returns 400 — it no longer defaults to the first registry entry. |
-| File fence | `safe_path()` — registered roots (+ optional `SETSWEEP_ALLOWED_ROOTS`) |
+| File fence | `safe_path()` — registered roots (+ optional `KETTLE_ALLOWED_ROOTS`) |
 
 ---
 
@@ -24,7 +24,7 @@ Authoritative implementation: `server.py`. Contract tests: `test_server.py`.
 
 ```json
 {
-  "app": "setsweep",
+  "app": "kettle",
   "version": "0.2.0",
   "api_version": 0,
   "desk_schema_version": 0,
@@ -39,7 +39,7 @@ Authoritative implementation: `server.py`. Contract tests: `test_server.py`.
 
 `version` is the core package version single-sourced from `pyproject.toml`.
 `api_version` identifies the localhost HTTP/NDJSON contract;
-`desk_schema_version` identifies the durable `.setsweep/` file format. The
+`desk_schema_version` identifies the durable `.kettle/` file format. The
 contract versions are integers. Version `0` means pre-stable: viewports should
 still declare which values they support and report skew clearly instead of
 guessing at an unfamiliar route or file shape. A move to `1` is the explicit
@@ -66,7 +66,7 @@ Single source of truth for desk/settings model UIs:
 - `visible` = checked ∩ CLI-on-PATH, always including the active chat model (`forced: true` when needed).
 
 - Set on **every** bind path (`start_server` and `main` / sidecar) via `_record_bind`.
-- Informational cache: `~/.cache/setsweep/server.json` — `{ pid, port, started, url, projects, settings }`. Ping is authoritative.
+- Informational cache: `~/.cache/kettle/server.json` — `{ pid, port, started, url, projects, settings }`. Ping is authoritative.
 - Circuit-breaker: a second launch on 4242 defers unless the predecessor is stale or `--replace` is passed.
 
 ### Registry paths (which desk am I talking to?)
@@ -74,11 +74,12 @@ Single source of truth for desk/settings model UIs:
 Resolution order (`resolve_projects_path`):
 
 1. `$DESK_PROJECTS` — explicit (desktop sidecar always sets this)
-2. User registry if it exists — macOS `~/Library/Application Support/Setsweep/projects.json`, else `~/.config/setsweep/projects.json`
-3. Repo-local `<setsweep-core>/projects.json` if present (dev checkout)
-4. Otherwise the user path (first write creates the shared registry)
+2. Kettle user registry if it exists — macOS `~/Library/Application Support/Kettle/projects.json`, else `~/.config/kettle/projects.json`
+3. Existing legacy Setsweep user registry, used in place without splitting state
+4. Repo-local `<kettle-core>/projects.json` if present (development checkout)
+5. Otherwise the Kettle user path (first write creates the shared registry)
 
-Desktop always points `DESK_PROJECTS` at Application Support. After the `.app` has run once, CLI `setsweep` without an override prefers that same file when present — one desk across viewports.
+Desktop always points `DESK_PROJECTS` at Application Support. After the `.app` has run once, CLI `kettle` without an override prefers that same file when present — one desk across viewports.
 
 `GET /api/ping` and `GET /api/projects` expose the live path (`projects` / `registry`).
 
@@ -86,9 +87,9 @@ Desktop always points `DESK_PROJECTS` at Application Support. After the `.app` h
 
 | Viewport | Port behavior |
 |----------|---------------|
-| CLI `setsweep --web` | Prefers **4242** (circuit-breaker / `--replace`) |
+| CLI `kettle --web` | Prefers **4242** (circuit-breaker / `--replace`) |
 | Desktop `.app` | Prefers **4242** when free; otherwise ephemeral |
-| Plugin | Tries `setsweep.baseUrl` → `server.json` → `:4242`, each validated by ping |
+| VS Code / Cursor | Tries `kettle.serverUrl` → `server.json` → `:4242`, each validated by ping |
 
 When desktop falls back to an ephemeral port, the plugin finds it via `server.json` (last successful bind). Prefer one live core when possible — two desks (repo registry vs Application Support) can diverge.
 
@@ -179,8 +180,8 @@ path that arms a turn.
 |------|---------|--------|-------------------|
 | `interview` | founding interview (`/api/interview`) | no | **none** (tool-less; core survey snapshot) |
 | `chat` | — (reserved) | yes (`acceptEdits`) | Read/Glob/Grep/Edit/Write + narrow shell |
-| `agent` | review chat (`/api/chat`, `setsweep chat`) | yes (`acceptEdits`) | Edit/Write + everyday shell kit (`mv`/`cp`) |
-| `sweep` | founding/found, sweep (`/api/found`, `/api/sweep`, `setsweep found`) | yes (`acceptEdits`) | Edit/Write + `mkdir`/`mv`/`cp`/`rm`/`tee` |
+| `agent` | review chat (`/api/chat`, `kettle chat`) | yes (`acceptEdits`) | Edit/Write + everyday shell kit (`mv`/`cp`) |
+| `sweep` | founding/found, sweep (`/api/found`, `/api/sweep`, `kettle found`) | yes (`acceptEdits`) | Edit/Write + `mkdir`/`mv`/`cp`/`rm`/`tee` |
 
 ### What a tier is — and is not
 
@@ -191,7 +192,7 @@ arbitrary paths, as do `sed` and `awk` in the `agent` tier. So every write-beari
 respect, not a boundary the system enforces.
 
 Read that plainly: a curator turn *could* write outside its project root. Nothing today stops
-it. `safe_path` fences Setsweep's own **HTTP file routes** (`/api/file`, `/api/save`), which is
+it. `safe_path` fences Kettle's own **HTTP file routes** (`/api/file`, `/api/save`), which is
 a different surface from the tools a spawned curator CLI holds.
 
 `python`/`python3` were removed from the `sweep` tier on 2026-07-20 — no prompt ever referenced
@@ -216,7 +217,7 @@ provider **actually** guarantees under the argv `runtime.tools_argv` builds:
 | grok     | ✅ tool-less (`--permission-mode plan`, no Bash) | ❌ | ✅ | ✅ | ❌ (bypassPermissions + open Bash on chat/sweep) |
 
 **Founding interview (`/api/interview`)** is the trust ceremony and is **tool-less for every
-provider**: core runs a deterministic survey (`survey.py` → `.setsweep/runtime/survey.json`)
+provider**: core runs a deterministic survey (`survey.py` → `.kettle/runtime/survey.json`)
 and injects it into the first turn. The curator only rephrases the snapshot into a plain
 opening + confirmation card — no shell, no writes. Users never see provider capability
 essays for founding.

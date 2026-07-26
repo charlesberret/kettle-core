@@ -1,7 +1,7 @@
 ---
 id: 21
 title: First-run design pass (web)
-repo: setsweep-core
+repo: kettle-core
 touches: [static/index.html (modal styles, #setupmodal, #addmodal), server.py (launch hint only)]
 risk: run-critical
 depends-on: [08]
@@ -10,7 +10,7 @@ status: done
 
 ## Context
 
-Bare `setsweep` launches the web client, and the first thing a new user meets is the "set up Setsweep" modal (`#setupmodal`). From the 2026-07-21 plugin-sitting handoff, with the user's own read: it is functionally right — provider selection, per-role models, and an honest "Setsweep never stores API keys" line — but it looks like a debugging form. The layout is dense, the label column crowds the controls ("curatorial setup", "session chat"), the selects are stock and unstyled, and a heavy block of prose sits above it.
+Bare `kettle` launches the web client, and the first thing a new user meets is the "set up Kettle" modal (`#setupmodal`). From the 2026-07-21 plugin-sitting handoff, with the user's own read: it is functionally right — provider selection, per-role models, and an honest "Kettle never stores API keys" line — but it looks like a debugging form. The layout is dense, the label column crowds the controls ("curatorial setup", "session chat"), the selects are stock and unstyled, and a heavy block of prose sits above it.
 
 This is the same argument as the founding interview, applied one screen earlier. The setup modal is the product's actual first impression, and right now it undersells a tool whose whole thesis is careful, deliberate work. Before this goes on GitHub for strangers, the first screen has to read as a product.
 
@@ -24,7 +24,7 @@ Tighten the `#setupmodal` copy. Keep the "never stores API keys" line verbatim �
 
 Verify the gate: the setup modal should not reappear once settings are valid. The handoff flags this as a possible bug, so confirm the current behavior before changing anything, then fix it if it is real.
 
-Add the launch hint (P2, one line in `server.py`): after a bare launch, print the CLI viewport alongside the URL — `CLI: setsweep projects | add | queue …` — so the half of the product that has no window is discoverable.
+Add the launch hint (P2, one line in `server.py`): after a bare launch, print the CLI viewport alongside the URL — `CLI: kettle projects | add | queue …` — so the half of the product that has no window is discoverable.
 
 Bring every modal you touch up to the accessibility floor: focus trap, `aria-modal`, and Esc-to-close.
 

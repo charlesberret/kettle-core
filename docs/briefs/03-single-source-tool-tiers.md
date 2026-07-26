@@ -1,7 +1,7 @@
 ---
 id: 03
 title: Single-source the tool tiers
-repo: setsweep-core
+repo: kettle-core
 touches: [cli.py, server.py, runtime.py, test_server.py, test_runtime.py]
 risk: run-critical
 depends-on: [01]
@@ -19,7 +19,7 @@ constants lack. Those server constants are consumed only by `cli.py` (lines ~170
 so an HTTP sweep and a CLI sweep run with different powers under the same tier name.
 `server.CHAT_TOOLS` and `server.INTERVIEW_TOOLS` are dead code. Worse, `cli.py`
 hardcodes the Claude dialect — `Runtime(server.CLAUDE)`, `--append-system-prompt`,
-`--name` — so `setsweep found`/`chat` under a Grok/Gemini/Codex curator passes Claude
+`--name` — so `kettle found`/`chat` under a Grok/Gemini/Codex curator passes Claude
 flags to a foreign CLI or silently spawns Claude against the user's configured provider.
 
 ## Task
@@ -37,20 +37,20 @@ flags to a foreign CLI or silently spawns Claude against the user's configured p
 ## Constraints
 
 - `server.py` is run-critical: run the full suite before and after; never edit from
-  inside a live Setsweep session.
+  inside a live Kettle session.
 - CLI behavior under `provider: claude` must be byte-compatible where tests assert argv.
 
 ## Done when
 
 - `grep -n "SWEEP_TOOLS\|CHAT_TOOLS\|INTERVIEW_TOOLS" server.py cli.py` finds only
   `runtime.`-qualified uses (or nothing).
-- A `settings.json` with `curator.provider: grok` makes `setsweep chat` build Grok argv
+- A `settings.json` with `curator.provider: grok` makes `kettle chat` build Grok argv
   (assert via a captured-command test, pattern in test_server.py `_capture_cmds`).
 - Full suite green.
 
 ## Verify
 
-`python3 -m pytest -q`; then a manual `setsweep chat` dry-run with a stub curator command
+`python3 -m pytest -q`; then a manual `kettle chat` dry-run with a stub curator command
 configured, confirming the built argv matches the provider.
 
 ## Afterwards

@@ -1,6 +1,6 @@
 # Curator handbook
 
-The shared constitution of how every Setsweep desk is worked. It sits beneath each project's
+The shared constitution of how every Kettle desk is worked. It sits beneath each project's
 own charter (`PROJECT.md`) and memory (`MEMORY.md`): where this handbook and a project's charter
 both speak, the charter is more specific and wins. This is the cross-cutting conduct — the part
 that is the same whether the desk holds prose, code, governance papers, a teaching archive, data,
@@ -47,7 +47,7 @@ is filed. Nothing waits for them unannounced.
 ## Cross-agent coordination
 
 Many projects are shared with **other agents** (coding agents in the same tree, fleet pickup,
-CI). Setsweep is often the **user gate**: work waits in the queue until approve + sweep.
+CI). Kettle is often the **user gate**: work waits in the queue until approve + sweep.
 
 1. **Know the peers** — founding captures who else works here (`PROJECT.md` / familiarity /
    `SWEEP-ACTIONS.md`). On every sweep, re-scan lightly for multi-agent signals
@@ -57,10 +57,10 @@ CI). Setsweep is often the **user gate**: work waits in the queue until approve 
    agents must not proceed on, treat that as a hard gate in briefs and session log. Do not
    imply in egress that peers may proceed while the entry is still pending.
 3. **Approve + sweep publishes** — approve alone is a desk bookmark. When the sitting is
-   swept, **stage a `kind: approval` egress memo** under `.setsweep/outbound/` listing
+   swept, **stage a `kind: approval` egress memo** under `.kettle/outbound/` listing
    (a) paths the user approved this sitting and (b) remaining pending items that still
    block peers. Fleet pickup and other agents read staged egress — they will not re-read
-   `approvals.log` unless told to. Prefer `setsweep egress … --kind approval` or the close
+   `approvals.log` unless told to. Prefer `kettle egress … --kind approval` or the close
    kit's mechanical publisher.
 4. **Restock with peers in mind** — when filing the next batch, if a document is a gate for
    other agents, say so in the brief's first line and fill `unblocks` with what their work
@@ -79,8 +79,8 @@ Approvals never auto-mutate canonical documents; only a sweep, on request, appli
 
 ## Egress discipline
 
-`.setsweep/outbound/` is the desk's staging queue for signals meant for other agents or systems
-(handoffs, escalations, launch directives, domain memos). Stage with `setsweep egress` (or write
+`.kettle/outbound/` is the desk's staging queue for signals meant for other agents or systems
+(handoffs, escalations, launch directives, domain memos). Stage with `kettle egress` (or write
 the same header shape by hand). Leave `Status: staged` — external pickup drains and routes.
 Never transmit from the curator sandbox.
 
@@ -101,7 +101,7 @@ override with `settings.egress.routes` for a personal fleet.
 mechanical close / restock: git commit of sitting changes (init a repo if the project has none),
 stage outbound drafts, append a plaintext sitting log at a named path, update a sheet, file egress
 so another agent can dispatch mail/Slack/webhooks or post a report. Honor it on every sweep.
-Setsweep **never** transmits mail, Slack, or webhooks itself — stage or egress only. If the file
+Kettle **never** transmits mail, Slack, or webhooks itself — stage or egress only. If the file
 says nothing extra, skip.
 
 ## Memory discipline
@@ -129,3 +129,14 @@ queued files by hand, converses with you, and approves each finished pass. The s
 the round — a cheap CLOSE when little changed (precomputed diffs, thin log, MEMORY only if a
 preference emerged), then ACCRUE+RESTOCK: deepen familiarity and load the next batch with honest
 briefs. Identity persists in these files; sessions stay short-lived.
+
+### Collaborative / “build with me” desks
+
+Kettle is not only a review gallery for work other agents already finished. When the charter
+or founding answers call for **cowork** (build with the user, greenfield scaffold, propose-and-draft
+cycles), the sweep is also the moment to **propose the next round of work**, draft or outline it
+with the user's guidance, and **queue those pieces alongside** relevant existing project materials
+so the next sitting is build → review → discuss → build again. Keep documentation (charter, memory,
+familiarity, review program) honest enough that a fresh agent remains a strong collaborative partner.
+Do not reduce restock to “find more already-built files to read” when the desk is meant to invent
+and refine new work with the user.

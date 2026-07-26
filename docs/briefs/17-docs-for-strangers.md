@@ -1,7 +1,7 @@
 ---
 id: 17
 title: Docs for strangers
-repo: setsweep-core
+repo: kettle-core
 touches: [README.md, INSTALL.md, API.md, kits/README.md, CLAUDE.md, ARCHITECTURE.md (new), _Status.md]
 risk: normal
 depends-on: [10, 11]
@@ -15,9 +15,9 @@ architecture document a newcomer needs (`.local/DESIGN.md`) is gitignored, yet t
 docs cite it — dangling references in any clone. Vocabulary that gates comprehension
 ("sitting", "ledger", "desk") is used everywhere and defined nowhere. The drift list is
 concrete: `kits/README.md` says "four kinds" then lists five; `README.md` documents a
-`setsweep sweep-status|close` command where the real one is `sweep-close`; `INSTALL.md`
+`kettle sweep-status|close` command where the real one is `sweep-close`; `INSTALL.md`
 shows 5 of 14 subcommands; `CLAUDE.md` lists 6 of 8 test files; the
-durable-vs-runtime desk split (`.setsweep/runtime/` must be excluded from file sync)
+durable-vs-runtime desk split (`.kettle/runtime/` must be excluded from file sync)
 lives only in a `server.py` docstring while README describes pre-split paths;
 `kits/frameworks/egress.md`'s header template omits the `approval` kind its own table
 includes; the lineage subsystem — a headline feature — has no public documentation at
@@ -32,7 +32,7 @@ all; every cross-repo pointer is a Charles-local path; no doc gives a clone URL.
    Not a history document — the current shape, ~150 lines.
 2. **Glossary** in README: sitting, desk, user, curator, founding, kit, brief,
    approve-vs-sweep, egress, ledger, viewport. One crisp sentence each.
-3. **Quickstart**: the ten-minute path (install → `setsweep add` → founding interview →
+3. **Quickstart**: the ten-minute path (install → `kettle add` → founding interview →
    edit proposal → approve → first sitting → sweep), with 2–3 screenshots.
 4. **CLI reference**: generate from `cli.py`'s argparse table (the help strings already
    exist); all 14 subcommands.

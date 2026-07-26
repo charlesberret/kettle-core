@@ -260,7 +260,7 @@ def publish_approval_egress(proj: dict, entries: list[dict] | None = None) -> di
 
     day = date.today().isoformat()
     lines = [
-        f"User sitting closed via Setsweep for project `{proj.get('id')}` ({proj.get('name')}).",
+        f"User sitting closed via Kettle for project `{proj.get('id')}` ({proj.get('name')}).",
         "",
         "## Approved this sitting (peers may treat these as cleared)",
     ]
@@ -289,8 +289,8 @@ def publish_approval_egress(proj: dict, entries: list[dict] | None = None) -> di
 
     lines.extend([
         "",
-        "Source of truth on the desk: `.setsweep/runtime/queue.json` and "
-        "`.setsweep/runtime/approvals.log`. This memo is the fleet-readable summary "
+        "Source of truth on the desk: `.kettle/runtime/queue.json` and "
+        "`.kettle/runtime/approvals.log`. This memo is the fleet-readable summary "
         "after approve+sweep.",
     ])
     body = "\n".join(lines)
@@ -373,6 +373,6 @@ def status_for_prompt(proj: dict) -> str:
         "unchanged_ids": [u["id"] for u in st["unchanged"]],
     }
     return (
-        "CLOSE KIT STATUS (from setsweep sweepkit — trust this; do not re-diff to discover it):\n"
+        "CLOSE KIT STATUS (from kettle sweepkit — trust this; do not re-diff to discover it):\n"
         + json.dumps(slim, indent=2)
     )

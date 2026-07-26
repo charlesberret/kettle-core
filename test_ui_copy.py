@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Shared UI copy must stay aligned across web (core) and plugin Desk.
+"""Shared UI copy must stay aligned across web (core) and VS Code Desk.
 
 Canonical: static/ui-copy.js
-Mirror:    ../setsweep-plugin/packages/vscode/src/uiCopy.ts (if present)
+Mirror:    ../kettle-vscode/src/uiCopy.ts (if present)
 """
 
 from __future__ import annotations
@@ -13,9 +13,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 CORE_JS = ROOT / "static" / "ui-copy.js"
-PLUGIN_TS = (
-    ROOT.parent / "setsweep-plugin" / "packages" / "vscode" / "src" / "uiCopy.ts"
-)
+VSCODE_TS = ROOT.parent / "kettle-vscode" / "src" / "uiCopy.ts"
 
 # Keys every sitting surface must define
 REQUIRED = {
@@ -64,23 +62,23 @@ class UiCopyCatalog(unittest.TestCase):
         missing = REQUIRED - set(keys)
         self.assertFalse(missing, f"core ui-copy missing keys: {missing}")
         self.assertEqual(keys.get("streamIdle"), "Chat stream idle")
-        self.assertIn("Setsweep agent", keys.get("chatPlaceholder", ""))
+        self.assertIn("Kettle agent", keys.get("chatPlaceholder", ""))
 
-    def test_plugin_mirror_matches_when_present(self):
-        if not PLUGIN_TS.is_file():
-            self.skipTest("plugin tree not checked out next to core")
+    def test_vscode_mirror_matches_when_present(self):
+        if not VSCODE_TS.is_file():
+            self.skipTest("VS Code tree not checked out next to core")
         core = _keys_from_js(CORE_JS.read_text(encoding="utf-8"))
-        plugin = _keys_from_ts(PLUGIN_TS.read_text(encoding="utf-8"))
+        vscode = _keys_from_ts(VSCODE_TS.read_text(encoding="utf-8"))
         self.assertEqual(
             set(core),
-            set(plugin),
-            "ui-copy key sets differ between core and plugin — update both files",
+            set(vscode),
+            "ui-copy key sets differ between core and VS Code - update both files",
         )
         for k in sorted(core):
             self.assertEqual(
                 core[k],
-                plugin[k],
-                f"ui-copy mismatch for {k!r}:\n  core:   {core[k]!r}\n  plugin: {plugin[k]!r}",
+                vscode[k],
+                f"ui-copy mismatch for {k!r}:\n  core:   {core[k]!r}\n  vscode: {vscode[k]!r}",
             )
 
 

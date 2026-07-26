@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Status/compatibility checker with an optional serial Setsweep family test run."""
+"""Status/compatibility checker with an optional serial Kettle family test run."""
 
 from __future__ import annotations
 
@@ -57,7 +57,7 @@ def core_version(core: Repo) -> str:
 
 
 def contract_versions(core: Repo) -> tuple[int, int]:
-    path = core.path / "setsweep_contract.py"
+    path = core.path / "kettle_contract.py"
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     found: dict[str, int] = {}
     for node in tree.body:
@@ -119,13 +119,20 @@ def parse_args() -> argparse.Namespace:
     siblings = core_default.parent
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--core", type=Path, default=core_default)
-    parser.add_argument("--desktop", type=Path, default=siblings / "setsweep-desktop")
-    parser.add_argument("--plugin", type=Path, default=siblings / "setsweep-plugin")
+    parser.add_argument("--desktop", type=Path, default=siblings / "kettle-desktop")
+    parser.add_argument(
+        "--vscode",
+        "--plugin",
+        dest="vscode",
+        type=Path,
+        default=siblings / "kettle-vscode",
+        help="VS Code/Cursor adapter checkout (the --plugin spelling is deprecated)",
+    )
     parser.add_argument("--require-clean", action="store_true")
     parser.add_argument(
         "--run-tests",
         action="store_true",
-        help="run core, desktop, and plugin tests serially after compatibility checks",
+        help="run core, desktop, and VS Code tests serially after compatibility checks",
     )
     return parser.parse_args()
 
@@ -135,35 +142,35 @@ def main() -> int:
     repos = [
         Repo("core", args.core.resolve(), (sys.executable, "-m", "pytest")),
         Repo("desktop", args.desktop.resolve(), ("npm", "test")),
-        Repo("plugin", args.plugin.resolve(), ("npm", "test")),
+        Repo("vscode", args.vscode.resolve(), ("npm", "test")),
     ]
     missing = [repo for repo in repos if not repo.path.is_dir() or not is_checkout(repo)]
     if missing:
-        print("missing Setsweep Git checkouts:", file=sys.stderr)
+        print("missing Kettle Git checkouts:", file=sys.stderr)
         for repo in missing:
             print(f"  {repo.name}: {repo.path}", file=sys.stderr)
         return 2
 
-    core, desktop, plugin = repos
+    core, desktop, vscode = repos
     try:
         versions = {
             "core": core_version(core),
             "desktop": package_version(desktop, "package.json"),
-            "plugin": package_version(plugin, "packages/vscode/package.json"),
+            "vscode": package_version(vscode, "package.json"),
         }
         api_version, desk_version = contract_versions(core)
     except (KeyError, OSError, TypeError, ValueError, json.JSONDecodeError, tomllib.TOMLDecodeError) as exc:
         print(f"family metadata error: {exc}", file=sys.stderr)
         return 2
 
-    print("Setsweep repository family")
+    print("Kettle repository family")
     for repo in repos:
         print(status_line(repo, versions[repo.name]))
 
     print()
     compatibility_specs = (
-        ("desktop", desktop.path / "setsweep-compatibility.json"),
-        ("plugin", plugin.path / "packages/vscode/setsweep-compatibility.json"),
+        ("desktop", desktop.path / "kettle-compatibility.json"),
+        ("vscode", vscode.path / "kettle-compatibility.json"),
     )
     compatible = True
     print(f"contracts core(api={api_version}, desk={desk_version})")

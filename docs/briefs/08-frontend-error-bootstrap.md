@@ -1,7 +1,7 @@
 ---
 id: 08
 title: Frontend error bootstrap
-repo: setsweep-core
+repo: kettle-core
 touches: [static/index.html, static/ (new small js file), test_server.py]
 risk: run-critical
 depends-on: [01]
@@ -24,7 +24,7 @@ has zero automated verification.
 
 1. Create a tiny first script (either `static/boot.js` or a separate small inline
    `<script>` placed before `themes.js`): registers `window.onerror` and
-   `unhandledrejection` handlers that paint a visible banner ("Setsweep hit a script
+   `unhandledrejection` handlers that paint a visible banner ("Kettle hit a script
    error — [reload] [copy details]") using only DOM primitives it defines itself. It
    must not reference anything from the main script.
 2. Make `unhandledrejection` show that banner, not just log.

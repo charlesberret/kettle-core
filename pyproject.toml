@@ -3,7 +3,7 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "setsweep"
+name = "kettle"
 version = "0.2.0"
 description = "A review instrument: agents prepare and propagate; the human reviewer reads and rules. Three-pane app or CLI."
 readme = "README.md"
@@ -12,7 +12,25 @@ license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "Charles Berret" }]
 keywords = ["review", "agents", "claude", "editor", "curation", "inbox"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Operating System :: MacOS",
+  "Operating System :: POSIX",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: Software Development",
+]
 dependencies = []                  # the server and the CLI viewport are stdlib-only
+
+[project.urls]
+Homepage = "https://github.com/charlesberret/kettle"
+Repository = "https://github.com/charlesberret/kettle-core"
+Issues = "https://github.com/charlesberret/kettle-core/issues"
+Changelog = "https://github.com/charlesberret/kettle-core/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 dev = [
@@ -22,8 +40,12 @@ dev = [
 ]
 
 [project.scripts]
+kettle = "kettle_main:main"
+kettle-watch = "kettle_watch:main"   # the inbox folder-watch — run on a schedule (cron/timer)
+# Transitional aliases. Keep old installations and automation working while the
+# public product moves to Kettle; remove only in a separately announced release.
 setsweep = "setsweep_main:main"
-setsweep-watch = "setsweep_watch:main"   # the inbox folder-watch — run on a schedule (cron/timer)
+setsweep-watch = "setsweep_watch:main"
 
 [tool.setuptools]
 # Flat layout: explicit module list disables auto-discovery (which would choke on the
@@ -32,7 +54,7 @@ setsweep-watch = "setsweep_watch:main"   # the inbox folder-watch — run on a s
 # tree restructured under a package + package-data for static/ — deferred (see INSTALL.md).
 # After adding a name here: reinstall editable (`pip install -e .`) or the finder MAPPING
 # goes stale and the CLI raises ModuleNotFoundError for the new module.
-py-modules = ["setsweep_main", "setsweep_contract", "server", "runtime", "lineage", "cli", "kits", "curator", "sweepkit", "egress", "survey", "setsweep_watch"]
+py-modules = ["kettle_main", "kettle_contract", "server", "runtime", "lineage", "cli", "kits", "curator", "sweepkit", "egress", "survey", "kettle_watch", "setsweep_main", "setsweep_contract", "setsweep_watch"]
 
 [tool.ruff]
 line-length = 100

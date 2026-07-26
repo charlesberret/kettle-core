@@ -1,4 +1,10 @@
-# Agent briefs — ready-to-run work packages
+# Historical engineering briefs
+
+These work packages document the Setsweep-era engineering path that produced
+Kettle Core. They are retained as design evidence and implementation context,
+not as the current public backlog. Start with
+[`ROADMAP.md`](../../ROADMAP.md) and confirm every brief's premise against the
+live tree before reusing it.
 
 A brief is a self-contained work order for an autonomous agent session (or a focused
 human sitting): enough context to start cold, a precise task, the constraints that keep
@@ -16,20 +22,20 @@ One brief per session; finish or hand off — never leave a brief half-applied a
 Frontmatter: `id`, `title`, `repo`, `touches` (files), `risk` (`normal` | `run-critical`
 — the latter means the file list includes something whose breakage takes the live app
 down; re-read the Invariants section of `CLAUDE.md` before editing), `depends-on` (brief
-ids that must land first), `status` (`open` | `in-progress` | `done`).
+ids that must land first), `status` (`open` | `in-progress` | `done`). Status is
+historical and does not supersede the public roadmap.
 
 Body: **Context** (why; what the surveys found), **Task** (what to do), **Constraints**
 (what must not happen), **Done when** (checkable), **Verify** (the commands/actions that
-prove it), **Afterwards** (what to update: `_Status.md`, `API.md`, this index, the brief's
-own `status`).
+prove it), **Afterwards** (what was expected to be updated at the time).
 
 ## The rules that bind every brief
 
 - Never bind, signal, or curl port 4242 — that is the live window's port. Tests boot on
   ephemeral ports (`start_server(0)`), as `test_server.py` already does.
-- Run-critical files (`server.py`, `static/index.html`, `setsweep_main.py`,
+- Run-critical files (`server.py`, `static/index.html`, `kettle_main.py`,
   `projects.json`, `settings.json`) get edited only by an external session that runs the
-  tests before and after — never from inside Setsweep itself.
+  tests before and after — never from inside Kettle itself.
 - DESIGN §5 invariants are non-negotiable: localhost-only, file-fence on every route,
   append-only records never auto-mutated, user's words beat files, memory is
   distillation, every automated actor beats a healthbeacon.
@@ -57,15 +63,14 @@ own `status`).
 | 15 | [Desktop distribution](15-desktop-distribution.md) | desktop | 3 | 01, 11 |
 | 16 | [Extract the shared core-client](16-extract-core-client.md) | plugin | 3 | 02 |
 | 17 | [Docs for strangers](17-docs-for-strangers.md) | core | 4 | 10, 11 |
-| 18 | [Metrics beacons + setsweep doctor](18-metrics-and-doctor.md) | core | 5 | 11 |
+| 18 | [Metrics beacons + kettle doctor](18-metrics-and-doctor.md) | core | 5 | 11 |
 | 19 | [Enforce the agent fence](19-enforce-the-fence.md) | core | 6 | 03, 06 |
-| 20 | [One setsweep — install determinism](20-install-determinism.md) | core | 3 | — |
+| 20 | [One kettle — install determinism](20-install-determinism.md) | core | 3 | — |
 | 21 | [First-run design pass (web)](21-first-run-design.md) | core | 4 | 08 |
 | 22 | [Viewport founding parity](22-viewport-founding-parity.md) | core | 4 | 08, 21 |
 | 23 | [Viewport ritual regression bar](23-viewport-ritual-regression-bar.md) | core + plugin | 4 | 22 |
 
-Status board: a brief's `status` frontmatter is the truth; this table stays status-free
-so it never lies. `grep -l "status: open" docs/briefs/*.md` is the live to-do list.
+The current roadmap, issues, and live implementation are authoritative.
 
 **Parity rule:** founding and sitting chrome changes update
 [`docs/PLATFORMS.md`](../PLATFORMS.md) ritual matrix the same day. Type/color chrome:

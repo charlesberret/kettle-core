@@ -1,282 +1,91 @@
-# Setsweep — Roadmap
+# Kettle Core roadmap
 
-*Written 2026-07-17 from a full-system survey of the three repos (eleven subsystem audits;
-methods and raw findings summarized in `docs/` and the briefs). This is the master plan:
-what Setsweep is, what it is becoming, and the ordered work between here and a version
-strangers can use. Detail lives in the companion documents — this file is the spine.*
+Kettle is a local-first review instrument for human-agent work. Agents prepare
+and propagate; the user reads and rules. The roadmap protects that division of
+labor while making the instrument easier to install, trust, and extend.
 
-| Companion | Carries |
-|---|---|
-| [`docs/PLATFORMS.md`](docs/PLATFORMS.md) | Viewport expansion: adapters, desktop app, remote access |
-| [`docs/ENGINEERING.md`](docs/ENGINEERING.md) | Test strategy, CI, debugging systems, code health |
-| [`docs/RELEASE.md`](docs/RELEASE.md) | Measurement, stability/usability gates, the release ladder |
-| [`docs/briefs/`](docs/briefs/) | Ready-to-run work packages for autonomous agent sessions |
+The public product and repository map lives at
+[charlesberret/kettle](https://github.com/charlesberret/kettle). This document
+covers the core only.
 
-## North star
+## Current baseline
 
-Setsweep is a **review instrument for human–agent coworking**. Agents prepare and
-propagate; the user reads and rules. As agents write more of every codebase and corpus,
-the scarce resource is no longer production — it is deliberate human judgment. Setsweep
-concentrates that judgment: a curator pays the context cost once and delivers it pre-packed
-(the brief), the user rules once, and the ruling is applied outward mechanically (the
-sweep). Nothing asks the user to re-derive what an agent already knows; nothing lets an
-agent rule on what is the user's to rule.
+- Python 3.11+ standard-library runtime
+- First-class CLI and reference browser desk
+- Localhost API with explicit core, API, and desk-schema identity
+- Durable `.kettle/` desks with non-destructive `.setsweep/` fallback
+- Curator adapters for Claude, Codex, Gemini, and Grok CLIs
+- Project-root file fence, deterministic founding survey, lineage, egress, and
+  mechanical close helpers
+- VS Code/Cursor and macOS consumers validated through compatibility manifests
 
-What it could become: **the standing desk between a person and every fast-moving project
-they steward** — code, writing, records, knowledge, inboxes — with the person's attention
-routed to exactly the decisions that need a human, an auditable trail of who decided what,
-and viewports wherever the person already works (browser, editor, desktop, notes app).
+Kettle remains pre-1.0. The desk format and API are versioned, but the integer
+contracts are still at `0`.
 
-**Strategic bets** the rest of this roadmap honors:
+## Now: trustworthy public alpha
 
-1. **The desk is files.** All state in `.setsweep/` — human-readable, sync-friendly, no
-   database. Any frontend renders the same desk; a desk with no app installed is still
-   legible. (DESIGN §3.)
-2. **Viewports over a local core.** One localhost server, many thin clients. The wire
-   contract (`API.md`) is the product's real platform surface.
-3. **Provider-agnostic curation.** The curator is whichever agent CLI the user runs —
-   Claude, Codex, Gemini, Grok — behind one narrow adapter (`runtime.py`).
-4. **Attribution as a feature.** `agent · user · unattributed`, never guessed
-   (`lineage.py`). "Who decided this?" is a query, not an archaeology dig. No adjacent
-   tool offers this; it is a headline, not a footnote.
-5. **The user's hand is the only authority.** Approve is a bookmark; sweep is the
-   commit; egress stages and never transmits. These asymmetries are the product.
-6. **Invariants survive rewrites.** DESIGN §5 verbatim: localhost-only, file-fence on
-   every route, append-only records never auto-mutated, user's words beat the files,
-   memory is distillation, every automated actor beats a healthbeacon.
-7. **The fence should be real.** Today the project-root boundary is enforced by prompt,
-   not architecture — a tool allowlist names binaries, it cannot bound where they write
-   (see `API.md`, "What a tier is — and is not"). The ambition is containment as a
-   property of the system: *point Setsweep at a folder and it cannot touch anything
-   outside it.* No adjacent agent tool makes that claim, and it is the natural completion
-   of the division of labor this product exists to enforce. Ladder and first increment:
-   [brief 19](docs/briefs/19-enforce-the-fence.md).
+### Installation
 
-## Where it stands (2026-07-25, honest)
+- Restructure the flat modules into a package with bundled `static/` and `kits/`
+  resources.
+- Verify wheel and `pipx` installation in CI while keeping editable installs
+  excellent for contributors.
+- Expand `kettle doctor` to cover provider availability, registry selection,
+  desk integrity, runtime discovery, and legacy migration state.
 
-**Strong:** stdlib-only core with 309 tests at this checkpoint; file fence and circuit breaker solid;
-provider-neutral stream normalization; kit system; lineage; egress; install determinism
-(`~/.setsweep-venv`, `setsweep doctor` seed); de-personalized defaults; public docs
-(`ARCHITECTURE.md`, README glossary/quickstart, `docs/UI.md` type hierarchy); core-owned
-package/API/desk-schema identity on `/api/ping`; a structural reference-web ritual bar; three
-viewports (web, Electron desktop, VS Code/Cursor plugin) plus CLI. Plugin source at
-v0.6.65 auto-starts the live core on `:4242`; packaged-install verification is still a
-brief-23 gate. Desktop loads the same `static/index.html` as the
-web — no forked sitting UI.
+### Security
 
-**Landed since the 2026-07-17 snapshot (briefs):** 01, 03, 04, 06, 07, 08, 09, 10, 14,
-17, 20, 21 (and UI type-system follow-on). Working tree on `codex/shore-up-system` is
-committed in batches; plugin `main` carries auto-start + Desk sitting.
+- Add explicit Host and Origin validation to the localhost HTTP surface.
+- Design a per-boot authentication token shared through the local discovery
+  record.
+- Replace any provider permission that is only prompt-fenced with an enforceable
+  process or filesystem boundary where the host permits it.
+- Keep remote and multi-user serving out of scope until there is a separate
+  threat model.
 
-**Fragile / next pressure:**
+### Migration
 
-| Gap | Why it hurts | Track |
-|-----|--------------|--------|
-| **Viewport release proof incomplete** | Core and adapter structural bars catch disconnected ritual hops, but they do not prove an installed VSIX, browser focus, or real-provider founding. | **Brief 23** + PLATFORMS evidence labels |
-| **HTTP unauthenticated** | Localhost-only is the only barrier (brief 05 still open). | Phase 2 |
-| **Packaging** | Editable install works; wheel/pipx (11), signed DMG (15), marketplace VSIX polish still open. | Phase 3 |
-| **Watchers / fence / metrics** | Duplicate watchers (12), containment ambition (19), full doctor (18). | Phases 1 / 5 / 6 |
+- Add an explicit, dry-run-first `kettle migrate` command for `.setsweep/` desks
+  and legacy user registries.
+- Never maintain two writable desks for one project.
+- Publish a deprecation window before removing the old command aliases or
+  process identity.
 
-**Open briefs (grep is source of truth):**  
-`02 05 11 12 13 15 16 18 19` — plus brief 23 (`in-progress`). Done: `01 03 04 06 07 08 09 10 14 17 20 21 22`.
+## Next: reliable release surfaces
 
-**Near-term order for public GitHub (web + CLI first):**  
-finish 23's packaged/manual matrix → 05 (API harden) when supervised → 11/15 packaging.
+- Stabilize the API and desk schemas at version `1` only after their contracts
+  are documented and exercised by real adapters.
+- Finish packaged VS Code/Cursor and desktop smoke tests against exact core
+  provenance.
+- Add a changelog and release checklist covering compatibility, security,
+  third-party notices, source archives, and clean-tree gates.
+- Validate a complete stranger path: install, found a real desk, review an
+  entry, and close a sitting without maintainer help.
 
-## The arc
+## Later: evidence-led expansion
 
-Phases are dependency-ordered, not dated. Each phase names its exit test — the thing that
-proves it done. Workstreams reference briefs in `docs/briefs/` by number.
+- Improve watch support with native filesystem notifications.
+- Extract a shared client only when a second TypeScript adapter needs it.
+- Build an Obsidian adapter when a concrete writing or knowledge workflow is
+  ready to dogfood.
+- Add a narrow MCP bridge only for model-host tools over the same desk. It
+  should not replace the CLI or full sitting.
+- Consider remote or multi-user operation only after authentication, tenant
+  isolation, desk ownership, and session ownership are designed together.
 
-### Phase 0 — Secure the ground
+## Permanent product invariants
 
-The program's biggest risk is a `git clean`, not a bug.
+1. The desk is ordinary, inspectable files.
+2. Viewports depend on the core; the core never imports viewports.
+3. Approve is a bookmark, not an outward action.
+4. Sweep applies rulings and restocks under explicit policy.
+5. Egress stages; Kettle does not silently transmit.
+6. Unattributed edits remain unattributed.
+7. Provider credentials stay with the provider CLI.
+8. Background actors expose health instead of failing silently.
+9. Breaking API or desk changes advance a contract version and ship with a
+   migration story.
 
-- Commit the core working tree; track the egress layer (brief 01).
-- Reconcile the two plugin implementations into one canonical tree; retire the other
-  (brief 02).
-- Adopt the desktop rule: never stamp a build from a dirty core tree (folded into 15).
-- Refresh `_Status.md` to present reality (done 2026-07-17 alongside this roadmap).
-- Reserve the PyPI name (verified unclaimed as of 2026-07-17) with a placeholder (in 11).
-
-**Exit test:** `git status` clean on all three repos; a fresh clone of each builds and
-tests green; the plugin has one implementation.
-
-### Phase 1 — One truth per fact
-
-Every duplicated fact is a future drift bug. Collapse them while the codebase is small.
-
-- Tool tiers: delete the `server.py` copies, port `cli.py` onto
-  `build_turn_cmd`/`runtime.TOOL_TIERS` — also un-hardcodes the CLI from Claude (brief 03).
-- Prompts: move the ~460 lines of constants out of run-critical `server.py` into
-  `kits/prompts/*.md`, loaded like `kits/_base.md` already is; add the
-  format-every-prompt smoke test (brief 04).
-- Watchers: one `setsweep-watch`, provider-aware, with seen-state migration (brief 12).
-- Version: package/API/desk-schema identity is single-sourced from `pyproject.toml` +
-  `setsweep_contract.py` and surfaced in `/api/ping`; `--help`/wheel packaging remains
-  inside brief 11.
-- Doctrine: brief standard and egress discipline each stated in one home, referenced
-  elsewhere (folded into briefs 04 and 10).
-
-**Exit test:** grep finds one definition of each: tool tiers, sweep prompt, brief
-standard, egress routes, model catalog, watcher.
-
-### Phase 2 — Harden the shell
-
-Everything a stranger's machine — or a hostile web page — could do to a desk.
-
-- API hardening: per-boot bearer token written to `~/.cache/setsweep/server.json` (the
-  discovery file is the natural channel), reject cross-origin requests, normalize the
-  error envelope, stop leaking `repr(e)` (brief 05).
-- Provider capability table: declare per-provider guarantees (brief 06). Founding
-  interview is tool-less via core survey (all providers); write-tier honesty for Grok
-  open Bash remains for chat/sweep.
-- Curator watchdog: idle-timeout kill so a hung CLI can never pin a handler thread;
-  stub-curator tests for hang and client-disconnect (brief 07).
-- Frontend survivability: error banner bootstraps from its own tiny script; guarded
-  init; syntax gate in CI — closes the blank-window class structurally (brief 08).
-- Rendering safety + access: allowlist sanitizer (vendored DOMPurify), aria-live on the
-  stream, keyboard path through the queue, focus-trapped modals (brief 09).
-- De-personalization: egress routes into settings with neutral defaults; generic sweep
-  prompt; `kits/_base.md` split into generic core + user overlay; personal admin panels
-  gated (brief 10).
-
-**Exit test:** a security review session (external agent, adversarial) finds no
-localhost-bypass write path; founding on every configured provider honors read-only; the
-app survives an induced frontend syntax error with a visible banner; grep for personal
-topology in shipped surfaces returns nothing.
-
-### Phase 3 — Package for arrival
-
-From "works in Charles's venv" to "installs anywhere."
-
-- Core: restructure under a `setsweep/` package with `package-data`;
-  `importlib.resources` for `static/` and `kits/`; wheel + pipx paths verified in CI
-  (brief 11).
-- Desktop: Developer ID signing, notarization, DMG, auto-update against GitHub Releases,
-  CI builds that refuse dirty trees, bundle slimming, sidecar-import smoke (brief 15).
-- Plugin: LICENSE + repository field, real tests, bundled webview, marketplace-ready
-  packaging (briefs 02 and 16).
-- Contract: document the queue-entry schema and Tier-4 shapes; specify the streaming
-  protocol (200-always, error-without-done, EOF-is-terminal); changelog discipline for
-  breaking changes (brief 13).
-
-**Exit test:** on a machine that has never seen Setsweep: `pipx install setsweep` +
-`setsweep --web` works; the DMG opens without Gatekeeper surgery; the VSIX installs from
-the marketplace; a viewport detects version skew and says so.
-
-### Phase 4 — Docs meet strangers
-
-- ✅ Public `ARCHITECTURE.md` (desk model, invariants, durable-vs-runtime split, tool
-  tiers) — brief 17.
-- ✅ Glossary, clone-based quickstart, CLI reference, sync-layer guidance for
-  `.setsweep/runtime/` — brief 17 (screenshots optional polish later).
-- ✅ Sitting type hierarchy (`docs/UI.md`, `--text-*` tokens) — process guard against
-  chrome/body color drift.
-- ✅ **Viewport founding / first-run parity** — web add-project hot path + founding
-  empty-states aligned with Desk quality bar; desktop inherits (brief **22**). Optional
-  follow-on: plugin Desk CSS vs `docs/UI.md` tokens.
-
-**Exit test:** someone who has never seen the project installs it, founds a desk on a
-real folder (same ritual in web or desktop), and completes a sitting without asking a
-question the docs don't answer.
-
-### Phase 5 — Prove it works
-
-Measurement before beta; growth only on evidence. Full design in `docs/RELEASE.md`.
-
-- Local-first metrics beacons (no phone-home): sittings, founding completions,
-  time-to-first-approved-entry, quiet-close ratio, crash/hang/blank-window incidents
-  (brief 18).
-- `setsweep doctor`: one command that checks install, server, curator CLI, auth, desk
-  integrity — the support channel's first question (brief 18).
-- Dogfood cohort: Charles's own projects instrumented, weekly review questions answered.
-- Release ladder: private alpha (3–5 outside users) → public beta → 1.0, with the entry
-  and exit gates in `docs/RELEASE.md`.
-
-**Exit test:** the beta go/no-go is decided from the metrics file, not from vibes.
-
-### Phase 6 — Grow the surface
-
-Post-beta expansion, ordered by evidence of demand. Full analysis in `docs/PLATFORMS.md`.
-
-- Obsidian adapter on the extracted `core-client` package — the writing/knowledge
-  audience is half the kit system's reason to exist.
-- MCP viewport: expose the desk as an MCP server so any MCP-capable host becomes a thin
-  viewport for queue/approve/comment.
-- JetBrains, Sublime, Neovim as demand shows; each consumes `API.md`, not TypeScript.
-- Intake upgrades: FSEvents/inotify replacing cron polling (DESIGN §4's standing item).
-- Kit `tools` slot wired for real (skills first) — the documented, tested, unwired
-  extension point.
-- The local-model tool harness (DESIGN "flagged future project"): a curated, fenced
-  bash-utility layer that lets tool-less local models do real curator work.
-- Re-founding as merge, not amnesia (DESIGN §4) — needs a real design.
-
-### Phase 7 — Multi-user server (horizon; after single-user 1.0)
-
-**Deferred.** Today's product is one user, one machine, many viewports on one local
-core. Shared live activity across those viewports is intentional (desk-is-files), not a
-multi-user design.
-
-A **Setsweep server edition** — multiple people founding and sitting on desks in a
-shared space, in the spirit of **JupyterHub / multi-user Jupyter** (shared runtime,
-per-user isolation, admin of the hub) — is on the roadmap only as a **post-1.0 horizon**:
-
-- **Not** Phase 2–5 work. Personal localhost product, auth (brief 05), packaging, and
-  alpha/beta gates come first.
-- **Prerequisites (in order):** real auth and identity (beyond a single boot token);
-  a threat model for multi-tenant file fences; explicit session/desk ownership so two
-  humans do not share one curator session by accident; then a hub process that
-  provisions or routes per-user (or per-org) cores — not “open 0.0.0.0 and hope.”
-- **Out of scope until then:** collaborative live cursors, free-for-all shared chat
-  streams, or multi-tenant deployments without isolation.
-
-When demand is real, open a brief series under this phase; do not smuggle multi-user
-into Phase 6 adapter work.
-
-## Progress scaffolding
-
-How this roadmap stays true instead of rotting:
-
-- **Briefs carry status.** Every workstream item is a brief in `docs/briefs/` with
-  `status:` frontmatter (`open` → `in-progress` → `done`). The briefs index is the
-  progress board; this file links, never duplicates.
-- **`_Status.md` is the dashboard face.** Its Status paragraph is refreshed whenever a
-  phase advances; its Next-action list points at the current phase's open briefs. The
-  sidecar-dashboard contract stays honest because sweeps and sessions update it in the
-  same change that does the work.
-- **Exit tests are the phase truth.** A phase is done when its exit test passes in a
-  fresh session, not when its briefs are marked done.
-- **Every new automated actor beats a healthbeacon** (invariant 6) — the metrics beacons
-  of Phase 5 extend the existing `~/.cache/setsweep/` convention, and `setsweep doctor`
-  reads them.
-- **Quarterly roadmap sitting.** Setsweep reviews itself: this repo is a registered desk;
-  a quarterly sitting reads this file against reality and files the deltas.
-
-## Decisions taken (reversible, but taken)
-
-- **Editable install stays supported forever** — it is the contributor path; the wheel
-  path is additive (Phase 3), not a replacement.
-- **The single-file frontend is split for survivability, not rewritten** — a few plain
-  `.js` files with no build step preserves the no-build property while making parse
-  failures partial. A framework rewrite is not on this roadmap.
-- **Desktop stays Electron-with-sidecar** through 1.0. DESIGN's pywebview-vs-Tauri
-  question is answered by shipping evidence: the sidecar pattern works today; revisit
-  only if bundle size or memory becomes a beta complaint.
-- **Remote (non-localhost) viewports wait for Phase 2 auth**, and then arrive as tunnel
-  guidance, not as a listening-on-0.0.0.0 flag.
-- **Multi-user / hub server is Phase 7 only** — after single-user 1.0. One person,
-  many viewports on one local core remains the product through beta; JupyterHub-style
-  shared hosting is deferred, not denied.
-- **No phone-home telemetry, ever.** Measurement is local files the user owns; sharing
-  them is a user action (see `docs/RELEASE.md`).
-
-## Open questions for the user
-
-Inherited from DESIGN §6 and still genuinely open: multi-desk sittings (unified queue
-across projects, or one-desk-at-a-time as a feature?); the curator's voice (named persona
-per project, or anonymous office?); interview-transcript retention (founding testimony
-kept forever in the desk, or distilled and discarded?). New from this survey: which two
-adapter platforms after VS Code (recommendation in `docs/PLATFORMS.md`: Obsidian, then
-the MCP viewport); and whether 1.0's compatibility promise covers the desk file format
-(recommendation: yes — the desk outlives the app; that is the point).
+Detailed pre-rename engineering briefs remain under
+[`docs/briefs/`](./docs/briefs/) as historical design evidence. Their status
+frontmatter is not the current public roadmap.

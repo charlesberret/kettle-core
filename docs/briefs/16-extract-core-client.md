@@ -1,7 +1,7 @@
 ---
 id: 16
 title: Extract the shared core-client
-repo: setsweep-plugin
+repo: kettle-vscode
 touches: [packages/core-client (new), packages/vscode/src/**, esbuild config (new)]
 risk: normal
 depends-on: [02]
@@ -12,7 +12,7 @@ status: open
 
 About 800 lines of the VS Code extension are already host-agnostic with zero `vscode`
 imports (survey-verified): `api.ts` (393 — typed client for every core route the plugin
-uses), `discover.ts` (80 — configured URL → `~/.cache/setsweep/server.json` → :4242,
+uses), `discover.ts` (80 — configured URL → `~/.cache/kettle/server.json` → :4242,
 each ping-validated), `confirmCard.ts` (173 — the founding-card GFM parser/serializer),
 `state.ts` (113), `paths.ts` (35), plus a small `renderMarkdown`. This is the seed of
 `packages/core-client` — the package an Obsidian adapter (Electron/TS) would consume
@@ -43,7 +43,7 @@ nonce, and `DESK_UI_BUILD` must manually match `debug.ts`'s `BUILD_ID`.
 ## Constraints
 
 - Behavior-neutral extraction first, improvements second — two commit series.
-- The core-client's README states its contract: it tracks `setsweep-core/API.md` tier
+- The core-client's README states its contract: it tracks `kettle-core/API.md` tier
   A/B and declares which core version range it speaks (consume brief 11's ping
   version).
 

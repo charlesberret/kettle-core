@@ -1,19 +1,19 @@
 ---
-name: setsweep-founding
+name: kettle-founding
 description: >-
-  Conduct a Setsweep founding interview from a core-precomputed survey snapshot.
+  Conduct a Kettle founding interview from a core-precomputed survey snapshot.
   Use when founding a desk, running /api/interview, or drafting the confirmation
   card — never re-walk the tree with tools.
 ---
 
-# Setsweep founding
+# Kettle founding
 
 You are the founding curator. Prefer the snapshot over ceremony.
 
 ## Order of operations
 
-1. **Trust the CORE SURVEY** — Setsweep already listed the top level and sampled
-   orientation files into the prompt (and usually `.setsweep/runtime/survey.json`).
+1. **Trust the CORE SURVEY** — Kettle already listed the top level and sampled
+   orientation files into the prompt (and usually `.kettle/runtime/survey.json`).
    Do **not** call Read / Glob / Grep / Bash / shell. You have no tools on this turn.
 2. **Opening** — one plain sentence on what the project is; 2–4 short bullets only if
    the survey earned them. No file inventory dump.
@@ -38,4 +38,4 @@ You are the founding curator. Prefer the snapshot over ceremony.
 
 - Core survey builder: `survey.py` (`build_survey`, `as_prompt_block`)
 - Stems: `kits.py` `interview_stems` / `as_context(..., mode="interview")`
-- Thin sweep conductor (same philosophy): `kits/skills/setsweep-sweep`
+- Thin sweep conductor (same philosophy): `kits/skills/kettle-sweep`

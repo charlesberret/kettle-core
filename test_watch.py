@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Unit tests for setsweep_watch — the inbox folder-watch.
+"""Unit tests for kettle_watch — the inbox folder-watch.
 
 Stdlib only. Covers the pure, agent-free helpers (path resolution, the scan/seen-set, the
 deterministic queue repair, the healthbeacon). The agent-firing intake_pass itself is not
@@ -13,7 +13,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
-import setsweep_watch as w
+import kettle_watch as w
 
 
 class ResolveIntakeTest(unittest.TestCase):
@@ -34,7 +34,14 @@ class ResolveIntakeTest(unittest.TestCase):
         # responses/outbound dir names are always ignored by the scan
         self.assertIn("responses", ignore)
         self.assertIn("outbox", ignore)
+        self.assertIn(".kettle", ignore)
         self.assertIn(".setsweep", ignore)
+
+    def test_runtime_falls_back_to_legacy_desk(self):
+        (self.tmp / ".setsweep").mkdir()
+        runtime = w._runtime_dir({"id": "x", "root": str(self.tmp)})
+        self.assertEqual(runtime, (self.tmp / ".setsweep" / "runtime").resolve())
+        self.assertFalse((self.tmp / ".kettle").exists())
 
     def test_root_watch_and_absolute(self):
         proj = {"id": "x", "root": str(self.tmp),
@@ -54,7 +61,7 @@ class ScanNewTest(unittest.TestCase):
         (self.tmp / "b.txt").write_text("2")
         (self.tmp / ".hidden").write_text("x")          # dotfile → skipped
         (self.tmp / "responses").mkdir()                # dir + in ignore → skipped
-        ignore = {"responses", ".setsweep"}
+        ignore = {"responses", ".kettle"}
         names = [p.name for p in w.scan_new(self.tmp, ignore, set())]
         self.assertEqual(sorted(names), ["a.eml", "b.txt"])
         # a seen path is excluded
@@ -119,7 +126,7 @@ class IntakePassTest(unittest.TestCase):
             "id": "inbox", "name": "Inbox", "root": str(self.root),
             "intake": {"watch": "incoming", "responses": "responses"},
         }
-        runtime = self.root / ".setsweep" / "runtime"
+        runtime = self.root / ".kettle" / "runtime"
         runtime.mkdir(parents=True)
         self.queue = runtime / "queue.json"
         self.queue.write_text(json.dumps({"entries": [{"id": "request-one"}]}))

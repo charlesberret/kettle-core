@@ -1,4 +1,4 @@
-"""Desk egress — durable staging of outward signals under `.setsweep/outbound/`.
+"""Desk egress — durable staging of outward signals under `.kettle/outbound/`.
 
 Distinct from inbox kit mail staging (`<root>/outbox`). The desk writes Status: staged;
 external pickup drains and routes. Never transmits from the desk process itself.
@@ -51,14 +51,14 @@ def _framework_text() -> str:
     except OSError:
         return (
             "# Desk Egress\n\n"
-            "`.setsweep/outbound/` stages outward signals for external pickup. "
+            "`.kettle/outbound/` stages outward signals for external pickup. "
             "Not the inbox kit's `<root>/outbox` (mail drafts). "
             "Status: staged — never route or transmit from the desk.\n"
         )
 
 
 def ensure_egress(proj: dict) -> Path:
-    """Create `.setsweep/outbound/` and seed README.md from the egress framework if missing."""
+    """Create `.kettle/outbound/` and seed README.md from the egress framework if missing."""
     d = egress_dir(proj)
     d.mkdir(parents=True, exist_ok=True)
     readme = d / "README.md"
@@ -108,7 +108,7 @@ def stage_egress(
     pid = proj.get("id") or "desk"
     text = (
         f"# Egress: {topic}\n"
-        f"**From:** setsweep/{pid} · **Date:** {day}\n"
+        f"**From:** kettle/{pid} · **Date:** {day}\n"
         f"**Kind:** {kind}\n"
         f"**Route:** {route}\n"
         f"**Status:** staged\n"
@@ -162,7 +162,7 @@ def status_for_prompt(proj: dict) -> str:
     staged = list_staged(proj)
     lines = [
         f"DESK EGRESS — stage outward signals under {egress_dir(proj)} "
-        "(not inbox <root>/outbox). Prefer `setsweep egress`. Status stays staged; "
+        "(not inbox <root>/outbox). Prefer `kettle egress`. Status stays staged; "
         "external pickup routes.",
         f"Currently staged: {len(staged)}",
     ]

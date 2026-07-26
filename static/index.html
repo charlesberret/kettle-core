@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <!-- Bump this when sitting UI changes; title shows it so we can confirm the shell loaded. -->
-<meta name="setsweep-ui" content="2026-07-25a">
-<title>setsweep · ui-2026-07-25a</title>
+<meta name="kettle-ui" content="2026-07-25a">
+<title>kettle · ui-2026-07-25a</title>
 <style>
   /*
    * Type & chrome roles — single source of sitting hierarchy.
@@ -821,7 +821,7 @@
   <div id="chat-live" class="sr-only" aria-live="polite" aria-atomic="true"></div>
   <div id="spin"><span id="spinlabel">working…</span><span class="spin-elapsed" id="spinelapsed"></span></div>
   <div id="chatbar">
-    <textarea id="chatin" placeholder="Chat with the Setsweep agent…"></textarea>
+    <textarea id="chatin" placeholder="Chat with the Kettle agent…"></textarea>
   </div>
 </div>
 
@@ -861,8 +861,8 @@
 
 <div id="setupbg">
   <div id="setupmodal" role="dialog" aria-modal="true" aria-labelledby="setupmodal-h">
-    <h2 id="setupmodal-h">Set Up Setsweep</h2>
-    <div class="mnote">Pick the agent CLI that runs founding, chat, and sweeps. Setsweep never stores API keys — sign in to the CLI or set its key in your shell.</div>
+    <h2 id="setupmodal-h">Set Up Kettle</h2>
+    <div class="mnote">Pick the agent CLI that runs founding, chat, and sweeps. Kettle never stores API keys — sign in to the CLI or set its key in your shell.</div>
     <div class="mrow" style="margin-bottom:8px">
       <span class="lbl">provider</span>
       <select id="setupProvider" style="flex:1">
@@ -993,7 +993,7 @@
       </select>
     </div>
     <div id="agentrows"></div>
-    <div class="arow mono-dim" style="font-size:11px" id="agentProviderHint">model is any id your agent CLI accepts — pick a standard model or type a custom id. Auth stays ambient (Claude / Grok / Codex / Gemini login or env keys); Setsweep never stores keys.</div>
+    <div class="arow mono-dim" style="font-size:11px" id="agentProviderHint">model is any id your agent CLI accepts — pick a standard model or type a custom id. Auth stays ambient (Claude / Grok / Codex / Gemini login or env keys); Kettle never stores keys.</div>
   </div>
 
   <div class="asec" data-tab="behavior">
@@ -1031,7 +1031,7 @@
 
   <div class="asec" data-tab="projects">
     <div id="projrows"></div>
-    <div class="arow mono-dim" style="font-size:11px">delete only unregisters — the folder and its .setsweep desk are left on disk.</div>
+    <div class="arow mono-dim" style="font-size:11px">delete only unregisters — the folder and its .kettle desk are left on disk.</div>
   </div>
 
   <div class="asec" data-tab="curators">
@@ -1133,7 +1133,7 @@
       root.appendChild(b);
     }
     var m = document.getElementById('errbanner-msg');
-    if(m){ m.textContent = 'Setsweep hit a script error — ' + label; }
+    if(m){ m.textContent = 'Kettle hit a script error — ' + label; }
   }
   /* Exposed so the main script's init() can name the boot phase that failed.
      One-directional: init() may call in; the boot layer calls nothing out. */
@@ -1155,9 +1155,9 @@
 <script src="/purify.min.js"></script>
 <script src="/ui-copy.js"></script>
 <script>
-/* Canonical UI strings — static/ui-copy.js (window.SETSWEEP_UI_COPY). Keep in
-   sync with setsweep-plugin packages/vscode/src/uiCopy.ts — see docs/UI.md. */
-const UIC = (typeof SETSWEEP_UI_COPY !== 'undefined' && SETSWEEP_UI_COPY) || {};
+/* Canonical UI strings — static/ui-copy.js (window.KETTLE_UI_COPY). Keep in
+   sync with kettle-vscode src/uiCopy.ts — see docs/UI.md. */
+const UIC = (typeof KETTLE_UI_COPY !== 'undefined' && KETTLE_UI_COPY) || {};
 function uic(key, fallback){
   const v = UIC[key];
   return (typeof v === 'string' && v) ? v : fallback;
@@ -1183,7 +1183,7 @@ window.addEventListener('unhandledrejection', e => {
 });
 let Q = null, cur = null, dirty = false, busy = false, PROJECT = null, PROJECTS = [], mode = 'reading';
 let metaEditing = false;
-// one Claude session per project (setsweep-<project>): true once a chat/found turn has
+// one Claude session per project (kettle-<project>): true once a chat/found turn has
 // run for the loaded project, so compact/clear know a live thread exists. Reset per project.
 let PROJECT_SESSION = false;
 let SETTINGS = {}, HOMEDIR = '', findIdx = -1;
@@ -3075,7 +3075,7 @@ async function refreshSetupStatus(){
   try {
     SETUP_CATALOG = await jget('/api/curator/catalog');
   } catch(e){
-    st.textContent = 'Cannot reach the Setsweep server catalog.';
+    st.textContent = 'Cannot reach the Kettle server catalog.';
     st.style.color = 'var(--warn)';
     btn.disabled = true;
     return;
@@ -3341,8 +3341,8 @@ function setFoundingChrome(on){
   const p = PROJECTS.find(x => x.id === PROJECT);
   if($('ivpname')) $('ivpname').textContent = p ? p.name : (PROJECT || '');
   $('chatin').placeholder = on
-    ? uic('chatPlaceholderFounding', 'Chat with the Setsweep agent…')
-    : uic('chatPlaceholder', 'Chat with the Setsweep agent…');
+    ? uic('chatPlaceholderFounding', 'Chat with the Kettle agent…')
+    : uic('chatPlaceholder', 'Chat with the Kettle agent…');
   if(on){
     try { $('chatin').focus({ preventScroll: true }); }
     catch(_){ $('chatin').focus(); }
@@ -3358,7 +3358,7 @@ function setProposingChrome(on){
   }
   $('chatin').placeholder = on
     ? uic('chatPlaceholderProposing', 'Ask to revise the proposal — or edit it, then Found Desk')
-    : uic('chatPlaceholder', 'Chat with the Setsweep agent…');
+    : uic('chatPlaceholder', 'Chat with the Kettle agent…');
   if(on) $('chatin').focus();
 }
 function enterInterview(opts){
@@ -3718,7 +3718,7 @@ async function autoCompact(force){
   if(force || CTX_USED > CTX_COMPACT_AT * CTX_WINDOW) await runCompact();
 }
 $('ctxbar').onclick = async () => {
-  // the unit is the PROJECT session now (setsweep-<project>), so this works whenever a
+  // the unit is the PROJECT session now (kettle-<project>), so this works whenever a
   // project is loaded \u2014 no open file required; the server resolves the project session
   if(!PROJECT || busy) return;
   if(SETTINGS.ctxClick === 'clear'){
@@ -3861,7 +3861,7 @@ function migrateThemeSettings() {
   SETTINGS.slots = migrateRoleMap(SETTINGS.slots);
   SETTINGS.iface = migrateIfaceMap(SETTINGS.iface);
   if (!SETTINGS.themeMode) SETTINGS.themeMode = 'dark';
-  if (!SETTINGS.builtinTheme || !BUILTIN_THEMES[SETTINGS.builtinTheme]) SETTINGS.builtinTheme = 'setsweep';
+  if (!SETTINGS.builtinTheme || !BUILTIN_THEMES[SETTINGS.builtinTheme]) SETTINGS.builtinTheme = 'kettle';
   if (SETTINGS.palettes) {
     const pals = {};
     for (const [name, snap] of Object.entries(SETTINGS.palettes)) {
@@ -3888,8 +3888,8 @@ function resolvedThemeMode() {
 }
 
 function activeBuiltinTheme() {
-  const id = SETTINGS.builtinTheme || 'setsweep';
-  return BUILTIN_THEMES[id] || BUILTIN_THEMES.setsweep;
+  const id = SETTINGS.builtinTheme || 'kettle';
+  return BUILTIN_THEMES[id] || BUILTIN_THEMES.kettle;
 }
 
 function builtinThemePreset() {
@@ -3940,7 +3940,7 @@ function buildThemeControls(){
 
   modeSel.value = SETTINGS.themeMode || 'system';
   themeSel.innerHTML = Object.entries(BUILTIN_THEMES).map(([id, t]) =>
-    `<option value="${esc(id)}"${id === (SETTINGS.builtinTheme || 'setsweep') ? ' selected' : ''}>${esc(t.label)}</option>`
+    `<option value="${esc(id)}"${id === (SETTINGS.builtinTheme || 'kettle') ? ' selected' : ''}>${esc(t.label)}</option>`
   ).join('');
 
   if (!modeSel.dataset.wired) {
@@ -3968,9 +3968,9 @@ function buildThemeControls(){
   }
 }
 
-if (!window.__setsweepThemeMedia) {
-  window.__setsweepThemeMedia = window.matchMedia('(prefers-color-scheme: dark)');
-  window.__setsweepThemeMedia.addEventListener('change', () => {
+if (!window.__kettleThemeMedia) {
+  window.__kettleThemeMedia = window.matchMedia('(prefers-color-scheme: dark)');
+  window.__kettleThemeMedia.addEventListener('change', () => {
     if ((SETTINGS.themeMode || 'system') === 'system') applyTheme();
   });
 }
@@ -4465,7 +4465,7 @@ async function loadAdminDebug(){
       <span class="k">heartbeat age</span><span class="v">${sen.heartbeat_age==null?'—':esc(sen.heartbeat_age)+'s'}</span>
       <span class="k">pid</span><span class="v">${sen.pid==null?'—':esc(sen.pid)+(sen.pid_alive?' (live)':' (dead)')}</span>
     </div>`;
-    h += `<h2 style="margin-top:16px">Setsweep-Watch Beacon</h2>`;
+    h += `<h2 style="margin-top:16px">Kettle-Watch Beacon</h2>`;
     h += w ? `<div class="kv">
         <span class="k">status</span><span class="v ${w.status==='ok'?'ok':'bad'}">${esc(w.status)}</span>
         <span class="k">last run</span><span class="v">${esc(w.last_run)}</span>
@@ -4737,7 +4737,7 @@ function wireAdmin(){
     syncBehaviorInputs(); applyMdToggle(); wireAdmin();
     applyCols(); applySplit();
     initDividers();
-    if($('chatin')) $('chatin').placeholder = uic('chatPlaceholder', 'Chat with the Setsweep agent…');
+    if($('chatin')) $('chatin').placeholder = uic('chatPlaceholder', 'Chat with the Kettle agent…');
     if($('commentin')) $('commentin').placeholder = uic('commentPlaceholder',
       'a note for the sweep, tied to this file — Enter saves · Shift+Enter newline · Esc cancels');
     $('metaedit').onclick = toggleMetaEdit;
@@ -4774,7 +4774,7 @@ function wireAdmin(){
     syncChrome();
   } catch(err){
     if(typeof console !== 'undefined' && console.error){
-      console.error('Setsweep init failed while ' + phase, err);
+      console.error('Kettle init failed while ' + phase, err);
     }
     if(window.__ssBootError){
       window.__ssBootError(

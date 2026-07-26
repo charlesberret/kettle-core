@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for desk egress (.setsweep/outbound/)."""
+"""Tests for desk egress (.kettle/outbound/)."""
 
 from __future__ import annotations
 
@@ -15,9 +15,9 @@ import server
 
 class EgressTests(unittest.TestCase):
     def setUp(self):
-        self.tmp = Path(tempfile.mkdtemp(prefix="setsweep-egress-"))
+        self.tmp = Path(tempfile.mkdtemp(prefix="kettle-egress-"))
         self.root = self.tmp / "proj"
-        (self.root / ".setsweep").mkdir(parents=True)
+        (self.root / ".kettle").mkdir(parents=True)
         registry = self.tmp / "projects.json"
         registry.write_text(json.dumps({"projects": [{
             "id": "t", "name": "Test", "root": str(self.root),
@@ -58,7 +58,7 @@ class EgressTests(unittest.TestCase):
         self.assertRegex(path.name, r"^\d{4}-\d{2}-\d{2}-launch-ship-the-beta\.md$")
         body = path.read_text()
         self.assertIn("# Egress: Ship the beta", body)
-        self.assertIn("**From:** setsweep/t", body)
+        self.assertIn("**From:** kettle/t", body)
         self.assertIn("**Kind:** launch", body)
         self.assertIn("**Route:** launch", body)  # neutral product default
         self.assertIn("**Status:** staged", body)
@@ -93,23 +93,23 @@ class EgressTests(unittest.TestCase):
     def test_settings_egress_routes_override_defaults(self):
         server.SETTINGS_PATH.write_text(json.dumps({
             "egress": {"routes": {
-                "launch": "handoff-setsweep-avicenna-directives",
-                "handoff": "avicenna",
+                "launch": "release-coordinator",
+                "handoff": "peer-review",
             }},
         }))
         result = egress.stage_egress(
             self.proj(), kind="launch", topic="Go", body="Ship it.")
-        self.assertIn("**Route:** handoff-setsweep-avicenna-directives",
+        self.assertIn("**Route:** release-coordinator",
                       Path(result["path"]).read_text())
         result2 = egress.stage_egress(
             self.proj(), kind="handoff", topic="Note", body="hi")
-        self.assertIn("**Route:** avicenna", Path(result2["path"]).read_text())
+        self.assertIn("**Route:** peer-review", Path(result2["path"]).read_text())
 
     def test_register_project_seeds_outbound(self):
         folder = self.tmp / "notes"
         folder.mkdir()
         proj = server.register_project("My Notes", str(folder))
-        readme = folder / ".setsweep" / "outbound" / "README.md"
+        readme = folder / ".kettle" / "outbound" / "README.md"
         self.assertTrue(readme.is_file())
         self.assertEqual(proj["id"], "my_notes")
 

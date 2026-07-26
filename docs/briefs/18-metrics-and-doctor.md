@@ -1,8 +1,8 @@
 ---
 id: 18
-title: Metrics beacons + setsweep doctor
-repo: setsweep-core
-touches: [server.py, sweepkit.py, cli.py, setsweep/ metrics module (new), test files]
+title: Metrics beacons + kettle doctor
+repo: kettle-core
+touches: [server.py, sweepkit.py, cli.py, kettle/ metrics module (new), test files]
 risk: run-critical
 depends-on: [11]
 status: open
@@ -21,18 +21,18 @@ needs before an alpha cohort exists.
 ## Task
 
 1. **Metrics events.** A small module (`metrics.py`): append-only JSONL at
-   `~/.cache/setsweep/metrics.jsonl`, events `{ts, event, project: sha256-prefix,
+   `~/.cache/kettle/metrics.jsonl`, events `{ts, event, project: sha256-prefix,
    fields}` — project identity hashed even locally (files leak into screenshots).
    Instrument the seams that already exist: founding transitions (interview started /
    proposal filed / founded), entry approved (with curated-to-ruled latency), sweep
    completed (kind: mechanical/judgment), curator turn ended (ok/error/watchdog-kill),
    frontend boot-error beacon (one POST from the brief-08 banner). Writes are
    best-effort and never raise into the request path.
-2. **`setsweep metrics`**: prints the RELEASE.md tables (stability / success /
+2. **`kettle metrics`**: prints the RELEASE.md tables (stability / success /
    usability) for a date range, from the local file. This is how the user reads their
    own telemetry.
-3. **`setsweep doctor`**: checks, in order — **install seed already from brief 20**
-   (`cli.install_doctor_checks`: which `setsweep` on PATH vs `~/.setsweep-venv`,
+3. **`kettle doctor`**: checks, in order — **install seed already from brief 20**
+   (`cli.install_doctor_checks`: which `kettle` on PATH vs `~/.kettle-venv`,
    extra PATH hits, every `py-modules` name importable and present in the installed
    `top_level`); each failing row should point at [`INSTALL.md`](../../INSTALL.md) or
    [`ARCHITECTURE.md`](../../ARCHITECTURE.md) (brief 17); then expand with Python +
@@ -57,7 +57,7 @@ needs before an alpha cohort exists.
 ## Done when
 
 - A stub founding + sitting + sweep produces the expected event sequence in the JSONL.
-- `setsweep metrics` renders honest tables from it; `setsweep doctor` on a healthy
+- `kettle metrics` renders honest tables from it; `kettle doctor` on a healthy
   setup is all green, and on each induced failure names the failing layer with a docs
   pointer.
 

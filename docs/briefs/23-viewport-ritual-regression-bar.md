@@ -1,8 +1,8 @@
 ---
 id: 23
 title: Viewport ritual regression bar
-repo: setsweep-core
-touches: [test_frontend.py, static/index.html, docs/PLATFORMS.md, tools/check_family.py; corresponding checks in setsweep-plugin]
+repo: kettle-core
+touches: [test_frontend.py, static/index.html, docs/PLATFORMS.md, tools/check_family.py; corresponding checks in kettle-vscode]
 risk: run-critical
 depends-on: [22]
 status: in-progress

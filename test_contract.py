@@ -13,7 +13,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
-import setsweep_contract
+import kettle_contract
 
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT / "tools"))
@@ -24,11 +24,11 @@ class ContractIdentity(unittest.TestCase):
     def test_core_version_is_single_sourced_from_pyproject(self):
         with (ROOT / "pyproject.toml").open("rb") as fp:
             expected = str(tomllib.load(fp)["project"]["version"])
-        self.assertEqual(setsweep_contract.core_version(), expected)
-        self.assertEqual(setsweep_contract.identity()["version"], expected)
+        self.assertEqual(kettle_contract.core_version(), expected)
+        self.assertEqual(kettle_contract.identity()["version"], expected)
 
     def test_contract_versions_are_nonnegative_integers(self):
-        identity = setsweep_contract.identity()
+        identity = kettle_contract.identity()
         for key in ("api_version", "desk_schema_version"):
             self.assertIs(type(identity[key]), int)
             self.assertGreaterEqual(identity[key], 0)
@@ -66,42 +66,42 @@ class ContractIdentity(unittest.TestCase):
         self.assertEqual(
             check_family.contract_versions(repo),
             (
-                setsweep_contract.API_VERSION,
-                setsweep_contract.DESK_SCHEMA_VERSION,
+                kettle_contract.API_VERSION,
+                kettle_contract.DESK_SCHEMA_VERSION,
             ),
         )
 
 
 class FamilyCheckCommand(unittest.TestCase):
-    def make_family(self, root: Path, *, plugin_api=0):
-        core = root / "setsweep-core"
-        desktop = root / "setsweep-desktop"
-        plugin = root / "setsweep-plugin"
-        (plugin / "packages" / "vscode").mkdir(parents=True)
+    def make_family(self, root: Path, *, vscode_api=0):
+        core = root / "kettle-core"
+        desktop = root / "kettle-desktop"
+        vscode = root / "kettle-vscode"
+        vscode.mkdir()
         desktop.mkdir()
         core.mkdir()
         (core / "pyproject.toml").write_text(
-            '[project]\nname = "setsweep"\nversion = "0.2.0"\n',
+            '[project]\nname = "kettle"\nversion = "0.2.0"\n',
             encoding="utf-8",
         )
-        (core / "setsweep_contract.py").write_text(
+        (core / "kettle_contract.py").write_text(
             "API_VERSION = 0\nDESK_SCHEMA_VERSION = 0\n",
             encoding="utf-8",
         )
         (desktop / "package.json").write_text(
             json.dumps({"version": "0.1.0"}), encoding="utf-8"
         )
-        (desktop / "setsweep-compatibility.json").write_text(
+        (desktop / "kettle-compatibility.json").write_text(
             json.dumps({"apiVersions": [0], "deskSchemaVersions": [0]}),
             encoding="utf-8",
         )
-        (plugin / "packages" / "vscode" / "package.json").write_text(
+        (vscode / "package.json").write_text(
             json.dumps({"version": "0.6.65"}), encoding="utf-8"
         )
-        (plugin / "packages" / "vscode" / "setsweep-compatibility.json").write_text(
+        (vscode / "kettle-compatibility.json").write_text(
             json.dumps(
                 {
-                    "api_versions": [plugin_api],
+                    "api_versions": [vscode_api],
                     "desk_schema_versions": [0],
                 }
             ),
@@ -110,7 +110,7 @@ class FamilyCheckCommand(unittest.TestCase):
         return SimpleNamespace(
             core=core,
             desktop=desktop,
-            plugin=plugin,
+            vscode=vscode,
             require_clean=False,
             run_tests=False,
         )
@@ -138,11 +138,11 @@ class FamilyCheckCommand(unittest.TestCase):
             code, out, err = self.run_main(args)
         self.assertEqual(code, 0, err)
         self.assertIn("desktop  api=[0], desk=[0] => compatible", out)
-        self.assertIn("plugin   api=[0], desk=[0] => compatible", out)
+        self.assertIn("vscode   api=[0], desk=[0] => compatible", out)
 
     def test_family_main_rejects_incompatible_or_dirty_release(self):
         with tempfile.TemporaryDirectory() as tmp:
-            args = self.make_family(Path(tmp), plugin_api=1)
+            args = self.make_family(Path(tmp), vscode_api=1)
             code, out, _ = self.run_main(args)
             self.assertEqual(code, 1)
             self.assertIn("INCOMPATIBLE", out)
@@ -164,7 +164,7 @@ class FamilyCheckCommand(unittest.TestCase):
             ):
                 code = check_family.main()
         self.assertEqual(code, 2)
-        self.assertIn("missing Setsweep Git checkouts", err.getvalue())
+        self.assertIn("missing Kettle Git checkouts", err.getvalue())
 
 
 if __name__ == "__main__":

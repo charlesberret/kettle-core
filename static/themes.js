@@ -1,4 +1,4 @@
-/* Built-in color themes for setsweep. Each theme defines 16 ANSI terminal colors
+/* Built-in color themes for kettle. Each theme defines 16 ANSI terminal colors
    (indices 0–15) plus optional text/interface role overrides for dark and light. */
 'use strict';
 
@@ -58,8 +58,8 @@ function pack(colors16, slots, iface, ifaceOpacity, slotOpacity) {
 }
 
 const BUILTIN_THEMES = {
-  setsweep: {
-    label: 'Setsweep',
+  kettle: {
+    label: 'Kettle',
     dark: pack(
       ['#16161e', '#d4756b', '#7dba6f', '#c8a24a', '#7d9fc8', '#9a76c2', '#389bb4', '#d8d8e0',
         '#32323f', '#e8928a', '#94c98a', '#d4b86a', '#9db4d8', '#b094d2', '#59b4cc', '#ececf2'],

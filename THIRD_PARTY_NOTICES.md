@@ -1,6 +1,6 @@
 # Third-party notices
 
-setsweep bundles the following assets, each under its own license:
+kettle bundles the following assets, each under its own license:
 
 - **marked** (`static/marked.min.js`) — a Markdown parser, MIT License.
   https://github.com/markedjs/marked
@@ -11,4 +11,4 @@ setsweep bundles the following assets, each under its own license:
   https://github.com/IBM/plex
 
 Their licenses permit redistribution; this file preserves the required attribution.
-setsweep itself is MIT-licensed — see `LICENSE`.
+kettle itself is MIT-licensed — see `LICENSE`.

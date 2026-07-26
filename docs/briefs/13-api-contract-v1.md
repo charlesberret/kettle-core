@@ -1,7 +1,7 @@
 ---
 id: 13
 title: API contract v1
-repo: setsweep-core
+repo: kettle-core
 touches: [API.md, server.py (small), test_server.py]
 risk: normal
 depends-on: [05, 07, 11]

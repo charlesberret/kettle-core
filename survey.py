@@ -5,7 +5,7 @@ tool-less (no shell / writes) under every provider. The model only rephrases the
 snapshot into a plain opening and the confirmation card.
 
 Pure: no server import, no network. Callers write the snapshot where they like
-(typically ``.setsweep/runtime/survey.json``).
+(typically ``.kettle/runtime/survey.json``).
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ _SAMPLE_NAMES = (
 _SKIP_DIR_NAMES = frozenset({
     ".git", ".hg", ".svn", "node_modules", ".venv", "venv", "__pycache__",
     ".tox", ".mypy_cache", ".pytest_cache", "dist", "build", ".next",
-    ".turbo", "target", "vendor", ".setsweep", ".cache",
+    ".turbo", "target", "vendor", ".kettle", ".setsweep", ".cache",
 })
 
 _MAX_TOP = 48
@@ -47,7 +47,8 @@ def build_survey(
     top: list[dict[str, str]] = []
     empty = True
     has_git = False
-    has_setsweep = False
+    has_kettle = False
+    has_legacy_desk = False
     has_cursor = False
     has_claude_dir = False
     agent_markers: list[str] = []
@@ -69,7 +70,9 @@ def build_survey(
 
     for ent in entries:
         name = ent.name
-        if name in _SKIP_DIR_NAMES and name not in (".setsweep", ".git", ".cursor"):
+        if name in _SKIP_DIR_NAMES and name not in (
+            ".kettle", ".setsweep", ".git", ".cursor"
+        ):
             # Still record presence of key markers even if we skip listing their guts.
             pass
         try:
@@ -82,8 +85,10 @@ def build_survey(
             top.append({"name": name, "kind": kind})
         if name == ".git" and is_dir:
             has_git = True
+        elif name == ".kettle" and is_dir:
+            has_kettle = True
         elif name == ".setsweep" and is_dir:
-            has_setsweep = True
+            has_legacy_desk = True
         elif name == ".cursor" and is_dir:
             has_cursor = True
             agent_markers.append(".cursor/")
@@ -118,7 +123,8 @@ def build_survey(
 
     signals = {
         "git": has_git,
-        "setsweep_desk": has_setsweep,
+        "kettle_desk": has_kettle,
+        "legacy_setsweep_desk": has_legacy_desk,
         "cursor": has_cursor,
         "claude_dir": has_claude_dir,
         "agent_markers": agent_markers,
@@ -211,8 +217,10 @@ def as_prompt_block(survey: dict[str, Any]) -> str:
     bits = []
     if sig.get("git"):
         bits.append("git repo")
-    if sig.get("setsweep_desk"):
-        bits.append("existing .setsweep desk")
+    if sig.get("kettle_desk"):
+        bits.append("existing .kettle desk")
+    elif sig.get("legacy_setsweep_desk"):
+        bits.append("existing legacy .setsweep desk")
     if sig.get("agent_markers"):
         bits.append("agent markers: " + ", ".join(sig["agent_markers"]))
     if bits:

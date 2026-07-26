@@ -91,7 +91,7 @@ class LineageTest(unittest.TestCase):
     def test_log_agent_edits_relativizes_and_filters(self):
         rec = lineage.log_agent_edits(self.tmp, [
             str(self.tmp / "a.md"),
-            str(self.tmp / ".setsweep" / "PROJECT.md"),   # machinery → dropped
+            str(self.tmp / ".kettle" / "PROJECT.md"),   # machinery → dropped
             "/etc/passwd",                                  # outside the desk → dropped
             str(self.tmp / "a.md"),                         # duplicate → once
         ], actor="curator")
@@ -101,7 +101,7 @@ class LineageTest(unittest.TestCase):
 
     def test_log_agent_edits_none_when_nothing_trackable(self):
         self.assertIsNone(lineage.log_agent_edits(
-            self.tmp, ["/etc/x", str(self.tmp / ".setsweep" / "q.json")]))
+            self.tmp, ["/etc/x", str(self.tmp / ".kettle" / "q.json")]))
 
     def test_agent_edit_auto_logged_reconciles_as_agent(self):
         (self.tmp / "a.md").write_text("changed by the sweep\n")
@@ -124,14 +124,14 @@ class LineageTest(unittest.TestCase):
         self.assertEqual(r1["action"], "created")
         self.assertTrue(r1["editing_created"])
         body = (self.tmp / "CLAUDE.md").read_text()
-        self.assertIn("setsweep:lineage", body)
-        self.assertIn(".setsweep/EDITING.md", body)
-        self.assertTrue((self.tmp / ".setsweep" / "EDITING.md").exists())
+        self.assertIn("kettle:lineage", body)
+        self.assertIn(".kettle/EDITING.md", body)
+        self.assertTrue((self.tmp / ".kettle" / "EDITING.md").exists())
         r2 = lineage.ensure_directive(self.tmp)               # re-bind
         self.assertEqual(r2["action"], "updated")
         self.assertFalse(r2["editing_created"])
         # exactly one fenced block (open + close marker), no duplication
-        self.assertEqual((self.tmp / "CLAUDE.md").read_text().count("setsweep:lineage"), 2)
+        self.assertEqual((self.tmp / "CLAUDE.md").read_text().count("kettle:lineage"), 2)
 
     def test_ensure_directive_appends_to_existing_claude(self):
         (self.tmp / "CLAUDE.md").write_text("# My project\n\nexisting instructions.\n")
@@ -139,7 +139,22 @@ class LineageTest(unittest.TestCase):
         self.assertEqual(r["action"], "appended")
         body = (self.tmp / "CLAUDE.md").read_text()
         self.assertIn("existing instructions", body)
-        self.assertIn("setsweep:lineage", body)
+        self.assertIn("kettle:lineage", body)
+
+    def test_ensure_directive_updates_legacy_desk_without_splitting_state(self):
+        (self.tmp / ".kettle").rename(self.tmp / ".setsweep")
+        (self.tmp / "CLAUDE.md").write_text(
+            "<!-- setsweep:lineage (old) -->\nold\n"
+            "<!-- /setsweep:lineage -->\n"
+        )
+        result = lineage.ensure_directive(self.tmp)
+        body = (self.tmp / "CLAUDE.md").read_text()
+        self.assertEqual(result["action"], "updated")
+        self.assertIn("kettle:lineage", body)
+        self.assertIn(".setsweep/EDITING.md", body)
+        self.assertNotIn("setsweep:lineage", body)
+        self.assertTrue((self.tmp / ".setsweep" / "EDITING.md").exists())
+        self.assertFalse((self.tmp / ".kettle").exists())
 
     # ---- optional git substrate ----
 
@@ -155,16 +170,16 @@ class LineageTest(unittest.TestCase):
         (self.tmp / "a.md").write_text("changed\n")
         h = lineage.git_snapshot(self.tmp, "lineage: test")
         self.assertIsNotNone(h)                                       # lineage committed
-        self.assertTrue((self.tmp / ".setsweep" / "lineage.git").exists())
+        self.assertTrue((self.tmp / ".kettle" / "lineage.git").exists())
         after = run("rev-list", "--count", "HEAD").stdout.strip()
         self.assertEqual(before, after)                              # project git UNTOUCHED
 
     # ---- walking ----
 
-    def test_setsweep_dir_and_dotfiles_not_tracked(self):
+    def test_kettle_dir_and_dotfiles_not_tracked(self):
         lineage.accept_baseline(self.tmp)
-        (self.tmp / ".setsweep" / "queue.json").parent.mkdir(exist_ok=True)
-        (self.tmp / ".setsweep" / "queue.json").write_text("{}")
+        (self.tmp / ".kettle" / "queue.json").parent.mkdir(exist_ok=True)
+        (self.tmp / ".kettle" / "queue.json").write_text("{}")
         (self.tmp / ".hidden").write_text("secret\n")
         self.assertEqual(lineage.status(self.tmp)["changed"], 0)   # neither is tracked
 

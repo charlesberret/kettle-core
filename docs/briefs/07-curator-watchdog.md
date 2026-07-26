@@ -1,7 +1,7 @@
 ---
 id: 07
 title: Curator watchdog
-repo: setsweep-core
+repo: kettle-core
 touches: [server.py, test_server.py]
 risk: run-critical
 depends-on: [01]

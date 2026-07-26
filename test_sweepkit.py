@@ -15,9 +15,9 @@ import sweepkit
 
 class SweepkitBase(unittest.TestCase):
     def setUp(self):
-        self.tmp = Path(tempfile.mkdtemp(prefix="setsweep-sweepkit-"))
+        self.tmp = Path(tempfile.mkdtemp(prefix="kettle-sweepkit-"))
         self.root = self.tmp / "proj"
-        (self.root / ".setsweep").mkdir(parents=True)
+        (self.root / ".kettle").mkdir(parents=True)
         (self.root / "doc.md").write_text("hello\n", encoding="utf-8")
         registry = self.tmp / "projects.json"
         registry.write_text(json.dumps({"projects": [{

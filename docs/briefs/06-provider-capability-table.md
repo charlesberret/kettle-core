@@ -1,7 +1,7 @@
 ---
 id: 06
 title: Provider capability table
-repo: setsweep-core
+repo: kettle-core
 touches: [runtime.py, curator.py, server.py, API.md, test_runtime.py]
 risk: run-critical
 depends-on: [03]
@@ -10,7 +10,7 @@ status: done
 
 ## Context
 
-Setsweep's safety story leans on tool tiers, but tiers are only as real as each provider
+Kettle's safety story leans on tool tiers, but tiers are only as real as each provider
 makes them. On Grok, the "read-only" interview tier maps to `--allow Bash` +
 `--always-approve` (runtime.py:~546–558) because of documented Grok flag quirks — so a
 founding interview under `provider: grok` can execute arbitrary shell, including writes.

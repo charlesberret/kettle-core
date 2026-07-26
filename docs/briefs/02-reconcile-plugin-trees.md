@@ -1,7 +1,7 @@
 ---
 id: 02
 title: Reconcile the two plugin trees
-repo: setsweep-plugin
+repo: kettle-vscode
 touches: [packages/vscode/**, git worktrees]
 risk: normal
 depends-on: []
@@ -39,7 +39,7 @@ version numbers. No document says which tree is canonical.
 - Nothing from the branch overwrites a rewrite file wholesale — port, don't paste; the
   two `api.ts` variants (393 vs 325 lines) must be diffed and reconciled deliberately.
 - The extension must keep working attach-only (sidecar auto-start is additive and off by
-  default until `setsweep.autoStartServer` — a new setting — enables it).
+  default until `kettle.autoStartServer` — a new setting — enables it).
 - Respect the settings work landed 2026-07-17 (`serverUrl`/`project`/`confirmSweep` with
   fallback reads of the pre-0.3 keys).
 

@@ -1,7 +1,7 @@
 ---
 id: 14
 title: Test depth
-repo: setsweep-core
+repo: kettle-core
 touches: [test_server.py, test_cli.py (new), test_watch.py, pyproject.toml, .github/workflows (new)]
 risk: normal
 depends-on: [01]

@@ -1,47 +1,12 @@
 #!/usr/bin/env python3
-"""setsweep — unified entrypoint (the installed console script).
+"""Compatibility entrypoint for the former ``setsweep`` command.
 
-One command, two viewports onto the same desk:
-
-  setsweep                          browser / server mode       (default; stdlib only)
-  setsweep --web [--port N]         same as bare launch
-  setsweep projects                 list registered desks       ┐
-  setsweep add     <folder>         register a folder as a desk │
-  setsweep init                     register the current folder │  the CLI viewport
-  setsweep queue   <project>        show a desk's queue         │  (stdlib only)
-  setsweep open    <project> <id>   open the file in $EDITOR    │
-  setsweep chat    <project> [id]   talk to the resident curator│
-  setsweep sweep-status|close|archive   mechanical CLOSE helpers│
-  setsweep egress|egress-status         desk → ecosystem staging┘
-  setsweep doctor                   install health (PATH + py-modules)
-  setsweep --help                   this message
-
-The native macOS window lives in the separate setsweep-desktop Electron shell.
-Routing keeps web/server as the default; the CLI subcommands go through `cli.py`.
+New installs should use ``kettle``. This alias intentionally shares the exact
+same implementation and contracts during the rename transition.
 """
-import sys
 
-CLI_CMDS = {"projects", "add", "init", "found", "queue", "open", "lineage", "bind", "chat",
-            "doctor",
-            "sweep-status", "sweep-close", "sweep-archive", "egress", "egress-status"}
-
-
-def main(argv=None) -> int:
-    args = list(sys.argv[1:] if argv is None else argv)
-    cmd = args[0] if args else None
-
-    if cmd in ("-h", "--help"):
-        print((__doc__ or "").strip())
-        return 0
-    if cmd in CLI_CMDS:
-        import cli
-        return cli.main(args)
-    if cmd in (None, "--web", "--app", "--replace"):
-        import server          # server.main() reads sys.argv (--port/--no-open)
-        return server.main() or 0
-    print(f"setsweep: unknown command {cmd!r} (try setsweep --help)", file=sys.stderr)
-    return 2
+from kettle_main import main
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())

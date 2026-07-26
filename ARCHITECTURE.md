@@ -1,4 +1,4 @@
-# Setsweep architecture
+# Kettle architecture
 
 How the product is shaped today. Longer private design notes may exist outside the
 published tree; **this file is the public source of truth** for clone readers and new
@@ -6,7 +6,7 @@ contributors.
 
 ## Thesis
 
-Setsweep is a **review instrument**. Agents prepare and propagate; the human reviewer
+Kettle is a **review instrument**. Agents prepare and propagate; the human reviewer
 (the *user*) reads and rules. Context is paid for once by a per-project *curator* and
 delivered pre-packed (the *brief*). Rulings are applied outward mechanically by a
 *sweep*. Nothing asks the user to re-derive what an agent already knows; nothing lets
@@ -14,19 +14,19 @@ an agent rule on what is the user’s to rule.
 
 ## Desk-is-files; the app is a viewport
 
-All durable desk state lives under `<project-root>/.setsweep/` as ordinary files — no
+All durable desk state lives under `<project-root>/.kettle/` as ordinary files — no
 hidden database. Any frontend (browser, CLI, desktop shell, editor plugin) is a
 **viewport** over the same localhost API and the same desk files.
 
 | Concern | Location |
 |--------|----------|
-| Charter, memory, review program, archive, outbound egress | `.setsweep/` (durable; safe to sync) |
-| Queue, chatlog, snapshots, session logs, comments | `.setsweep/runtime/` (**exclude from file sync**) |
+| Charter, memory, review program, archive, outbound egress | `.kettle/` (durable; safe to sync) |
+| Queue, chatlog, snapshots, session logs, comments | `.kettle/runtime/` (**exclude from file sync**) |
 | Project registry | `projects.json` (user-local or Application Support for the `.app`) |
 | Preferences / curator provider | `settings.json` |
 
 **Sync rule:** if the project tree is synced (Dropbox, iCloud, git-annex, etc.), exclude
-`.setsweep/runtime/` so the sync daemon does not race high-churn rewrites. Durable desk
+`.kettle/runtime/` so the sync daemon does not race high-churn rewrites. Durable desk
 files may sync normally.
 
 Multiple viewports may open one desk. Concurrency is file-level atomic writes, not a
@@ -36,17 +36,17 @@ long-lived state daemon.
 
 One Python server per machine, binds **`127.0.0.1` only**, default port **4242**. An
 identity beacon (`GET /api/ping`) lets a new launch recognize and retire a previous
-healthy Setsweep instance — never by trusting a stale pidfile alone. Foreign occupants of
+healthy Kettle instance — never by trusting a stale pidfile alone. Foreign occupants of
 the port fall back to an ephemeral port.
 
 ## Viewports
 
 | Viewport | Where |
 |----------|--------|
-| Browser / server | this repo — `setsweep` / `setsweep --web` |
-| CLI | this repo — `setsweep projects \| queue \| chat \| …` |
-| macOS `.app` | sibling **setsweep-desktop** |
-| Editor plugins | sibling **setsweep-plugin** (VS Code/Cursor first) |
+| Browser / server | this repo — `kettle` / `kettle --web` |
+| CLI | this repo — `kettle projects \| queue \| chat \| …` |
+| macOS `.app` | sibling **kettle-desktop** |
+| VS Code / Cursor | sibling **kettle-vscode** |
 
 Wire contract: [`API.md`](./API.md).
 
@@ -63,11 +63,11 @@ Founding no longer depends on per-provider read-only shell modes.
 
 ## Founding state machine
 
-1. **Register** a folder (`setsweep add` or in-app add) — seeds an empty desk + queue
+1. **Register** a folder (`kettle add` or in-app add) — seeds an empty desk + queue
    “awaiting founding.”
 2. **Survey** — core maps the folder deterministically (no curator CLI).
 3. **Interview** — tool-less curator chat over that snapshot; user’s words beat the files.
-4. **Propose** — Finish drafts `.setsweep/DESK-PROPOSAL.md` into the editor.
+4. **Propose** — Finish drafts `.kettle/DESK-PROPOSAL.md` into the editor.
 5. **Approve proposal** — curator digests *user-edited* text and founds the desk
    (charter, memory, first queue batch).
 6. **Sitting** — user works the queue: read, comment, approve/rework.
@@ -76,7 +76,7 @@ Founding no longer depends on per-provider read-only shell modes.
 ## Lineage
 
 Edits are attributed as **agent**, **user**, or **unattributed** — never guessed. Agents
-do not relabel user claims. CLI: `setsweep lineage` / `setsweep bind`. HTTP:
+do not relabel user claims. CLI: `kettle lineage` / `kettle bind`. HTTP:
 `/api/lineage` and related resolve endpoints. See also the desk’s own ledger files.
 
 ## Invariants (non-negotiable)
@@ -107,8 +107,8 @@ do not relabel user claims. CLI: `setsweep lineage` / `setsweep bind`. HTTP:
 
 Flat Python modules at repo root (`server.py`, `cli.py`, `runtime.py`, …), stdlib-only
 runtime for server and CLI. Install **editable** (`pip install -e .`) so `static/` and
-the registry resolve from the source tree. Canonical install path: `~/.setsweep-venv`
-(see [`INSTALL.md`](./INSTALL.md)). `setsweep doctor` checks PATH and editable mapping.
+the registry resolve from the source tree. Canonical install path: `~/.kettle-venv`
+(see [`INSTALL.md`](./INSTALL.md)). `kettle doctor` checks PATH and editable mapping.
 
 **Sitting UI** is only `static/index.html` (plus themes/fonts). Type hierarchy, buttons,
 and meta-pane rules: [`docs/UI.md`](./docs/UI.md). Desktop does not fork that file.

@@ -1,4 +1,4 @@
-"""Setsweep curator kits — the per-kind playbook that arms a project's curator: a review
+"""Kettle curator kits — the per-kind playbook that arms a project's curator: a review
 lens, an urgency rubric, a first-queue heuristic, founding-interview stems, sweep self-checks,
 and an (optional) extra-tools list layered on the always-on builtins.
 
@@ -19,7 +19,7 @@ KINDS = ["writing", "code", "records", "knowledge", "inbox"]
 # (kit wins on conflict). Sweep-actions is shared so inbox and non-inbox alike can opt in.
 #
 # Wording discipline: this card is the product's first impression, answered before the
-# user has learned any Setsweep vocabulary. Stems and options must be self-explanatory —
+# user has learned any Kettle vocabulary. Stems and options must be self-explanatory —
 # no internal terms (sitting, sweep, egress, corpus), no slash piles, no example dumps.
 # One axis per question; single-choice where the axis must be crisp; every option should
 # change what the desk actually does. Card mechanics are stated once by the UI, never
@@ -56,6 +56,8 @@ BASE_INTERVIEW = [
             "Decisions — surface the calls only I can make",
             "Consistency — keep everything agreeing with itself",
             "Throughput — clear incoming work and draft replies",
+            # Cowork is first-class: desk is not only a review gallery of others' work.
+            "Build with me — propose next work, draft it together, then refine it in the queue",
         ],
     },
     {

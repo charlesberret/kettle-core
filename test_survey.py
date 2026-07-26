@@ -43,6 +43,14 @@ class TestBuildSurvey(unittest.TestCase):
         self.assertIn("CORE SURVEY", block)
         self.assertIn("README.md", block)
 
+    def test_reports_legacy_setsweep_desk_without_treating_it_as_kettle(self):
+        with tempfile.TemporaryDirectory() as td:
+            (Path(td) / ".setsweep").mkdir()
+            snap = survey.build_survey(td)
+        self.assertFalse(snap["signals"]["kettle_desk"])
+        self.assertTrue(snap["signals"]["legacy_setsweep_desk"])
+        self.assertIn("legacy .setsweep desk", survey.as_prompt_block(snap))
+
     def test_dump_roundtrip(self):
         with tempfile.TemporaryDirectory() as td:
             snap = survey.build_survey(td)

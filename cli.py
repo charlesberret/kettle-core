@@ -1,31 +1,31 @@
 #!/usr/bin/env python3
-"""setsweep — a command-line viewport over the same desk.
+"""kettle — a command-line viewport over the same desk.
 
 Proof of DESIGN.md §3 ("the desk is the application; the app is a viewport"): this driver
 runs **no HTTP server**. It shares the web app's logic only through the desk helpers in
 `server.py` (importing them is side-effect-free) and the agent adapter in `runtime.py`.
-The desk is plain files in `<root>/.setsweep/`; this renders and drives them from the
+The desk is plain files in `<root>/.kettle/`; this renders and drives them from the
 terminal — and edits go through your own `$EDITOR`, which is less to build and captures
 your edits where the lineage reconciler can see them.
 
-  setsweep projects                list registered desks
-  setsweep add     <folder>        register a folder as a desk (first-run)
-  setsweep init                    register the current folder as a desk
-  setsweep found   <project>       curator founds the desk: charter, memory, first queue
-  setsweep queue   <project>       show a desk's queue
-  setsweep open    <project> <id>  show the brief, then open the file in $EDITOR
-  setsweep lineage <project>       who edited what: agent / user / unattributed
-  setsweep bind    <project>       add the lineage directive to the project's CLAUDE.md
-  setsweep chat    <project> [id]  converse with the resident curator — resumes the
+  kettle projects                list registered desks
+  kettle add     <folder>        register a folder as a desk (first-run)
+  kettle init                    register the current folder as a desk
+  kettle found   <project>       curator founds the desk: charter, memory, first queue
+  kettle queue   <project>       show a desk's queue
+  kettle open    <project> <id>  show the brief, then open the file in $EDITOR
+  kettle lineage <project>       who edited what: agent / user / unattributed
+  kettle bind    <project>       add the lineage directive to the project's CLAUDE.md
+  kettle chat    <project> [id]  converse with the resident curator — resumes the
                                     project session, shows the corrected token meter
                                     after each turn, records turns to the desk ledger
-  setsweep sweep-status <project>  mechanical CLOSE readiness (quiet / judgment / accrue)
-  setsweep sweep-close  <project>  quiet CLOSE: stage · archive · thin session log
-  setsweep sweep-archive <project>  archive queue entries (after judgment)
-  setsweep refresh-briefs <project> rewrite cold-re-entry briefs on the current queue
-  setsweep egress <project>        stage a desk egress memo (.setsweep/outbound/)
-  setsweep egress-status <project> list staged egress memos
-  setsweep doctor                  install health (which setsweep, py-modules mapping)
+  kettle sweep-status <project>  mechanical CLOSE readiness (quiet / judgment / accrue)
+  kettle sweep-close  <project>  quiet CLOSE: stage · archive · thin session log
+  kettle sweep-archive <project>  archive queue entries (after judgment)
+  kettle refresh-briefs <project> rewrite cold-re-entry briefs on the current queue
+  kettle egress <project>        stage a desk egress memo (.kettle/outbound/)
+  kettle egress-status <project> list staged egress memos
+  kettle doctor                  install health (which kettle, py-modules mapping)
 
 Run: python3 cli.py <command> …    (PROJECTS via DESK_PROJECTS env, same as the server)
 """
@@ -48,9 +48,9 @@ import server
 import sweepkit
 
 # Canonical install (brief 20). Doctor flags any other winner on PATH.
-CANONICAL_VENV = Path.home() / ".setsweep-venv"
-CANONICAL_SETSWEEP = CANONICAL_VENV / "bin" / "setsweep"
-DIST_NAME = "setsweep"
+CANONICAL_VENV = Path.home() / ".kettle-venv"
+CANONICAL_KETTLE = CANONICAL_VENV / "bin" / "kettle"
+DIST_NAME = "kettle"
 
 
 def _k(n) -> str:
@@ -58,7 +58,7 @@ def _k(n) -> str:
     return f"{n/1000:.0f}k" if n >= 1000 else str(n)
 
 
-def _which_all(cmd: str = "setsweep") -> list[Path]:
+def _which_all(cmd: str = "kettle") -> list[Path]:
     """Every executable `cmd` on PATH, in resolution order (no duplicates)."""
     seen: set[str] = set()
     out: list[Path] = []
@@ -108,24 +108,24 @@ def install_doctor_checks(
     path_hits: list[Path] | None = None,
     py_modules: list[str] | None = None,
     top_level: list[str] | None | object = ...,
-    canonical: Path = CANONICAL_SETSWEEP,
+    canonical: Path = CANONICAL_KETTLE,
 ) -> list[dict]:
-    """Read-only install health rows for `setsweep doctor` (brief 20; expanded by brief 18).
+    """Read-only install health rows for `kettle doctor` (brief 20; expanded by brief 18).
 
     Each row: {name, ok, detail, docs}. `ok` False means doctor should exit nonzero.
     """
     rows: list[dict] = []
-    hits = path_hits if path_hits is not None else _which_all("setsweep")
+    hits = path_hits if path_hits is not None else _which_all("kettle")
     modules = py_modules if py_modules is not None else _py_modules_from_pyproject()
     if top_level is ...:
         top_level = _installed_top_level()
 
-    # --- which setsweep ---
+    # --- which kettle ---
     if not hits:
         rows.append({
-            "name": "setsweep-on-path",
+            "name": "kettle-on-path",
             "ok": False,
-            "detail": "no `setsweep` on PATH",
+            "detail": "no `kettle` on PATH",
             "docs": "INSTALL.md § Canonical install",
         })
     else:
@@ -138,7 +138,7 @@ def install_doctor_checks(
             resolved = first
             is_canon = False
         rows.append({
-            "name": "setsweep-on-path",
+            "name": "kettle-on-path",
             "ok": is_canon,
             "detail": (
                 f"resolves to {first}"
@@ -150,7 +150,7 @@ def install_doctor_checks(
         extras = hits[1:]
         if extras:
             rows.append({
-                "name": "setsweep-path-extras",
+                "name": "kettle-path-extras",
                 "ok": False,
                 "detail": f"{len(extras)} extra on PATH: "
                           + ", ".join(str(p) for p in extras),
@@ -158,9 +158,9 @@ def install_doctor_checks(
             })
         else:
             rows.append({
-                "name": "setsweep-path-extras",
+                "name": "kettle-path-extras",
                 "ok": True,
-                "detail": "single setsweep on PATH",
+                "detail": "single kettle on PATH",
                 "docs": "INSTALL.md § Canonical install",
             })
 
@@ -252,8 +252,8 @@ def cmd_projects(_args) -> int:
     projs = _projects_or_empty()
     if not projs:
         print("no desks registered yet.")
-        print("  register one:        setsweep add <folder>")
-        print("  or, inside a folder: setsweep init")
+        print("  register one:        kettle add <folder>")
+        print("  or, inside a folder: kettle init")
         return 0
     for p in projs:
         root = server.project_root(p)
@@ -279,8 +279,8 @@ def cmd_add(args) -> int:
     print(f"registered [{proj['id']}] {proj['name']}")
     print(f"  root: {server.project_root(proj)}")
     print(f"  desk: {server.desk_dir(proj)}  (queue seeded — awaiting founding)")
-    print(f"\nnext:  setsweep chat  {proj['id']}     # talk to the curator, found the desk")
-    print(f"       setsweep queue {proj['id']}     # see what's been filed")
+    print(f"\nnext:  kettle chat  {proj['id']}     # talk to the curator, found the desk")
+    print(f"       kettle queue {proj['id']}     # see what's been filed")
     return 0
 
 
@@ -304,7 +304,7 @@ def cmd_lineage(args) -> int:
     st = lineage.status(root)
     if st["baseline_ts"] is None:
         print(f"{proj['id']}: no lineage baseline yet.")
-        print(f"  set one:  setsweep lineage {proj['id']} --accept")
+        print(f"  set one:  kettle lineage {proj['id']} --accept")
         return 0
     c = st["counts"]
     print(f"lineage — {proj['id']}   (baseline {st['baseline_ts']})")
@@ -318,7 +318,7 @@ def cmd_lineage(args) -> int:
         print(f"  {ch['status']:<13} {ch['change']:<9} {ch['path']}{by}")
     if c["unattributed"]:
         print(f"\n{c['unattributed']} unattributed — changed outside the app, source unconfirmed.")
-        print(f"  review, then re-baseline:  setsweep lineage {proj['id']} --accept")
+        print(f"  review, then re-baseline:  kettle lineage {proj['id']} --accept")
     return 0
 
 
@@ -330,7 +330,7 @@ def cmd_bind(args) -> int:
     print(f"lineage directive {r['action']} in {r['file']}")
     if r["editing_created"]:
         print(f"  wrote {server.desk_dir(proj)}/EDITING.md (the protocol)")
-    print("  agents in this tree now carry the attribution directive + the .setsweep pointer.")
+    print("  agents in this tree now carry the attribution directive + the .kettle pointer.")
     return 0
 
 
@@ -389,10 +389,10 @@ def cmd_found(args) -> int:
     print(f"\n{'✓ founded' if founded else '✗ not yet founded'} — "
           f"{n} entr{'y' if n == 1 else 'ies'} in the queue.")
     if founded:
-        print(f"next:  setsweep queue {proj['id']}   ·   "
-              f"setsweep chat {proj['id']} <entry-id>")
+        print(f"next:  kettle queue {proj['id']}   ·   "
+              f"kettle chat {proj['id']} <entry-id>")
     else:
-        print("(no entries filed — run `setsweep found` again, or read the survey above.)")
+        print("(no entries filed — run `kettle found` again, or read the survey above.)")
     return 0
 
 
@@ -453,7 +453,7 @@ def cmd_refresh_briefs(args) -> int:
                 print(f"  [agent error: {ev['error']}]")
         elif t == "error":
             print(f"\n  [error: {ev['s']}]")
-    print(f"\nnext:  setsweep queue {proj['id']}")
+    print(f"\nnext:  kettle queue {proj['id']}")
     return 0
 
 
@@ -587,7 +587,7 @@ def cmd_egress(args) -> int:
     body = args.body
     if body is None:
         if sys.stdin.isatty():
-            print("setsweep egress: pass --body or pipe the memo body on stdin", file=sys.stderr)
+            print("kettle egress: pass --body or pipe the memo body on stdin", file=sys.stderr)
             return 2
         body = sys.stdin.read()
     try:
@@ -638,23 +638,23 @@ def cmd_doctor(_args) -> int:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
-        prog="setsweep", description="CLI viewport over the desk.",
+        prog="kettle", description="CLI viewport over the desk.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="examples:\n"
-               "  setsweep projects\n"
-               "  setsweep add     ~/work/notes        # register a folder\n"
-               "  setsweep init                        # register the current folder\n"
-               "  setsweep queue   setsweep\n"
-               "  setsweep open    setsweep refounding-merge\n"
-               "  setsweep chat    setsweep               # talk to the desk\n"
-               "  setsweep chat    setsweep <entry-id>    # about one file\n"
-               "  setsweep doctor                      # install health\n"
-               "  setsweep sweep-status setsweep\n"
-               "  setsweep sweep-close  setsweep\n"
-               "  setsweep refresh-briefs setsweep\n"
-               "  setsweep egress setsweep --kind launch --topic go-ahead --body '…'\n"
-               "  setsweep egress-status setsweep\n")
-    # not required: a bare `setsweep` should greet with the menu, not error out
+               "  kettle projects\n"
+               "  kettle add     ~/work/notes        # register a folder\n"
+               "  kettle init                        # register the current folder\n"
+               "  kettle queue   kettle\n"
+               "  kettle open    kettle refounding-merge\n"
+               "  kettle chat    kettle               # talk to the desk\n"
+               "  kettle chat    kettle <entry-id>    # about one file\n"
+               "  kettle doctor                      # install health\n"
+               "  kettle sweep-status kettle\n"
+               "  kettle sweep-close  kettle\n"
+               "  kettle refresh-briefs kettle\n"
+               "  kettle egress kettle --kind launch --topic go-ahead --body '…'\n"
+               "  kettle egress-status kettle\n")
+    # not required: a bare `kettle` should greet with the menu, not error out
     sub = ap.add_subparsers(
         dest="cmd",
         metavar="{projects,add,init,found,queue,open,lineage,bind,chat,doctor,"
@@ -662,7 +662,7 @@ def main(argv=None) -> int:
     sub.add_parser("projects", help="list registered desks").set_defaults(fn=cmd_projects)
     sub.add_parser(
         "doctor",
-        help="install health: which setsweep, py-modules mapping (brief 20; brief 18 expands)",
+        help="install health: which kettle, py-modules mapping (brief 20; brief 18 expands)",
     ).set_defaults(fn=cmd_doctor)
     a = sub.add_parser("add", help="register a folder as a desk")
     a.add_argument("path"); a.add_argument("--name", default=None); a.set_defaults(fn=cmd_add)
@@ -699,7 +699,7 @@ def main(argv=None) -> int:
     rb.add_argument("project")
     rb.add_argument("--model", default=None)
     rb.set_defaults(fn=cmd_refresh_briefs)
-    eg = sub.add_parser("egress", help="stage a desk egress memo under .setsweep/outbound/")
+    eg = sub.add_parser("egress", help="stage a desk egress memo under .kettle/outbound/")
     eg.add_argument("project")
     eg.add_argument("--kind", required=True, choices=sorted(egress.KINDS))
     eg.add_argument("--topic", required=True)
@@ -709,7 +709,7 @@ def main(argv=None) -> int:
     es = sub.add_parser("egress-status", help="list staged desk egress memos")
     es.add_argument("project"); es.set_defaults(fn=cmd_egress_status)
     args = ap.parse_args(argv)
-    if not getattr(args, "fn", None):   # bare `setsweep` → show the menu, exit clean
+    if not getattr(args, "fn", None):   # bare `kettle` → show the menu, exit clean
         ap.print_help()
         return 0
     try:

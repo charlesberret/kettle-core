@@ -1,7 +1,7 @@
 ---
 id: 19
 title: Enforce the agent fence
-repo: setsweep-core
+repo: kettle-core
 touches: [sandbox.py (new), runtime.py, server.py, curator.py, API.md, test_sandbox.py (new)]
 risk: run-critical
 depends-on: [03, 06]
@@ -10,7 +10,7 @@ status: open
 
 ## Context
 
-Setsweep's thesis is a boundary: agents prepare, the user rules. But three of the
+Kettle's thesis is a boundary: agents prepare, the user rules. But three of the
 invariants that express it are enforced by **prompt**, not architecture — writes stay
 inside the project root, append-only records are never mutated, the desk never transmits.
 All three are requests, not guarantees.
@@ -22,10 +22,10 @@ were dropped from the sweep tier on 2026-07-20 (evidence: no prompt under `kits/
 referenced them), which narrowed the hole without closing it. Provider variance widens it
 again: Grok's tiers map to `bypassPermissions` with open Bash, which brief 06 can *detect
 and refuse* but cannot *fix*. And `safe_path` — the fence people assume covers this — governs
-Setsweep's own HTTP routes (`/api/file`, `/api/save`), not the tools a spawned curator holds.
+Kettle's own HTTP routes (`/api/file`, `/api/save`), not the tools a spawned curator holds.
 
 **The ambition.** Make the fence a property of the system rather than a line in a prompt:
-*point Setsweep at a folder and it cannot touch anything outside it.* No adjacent agent tool
+*point Kettle at a folder and it cannot touch anything outside it.* No adjacent agent tool
 makes that claim, and it is the natural completion of the product's own thesis — a division
 of labor is only as real as its boundary.
 
@@ -38,7 +38,7 @@ of labor is only as real as its boundary.
 3. **OS sandbox around the curator process** — *this brief's increment.* Highest value per
    unit of effort, because it fences whatever the CLI does, including raw shell, regardless
    of which vendor's permission model sits underneath. Provider-agnostic by construction.
-4. **Mediated tools** — Setsweep exposes its own fenced tool layer (read/grep/edit/write, all
+4. **Mediated tools** — Kettle exposes its own fenced tool layer (read/grep/edit/write, all
    through `safe_path`) and the agent holds no raw shell. Strongest guarantee, and it is the
    same build DESIGN already flagged as the local-model tool harness, so it pays twice: real
    containment *and* tool use for models without native tool-calling.
@@ -60,7 +60,7 @@ of labor is only as real as its boundary.
 
 ## Task (first increment only)
 
-1. Write `sandbox.py`: build a per-sitting profile from the project root + its `.setsweep/`
+1. Write `sandbox.py`: build a per-sitting profile from the project root + its `.kettle/`
    + a temp dir, and expose `wrap_argv(argv, project_root) -> argv`. macOS first
    (`sandbox-exec` + generated SBPL); Linux second (`bubblewrap`, or Landlock where the
    kernel supports it).
@@ -68,7 +68,7 @@ of labor is only as real as its boundary.
 3. Add a `sandboxed` field to the provider capability table (brief 06's structure) so
    `/api/ping` reports honestly whether the active turn is contained.
 4. Tests (`test_sandbox.py`): the profile denies a write to `/tmp` and to `$HOME` outside the
-   root; permits writes inside the root and `.setsweep/`; the turn refuses or warns when
+   root; permits writes inside the root and `.kettle/`; the turn refuses or warns when
    `sandbox-exec` is unavailable.
 5. **Measure the cost**: run a real founding and a real sweep under the sandbox and record
    what breaks. That measurement is the deliverable, not an afterthought.

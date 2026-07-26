@@ -1,7 +1,7 @@
 ---
 id: 09
 title: Allowlist sanitizer + keyboard access
-repo: setsweep-core
+repo: kettle-core
 touches: [static/index.html, static/ (vendored DOMPurify)]
 risk: run-critical
 depends-on: [08]

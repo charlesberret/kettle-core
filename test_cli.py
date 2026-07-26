@@ -23,7 +23,7 @@ import server
 
 class CliTests(unittest.TestCase):
     def setUp(self):
-        self.tmp = Path(tempfile.mkdtemp(prefix="setsweep-cli-"))
+        self.tmp = Path(tempfile.mkdtemp(prefix="kettle-cli-"))
         self.registry = self.tmp / "projects.json"
         self.registry.write_text('{"projects": []}')
         self.settings = self.tmp / "settings.json"
@@ -64,7 +64,7 @@ class CliTests(unittest.TestCase):
         code1, out1, err1 = self.run_cli(["add", str(root), "--name", "My Notes"])
         self.assertEqual((code1, err1), (0, ""))
         self.assertIn("registered [my_notes]", out1)
-        self.assertTrue((root / ".setsweep" / "runtime" / "queue.json").is_file())
+        self.assertTrue((root / ".kettle" / "runtime" / "queue.json").is_file())
 
         code2, out2, _ = self.run_cli(["projects"])
         self.assertEqual(code2, 0)
@@ -186,7 +186,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(cmd[cmd.index("--model") + 1], "sonnet")
 
     def test_chat_builds_grok_argv_when_provider_is_grok(self):
-        """Gate for brief 03: a grok curator config makes `setsweep chat` build Grok
+        """Gate for brief 03: a grok curator config makes `kettle chat` build Grok
         dialect argv (no Claude hardcoding), single-sourced through build_turn_cmd."""
         self.settings.write_text(json.dumps({
             "curator": {
@@ -238,20 +238,20 @@ class CliTests(unittest.TestCase):
 
     def test_install_doctor_flags_stale_mapping_and_path_extras(self):
         """Brief 20: doctor catches PATH strays and py-modules missing from top_level."""
-        canon = Path("/tmp/fake-venv/bin/setsweep")
+        canon = Path("/tmp/fake-venv/bin/kettle")
         rows = cli.install_doctor_checks(
             path_hits=[
-                Path("/opt/homebrew/bin/setsweep"),
-                Path("/Users/me/.local/bin/setsweep"),
+                Path("/opt/homebrew/bin/kettle"),
+                Path("/Users/me/.local/bin/kettle"),
             ],
             py_modules=["cli", "server", "egress", "sweepkit"],
             top_level=["cli", "server"],  # egress + sweepkit missing → stale MAPPING
             canonical=canon,
         )
         by_name = {r["name"]: r for r in rows}
-        self.assertFalse(by_name["setsweep-on-path"]["ok"])
-        self.assertFalse(by_name["setsweep-path-extras"]["ok"])
-        self.assertIn("extra on PATH", by_name["setsweep-path-extras"]["detail"])
+        self.assertFalse(by_name["kettle-on-path"]["ok"])
+        self.assertFalse(by_name["kettle-path-extras"]["ok"])
+        self.assertIn("extra on PATH", by_name["kettle-path-extras"]["detail"])
         self.assertFalse(by_name["install-mapping"]["ok"])
         self.assertIn("egress", by_name["install-mapping"]["detail"])
         self.assertIn("sweepkit", by_name["install-mapping"]["detail"])
@@ -262,17 +262,17 @@ class CliTests(unittest.TestCase):
         modules = cli._py_modules_from_pyproject()
         self.assertIn("egress", modules)
         rows = cli.install_doctor_checks(
-            path_hits=[cli.CANONICAL_SETSWEEP],
+            path_hits=[cli.CANONICAL_KETTLE],
             py_modules=modules,
             top_level=list(modules),
-            canonical=cli.CANONICAL_SETSWEEP,
+            canonical=cli.CANONICAL_KETTLE,
         )
         self.assertTrue(all(r["ok"] for r in rows), rows)
         code, out, err = self.run_cli(["doctor"])
         # Live PATH may have strays — command must run and print a table either way.
         self.assertIn(code, (0, 1))
         self.assertEqual(err, "")
-        self.assertIn("setsweep-on-path", out)
+        self.assertIn("kettle-on-path", out)
         self.assertIn("py-modules-importable", out)
 
 

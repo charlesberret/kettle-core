@@ -1,7 +1,7 @@
 ---
 id: 01
 title: Commit the working tree
-repo: setsweep-core
+repo: kettle-core
 touches: [git only — no code changes]
 risk: normal
 depends-on: []

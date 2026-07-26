@@ -2,7 +2,7 @@
 """desk — three-pane review server: agent-curated queue · plaintext editor · review agent.
 
 Multi-project: the registry at projects.json maps project ids to a root (the agent's
-working directory) and a queue file (<root>/.setsweep/queue.json by convention). The
+working directory) and a queue file (<root>/.kettle/queue.json by convention). The
 right-pane agent is the active curator CLI in headless mode (Claude: stream-json;
 Grok Build CLI: streaming-json), run in the active project's root with
 Read/Glob/Grep/Edit/Write under acceptEdits (project-fenced);
@@ -38,7 +38,7 @@ import kits     # curator kits: the per-kind playbook (lens · urgency · first-
 import lineage  # who-edited-what: agent edits self-record to the desk's working record
 import runtime  # viewport-neutral agent adapter: spawn · usage normalizer · session ledger
 import curator as curator_mod  # pluggable curator backends (claude CLI default)
-import setsweep_contract  # core/API/desk-schema identity for every viewport
+import kettle_contract  # core/API/desk-schema identity for every viewport
 import survey as survey_mod  # deterministic founding survey (tool-less interview Phase A)
 import sweepkit  # mechanical sweep close-kit (status · archive · stage · thin log)
 
@@ -59,6 +59,15 @@ STATIC = APPDIR / "static"
 def user_projects_path() -> Path:
     """Platform user-data registry — same location desktop uses on macOS."""
     if sys.platform == "darwin":
+        return HOME / "Library/Application Support/Kettle/projects.json"
+    xdg = os.environ.get("XDG_CONFIG_HOME")
+    base = Path(xdg).expanduser() if xdg else HOME / ".config"
+    return base / "kettle" / "projects.json"
+
+
+def legacy_user_projects_path() -> Path:
+    """Pre-Kettle registry location, read during the rename transition."""
+    if sys.platform == "darwin":
         return HOME / "Library/Application Support/Setsweep/projects.json"
     xdg = os.environ.get("XDG_CONFIG_HOME")
     base = Path(xdg).expanduser() if xdg else HOME / ".config"
@@ -70,8 +79,9 @@ def resolve_projects_path() -> Path:
 
     1. `$DESK_PROJECTS` — explicit override (tests, desktop sidecar, power users)
     2. User registry if it already exists (Application Support / XDG)
-    3. Repo-local `APPDIR/projects.json` if present (dev checkout)
-    4. Otherwise the user path (first write creates the shared registry)
+    3. Existing legacy Setsweep user registry (read/write in place; no split state)
+    4. Repo-local `APPDIR/projects.json` if present (dev checkout)
+    5. Otherwise the Kettle user path (first write creates the shared registry)
     """
     env = os.environ.get("DESK_PROJECTS")
     if env:
@@ -79,6 +89,9 @@ def resolve_projects_path() -> Path:
     user = user_projects_path()
     if user.exists():
         return user
+    legacy = legacy_user_projects_path()
+    if legacy.exists():
+        return legacy
     repo = APPDIR / "projects.json"
     if repo.exists():
         return repo
@@ -93,7 +106,7 @@ SERVER_PORT = None  # bound port, recorded at startup for the admin report
 SERVER_STARTED = None  # ISO timestamp, set at bind
 DEFAULT_PORT = 4242  # one port for native app and web mode alike — a bookmarked
                      # tab always reaches the live server, never a stale orphan
-RUNTIME_PATH = HOME / ".cache/setsweep/server.json"  # informational record of the bind
+RUNTIME_PATH = HOME / ".cache/kettle/server.json"  # informational record of the bind
 QUEUE_LOCK = threading.Lock()
 SETTINGS_LOCK = threading.Lock()
 PROJECTS_LOCK = threading.Lock()
@@ -237,12 +250,18 @@ CHATLOG_CAP = 500  # server-side cap: most recent N messages kept per project
 
 
 def _env_allowed_roots() -> list[Path]:
-    """Extra base roots for the file fence, from $SETSWEEP_ALLOWED_ROOTS (os.pathsep-separated).
+    """Extra base roots for the file fence.
+
+    ``KETTLE_ALLOWED_ROOTS`` is authoritative. The former
+    ``SETSWEEP_ALLOWED_ROOTS`` remains a read-side fallback during migration.
     Default (unset) = empty: the fence is exactly the registered project roots, each gated under
     $HOME at registration. Set this to widen it — e.g. a notes vault whose `[[wikilinks]]` cross
-    project boundaries: `SETSWEEP_ALLOWED_ROOTS="$HOME/Notes:$HOME/Vault"`."""
+    project boundaries: `KETTLE_ALLOWED_ROOTS="$HOME/Notes:$HOME/Vault"`."""
     out: list[Path] = []
-    for part in os.environ.get("SETSWEEP_ALLOWED_ROOTS", "").split(os.pathsep):
+    raw = os.environ.get("KETTLE_ALLOWED_ROOTS")
+    if raw is None:
+        raw = os.environ.get("SETSWEEP_ALLOWED_ROOTS", "")
+    for part in raw.split(os.pathsep):
         part = part.strip()
         if part:
             try:
@@ -254,7 +273,7 @@ def _env_allowed_roots() -> list[Path]:
 
 # The fence = these base roots + every registered project root (see allowed_roots()). Base
 # defaults to empty for portability; the author can restore prior behavior with, e.g.,
-# SETSWEEP_ALLOWED_ROOTS="$HOME/cloud/sync:$HOME/Library/Mobile Documents/com~apple~CloudDocs".
+# KETTLE_ALLOWED_ROOTS="$HOME/cloud/sync:$HOME/Library/Mobile Documents/com~apple~CloudDocs".
 BASE_ALLOWED_ROOTS = _env_allowed_roots()
 
 # Tool tiers (agent / chat / sweep / interview) are single-sourced in
@@ -272,7 +291,7 @@ def _load_prompt(name: str, fallback: str) -> str:
         text = path.read_text(encoding="utf-8")
     except OSError as exc:
         print(
-            f"setsweep: prompt file {path} unavailable ({exc}); using emergency fallback",
+            f"kettle: prompt file {path} unavailable ({exc}); using emergency fallback",
             file=sys.stderr,
         )
         return fallback
@@ -444,13 +463,23 @@ def project_root(proj: dict) -> Path:
 
 
 def desk_dir(proj: dict) -> Path:
-    """Durable desk — always at <project_root>/.setsweep (syncs with the project)."""
-    return project_root(proj) / ".setsweep"
+    """Resolve one durable desk without creating parallel state.
+
+    Prefer ``.kettle``. If it does not exist, keep using an existing
+    ``.setsweep`` desk until the user runs an explicit migration. New projects
+    always receive ``.kettle``.
+    """
+    root = project_root(proj)
+    current = root / ".kettle"
+    legacy = root / ".setsweep"
+    if current.exists() or not legacy.exists():
+        return current
+    return legacy
 
 
 def intake_paths(proj: dict):
     """(watch, responses, outbound) resolved for an inbox project's `intake` block, or None.
-    Mirrors setsweep-watch.resolve_intake: `watch` may be a folder, '.', or a subdir; relatives
+    Mirrors kettle-watch.resolve_intake: `watch` may be a folder, '.', or a subdir; relatives
     join to the root; responses/outbound default under the root. Used to thread the outbound
     folder into the sweep so approved drafts are staged outward (never transmitted)."""
     cfg = proj.get("intake")
@@ -469,10 +498,10 @@ def intake_paths(proj: dict):
 
 def runtime_dir(proj: dict) -> Path:
     """Volatile runtime state — the high-churn files (queue, chatlog, logs, snapshots,
-    sessions) that must NOT sync. Kept INSIDE the project at <root>/.setsweep/runtime/
+    sessions) that must NOT sync. Kept INSIDE the project at <root>/.kettle/runtime/
     so they stay within the review agent's project-root fence (no out-of-sandbox
     --add-dir needed). If you sync the project tree (Dropbox/iCloud/etc.), exclude
-    `.setsweep/runtime/` at the sync layer (e.g. a `seafile-ignore.txt`) so the daemon
+    `.kettle/runtime/` at the sync layer (e.g. a `seafile-ignore.txt`) so the daemon
     doesn't race these rapid rewrites. The durable desk files stay in desk_dir() and sync
     normally. (A sync idiosyncrasy is fixed at the sync layer, not by moving state outside
     the sandbox.)"""
@@ -699,7 +728,7 @@ def build_refresh_briefs_prompt(proj: dict) -> str | None:
     """Prompt for rewriting brief+ask on the current queue only.
 
     Returns None when the queue is empty (caller should short-circuit). Shared by
-    POST /api/refresh-briefs and `setsweep refresh-briefs`.
+    POST /api/refresh-briefs and `kettle refresh-briefs`.
     """
     entries = load_queue(proj).get("entries") or []
     if not entries:
@@ -747,7 +776,7 @@ def build_refresh_briefs_prompt(proj: dict) -> str | None:
 def session_path(proj: dict) -> Path:
     """The project's single persistent-session record (replaces the old per-file model
     and the founding interview.json). One Claude Code session per project — named
-    setsweep-<project> — runs interview → found → chat → sweep; this file is its
+    kettle-<project> — runs interview → found → chat → sweep; this file is its
     source of truth: {session_id, status, last_entry, name}."""
     return runtime_dir(proj) / "session.json"
 
@@ -880,11 +909,11 @@ def find_entry(q: dict, entry_id: str) -> dict:
 def session_name(proj: dict, entry: dict | None = None) -> str:
     """Display name set on the project's single Claude session via `--name`, so it is
     legible in the `/resume` picker and terminal title. One session per project now, so
-    the name is project-level: setsweep-<project>, slugified and length-capped. The
+    the name is project-level: kettle-<project>, slugified and length-capped. The
     `entry` argument is accepted but ignored (kept for call-site compatibility)."""
     base = proj.get("name") or "desk"
     body = re.sub(r"[^a-z0-9]+", "-", base.lower()).strip("-")[:48]
-    return f"setsweep-{body}" if body else "setsweep"
+    return f"kettle-{body}" if body else "kettle"
 
 
 def ensure_snapshots(proj: dict, q: dict):
@@ -1093,7 +1122,7 @@ def register_project(name: str, root: str, kit: str | None = None,
         data["projects"].append(proj)
         PROJECTS_PATH.parent.mkdir(parents=True, exist_ok=True)
         atomic_write(PROJECTS_PATH, json.dumps(data, indent=2, ensure_ascii=False))
-    (rp / ".setsweep").mkdir(parents=True, exist_ok=True)   # durable desk dir
+    (rp / ".kettle").mkdir(parents=True, exist_ok=True)   # new durable desk dir
     qp = queue_path(proj)
     if not qp.exists():
         atomic_write(qp, json.dumps(
@@ -1118,7 +1147,7 @@ def refound_desk(proj: dict) -> dict:
     except (OSError, json.JSONDecodeError):
         pass
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    bk = HOME / ".cache" / "setsweep-refound-backups" / f"{proj['id']}-{stamp}"
+    bk = HOME / ".cache" / "kettle-refound-backups" / f"{proj['id']}-{stamp}"
     if desk.exists():
         bk.parent.mkdir(parents=True, exist_ok=True)
         shutil.copytree(desk, bk)
@@ -1348,7 +1377,7 @@ def admin_report(active_pid: str | None) -> dict:
     }
     if fleet:
         health = _read_json(CACHE / "inventory-health.json")
-        watch = health.get("setsweep-watch") if isinstance(health, dict) else None
+        watch = health.get("kettle-watch") if isinstance(health, dict) else None
         report["sentinel"] = _sentinel_status()
         report["events"] = _events_tail(20)
         report["watcher"] = watch
@@ -1432,12 +1461,12 @@ class Handler(BaseHTTPRequestHandler):
                 self.wfile.write(body)
             elif url.path == "/api/ping":
                 # identity beacon: lets a new instance recognize (and retire) an
-                # old setsweep holding the port — and lets anyone tell us apart
+                # old kettle holding the port — and lets anyone tell us apart
                 # from a foreign service
                 cfg = current_curator()
                 self.send_json({
-                    "app": "setsweep",
-                    **setsweep_contract.identity(),
+                    "app": "kettle",
+                    **kettle_contract.identity(),
                     "pid": os.getpid(),
                     "port": SERVER_PORT,
                     "started": SERVER_STARTED,
@@ -1727,7 +1756,7 @@ class Handler(BaseHTTPRequestHandler):
             best = None
             for ext in (".md", ".markdown", ".txt", ""):
                 for p in root.rglob("*"):
-                    if "/." in str(p):  # skip dotdirs (.setsweep, .git)
+                    if "/." in str(p):  # skip dotdirs (.kettle, .git)
                         continue
                     if p.is_file() and p.stem.lower() == stem and (
                             ext == "" or p.suffix.lower() == ext):
@@ -1934,7 +1963,7 @@ class Handler(BaseHTTPRequestHandler):
             prompt += "\n" + sweep_precomputed_context(proj, queue_entries)
             prompt += "\n" + sweepkit.status_for_prompt(proj)
             prompt += (
-                "\n\nCLOSE KIT: prefer `setsweep sweep-close <project>` / mechanical helpers when "
+                "\n\nCLOSE KIT: prefer `kettle sweep-close <project>` / mechanical helpers when "
                 "quiet; after judgment, archive via the close-kit rather than hand-rolled mv/rm.\n"
             )
             intake = intake_paths(proj)
@@ -2063,7 +2092,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json({"error": f"no such project: {pid}"}, 400)
                 return
             atomic_write(PROJECTS_PATH, json.dumps(data, indent=2, ensure_ascii=False))
-        # the project's files and its .setsweep desk are intentionally left untouched
+        # the project's files and its .kettle desk are intentionally left untouched
         self.send_json({"projects": load_projects(), "home": str(HOME)})
 
     # ---- edit a project's name / root (id stays fixed; a moved root repoints the queue) ----
@@ -2343,7 +2372,7 @@ class Handler(BaseHTTPRequestHandler):
         the viewport-neutral adapter any future CLI viewport drives too. This method is the
         HTTP/process glue: own the response, forward each normalized event, map the init
         session-id to the caller's `persist` hook, and (when `record_user_message` is set)
-        append the turn to the desk's own ledger at `<root>/.setsweep/sessions/<id>.jsonl`
+        append the turn to the desk's own ledger at `<root>/.kettle/sessions/<id>.jsonl`
         — so continuity is the desk's, not the agent process's. Event shapes are unchanged
         (model/text/tool/done/error); `usage` is additive and ignored by older frontends;
         `done.ctx` is now true single-call occupancy, not the turn's summed aggregate."""
@@ -2414,7 +2443,7 @@ class Handler(BaseHTTPRequestHandler):
                 line_queue.put(eof)
 
         threading.Thread(target=read_stdout, daemon=True,
-                         name="setsweep-curator-stdout").start()
+                         name="kettle-curator-stdout").start()
         last_event_at = [time.monotonic()]
 
         def iter_lines():
@@ -2481,7 +2510,9 @@ class Handler(BaseHTTPRequestHandler):
         finally:
             if record_user_message is not None and cap["sid"]:
                 try:
-                    runtime.SessionLedger(Path(cwd) / ".setsweep" / "sessions").append_turn(
+                    runtime.SessionLedger(
+                        desk_dir({"root": cwd}) / "sessions"
+                    ).append_turn(
                         cap["sid"], "user", record_user_message,
                         agent_text="".join(cap["text"]), tools=cap["tools"],
                         usage=meter.snapshot())
@@ -2505,7 +2536,7 @@ class Handler(BaseHTTPRequestHandler):
 # ---------- entry points ----------
 
 def _record_bind(port: int) -> None:
-    """Stamp identity globals + ~/.cache/setsweep/server.json after a successful bind.
+    """Stamp identity globals + ~/.cache/kettle/server.json after a successful bind.
 
     Shared by `start_server` (tests / daemon) and `main` (blocking sidecar / CLI web).
     `/api/ping` is the authority; the cache file is informational for discovery.
@@ -2538,13 +2569,13 @@ def start_server(port: int = 0) -> tuple[ThreadingHTTPServer, int]:
     return srv, SERVER_PORT
 
 
-def _ping_setsweep(port: int, timeout: float = 0.8) -> dict | None:
-    """Answer of /api/ping on the port iff it identifies as setsweep, else None."""
+def _ping_kettle(port: int, timeout: float = 0.8) -> dict | None:
+    """Answer of /api/ping for Kettle or its transitional Setsweep predecessor."""
     try:
         with urllib.request.urlopen(
                 f"http://127.0.0.1:{port}/api/ping", timeout=timeout) as r:
             j = json.loads(r.read())
-            return j if j.get("app") == "setsweep" else None
+            return j if j.get("app") in {"kettle", "setsweep"} else None
     except Exception:  # noqa: BLE001 — closed port, timeout, non-JSON: all mean "not ours"
         return None
 
@@ -2596,12 +2627,12 @@ def prepare_bind(port: int = DEFAULT_PORT, replace: bool = False) -> int | None:
 
     Returns:
       port to bind (may equal the preferred port), or
-      None if a healthy current setsweep already holds the port (caller should defer).
+      None if a healthy current kettle already holds the port (caller should defer).
 
     Retires a predecessor only when stale or `replace` is True. Does not fall back to
     an ephemeral port — callers that hit OSError on bind may try port 0 themselves.
     """
-    info = _ping_setsweep(port)
+    info = _ping_kettle(port)
     pid = info.get("pid") if info else None
     if pid and pid != os.getpid():
         if replace or _predecessor_is_stale(info or {}):
@@ -2617,14 +2648,14 @@ def start_server_preferred(port: int = DEFAULT_PORT,
 
     Circuit-breaker (2026-06-13): a bare launch must NEVER kill a healthy, CURRENT
     predecessor — that turned every stray relaunch into the user's window vanishing
-    mid-sitting. We retire a responding setsweep predecessor ONLY if it is stale
+    mid-sitting. We retire a responding kettle predecessor ONLY if it is stale
     (started before the current code) or the launch is explicit (`--replace`).
 
     Returns:
       (server, port) — this process bound the port and is now serving.
-      None           — a healthy current setsweep already holds the port; the caller
+      None           — a healthy current kettle already holds the port; the caller
                        should defer (do not open a second window; do not kill anything).
-    A foreign (non-setsweep) occupant → fall back to an ephemeral port (returns a tuple).
+    A foreign (non-kettle) occupant → fall back to an ephemeral port (returns a tuple).
     We kill only a pid that ANSWERED our ping — never on the say-so of a stale state file.
     """
     claimed = prepare_bind(port, replace=replace)
@@ -2637,7 +2668,7 @@ def start_server_preferred(port: int = DEFAULT_PORT,
 
 
 def main():
-    """Blocking web entry (CLI `setsweep --web`, desktop sidecar).
+    """Blocking web entry (CLI `kettle --web`, desktop sidecar).
 
     Same identity recording as `start_server`. On the default port (no `--port`),
     applies the circuit-breaker via `prepare_bind` so `--replace` actually works
@@ -2650,13 +2681,13 @@ def main():
     if explicit_port:
         port = int(args[args.index("--port") + 1])
     # Always run the circuit-breaker — including with explicit --port — so
-    # `setsweep --web --port 4242 --replace` (plugin Restart Core) actually
+    # `kettle --web --port 4242 --replace` (plugin Restart Core) actually
     # retires the predecessor. Previously --port skipped prepare_bind and
     # hit "Address already in use" while the stale process kept serving.
     claimed = prepare_bind(port, replace=replace)
     if claimed is None:
         url = f"http://127.0.0.1:{port}/"
-        print(f"setsweep already running at {url} — deferring (pass --replace to restart)")
+        print(f"kettle already running at {url} — deferring (pass --replace to restart)")
         return 0
     port = claimed
 
@@ -2671,7 +2702,7 @@ def main():
     _record_bind(srv.server_address[1])
     url = f"http://127.0.0.1:{SERVER_PORT}/"
     print(f"desk · {url}\nprojects: {PROJECTS_PATH}")
-    print("CLI: setsweep projects | add | queue | chat …")
+    print("CLI: kettle projects | add | queue | chat …")
     if "--no-open" not in args:
         threading.Timer(0.4, lambda: webbrowser.open(url)).start()
     try:

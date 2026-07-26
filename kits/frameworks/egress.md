@@ -1,6 +1,6 @@
 # Desk egress
 
-`.setsweep/outbound/` is the desk's **staging queue** for signals meant for other agents
+`.kettle/outbound/` is the desk's **staging queue** for signals meant for other agents
 or systems. Stage here; never transmit mail or route outside the project from the curator
 sandbox. External pickup drains `Status: staged` files and routes them.
 
@@ -16,7 +16,7 @@ Kinds: `handoff` | `escalation` | `launch` | `domain` | `approval`
 
 ```markdown
 # Egress: <topic>
-**From:** setsweep/<project-id> · **Date:** YYYY-MM-DD
+**From:** kettle/<project-id> · **Date:** YYYY-MM-DD
 **Kind:** handoff | escalation | launch | domain | approval
 **Route:** <hint>
 **Status:** staged
@@ -39,7 +39,7 @@ Default route hints ship neutral (product code). Override per machine in
 
 ## Discipline
 
-1. Prefer `setsweep egress <project> …` (or the helper) over freehand filenames.
+1. Prefer `kettle egress <project> …` (or the helper) over freehand filenames.
 2. Launch rulings: append `LAUNCH DIRECTIVE:` to `runtime/sweep.log` **and** stage a `launch` egress memo.
 3. Domain memos may still write to their project path; also stage a short `domain` egress pointer.
 4. **Approvals (approve + sweep):** when the user's pass unblocks other agents (roadmap,

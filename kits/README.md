@@ -16,7 +16,7 @@ Leaving a project's kit unset gives a general curator with no specialized lens.
 
 ## Product prompts (`prompts/`)
 
-`prompts/*.md` is Setsweep's user-visible curator language: founding, sweep, accrue,
+`prompts/*.md` is Kettle's user-visible curator language: founding, sweep, accrue,
 chat-context, and live-reporting instructions. The server reads each file once at import.
 Prompt files are safe to tune directly; preserve their `{placeholders}` and run the prompt
 format smoke test after editing. A missing file logs a warning and uses a short built-in
@@ -39,11 +39,11 @@ configured on the **project stanza** (not the kit — intake paths are personal 
 }
 ```
 
-- **Live intake** — `setsweep-watch` (cron, ~15 min) scans `watch`, diffs against a per-project
+- **Live intake** — `kettle-watch` (cron, ~15 min) scans `watch`, diffs against a per-project
   seen-set, and fires a curate agent for each new file: it drafts a response into `responses/`
   and files a queue entry (brief + a `source` field pointing at the incoming item). When `watch`
   is the project root or a subdir, intake ignores its own output (`responses/`, `outbound/`,
-  `.setsweep/`).
+  `.kettle/`).
 - **Sweep routes outward** — approve is a bookmark; at sweep the approved drafts are **staged to
   `outbound/`** (a send-queue an external tool picks up). The sweep never transmits — staging
   only, per the localhost-only invariant. See [`ARCHITECTURE.md`](../ARCHITECTURE.md) (desk model

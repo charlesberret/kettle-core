@@ -1,7 +1,7 @@
 # Sitting UI conventions
 
 **Single frontend:** `static/index.html` (+ `themes.js`, fonts). Browser, CLI-launched
-web, and **setsweep-desktop** all load this file. Do not fork styles into the desktop
+web, and **kettle-desktop** all load this file. Do not fork styles into the desktop
 repo or the VS Code Desk webview without a deliberate shared token plan.
 
 When you touch sitting chrome, **read this file first**. Fixing one panel and leaving a
@@ -84,19 +84,19 @@ User-facing **strings** must not drift between web, desktop, and the plugin Desk
 
 | Role | Location |
 |------|----------|
-| **Canonical (edit here only)** | `static/ui-copy.js` → `window.SETSWEEP_UI_COPY` (`/ui-copy.js`) |
-| **Plugin (generated)** | `setsweep-plugin/packages/vscode/src/uiCopy.ts` — **do not hand-edit** |
+| **Canonical (edit here only)** | `static/ui-copy.js` → `window.KETTLE_UI_COPY` (`/ui-copy.js`) |
+| **VS Code (generated)** | `kettle-vscode/src/uiCopy.ts` — **do not hand-edit** |
 | **Desktop** | inherits web (same static files via sidecar) |
 
 **Workflow**
 
-1. Edit `setsweep-core/static/ui-copy.js` only.
+1. Edit `kettle-core/static/ui-copy.js` only.
 2. In the plugin package: `npm run sync-ui-copy`, then commit the generated snapshot.
 3. Run `npm run check-ui-copy` against the intended core checkout.
 4. Ordinary plugin compile/package consumes the committed snapshot and stays
    sibling-independent; rebuild/reinstall the VSIX if needed.
 
-`SETSWEEP_SRC` (core root) or `SETSWEEP_UI_COPY` (path to `ui-copy.js`) override discovery
+`KETTLE_SRC` (core root) or `KETTLE_UI_COPY` (path to `ui-copy.js`) override discovery
 when the repos are not siblings.
 
 **Test:** `test_ui_copy.py` asserts core keys exist and, when the plugin tree is present,
@@ -117,13 +117,13 @@ that generated `uiCopy.ts` still matches (CI safety if someone hand-edits the mi
 - [ ] Every new string maps to a type role in the table above.
 - [ ] No new `color: var(--fg)` on labels, pane titles, or supporting paragraphs.
 - [ ] Buttons use the shared kit; midfoot actions match each other.
-- [ ] Bump `meta name="setsweep-ui"` content so reloads are obvious.
+- [ ] Bump `meta name="kettle-ui"` content so reloads are obvious.
 - [ ] Desktop: no CSS fork — only core `static/` (rebuild sidecar for packaged app).
 
-## Plugin / desktop note
+## Editor / desktop note
 
 | Viewport | UI source |
 |----------|-----------|
-| Web / `setsweep --web` | `static/index.html` |
+| Web / `kettle --web` | `static/index.html` |
 | Desktop `.app` | Same file via sidecar |
 | VS Code / Cursor Desk | Separate `deskPanel.ts` — should *follow* these roles when restyled; not a second source of truth for the main sitting |

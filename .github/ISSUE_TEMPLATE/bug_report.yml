@@ -1,0 +1,59 @@
+name: Bug report
+description: Report a reproducible problem in Kettle Core
+title: "[Bug] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve Kettle. Do not include API keys, private desk contents, or security reports here.
+  - type: input
+    id: version
+    attributes:
+      label: Kettle version or commit
+      placeholder: "0.2.0 or abc1234"
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Surface
+      options:
+        - CLI
+        - Web desk
+        - Localhost API
+        - Curator runtime
+        - Desk files or migration
+        - Installation
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Give the smallest safe sequence that reproduces the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Relevant diagnostics
+      description: Paste sanitized `kettle doctor` output or logs if useful.
+      render: shell
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Safety check
+      options:
+        - label: I removed credentials, private desk content, and personal paths.
+          required: true
+        - label: This is not a vulnerability report; I will use SECURITY.md for those.
+          required: true

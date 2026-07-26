@@ -213,7 +213,7 @@ class TestCatalog(unittest.TestCase):
     def test_build_catalog_seed_menu_and_visible(self):
         # Pin PATH so the visibility assertions cannot pass vacuously on a host with
         # no curator CLIs (or vary because a developer happens to have several).
-        with tempfile.TemporaryDirectory(prefix="setsweep-catalog-") as td:
+        with tempfile.TemporaryDirectory(prefix="kettle-catalog-") as td:
             claude = Path(td) / "claude"
             claude.write_text("#!/bin/sh\nexit 0\n")
             claude.chmod(0o755)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Unit + integration tests for the Setsweep server.
+"""Unit + integration tests for the Kettle server.
 
 Stdlib only (unittest + urllib). Run:  python3 test_server.py   (or python3 -m unittest)
 
@@ -26,7 +26,7 @@ from contextlib import redirect_stderr
 from pathlib import Path
 
 import server
-import setsweep_contract
+import kettle_contract
 
 
 def _http(method, url, body=None):
@@ -43,9 +43,9 @@ class Base(unittest.TestCase):
     """Redirect server globals into a tempdir under a fake HOME, with one project."""
 
     def setUp(self):
-        self.tmp = Path(tempfile.mkdtemp(prefix="setsweep-test-"))
+        self.tmp = Path(tempfile.mkdtemp(prefix="kettle-test-"))
         self.root = self.tmp / "proj"
-        (self.root / ".setsweep").mkdir(parents=True)
+        (self.root / ".kettle").mkdir(parents=True)
         registry = self.tmp / "projects.json"
         registry.write_text(json.dumps({"projects": [{
             "id": "t", "name": "Test", "root": str(self.root),
@@ -116,25 +116,53 @@ class HelperTests(Base):
             if prev is not None:
                 os.environ["DESK_PROJECTS"] = prev
 
+    def test_resolve_projects_path_falls_back_to_legacy_registry(self):
+        saved_home = server.HOME
+        saved_appdir = server.APPDIR
+        prev = os.environ.pop("DESK_PROJECTS", None)
+        try:
+            server.HOME = self.tmp
+            server.APPDIR = self.tmp / "empty-appdir"
+            server.APPDIR.mkdir()
+            legacy = server.legacy_user_projects_path()
+            legacy.parent.mkdir(parents=True, exist_ok=True)
+            legacy.write_text('{"projects":[]}')
+            self.assertEqual(server.resolve_projects_path(), legacy)
+        finally:
+            server.HOME = saved_home
+            server.APPDIR = saved_appdir
+            if prev is not None:
+                os.environ["DESK_PROJECTS"] = prev
+
+    def test_desk_dir_prefers_kettle_and_falls_back_to_setsweep(self):
+        proj = self.proj()
+        current = self.root / ".kettle"
+        legacy = self.root / ".setsweep"
+        shutil.rmtree(current)
+        legacy.mkdir()
+        self.assertEqual(server.desk_dir(proj), legacy.resolve())
+        current.mkdir()
+        self.assertEqual(server.desk_dir(proj), current.resolve())
+
     def test_slug(self):
         self.assertEqual(server.slug("Hello World!"), "Hello_World")
         self.assertEqual(server.slug("a/b:c"), "a_b_c")
         self.assertEqual(server.slug("!!!"), "x")  # empty-after-strip fallback
 
     def test_session_name(self):
-        # one session per project now: setsweep-<project>, slugified, entry ignored
+        # one session per project now: kettle-<project>, slugified, entry ignored
         n = server.session_name({"name": "CryptoHistory"})
-        self.assertEqual(n, "setsweep-cryptohistory")
+        self.assertEqual(n, "kettle-cryptohistory")
         self.assertEqual(n, n.lower())
         self.assertNotIn(" ", n)
         # the entry argument is accepted but ignored (call-site compatibility)
         self.assertEqual(
             server.session_name({"name": "CryptoHistory"}, {"title": "Chapter 3"}),
-            "setsweep-cryptohistory")
-        self.assertEqual(server.session_name({"name": "P"}), "setsweep-p")
-        # length-capped (slug body <= 48 chars after the setsweep- prefix)
+            "kettle-cryptohistory")
+        self.assertEqual(server.session_name({"name": "P"}), "kettle-p")
+        # length-capped (slug body <= 48 chars after the kettle- prefix)
         long = server.session_name({"name": "x" * 80})
-        self.assertLessEqual(len(long), len("setsweep-") + 48)
+        self.assertLessEqual(len(long), len("kettle-") + 48)
 
     def test_safe_path_allows_under_root(self):
         p = self.root / "doc.md"
@@ -177,10 +205,10 @@ class HelperTests(Base):
 
     def test_safe_path_relative_with_base_joins_to_root(self):
         # a relative path resolves against the supplied base (the project root), not CWD
-        (self.root / ".setsweep").mkdir(exist_ok=True)
-        (self.root / ".setsweep" / "PROJECT.md").write_text("charter")
-        got = server.safe_path(".setsweep/PROJECT.md", self.root)
-        self.assertEqual(got, (self.root / ".setsweep" / "PROJECT.md").resolve())
+        (self.root / ".kettle").mkdir(exist_ok=True)
+        (self.root / ".kettle" / "PROJECT.md").write_text("charter")
+        got = server.safe_path(".kettle/PROJECT.md", self.root)
+        self.assertEqual(got, (self.root / ".kettle" / "PROJECT.md").resolve())
 
     def test_safe_path_relative_with_base_still_fences_traversal(self):
         # a relative path that climbs out of the fence via .. is still rejected post-join
@@ -225,22 +253,30 @@ class HelperTests(Base):
             server.BASE_ALLOWED_ROOTS = saved_base
 
     def test_env_allowed_roots(self):
-        # the portable fence: base roots come from $SETSWEEP_ALLOWED_ROOTS, default empty
+        # the portable fence: base roots come from $KETTLE_ALLOWED_ROOTS, default empty
         a, b = self.tmp / "vaultA", self.tmp / "vaultB"
         a.mkdir(); b.mkdir()
-        saved = os.environ.get("SETSWEEP_ALLOWED_ROOTS")
+        saved = os.environ.get("KETTLE_ALLOWED_ROOTS")
+        saved_legacy = os.environ.get("SETSWEEP_ALLOWED_ROOTS")
         try:
-            os.environ["SETSWEEP_ALLOWED_ROOTS"] = f"{a}{os.pathsep}{b}"
+            os.environ["KETTLE_ALLOWED_ROOTS"] = f"{a}{os.pathsep}{b}"
             roots = server._env_allowed_roots()
             self.assertIn(a.resolve(), roots)
             self.assertIn(b.resolve(), roots)
-            os.environ["SETSWEEP_ALLOWED_ROOTS"] = ""          # unset/empty → no base roots
+            os.environ["KETTLE_ALLOWED_ROOTS"] = ""          # unset/empty → no base roots
             self.assertEqual(server._env_allowed_roots(), [])
+            os.environ.pop("KETTLE_ALLOWED_ROOTS")
+            os.environ["SETSWEEP_ALLOWED_ROOTS"] = str(a)
+            self.assertEqual(server._env_allowed_roots(), [a.resolve()])
         finally:
             if saved is None:
+                os.environ.pop("KETTLE_ALLOWED_ROOTS", None)
+            else:
+                os.environ["KETTLE_ALLOWED_ROOTS"] = saved
+            if saved_legacy is None:
                 os.environ.pop("SETSWEEP_ALLOWED_ROOTS", None)
             else:
-                os.environ["SETSWEEP_ALLOWED_ROOTS"] = saved
+                os.environ["SETSWEEP_ALLOWED_ROOTS"] = saved_legacy
 
     def test_settings_create_then_shallow_merge(self):
         # A missing file is seeded with a normalized curator block (provider/command/
@@ -386,14 +422,14 @@ class HelperTests(Base):
 
     def test_project_orientation_reads_and_truncates(self):
         self.assertEqual(server.project_orientation(self.proj()), "")  # missing → ""
-        (self.root / ".setsweep" / "PROJECT.md").write_text("X" * 4000)
+        (self.root / ".kettle" / "PROJECT.md").write_text("X" * 4000)
         out = server.project_orientation(self.proj())
         self.assertIn("PROJECT.md", out)                       # labeled
         self.assertEqual(out.count("X"), 2500)                 # body truncated
         self.assertNotIn("MEMORY.md", out)                     # absent file → section omitted
 
     def test_project_orientation_includes_curator_memory(self):
-        desk = self.root / ".setsweep"
+        desk = self.root / ".kettle"
         (desk / "PROJECT.md").write_text("the charter")
         (desk / "MEMORY.md").write_text("- 2026-06-11: user prefers serial commas")
         out = server.project_orientation(self.proj())
@@ -404,7 +440,7 @@ class HelperTests(Base):
         self.assertNotIn("MEMORY.md", server.project_orientation(self.proj()))
 
     def test_project_orientation_includes_familiarity(self):
-        desk = self.root / ".setsweep"
+        desk = self.root / ".kettle"
         (desk / "PROJECT.md").write_text("charter")
         (desk / "FAMILIARITY.md").write_text("## Map\n- `src/content` is the content collections root")
         out = server.project_orientation(self.proj())
@@ -413,7 +449,7 @@ class HelperTests(Base):
         self.assertLess(out.index("charter"), out.index("content collections"))
 
     def test_project_orientation_includes_sweep_actions(self):
-        desk = self.root / ".setsweep"
+        desk = self.root / ".kettle"
         (desk / "SWEEP-ACTIONS.md").write_text(
             "- Stage approved drafts to outbound\n- Append sitting log to ~/Notes/rounds.md\n")
         out = server.project_orientation(self.proj())
@@ -469,8 +505,8 @@ class HelperTests(Base):
         ids = [p["id"] for p in json.loads(server.PROJECTS_PATH.read_text())["projects"]]
         self.assertIn("my_notes", ids)
         # durable desk + seeded queue (awaiting founding) + egress outbound
-        self.assertTrue((folder / ".setsweep").is_dir())
-        self.assertTrue((folder / ".setsweep" / "outbound" / "README.md").is_file())
+        self.assertTrue((folder / ".kettle").is_dir())
+        self.assertTrue((folder / ".kettle" / "outbound" / "README.md").is_file())
         q = json.loads(server.queue_path(proj).read_text())
         self.assertEqual(q["curated"], "awaiting founding curation")
 
@@ -545,7 +581,7 @@ class EndpointTests(Base):
         try:
             status, payload = _http("GET", f"http://127.0.0.1:{extra_port}/api/ping")
             self.assertEqual(status, 200)
-            self.assertEqual(payload["app"], "setsweep")
+            self.assertEqual(payload["app"], "kettle")
             self.assertEqual(payload["port"], extra_port)
         finally:
             extra_server.shutdown()
@@ -578,7 +614,7 @@ class EndpointTests(Base):
     def test_lineage_bind_writes_directive(self):
         s, j = _http("POST", f"{self.base}/api/lineage/bind", {"project": "t"})
         self.assertEqual((s, j["ok"]), (200, True))
-        self.assertIn("setsweep:lineage", (self.root / "CLAUDE.md").read_text())
+        self.assertIn("kettle:lineage", (self.root / "CLAUDE.md").read_text())
 
     def test_queue_get_creates_snapshots(self):
         s, j = _http("GET", f"{self.base}/api/queue?project=t")
@@ -900,7 +936,7 @@ class EndpointTests(Base):
         self.assertEqual(j["id"], "new_one")
         self.assertTrue(j.get("ok"))
         self.assertEqual(j["project"]["id"], "new_one")
-        self.assertTrue((good / ".setsweep" / "runtime" / "queue.json").exists())
+        self.assertTrue((good / ".kettle" / "runtime" / "queue.json").exists())
         # duplicate id
         s2, _ = _http("POST", f"{self.base}/api/projects/add", {"name": "New One", "root": str(good)})
         self.assertEqual(s2, 400)
@@ -1569,12 +1605,12 @@ class EndpointTests(Base):
 
     def test_chat_uses_one_project_session_named_for_project(self):
         # first chat turn on a project CREATES the named project session (no --resume),
-        # injects the file's context block, and names it setsweep-test
+        # injects the file's context block, and names it kettle-test
         cmds = self._capture_cmds()
         self._post_stream("/api/chat", {"project": "t", "id": "alpha", "message": "hi"})
         c1 = cmds[-1]
         self.assertIn("--name", c1)
-        self.assertEqual(c1[c1.index("--name") + 1], "setsweep-test")
+        self.assertEqual(c1[c1.index("--name") + 1], "kettle-test")
         self.assertNotIn("--resume", c1)
         prompt = c1[c1.index("-p") + 1]
         self.assertIn("[Active file:", prompt)         # context injected on first turn
@@ -1602,7 +1638,7 @@ class EndpointTests(Base):
         # question the sweep raised) must NOT crash; it resumes the project session and
         # injects no active-file context block.
         cmds = self._capture_cmds()
-        server.save_session(self.proj(), session_id="sid-live", name="setsweep-test")
+        server.save_session(self.proj(), session_id="sid-live", name="kettle-test")
         s, body = self._post_stream("/api/chat",
                                     {"project": "t", "message": "answering the sweep"})
         self.assertEqual(s, 200)
@@ -1625,7 +1661,7 @@ class EndpointTests(Base):
     def test_sweep_resumes_the_project_session(self):
         cmds = self._capture_cmds()
         # seed a project session as if chat had run
-        server.save_session(self.proj(), session_id="sid-live", name="setsweep-test")
+        server.save_session(self.proj(), session_id="sid-live", name="kettle-test")
         self._post_stream("/api/sweep", {"project": "t"})
         c = cmds[-1]
         self.assertIn("--resume", c)
@@ -1676,7 +1712,7 @@ class EndpointTests(Base):
         self.assertNotIn("INTAKE OUTBOUND", cmds[-1][cmds[-1].index("-p") + 1])
 
     def test_sweep_prompt_precomputes_diffs_and_asks_for_familiarity(self):
-        desk = self.root / ".setsweep"
+        desk = self.root / ".kettle"
         (desk / "FAMILIARITY.md").write_text("## Map\n- alpha.md is the lead essay")
         server.ensure_snapshots(self.proj(), server.load_queue(self.proj()))
         cmds = self._capture_cmds()
@@ -1810,12 +1846,12 @@ class EndpointTests(Base):
         import os
         s, j = _http("GET", f"{self.base}/api/ping")
         self.assertEqual(s, 200)
-        self.assertEqual(j["app"], "setsweep")
-        self.assertEqual(j["version"], setsweep_contract.core_version())
-        self.assertEqual(j["api_version"], setsweep_contract.API_VERSION)
+        self.assertEqual(j["app"], "kettle")
+        self.assertEqual(j["version"], kettle_contract.core_version())
+        self.assertEqual(j["api_version"], kettle_contract.API_VERSION)
         self.assertEqual(
             j["desk_schema_version"],
-            setsweep_contract.DESK_SCHEMA_VERSION,
+            kettle_contract.DESK_SCHEMA_VERSION,
         )
         self.assertEqual(j["port"], self.port)
         self.assertEqual(j["pid"], os.getpid())   # server rides in-process here
@@ -1907,7 +1943,7 @@ class LaunchTests(unittest.TestCase):
 
     def setUp(self):
         self._saved = {k: getattr(server, k) for k in
-                       ("_ping_setsweep", "_retire", "start_server", "_code_mtime")}
+                       ("_ping_kettle", "_retire", "start_server", "_code_mtime")}
         self.retired, self.bound = [], []
         server._retire = lambda pid: self.retired.append(pid)
         server.start_server = lambda port=0: (
@@ -1919,7 +1955,7 @@ class LaunchTests(unittest.TestCase):
             setattr(server, k, v)
 
     def _ping(self, result):
-        server._ping_setsweep = lambda port, timeout=0.8: result
+        server._ping_kettle = lambda port, timeout=0.8: result
 
     @staticmethod
     def _ts(epoch):
@@ -1957,7 +1993,7 @@ class LaunchTests(unittest.TestCase):
         self.assertEqual(self.bound, [server.DEFAULT_PORT])
 
     def test_foreign_occupant_ephemeral_fallback(self):  # regression
-        self._ping(None)  # a non-setsweep occupant pings as "not ours" -> None
+        self._ping(None)  # a non-kettle occupant pings as "not ours" -> None
         calls = []
         def fake_start(port=0):
             calls.append(port)

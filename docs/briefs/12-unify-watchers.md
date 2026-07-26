@@ -1,8 +1,8 @@
 ---
 id: 12
 title: Unify the folder-watchers
-repo: setsweep-core
-touches: [setsweep_watch.py, test_watch.py, crontab (fleet), ~/cloud/sync/code/bin/setsweep-watch (retire)]
+repo: kettle-core
+touches: [kettle_watch.py, test_watch.py, crontab (fleet), ~/cloud/sync/code/bin/kettle-watch (retire)]
 risk: normal
 depends-on: [03]
 status: open
@@ -10,14 +10,14 @@ status: open
 
 ## Context
 
-Two implementations share one name. The repo ships `setsweep_watch.py` (the packaged
-`setsweep-watch` console script, state under `~/.cache/setsweep/`), but cron actually
-runs `~/cloud/sync/code/bin/setsweep-watch` every 15 minutes — an older fork with an extra
+Two implementations share one name. The repo ships `kettle_watch.py` (the packaged
+`kettle-watch` console script, state under `~/.cache/kettle/`), but cron actually
+runs `~/cloud/sync/code/bin/kettle-watch` every 15 minutes — an older fork with an extra
 PICKUP pass and state under `~/.cache/claude/`. Fixes to the repo version never reach
 production and vice versa; their seen-state files differ, so a naive cutover would
 re-curate previously seen intake items and spam drafts. The repo version also resolves
 the registry and settings differently from the server (`DESK_PROJECTS` else
-`SCRIPT_DIR/projects.json`, `SCRIPT_DIR/settings.json` — setsweep_watch.py:36, 91–95),
+`SCRIPT_DIR/projects.json`, `SCRIPT_DIR/settings.json` — kettle_watch.py:36, 91–95),
 skipping the user-registry path the server prefers, and is Claude-only (hardcoded
 binary at :40, hand-built argv at :203–208) despite the provider-agnostic runtime.
 `intake_pass` — the code that mutates live queues on a timer — has no test.
@@ -25,7 +25,7 @@ binary at :40, hand-built argv at :203–208) despite the provider-agnostic runt
 ## Task
 
 1. Diff the fork against the repo version; port the PICKUP pass (or consciously retire
-   it, in writing) into `setsweep_watch.py`.
+   it, in writing) into `kettle_watch.py`.
 2. Converge resolution on the server's: import and use `server.resolve_projects_path()`
    and the same settings path (the watcher already imports sibling modules; `server`
    import is side-effect-free by design).

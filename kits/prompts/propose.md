@@ -4,10 +4,10 @@
    This is the editable charter draft the user will review in the center pane and approve when satisfied. Sections (use these Title Case headings exactly):
    # Desk Proposal — {name}
    ## What This Project Is — identity and purpose in the user's terms (quote them where their words were exact); kind/kit posture.
-   ## What Sittings Should Do — direction, review lens (kit default ± deltas), priorities from the interview.
+   ## What Sittings Should Do — direction, review lens (kit default ± deltas), priorities from the interview. If they ticked **Build with me** (or greenfield / starting from scratch), say clearly that sessions and closes are collaborative: propose next work, draft with the user, queue new pieces with related project files for build/review cycles — not only curate work other agents already finished.
    ## Fences — what the curator must never auto-change; paths if named.
    ## Sweep Extras — extra close-of-sitting work (or 'nothing beyond tidy-up and restock'). Include git commit if they ticked it (and note init-if-missing). If other agents share this repo, default-include publishing approvals as desk egress on sweep. Never transmit mail/Slack from the desk; stage or egress only.
-   ## Other Agents / Fleet — who else works this tree (or 'desk only'); what they watch; that user approve+sweep is the gate and approvals are staged under .setsweep/outbound/ for pickup.
+   ## Other Agents / Fleet — who else works this tree (or 'desk only'); what they watch; that user approve+sweep is the gate and approvals are staged under .kettle/outbound/ for pickup.
    ## Document Families & First Batch — for an existing corpus: families, key paths, what should surface first and why. For greenfield/empty: scaffold plan — first files to CREATE (typically README/overview, then ROADMAP or PLAN, then further drafts along the roadmap); say sittings will draft new material, not only review existing files.
    ## Open Questions — only genuine unresolved items, or omit.
    Keep it under ~100 lines. Precise enough that approving it is a real signature of intent. Prefer the user's wording over your paraphrase. All markdown titles, heds, and subheds in Title Case.
@@ -21,7 +21,7 @@
    urgency: high
    status: pending
    founding_phase: proposal
-   brief: plain cold-re-entry lead — this is the Setsweep Desk Proposal you edit; approving it founds the desk from this text. One short sentence on what to check before approving.
+   brief: plain cold-re-entry lead — this is the Kettle Desk Proposal you edit; approving it founds the desk from this text. One short sentence on what to check before approving.
    Set top-level "curated" to today + founding proposal.
    Do NOT file other content entries yet. Do NOT write PROJECT.md, MEMORY.md, or the rest of the desk apparatus — that waits for approve.
    (Queue schema + BRIEF STANDARD are appended below this prompt.)

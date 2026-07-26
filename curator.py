@@ -1,5 +1,5 @@
 """
-Pluggable curator backends for Setsweep.
+Pluggable curator backends for Kettle.
 
 The desk owns prompts, tool allowlists, NDJSON event shapes, and the session ledger.
 A curator *provider* only supplies the executable (and stream dialect) that runs a

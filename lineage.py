@@ -1,12 +1,12 @@
-"""Setsweep lineage — who edited what: agent vs. user vs. unattributed.
+"""Kettle lineage — who edited what: agent vs. user vs. unattributed.
 
 Implements the model in `LINEAGE.md` (Revision 1; user ruling 2026-06-18): track agent
 edits against user edits over a desk's files, with an honest `unattributed` residual for
 changes that happened outside the app and can't be confirmed. Two plain files in the desk:
 
-  .setsweep/working-record.jsonl  — append-only; agents (and the app, for the user's
+  .kettle/working-record.jsonl  — append-only; agents (and the app, for the user's
                                       own saves) log each edit-batch as it happens
-  .setsweep/lineage-baseline.json  — the last reconciled state: {ts, files: {rel: hash}}
+  .kettle/lineage-baseline.json  — the last reconciled state: {ts, files: {rel: hash}}
 
 The reconciler compares the tree against the baseline. A change a working-record entry
 claims (since the baseline) is attributed to that entry's actor; an **unclaimed** change is
@@ -30,7 +30,7 @@ RECORD_NAME = "working-record.jsonl"
 BASELINE_NAME = "lineage-baseline.json"
 
 # names skipped wholesale while walking a desk (desk machinery + VCS + heavy noise)
-SKIP_DIRS = {".setsweep", ".git", "node_modules", "__pycache__", ".venv",
+SKIP_DIRS = {".kettle", ".setsweep", ".git", "node_modules", "__pycache__", ".venv",
              "venv", ".mypy_cache", ".pytest_cache", "dist", "build", ".cache"}
 MAX_BYTES = 1_000_000          # skip files larger than this (likely data/media, not prose/source)
 
@@ -40,7 +40,12 @@ def _now() -> str:
 
 
 def desk_dir(root: Path | str) -> Path:
-    return Path(root) / ".setsweep"
+    root = Path(root)
+    current = root / ".kettle"
+    legacy = root / ".setsweep"
+    if current.exists() or not legacy.exists():
+        return current
+    return legacy
 
 
 # ---------- change detection: content-hash snapshot ----------
@@ -64,7 +69,7 @@ def _is_texty(path: Path) -> bool:
 def iter_tracked(root: Path | str, excludes: Optional[set] = None,
                  max_depth: Optional[int] = None) -> Iterator[Path]:
     """Walk the desk's tracked working files: text files under root, skipping dotdirs /
-    machinery / oversized / binary. The desk's own `.setsweep/` is never tracked.
+    machinery / oversized / binary. The desk's own `.kettle/` is never tracked.
 
     max_depth (>=1) bounds the walk by directory level — 1 = only files in the root folder,
     2 = root + one level of subdirs — and PRUNES the descent, so a shallow desk over a huge
@@ -222,7 +227,7 @@ WRITE_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
 
 def _relativize(root: Path | str, paths: Iterable[str]) -> list:
     """Absolute/relative edit paths → unique desk-relative paths. Paths outside the desk
-    root, and desk machinery under a dot-dir (`.setsweep/`, `.git/`), are dropped — the
+    root, and desk machinery under a dot-dir (`.kettle/`, `.git/`), are dropped — the
     record tracks the desk's *working* files, the same set the reconciler walks."""
     root = Path(root).resolve()
     rels: list = []
@@ -246,7 +251,7 @@ def _relativize(root: Path | str, paths: Iterable[str]) -> list:
 
 def log_agent_edits(root: Path | str, abs_paths: Iterable[str], actor: str = "agent",
                     session: str = "", summary: str = "") -> Optional[dict]:
-    """Log a turn's file edits as one agent batch, so Setsweep's own agents self-record
+    """Log a turn's file edits as one agent batch, so Kettle's own agents self-record
     without the honor system. Returns the record, or None if nothing trackable was edited."""
     rels = _relativize(root, abs_paths)
     if not rels:
@@ -279,10 +284,11 @@ def resolve(root: Path | str, path: str, actor_kind: str = "user",
 
 # ---------- the binding directive (transparent, fenced, opt-in) ----------
 
-DIRECTIVE_TAG = "setsweep:lineage"
+DIRECTIVE_TAG = "kettle:lineage"
+LEGACY_DIRECTIVE_TAG = "setsweep:lineage"
 EDITING_MD = """# Editing this project — the lineage protocol
 
-Any agent that edits files in this project records its work, so Setsweep can tell agent
+Any agent that edits files in this project records its work, so Kettle can tell agent
 edits from the user's. The rule:
 
 - When you edit files here, append one entry per edit-batch to `working-record.jsonl`:
@@ -290,47 +296,65 @@ edits from the user's. The rule:
   root>], "summary": …}`.
 - **Attribute honestly. An agent edit is an agent edit — never recorded as the user's.**
   If you are proposing rather than enacting the user's decision, say "proposal".
-- Setsweep's own agents do this automatically; this rule is for any *other* agent working
+- Kettle's own agents do this automatically; this rule is for any *other* agent working
   in the tree (e.g. a separate CLI session).
 
 Changes nobody logs are reconciled as `unattributed` and surfaced for the user to resolve —
-nothing is ever silently attributed to them. Setsweep desk config lives in this
-`.setsweep/` directory.
+nothing is ever silently attributed to them. Kettle desk config lives in this
+`{desk_name}/` directory.
 """
 
-_DIRECTIVE_BLOCK = (
-    "<!-- {tag} (added by `setsweep bind`; safe to delete this whole block) -->\n"
-    "**Editing this project:** record each edit to `.setsweep/working-record.jsonl` and "
-    "attribute honestly — an agent edit is an agent edit, never the user's. "
-    "Protocol: `.setsweep/EDITING.md`. Desk config: `.setsweep/`.\n"
-    "<!-- /{tag} -->"
-).format(tag=DIRECTIVE_TAG)
+
+def _directive_block(desk_name: str) -> str:
+    return (
+        "<!-- {tag} (added by `kettle bind`; safe to delete this whole block) -->\n"
+        "**Editing this project:** record each edit to `{desk_name}/working-record.jsonl` and "
+        "attribute honestly — an agent edit is an agent edit, never the user's. "
+        "Protocol: `{desk_name}/EDITING.md`. Desk config: `{desk_name}/`.\n"
+        "<!-- /{tag} -->"
+    ).format(tag=DIRECTIVE_TAG, desk_name=desk_name)
 
 
 def ensure_directive(root: Path | str, agent_file: str = "CLAUDE.md") -> dict:
     """Add (or refresh) the fenced lineage directive in the project's agent-instructions
-    file, and write a standard `.setsweep/EDITING.md` if absent. Idempotent and visible:
+    file, and write a standard desk-local `EDITING.md` if absent. Idempotent and visible:
     the block is marker-fenced so it is identifiable and removable. Returns what it did."""
     import re
     root = Path(root)
     d = desk_dir(root)
+    desk_name = d.name
+    directive = _directive_block(desk_name)
     d.mkdir(parents=True, exist_ok=True)
     editing_created = False
     if not (d / "EDITING.md").exists():
-        (d / "EDITING.md").write_text(EDITING_MD, encoding="utf-8")
+        (d / "EDITING.md").write_text(
+            EDITING_MD.replace("{desk_name}", desk_name),
+            encoding="utf-8",
+        )
         editing_created = True
 
     f = root / agent_file
     existing = f.read_text(encoding="utf-8") if f.exists() else ""
-    if f"<!-- {DIRECTIVE_TAG}" in existing:
-        new = re.sub(rf"<!-- {re.escape(DIRECTIVE_TAG)}.*?<!-- /{re.escape(DIRECTIVE_TAG)} -->",
-                     _DIRECTIVE_BLOCK, existing, flags=re.S)
+    present_tag = next(
+        (
+            tag for tag in (DIRECTIVE_TAG, LEGACY_DIRECTIVE_TAG)
+            if f"<!-- {tag}" in existing
+        ),
+        None,
+    )
+    if present_tag:
+        new = re.sub(
+            rf"<!-- {re.escape(present_tag)}.*?<!-- /{re.escape(present_tag)} -->",
+            directive,
+            existing,
+            flags=re.S,
+        )
         action = "updated"
     elif existing.strip():
-        new = existing.rstrip() + "\n\n" + _DIRECTIVE_BLOCK + "\n"
+        new = existing.rstrip() + "\n\n" + directive + "\n"
         action = "appended"
     else:
-        new = _DIRECTIVE_BLOCK + "\n"
+        new = directive + "\n"
         action = "created"
     f.write_text(new, encoding="utf-8")
     return {"file": str(f), "action": action, "editing_created": editing_created}
@@ -338,13 +362,17 @@ def ensure_directive(root: Path | str, agent_file: str = "CLAUDE.md") -> dict:
 
 # ---------- optional git substrate (separate history; never the project's own repo) ----------
 
-GIT_DIR = ".setsweep/lineage.git"          # a history apart from any user .git in the tree
+GIT_DIR = ".kettle/lineage.git"          # a history apart from any user .git in the tree
+
+
+def _git_dir(root: Path | str) -> Path:
+    return desk_dir(root) / "lineage.git"
 
 
 def _git(root: Path, *args, check: bool = True):
     import subprocess
     return subprocess.run(
-        ["git", "--git-dir", str(Path(root) / GIT_DIR), "--work-tree", str(root), *args],
+        ["git", "--git-dir", str(_git_dir(root)), "--work-tree", str(root), *args],
         capture_output=True, text=True, check=check)
 
 
@@ -355,16 +383,16 @@ def git_snapshot(root: Path | str, message: str) -> Optional[str]:
     the `lineage_git` setting; the hash baseline is the dependency-free default."""
     import subprocess
     root = Path(root)
-    gd = root / GIT_DIR
+    gd = _git_dir(root)
     try:
         if not gd.exists():
             _git(root, "init", "-q")
-            _git(root, "config", "user.email", "desk@setsweep.local", check=False)
-            _git(root, "config", "user.name", "Setsweep", check=False)
+            _git(root, "config", "user.email", "desk@kettle.local", check=False)
+            _git(root, "config", "user.name", "Kettle", check=False)
             # keep the user's .git, desk machinery, and heavy noise out of the lineage history
             (gd / "info").mkdir(parents=True, exist_ok=True)
             (gd / "info" / "exclude").write_text(
-                "\n".join([".git", ".setsweep", "node_modules", "__pycache__",
+                "\n".join([".git", ".kettle", ".setsweep", "node_modules", "__pycache__",
                            ".venv", "venv", "dist", "build", ".cache", ""]))
         _git(root, "add", "-A")
         if _git(root, "diff", "--cached", "--quiet", check=False).returncode == 0:

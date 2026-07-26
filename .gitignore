@@ -20,14 +20,14 @@ env/
 *~
 .cursor/
 
-# ── Seafile sync conflicts (never commit) ──
+# ── File-sync conflicts (never commit) ──
 *SFConflict*
 
 # ── Per-project desk state ──
-# setsweep creates <project-root>/.setsweep/ for each project's curator desk: the queue,
+# kettle creates <project-root>/.kettle/ for each project's curator desk: the queue,
 # chat transcript, snapshots, sessions, and logs. It is per-user runtime, never committed —
 # the repo's own development desk lives here too and must stay local.
-.setsweep/
+.kettle/
 
 # ── Personal config (both self-create on first run; see projects.example.json) ──
 projects.json

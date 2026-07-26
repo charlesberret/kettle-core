@@ -1,5 +1,5 @@
 """
-Setsweep agent runtime — the viewport-neutral adapter (v2 seed).
+Kettle agent runtime — the viewport-neutral adapter (v2 seed).
 
 The prototype's right-pane agent borrows three things from the `claude` process that
 the desk should own. This module takes them back, with no dependency on `server.py`,
@@ -14,7 +14,7 @@ so any viewport — the Electron shell today, the CLI tomorrow — drives the sa
      bar sailed past the window while the session was fine. Occupancy is a property of a
      *single* call; we read it from each `assistant` message and report the latest.
   3. **the session ledger** — the conversation lives in the desk
-     (`.setsweep/sessions/<id>.jsonl`), reconstructable and inspectable, instead of only
+     (`.kettle/sessions/<id>.jsonl`), reconstructable and inspectable, instead of only
      in the agent process's private store. `--resume` still threads the live agent; the
      desk is now the source of truth.
 
@@ -128,7 +128,7 @@ class _TextGapFixer:
 def normalize(lines: Iterable[str],
               meter: Optional[UsageMeter] = None,
               on_session: Optional[Callable[[str], None]] = None) -> Iterator[dict]:
-    """Agent JSONL streams → Setsweep client events.
+    """Agent JSONL streams → Kettle client events.
 
     Understands:
       - Claude: system/init · assistant · result · error
@@ -656,7 +656,7 @@ def system_append_argv(text: str, provider: str = "claude") -> list[str]:
 
 
 def effort_argv(effort: Optional[str], provider: str = "claude") -> list[str]:
-    """Map a Setsweep effort level onto provider CLI flags.
+    """Map a Kettle effort level onto provider CLI flags.
 
     Level names vary by backend (Claude: low…max; Grok: none…xhigh;
     Codex: low…ultra). Empty / 'default' omits the flag. Gemini CLI has no
