@@ -2,7 +2,7 @@
 
 Kettle is one product with independently released repositories.
 
-**Public home and star target:**
+**Product home and star target:**
 [github.com/charlesberret/kettle](https://github.com/charlesberret/kettle)
 
 | Repository | Role |
@@ -16,8 +16,8 @@ The core is the single authority for product semantics. Adapters attach to its
 localhost API and declare the contract versions they support. They do not fork
 the desk, its migrations, or the reference web interface.
 
-Kettle was previously named Setsweep. Old command names, desk paths, and process
-identity are accepted only as documented compatibility surfaces. New public
+Kettle was previously named Setsweep. Old command names, Desk paths, and
+process identity are accepted only as documented compatibility surfaces. New
 copy and new state use Kettle.
 
-See [REPOSITORIES.md](./REPOSITORIES.md) for ownership and release gates.
+See [REPOSITORIES.md](./REPOSITORIES.md) for ownership and compatibility.

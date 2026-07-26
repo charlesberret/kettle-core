@@ -2,9 +2,9 @@
 
 Kettle's repositories keep separate histories because they have different
 release units. Coherence comes from one core authority, explicit versioned
-contracts, and cross-family validation. The canonical public family map lives
-in the product home's
-[`docs/ARCHITECTURE.md`](https://github.com/charlesberret/kettle/blob/main/docs/ARCHITECTURE.md);
+contracts, and cross-family validation. The canonical family map lives in the
+product home's
+[`architecture explanation`](https://github.com/charlesberret/kettle/blob/main/docs/explanation/architecture.md);
 this document covers implementation compatibility.
 
 ## Ownership
@@ -51,10 +51,10 @@ build consumes one resolved core checkout and stamps its exact provenance.
 - `app`: `kettle`
 - `version`: the core distribution version
 - `api_version`: the HTTP and NDJSON contract integer
-- `desk_schema_version`: the durable desk contract integer
+- `desk_schema_version`: the durable Desk contract integer
 
 During the Setsweep transition, consumers may accept `app: "setsweep"` and
-existing `.setsweep/` desks. Branding alone does not advance either contract
+existing `.setsweep/` Desks. Branding alone does not advance either contract
 integer. A known unsupported contract is a user-facing error, never a guess.
 
 Versions advance independently. Core, desktop, and VS Code do not need matching

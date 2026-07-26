@@ -1,8 +1,8 @@
 # Contributing to Kettle
 
-Thank you for taking an interest. This repository owns Kettle's desk, API,
-kits, CLI, and reference web UI. The public product home and family navigator
-is [charlesberret/kettle](https://github.com/charlesberret/kettle).
+Thank you for taking an interest. This repository owns Kettle's Desk, API,
+kits, CLI, and reference web UI. The product home and family navigator is
+[charlesberret/kettle](https://github.com/charlesberret/kettle).
 
 ## Before you start
 
@@ -17,10 +17,10 @@ is [charlesberret/kettle](https://github.com/charlesberret/kettle).
 ```sh
 git clone https://github.com/charlesberret/kettle-core.git
 cd kettle-core
-python3 -m venv ~/.kettle-venv
-~/.kettle-venv/bin/pip install -e ".[dev]"
-~/.kettle-venv/bin/kettle doctor
-pytest
+python3 -m venv .venv
+.venv/bin/pip install -e ".[dev]"
+.venv/bin/kettle doctor
+.venv/bin/python -m pytest
 ```
 
 Runtime is **stdlib only**. Optional `dev` extras are for tests and coverage.
@@ -43,10 +43,10 @@ contract backward-compatible, and advance viewport compatibility manifests after
 - Do not store API keys; do not broaden the network surface without a brief.
 - Match existing tone in kits and UI copy (`static/ui-copy.js` is core-owned).
 
-## Code of conduct (lightweight)
+## Code of conduct
 
-Be kind, assume good faith, and keep discussion about the work. Hostile or
-harassing behavior is not welcome.
+Participation across the Kettle repositories is governed by the
+[project code of conduct](https://github.com/charlesberret/kettle/blob/main/CODE_OF_CONDUCT.md).
 
 ## License
 

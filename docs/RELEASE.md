@@ -1,7 +1,7 @@
 # Core release checklist
 
 The family-wide release definition lives in the
-[Kettle product home](https://github.com/charlesberret/kettle/blob/main/docs/RELEASE.md).
+[Kettle product home](https://github.com/charlesberret/kettle/blob/main/docs/reference/release-gates.md).
 This checklist covers the core artifact.
 
 ## Source release
