@@ -1,5 +1,9 @@
 /* Built-in color themes for kettle. Each theme defines 16 ANSI terminal colors
-   (indices 0–15) plus optional text/interface role overrides for dark and light. */
+   (indices 0–15) plus optional text/interface role overrides for dark and light.
+
+   Product palette (host-neutral): static/kettle-palette.json
+   The builtin `kettle` theme must stay in lockstep with that file (see test_palette.py).
+   Editor adapters project the same palette into host theme formats. */
 'use strict';
 
 const ANSI_LABELS = [
@@ -23,11 +27,12 @@ const IFACE_DARK = {
   urghigh: '--ansi-1', urgmed: '--ansi-3', urglow: '--ansi-2',  // low urgency = green
 };
 
+// Light packs store paper in ansi-0 and ink in ansi-7 (same index roles as dark).
 const IFACE_LIGHT = {
-  bg: '--ansi-15', fg: '--ansi-0', muted: '--ansi-0',
+  bg: '--ansi-0', fg: '--ansi-7', muted: '--ansi-7',
   panel: '--ansi-15', panel2: '--ansi-15', line: '--ansi-8',
   acc: '--ansi-4', link: '--ansi-4',
-  activebg: '--ansi-7', selection: '--ansi-12',
+  activebg: '--ansi-8', selection: '--ansi-12',
   good: '--ansi-2', warn: '--ansi-1',
   urghigh: '--ansi-1', urgmed: '--ansi-3', urglow: '--ansi-2',
 };
