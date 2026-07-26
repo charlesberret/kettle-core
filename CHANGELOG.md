@@ -16,7 +16,9 @@ and Desk schema have their own integer contract versions.
 - Existing `.setsweep/` Desks are used in place when no `.kettle/` Desk exists.
 - Existing Setsweep user registries remain discoverable without creating split
   state.
-- `setsweep` and `setsweep-watch` remain console-script aliases.
+- `setsweep` and `setsweep-watch` remain console-script aliases that call the
+  same `kettle_main` / `kettle_watch` entrypoints (no separate `setsweep_*`
+  modules remain in the tree).
 - Kettle adapters may attach to a legacy core identity during the migration
   window.
 - The API and Desk-schema contract integers remain unchanged at `0`.
