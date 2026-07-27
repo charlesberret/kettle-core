@@ -2,7 +2,7 @@
 id: 23
 title: Viewport ritual regression bar
 repo: kettle-core
-touches: [test_frontend.py, static/index.html, docs/PLATFORMS.md, tools/check_family.py; corresponding checks in kettle-vscode]
+touches: [tests/test_frontend.py, static/index.html, docs/PLATFORMS.md, tools/check_family.py; corresponding checks in kettle-vscode]
 risk: run-critical
 depends-on: [22]
 status: in-progress

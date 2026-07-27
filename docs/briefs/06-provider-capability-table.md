@@ -2,7 +2,7 @@
 id: 06
 title: Provider capability table
 repo: kettle-core
-touches: [runtime.py, curator.py, server.py, API.md, test_runtime.py]
+touches: [runtime.py, curator.py, server.py, API.md, tests/test_runtime.py]
 risk: run-critical
 depends-on: [03]
 status: done
@@ -58,7 +58,7 @@ implementation cannot keep on every provider.
 
 ## Verify
 
-`python3 -m pytest test_runtime.py test_server.py -q`; manual `/api/ping` against a
+`python3 -m pytest tests/test_runtime.py tests/test_server.py -q`; manual `/api/ping` against a
 scratch server with each provider configured (stub commands).
 
 ## Afterwards

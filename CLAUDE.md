@@ -43,9 +43,7 @@ Server listens on `http://127.0.0.1:4242/` (`DEFAULT_PORT = 4242` in `server.py`
 defers if the current instance is healthy; pass `--replace` or use `Kettle.app` to force a
 restart.
 
-Tests at repo root: `test_server.py`, `test_runtime.py`, `test_lineage.py`, `test_kits.py`,
-`test_watch.py`, `test_cli.py`, `test_curator.py`, `test_egress.py`, `test_frontend.py`,
-`test_kettle_main.py`, `test_sweepkit.py`. Run with `pytest`.
+Tests live under [`tests/`](./tests/) (see `tests/README.md`). Run with `pytest`.
 
 The `.kettle/` directory under each *project* holds that desk’s files. This repo’s own
 `.kettle/` (if any) is gitignored.
@@ -66,7 +64,7 @@ tests, and recovery steps.
 
 **Never bind or signal port 4242 from agent tooling** — that is the live window's port.
 
-Safe to edit directly: `README.md`, `ARCHITECTURE.md`, `INSTALL.md`, `test_*.py`, kits, prompts,
+Safe to edit directly: `README.md`, `ARCHITECTURE.md`, `INSTALL.md`, `tests/`, kits, prompts,
 `pyproject.toml`, `ROADMAP.md`, `docs/`, this file.
 
 Planning: `ROADMAP.md` is current. `docs/briefs/` is historical design evidence

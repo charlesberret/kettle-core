@@ -2,7 +2,7 @@
 id: 14
 title: Test depth
 repo: kettle-core
-touches: [test_server.py, test_cli.py (new), test_watch.py, pyproject.toml, .github/workflows (new)]
+touches: [tests/test_server.py, tests/test_cli.py (new), tests/test_watch.py, pyproject.toml, .github/workflows (new)]
 risk: normal
 depends-on: [01]
 status: done
@@ -29,14 +29,14 @@ one curator-catalog test passes vacuously on machines lacking the CLI binaries.
    approve → found (desk files land, queue fills) → chat → approve → sweep → close,
    entirely on the stub curator. This is the founding state machine's executable
    documentation.
-3. **`test_cli.py`:** drive `main(argv)` against the tempdir fixture pattern
-   (test_egress.py has the template); cover add/init/projects/queue/egress (approval is
+3. **`tests/test_cli.py`:** drive `main(argv)` against the tempdir fixture pattern
+   (tests/test_egress.py has the template); cover add/init/projects/queue/egress (approval is
    a server route, not a CLI verb) and
    the argv construction for agent turns (post-brief-03, provider-parameterized).
 4. **Coverage:** add coverage.py as a dev extra; wire `pytest --cov` into CI; publish
    the number in the CI summary. Target: no module below 60%, no PR that lowers the
    number without saying so.
-5. **Honesty fixes:** document serial-only in a comment atop test_server.py and in
+5. **Honesty fixes:** document serial-only in a comment atop tests/test_server.py and in
    ENGINEERING.md; pin the catalog test's PATH so it asserts deterministically.
 6. **CI bootstrap:** `.github/workflows/test.yml` — matrix py3.11/3.14 × ubuntu/macos,
    pytest on PR; the wheel-install smoke joins after brief 11 lands.

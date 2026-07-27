@@ -2,7 +2,7 @@
 id: 12
 title: Unify the folder-watchers
 repo: kettle-core
-touches: [kettle_watch.py, test_watch.py, crontab (fleet), ~/cloud/sync/code/bin/kettle-watch (retire)]
+touches: [kettle_watch.py, tests/test_watch.py, crontab (fleet), ~/cloud/sync/code/bin/kettle-watch (retire)]
 risk: normal
 depends-on: [03]
 status: open
@@ -36,7 +36,7 @@ binary at :40, hand-built argv at :203–208) despite the provider-agnostic runt
 5. Cut cron over to the venv console script; delete or archive the bin fork; update
    `routines.md` in the System repo (the canonical cron narrative) — that update is
    part of this brief, not optional.
-6. Tests for `intake_pass` with a stub curator (the `test_server.py` capture pattern):
+6. Tests for `intake_pass` with a stub curator (the `tests/test_server.py` capture pattern):
    new file → one curate spawn → entry normalized to pending.
 
 ## Constraints
@@ -51,7 +51,7 @@ binary at :40, hand-built argv at :203–208) despite the provider-agnostic runt
 - One watcher exists; cron runs the packaged script; the fork is gone or archived.
 - A synthetic new intake file produces exactly one curate spawn with provider-correct
   argv; previously seen items produce zero.
-- `test_watch.py` covers intake_pass; the healthbeacon shows an unbroken cadence.
+- `tests/test_watch.py` covers intake_pass; the healthbeacon shows an unbroken cadence.
 
 ## Verify
 

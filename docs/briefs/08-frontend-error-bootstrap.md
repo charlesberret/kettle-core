@@ -2,7 +2,7 @@
 id: 08
 title: Frontend error bootstrap
 repo: kettle-core
-touches: [static/index.html, static/ (new small js file), test_server.py]
+touches: [static/index.html, static/ (new small js file), tests/test_server.py]
 risk: run-critical
 depends-on: [01]
 status: done

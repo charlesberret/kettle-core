@@ -1,7 +1,7 @@
 # Kettle HTTP API
 
 Localhost contract for viewports (web UI, desktop sidecar, VS Code/Cursor plugin, future hosts).
-Authoritative implementation: `server.py`. Contract tests: `test_server.py`.
+Authoritative implementation: `server.py`. Contract tests: `tests/test_server.py`.
 
 **Base:** `http://127.0.0.1:<port>/` — default port **4242**. Desktop may use an ephemeral port; see Discovery.
 

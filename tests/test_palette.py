@@ -7,7 +7,7 @@ import re
 import unittest
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[1]
 PALETTE_PATH = ROOT / "static" / "kettle-palette.json"
 THEMES_PATH = ROOT / "static" / "themes.js"
 

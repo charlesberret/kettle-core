@@ -78,5 +78,5 @@ the menu (and selects the new id).
 
 The sitting UI still embeds builtins in `themes.js` for zero-latency load. Keep
 `themes.js` kettle hexes aligned with `static/themes/kettle.json` /
-`kettle-palette.json` (`test_palette.py`). Export of all builtins to JSON is
+`kettle-palette.json` (`tests/test_palette.py`). Export of all builtins to JSON is
 the shared catalog for non-browser viewports.

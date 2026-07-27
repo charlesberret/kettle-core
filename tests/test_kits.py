@@ -10,7 +10,7 @@ import kits
 class KitsTest(unittest.TestCase):
     def setUp(self):
         # the real shipped kits, beside this test
-        self.shipped = Path(__file__).resolve().parent / "kits"
+        self.shipped = Path(__file__).resolve().parents[1] / "kits"
 
     # ---- defaults ----
 

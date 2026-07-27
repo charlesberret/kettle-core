@@ -11,7 +11,7 @@ import re
 import unittest
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[1]
 CORE_JS = ROOT / "static" / "ui-copy.js"
 VSCODE_TS = ROOT.parent / "kettle-vscode" / "src" / "uiCopy.ts"
 

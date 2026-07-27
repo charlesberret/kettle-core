@@ -2,7 +2,7 @@
 id: 05
 title: Harden the HTTP surface
 repo: kettle-core
-touches: [server.py, static/index.html, API.md, test_server.py, plugin + desktop follow-ups]
+touches: [server.py, static/index.html, API.md, tests/test_server.py, plugin + desktop follow-ups]
 risk: run-critical
 depends-on: [01]
 status: open

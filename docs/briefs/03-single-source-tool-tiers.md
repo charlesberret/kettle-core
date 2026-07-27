@@ -2,7 +2,7 @@
 id: 03
 title: Single-source the tool tiers
 repo: kettle-core
-touches: [cli.py, server.py, runtime.py, test_server.py, test_runtime.py]
+touches: [cli.py, server.py, runtime.py, tests/test_server.py, tests/test_runtime.py]
 risk: run-critical
 depends-on: [01]
 status: done
@@ -45,7 +45,7 @@ flags to a foreign CLI or silently spawns Claude against the user's configured p
 - `grep -n "SWEEP_TOOLS\|CHAT_TOOLS\|INTERVIEW_TOOLS" server.py cli.py` finds only
   `runtime.`-qualified uses (or nothing).
 - A `settings.json` with `curator.provider: grok` makes `kettle chat` build Grok argv
-  (assert via a captured-command test, pattern in test_server.py `_capture_cmds`).
+  (assert via a captured-command test, pattern in tests/test_server.py `_capture_cmds`).
 - Full suite green.
 
 ## Verify

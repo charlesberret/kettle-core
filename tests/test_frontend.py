@@ -18,7 +18,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-STATIC = Path(__file__).resolve().parent / "static"
+STATIC = Path(__file__).resolve().parents[1] / "static"
 INDEX = STATIC / "index.html"
 
 # Inline scripts only: a <script ...> with no src= attribute, capturing its body.

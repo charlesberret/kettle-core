@@ -18,7 +18,7 @@ pack for brand-only consumers. Full story: [`THEMES.md`](./THEMES.md).
 
 Adapters own host packing. They do **not** invent a second brand palette.
 After changing the marquee pack, keep `themes.js` / `kettle-palette.json` aligned
-(`test_palette.py`) and regenerate VS Code themes.
+(`tests/test_palette.py`) and regenerate VS Code themes.
 
 When you touch sitting chrome, **read this file first**. Fixing one panel and leaving a
 sibling panel on ad-hoc white text is a regression against these rules.
@@ -116,7 +116,7 @@ User-facing **strings** must not drift between web, desktop, and the plugin Desk
 `KETTLE_SRC` (core root) or `KETTLE_UI_COPY` (path to `ui-copy.js`) override discovery
 when the repos are not siblings.
 
-**Test:** `test_ui_copy.py` asserts core keys exist and, when the plugin tree is present,
+**Test:** `tests/test_ui_copy.py` asserts core keys exist and, when the plugin tree is present,
 that generated `uiCopy.ts` still matches (CI safety if someone hand-edits the mirror).
 
 ## Founding / add project (brief 22)

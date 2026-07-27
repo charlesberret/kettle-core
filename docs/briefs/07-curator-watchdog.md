@@ -2,7 +2,7 @@
 id: 07
 title: Curator watchdog
 repo: kettle-core
-touches: [server.py, test_server.py]
+touches: [server.py, tests/test_server.py]
 risk: run-critical
 depends-on: [01]
 status: done
@@ -52,7 +52,7 @@ process that dies mid-stream can end the stream with an `error` event but **no `
 
 ## Verify
 
-`python3 -m pytest test_server.py -q -k "stream or sweep or chat or interview"` plus the
+`python3 -m pytest tests/test_server.py -q -k "stream or sweep or chat or interview"` plus the
 full suite.
 
 ## Afterwards

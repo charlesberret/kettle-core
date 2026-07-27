@@ -2,7 +2,7 @@
 id: 04
 title: Externalize the prompts
 repo: kettle-core
-touches: [server.py, kits/prompts/ (new), test_server.py, test_kits.py]
+touches: [server.py, kits/prompts/ (new), tests/test_server.py, tests/test_kits.py]
 risk: run-critical
 depends-on: [01]
 status: done

@@ -14,7 +14,7 @@ Branch `codex/shore-up-system` carries roughly 4,000 uncommitted inserted lines
 (~4,700 changed), including ~870 changed lines in `server.py` and ~1,260 in
 `static/index.html` — the two files whose
 breakage takes the app offline. The entire egress layer is untracked (`egress.py`,
-`test_egress.py`, `kits/frameworks/egress.md`) even though tracked code depends on it:
+`tests/test_egress.py`, `kits/frameworks/egress.md`) even though tracked code depends on it:
 `cli.py` imports `egress` and `pyproject.toml` lists it in `py-modules`, so a commit of
 the branch that misses the untracked files produces a tree that fails at import. Also
 untracked: a 92-byte empty `package-lock.json` at the repo root — npm cruft in a

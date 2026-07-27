@@ -2,7 +2,7 @@
 id: 13
 title: API contract v1
 repo: kettle-core
-touches: [API.md, server.py (small), test_server.py]
+touches: [API.md, server.py (small), tests/test_server.py]
 risk: normal
 depends-on: [05, 07, 11]
 status: open
@@ -23,7 +23,7 @@ event carries `output`, `cost`, `fraction` beyond the documented fields; `/api/p
 curator block carries `effort`, `stream`, `auth_hint` undocumented; `mutate` accepts
 `0/false/no/off` but only `?mutate=0` is documented; one shape is documented wrongly
 (open-link 404 returns `{error}`, not `{ok:false,error}`). The real spec today is
-`test_server.py`, which strangers cannot read first.
+`tests/test_server.py`, which strangers cannot read first.
 
 ## Task
 
@@ -37,7 +37,7 @@ curator block carries `effort`, `stream`, `auth_hint` undocumented; `mutate` acc
    `version` field from brief 11, the auth header from brief 05.
 5. Add contract snapshot tests: for each documented shape, a test that round-trips the
    live handler and asserts the documented keys (a thin loop over route fixtures —
-   pattern exists throughout test_server.py). The point: API.md and the code cannot
+   pattern exists throughout tests/test_server.py). The point: API.md and the code cannot
    drift silently again.
 6. Promote the Stability-notes section into a versioned-changes discipline: a
    `## Changes` log with dates, and the rule that removals get a deprecation entry one
@@ -53,7 +53,7 @@ curator block carries `effort`, `stream`, `auth_hint` undocumented; `mutate` acc
 ## Done when
 
 - An adapter author could implement Tier A/B from API.md alone, without reading
-  test_server.py — falsifiable: the snapshot tests enumerate every documented shape.
+  tests/test_server.py — falsifiable: the snapshot tests enumerate every documented shape.
 - The snapshot tests fail when a handler adds or removes a documented key.
 
 ## Verify

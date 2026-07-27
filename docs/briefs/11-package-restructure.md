@@ -43,7 +43,7 @@ PEP 639 `license = "MIT"` needs setuptools>=77, pyproject requires >=61.
 
 - This collides with every open edit to core — land at a quiet moment after brief 01,
   as one large mechanical commit (moves) plus small focused commits (resource loading).
-- `test_server.py`'s global-redirect fixture will need path updates; budget for it.
+- `tests/test_server.py`'s global-redirect fixture will need path updates; budget for it.
 - Do not rename modules while moving them (import churn only, no identity churn).
 
 ## Done when

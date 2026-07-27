@@ -2,7 +2,7 @@
 id: 19
 title: Enforce the agent fence
 repo: kettle-core
-touches: [sandbox.py (new), runtime.py, server.py, curator.py, API.md, test_sandbox.py (new)]
+touches: [sandbox.py (new), runtime.py, server.py, curator.py, API.md, tests/test_sandbox.py (new)]
 risk: run-critical
 depends-on: [03, 06]
 status: open
@@ -67,7 +67,7 @@ of labor is only as real as its boundary.
 2. Thread it through `build_turn_cmd` behind a setting (`sandbox.enabled`, default `false`).
 3. Add a `sandboxed` field to the provider capability table (brief 06's structure) so
    `/api/ping` reports honestly whether the active turn is contained.
-4. Tests (`test_sandbox.py`): the profile denies a write to `/tmp` and to `$HOME` outside the
+4. Tests (`tests/test_sandbox.py`): the profile denies a write to `/tmp` and to `$HOME` outside the
    root; permits writes inside the root and `.kettle/`; the turn refuses or warns when
    `sandbox-exec` is unavailable.
 5. **Measure the cost**: run a real founding and a real sweep under the sandbox and record

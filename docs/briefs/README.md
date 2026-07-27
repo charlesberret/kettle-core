@@ -32,7 +32,7 @@ prove it), **Afterwards** (what was expected to be updated at the time).
 ## The rules that bind every brief
 
 - Never bind, signal, or curl port 4242 — that is the live window's port. Tests boot on
-  ephemeral ports (`start_server(0)`), as `test_server.py` already does.
+  ephemeral ports (`start_server(0)`), as `tests/test_server.py` already does.
 - Run-critical files (`server.py`, `static/index.html`, `kettle_main.py`,
   `projects.json`, `settings.json`) get edited only by an external session that runs the
   tests before and after — never from inside Kettle itself.

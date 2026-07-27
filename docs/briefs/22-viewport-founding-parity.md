@@ -58,7 +58,7 @@ the sitting the way the Desk did. `docs/UI.md` covers type hierarchy; this brief
 
 ## Constraints
 
-- `static/index.html` is run-critical — suite + `node --check` / `test_frontend.py`
+- `static/index.html` is run-critical — suite + `node --check` / `tests/test_frontend.py`
   before and after; never edit from inside a live Kettle sitting.
 - Do not bind port 4242 from agent tooling.
 - Do not add an Electron-only founding dialog.
