@@ -53,7 +53,8 @@ white as body text. Always mix toward `--bg` for gray chrome.
 4. **New panes inherit the ladder.** A new tab or panel must map every string to a role *before* shipping; do not default new copy to `--fg` because it “looks fine alone.”
 5. **Same roles across tabs.** Info and Brief share `#meta dt` / `#meta dd` roles — do not invent a second type scale for a sibling tab.
 6. **Selection is subtle.** Active queue row: faint link wash (`--row-active-bg`) only — no left bar.
-   Mid chrome bars (`#midbar`, `#midfoot`) use the same wash so selection and editor chrome match.
+   Mid chrome bars (`#midbar`, `#midfoot`) use the canvas (`--bg`) so they match the editor body,
+   not the queue selection tint.
 7. **Diff badges** color `.qdiff .add` / `.del` with good/warn in **both** midbar and queue.
 8. **Icon-only chrome** (reload, settings): `.btn-icon.btn-ghost` is borderless — no box around glyphs.
 

@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <!-- Bump this when sitting UI changes; title shows it so we can confirm the shell loaded. -->
-<meta name="kettle-ui" content="2026-07-25a">
-<title>kettle · ui-2026-07-25a</title>
+<meta name="kettle-ui" content="2026-07-26a">
+<title>kettle · ui-2026-07-26a</title>
 <style>
   /*
    * Type & chrome roles — single source of sitting hierarchy.
@@ -290,9 +290,9 @@
 
   /* middle */
   #mid { display:flex; flex-direction:column; min-width:0; }
-  /* Mid chrome uses the selected-row wash (not solid --panel / palette stock) */
+  /* Mid chrome matches the sitting canvas (--bg), not the queue selection wash */
   #midbar { flex:none; display:flex; align-items:center; gap:10px; padding:8px 14px;
-            border-bottom:1px solid var(--line); background:var(--row-active-bg); }
+            border-bottom:1px solid var(--line); background:var(--bg); }
   #fname { flex:1; color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   #fname .fbase { color:var(--text-link); }
   #sittingdiff { flex:none; display:flex; align-items:center; gap:6px; font-size:12px; }
@@ -310,9 +310,9 @@
                    border:1px solid var(--line); border-radius:4px; padding:4px 8px; font:inherit; }
   #findcount { color:var(--dim); font-size:12px; min-width:48px; text-align:center; }
 
-  /* middle bottom bar — same wash as midbar / selected queue row */
+  /* middle bottom bar — same canvas as midbar */
   #midfoot { flex:none; display:flex; align-items:center; gap:10px; padding:8px 14px;
-             border-top:1px solid var(--line); background:var(--row-active-bg); }
+             border-top:1px solid var(--line); background:var(--bg); }
   #commentpanel { display:none; flex:none; flex-direction:column; gap:8px; padding:10px 14px;
                   border-top:1px solid var(--line); background:var(--panel2); min-height:0; }
   #commentpanel.open { display:flex; }
