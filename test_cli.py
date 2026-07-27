@@ -98,6 +98,63 @@ class CliTests(unittest.TestCase):
         self.assertIn("ask:   Approve it", out)
         self.assertIn("brief: Read closely.", out)
 
+    def test_themes_lists_marquee_kettle(self):
+        code, out, err = self.run_cli(["themes"])
+        self.assertEqual((code, err), (0, ""))
+        self.assertIn("kettle", out)
+        self.assertIn("marquee", out.lower() + out)  # header or marker
+        self.assertIn("default", out)
+
+    def test_open_uses_builtin_editor(self):
+        proj = self.register()
+        target = Path(proj["root"]) / "draft.md"
+        target.write_text("hello")
+        server.atomic_write(server.queue_path(proj), json.dumps({
+            "curated": "test",
+            "entries": [{
+                "id": "draft", "title": "Draft", "path": str(target),
+                "status": "pending", "brief": "Check it", "ask": "ok?",
+            }],
+        }))
+        with mock.patch("tui_editor.edit_file", return_value=0) as edit:
+            code, out, err = self.run_cli(["open", proj["id"], "draft"])
+        self.assertEqual((code, err), (0, ""))
+        self.assertIn("built-in editor", out)
+        edit.assert_called_once()
+        self.assertEqual(Path(edit.call_args.args[0]), target)
+
+    def test_open_external_uses_editor_env(self):
+        proj = self.register()
+        target = Path(proj["root"]) / "draft.md"
+        target.write_text("hello")
+        server.atomic_write(server.queue_path(proj), json.dumps({
+            "curated": "test",
+            "entries": [{"id": "draft", "path": str(target), "status": "pending"}],
+        }))
+        with mock.patch.dict(os.environ, {"EDITOR": "true"}), \
+                mock.patch("cli.subprocess.call", return_value=0) as call:
+            code, out, _ = self.run_cli(["open", proj["id"], "draft", "--external"])
+        self.assertEqual(code, 0)
+        self.assertIn("opening", out)
+        call.assert_called_once()
+        self.assertEqual(call.call_args.args[0][0], "true")
+
+    def test_edit_alias_and_tty_fallback(self):
+        proj = self.register()
+        target = Path(proj["root"]) / "draft.md"
+        target.write_text("hello")
+        server.atomic_write(server.queue_path(proj), json.dumps({
+            "curated": "test",
+            "entries": [{"id": "draft", "path": str(target), "status": "pending"}],
+        }))
+        # edit_file returns 3 → no tty → external fallback
+        with mock.patch("tui_editor.edit_file", return_value=3), \
+                mock.patch("cli.subprocess.call", return_value=0) as call:
+            code, out, err = self.run_cli(["edit", proj["id"], "draft"])
+        self.assertEqual(code, 0)
+        self.assertIn("no tty", err)
+        call.assert_called_once()
+
     def test_egress_and_status(self):
         proj = self.register()
         code, out, err = self.run_cli([
