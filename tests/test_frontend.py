@@ -101,24 +101,62 @@ class SittingUiConventions(unittest.TestCase):
             "--text-label must not be a bare --dim alias",
         )
 
-    def test_brief_pane_labels_gray_bodies_primary(self):
-        """Subheaders gray; ask/brief body text primary (readable)."""
+    def test_desk_brief_ask_blockquote_and_body(self):
+        """Right-pane brief: ask as block-quote lead; body as secondary brief text."""
         css = INDEX.read_text(encoding="utf-8")
+        self.assertIn("id=\"desk-brief\"", INDEX.read_text(encoding="utf-8"))
+        self.assertIn("id=\"takeaway\"", INDEX.read_text(encoding="utf-8"))
+        self.assertIn("id=\"ritual\"", INDEX.read_text(encoding="utf-8"))
         self.assertRegex(
             css,
-            r"#meta dt[^{]*\{[^}]*--text-label",
-            "meta labels must use --text-label",
+            r"\.brief-ask[^{]*\{[^}]*border-left",
+            "brief-ask must be block-quote styled (plugin Desk)",
         )
-        self.assertRegex(
-            css,
-            r"\.brief-ask[^{]*\{[^}]*color:\s*var\(--text-primary\)",
-            "brief-ask body must use --text-primary (docs/UI.md)",
-        )
-        self.assertRegex(
-            css,
-            r"\.brief-body[^{]*\{[^}]*color:\s*var\(--text-primary\)",
-            "brief-body must use --text-primary (docs/UI.md)",
-        )
+        # Ritual is framed by drag bars above (#divBrief) and below (#divDesk)
+        html = INDEX.read_text(encoding="utf-8")
+        self.assertIn('id="divBrief"', html)
+        self.assertIn('id="divDesk"', html)
+        self.assertLess(html.index('id="divBrief"'), html.index('id="ritual"'))
+        self.assertLess(html.index('id="ritual"'), html.index('id="divDesk"'))
+        # Reload button stays removed; agent bar sits under chat entry
+        html = INDEX.read_text(encoding="utf-8")
+        self.assertNotIn("id=\"reloadbtn\"", html)
+        self.assertIn("id=\"agentbar\"", html)
+        self.assertIn("id=\"ctxbar\"", html)
+        self.assertLess(html.index("id=\"chatin\""), html.index("id=\"agentbar\""))
+        self.assertLess(html.index("id=\"model\""), html.index("id=\"ctxbar\""))
+        self.assertLess(html.index("id=\"ctxbar\""), html.index("id=\"agentsettings\""))
+        # model/ctx/settings live inside agentbar (bottom of right pane)
+        self.assertLess(html.index("id=\"agentbar\""), html.index("id=\"model\""))
+        # Project selector lives in the right desk pane; git heatmap fills the row gap
+        self.assertIn("id=\"desk-proj\"", html)
+        self.assertIn("id=\"gitmap\"", html)
+        self.assertLess(html.index("id=\"proj\""), html.index("id=\"gitmap\""))
+        # Renderer + lifecycle layers present (methodical git strip)
+        self.assertIn("function renderGitMap", html)
+        self.assertIn("function refreshGitMap", html)
+        self.assertIn("function gitMapEmptyGrid", html)
+        self.assertIn("/api/git/activity", html)
+        self.assertLess(html.index("id=\"desk-proj\""), html.index("id=\"desk-brief\""))
+        self.assertLess(html.index("id=\"approve\""), html.index("id=\"comment\""))
+        self.assertLess(html.index("id=\"comment\""), html.index("id=\"sweepbtn\""))
+
+    def test_left_file_info_box(self):
+        """Bottom-left info pane: status/path/changes under the queue."""
+        html = INDEX.read_text(encoding="utf-8")
+        self.assertIn('id="meta"', html)
+        self.assertIn('id="metadl"', html)
+        self.assertIn('id="metaedit"', html)
+        self.assertIn('id="divQ"', html)
+        # Info sits after the queue in the left column
+        self.assertLess(html.index('id="queue"'), html.index('id="meta"'))
+        self.assertLess(html.index('id="meta"'), html.index('id="mid"'))
+        css = html
+        self.assertRegex(css, r"#meta\s*\{[^}]*border-top")
+        # Field names: gray body text (not all-caps header labels)
+        self.assertRegex(css, r"\.meta-k[^{]*\{[^}]*--text-secondary")
+        self.assertIn("metaRow('status'", html)
+        self.assertIn("metaRow('needs'", html)
 
     def test_diff_badges_colored_globally(self):
         css = INDEX.read_text(encoding="utf-8")

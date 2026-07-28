@@ -90,17 +90,58 @@ Single source of truth for desk/settings model UIs:
 {
   "providers": [{ "id": "claude", "label": "Claude Code", "command": "claude", "command_exists": true, "hint": "…", "stream": "stream-json" }],
   "models": [{ "id": "sonnet", "provider": "claude", "label": "Sonnet", "blurb": "…", "good_for": ["setup","chat"], "effort_supported": true }],
-  "models_by_provider": { "claude": ["sonnet", "opus", "haiku", "fable"] },
+  "models_by_provider": { "claude": ["fable", "haiku", "opus", "sonnet"] },
   "efforts_by_provider": { "claude": [{ "id": "high", "label": "high" }] },
   "defaults_by_provider": { "claude": { "setup": "sonnet", "chat": "sonnet" } },
-  "menu": { "claude": ["sonnet", "opus", "haiku"] },
+  "menu": { "claude": ["haiku", "sonnet", "opus"] },
   "visible": [{ "id": "sonnet", "provider": "claude", "ready": true, "forced": false }],
   "active": { "provider": "claude", "command": "claude", "models": {}, "effort": "default" }
 }
 ```
 
 - `menu` = user checkmarks (`settings.curator.menu`); seeded to Claude sonnet/opus/haiku when missing.
-- `visible` = checked ∩ CLI-on-PATH, always including the active chat model (`forced: true` when needed).
+- `models_by_provider` / `visible` model order = A–Z by display label within each provider.
+- `visible` = checked ∩ CLI-on-PATH only (`forced` remains on the wire as always `false`; the active chat model is no longer force-included).
+
+### `GET /api/git/activity?project=<id>&weeks=auto`
+
+Local git contribution heatmap for the project root (desk chrome strip next to the
+project selector). Implementation: [`gitmap.py`](./gitmap.py).
+
+| Pin | Choice |
+|-----|--------|
+| Root | Registered project `root` only (no parent walk-up) |
+| Window | **Adaptive** by default (repo age → 2–26 weeks). Pass `weeks=N` to force fixed. |
+| Grain | `day` when dense; `week` (one bar per week) when sparse / young |
+| Week start | **Sunday** (GitHub classic) for day grain |
+| Scope | `git log --all`, all authors |
+| Levels | 0–7 in **sevenths** of full (1 commit / 1 active day = 1/7); quieter of absolute × relative |
+| Network | None |
+
+```json
+{
+  "ok": true,
+  "git": true,
+  "weeks": 8,
+  "grain": "week",
+  "rows": 1,
+  "adaptive": true,
+  "dow_start": 0,
+  "first_date": "2026-06-01",
+  "last_date": "2026-07-28",
+  "repo_first": "2026-06-03",
+  "total": 12,
+  "max": 4,
+  "cells": [
+    { "date": "2026-06-01", "date_end": "2026-06-07", "count": 2, "level": 2 }
+  ]
+}
+```
+
+- Omit `weeks` / `weeks=auto` → adaptive. `weeks=4` → fixed 4-week window.
+- Not a git work tree: `{ "ok": true, "git": false, "cells": [], … }`.
+- Day grain: `rows=7`, cells column-major (week × weekday). Week grain: `rows=1`, one cell per week.
+- Restart the server after updating `gitmap.py` / `py-modules`.
 
 - Set on **every** bind path (`start_server` and `main` / sidecar) via `_record_bind`.
 - Informational cache: `~/.cache/kettle/server.json` — `{ pid, port, started, url, projects, settings }`. Ping is authoritative.

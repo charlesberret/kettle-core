@@ -42,6 +42,7 @@ import kettle_contract  # core/API/desk-schema identity for every viewport
 import survey as survey_mod  # deterministic founding survey (tool-less interview Phase A)
 import sweepkit  # mechanical sweep close-kit (status · archive · stage · thin log)
 import theme_catalog  # bundled + user color theme packs (web, desktop, CLI)
+import gitmap  # local git contribution heatmap (desk chrome; no network)
 
 HOME = Path.home()
 
@@ -461,6 +462,11 @@ def want_mutate(qs: dict) -> bool:
 
 def project_root(proj: dict) -> Path:
     return Path(proj["root"]).expanduser().resolve()
+
+
+def git_commit_activity(root: Path, weeks: int = 26) -> dict:
+    """Delegate to :mod:`gitmap` (kept as a server-facing name for tests/callers)."""
+    return gitmap.git_commit_activity(root, weeks=weeks)
 
 
 def desk_dir(proj: dict) -> Path:
@@ -1540,6 +1546,18 @@ class Handler(BaseHTTPRequestHandler):
                 stat = entry_diffstat(proj, ent) if ent else None
                 # `stat` is canonical; `diff` kept for older clients (same key, different type — avoid)
                 self.send_json({"stat": stat, "diff": stat})
+            elif url.path == "/api/git/activity":
+                # Local git contribution heatmap (gitmap.py) for the project root.
+                # Omit weeks / weeks=auto → adaptive window from first commit.
+                proj = get_project(qs.get("project", [None])[0])
+                raw_w = (qs.get("weeks", [None])[0] or "").strip().lower()
+                if raw_w in ("", "auto", "0", "none"):
+                    weeks_arg = None  # adaptive
+                else:
+                    weeks_arg = gitmap.clamp_weeks(raw_w)
+                self.send_json(
+                    gitmap.git_commit_activity(project_root(proj), weeks=weeks_arg)
+                )
             elif url.path == "/api/chatlog":
                 proj = get_project(qs.get("project", [None])[0])
                 self.send_json({"messages": load_chatlog(proj)})

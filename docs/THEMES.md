@@ -15,7 +15,7 @@ Under `static/themes/`:
 
 - `index.json` — default id (`kettle`) and catalog
 - `kettle.json` — **marquee** product theme
-- `nord.json`, `solarized.json`, `tokyo-night.json`, `gruvbox.json`, `material.json`, `one-dark.json`, `classic.json`
+- `nord.json`, `solarized.json`, `tokyo-night.json`, `gruvbox.json`, `material.json`, `classic.json`
 
 Shortcut for brand-only consumers: `static/kettle-palette.json` (mirrors marquee).
 

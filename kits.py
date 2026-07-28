@@ -237,8 +237,13 @@ def as_context(kit, mode: str) -> str:
         if not kit:
             return ""
         checks = kit.get("sweepChecks") or []
+        def _check_line(c):
+            s = str(c or "").strip()
+            if s.startswith("- "):
+                s = s[2:].strip()
+            return f"- {s}" if s else ""
         body = ("Sweep self-check (confirm each before closing):\n"
-                + "\n".join(f"- {c}" for c in checks)) if checks else ""
+                + "\n".join(x for x in (_check_line(c) for c in checks) if x)) if checks else ""
     elif mode == "found":
         if not kit:
             return ""

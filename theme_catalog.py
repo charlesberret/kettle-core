@@ -25,6 +25,13 @@ IFACE_KEYS = (
 SLOT_KEYS = (
     "mdhead", "ctxhead", "ctxbody", "cmthead", "comment", "agent", "user",
 )
+# Text roles that must resolve to ink (not paper) under the paper-in-0 / ink-in-7 convention.
+TEXT_SLOT_KEYS = ("ctxhead", "ctxbody", "cmthead", "agent")
+# Preset solid % for interface/text roles (matches static/themes.js).
+DEFAULT_IFACE_OPACITY_DARK = {"panel": 92, "panel2": 96, "activebg": 84, "muted": 58}
+DEFAULT_IFACE_OPACITY_LIGHT = {"panel": 96, "panel2": 100, "activebg": 92, "muted": 52}
+DEFAULT_SLOT_OPACITY_DARK = {"agent": 58}
+DEFAULT_SLOT_OPACITY_LIGHT = {"agent": 48}
 # Syntax token kinds → preferred iface/slot or fixed ANSI index name.
 SYNTAX_ROLE_DEFAULTS = {
     "text": "fg",
@@ -240,9 +247,10 @@ def pack_to_web(pack: dict[str, Any]) -> dict[str, Any]:
 
     ``dark`` / ``light`` each expose ``colors`` (``--ansi-N`` → hex), ``iface`` and
     ``slots`` (role → ``--ansi-N``), matching the browser applyTheme() path.
+    Missing opacities fall back to the sitting defaults (themes.js IFACE_/SLOT_OPACITY_*).
     """
 
-    def mode(block: dict[str, Any]) -> dict[str, Any]:
+    def mode(block: dict[str, Any], *, which: str) -> dict[str, Any]:
         ansi = list(block["ansi"])
         colors = {f"--ansi-{i}": ansi[i] for i in range(16)}
         iface = {
@@ -253,12 +261,20 @@ def pack_to_web(pack: dict[str, Any]) -> dict[str, Any]:
             str(k): f"--ansi-{int(v)}"
             for k, v in (block.get("slots") or {}).items()
         }
+        if which == "light":
+            iface_op = dict(DEFAULT_IFACE_OPACITY_LIGHT)
+            slot_op = dict(DEFAULT_SLOT_OPACITY_LIGHT)
+        else:
+            iface_op = dict(DEFAULT_IFACE_OPACITY_DARK)
+            slot_op = dict(DEFAULT_SLOT_OPACITY_DARK)
+        iface_op.update(block.get("ifaceOpacity") or {})
+        slot_op.update(block.get("slotOpacity") or {})
         return {
             "colors": colors,
             "iface": iface,
             "slots": slots,
-            "ifaceOpacity": dict(block.get("ifaceOpacity") or {}),
-            "slotOpacity": dict(block.get("slotOpacity") or {}),
+            "ifaceOpacity": iface_op,
+            "slotOpacity": slot_op,
         }
 
     return {
@@ -266,8 +282,8 @@ def pack_to_web(pack: dict[str, Any]) -> dict[str, Any]:
         "label": pack.get("label"),
         "marquee": bool(pack.get("marquee")),
         "source": pack.get("_source", "bundled"),
-        "dark": mode(pack["dark"]),
-        "light": mode(pack["light"]),
+        "dark": mode(pack["dark"], which="dark"),
+        "light": mode(pack["light"], which="light"),
     }
 
 

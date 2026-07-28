@@ -149,6 +149,39 @@ class TestResolveCurator(unittest.TestCase):
         self.assertEqual(cfg2.effort, "")
         self.assertIsNone(cfg2.effort_for("chat"))
 
+    def test_per_task_efforts(self):
+        cfg = resolve_curator({
+            "curator": {
+                "provider": "claude",
+                "effort": "low",
+                "efforts": {"setup": "max", "chat": "high"},
+            }
+        })
+        self.assertEqual(cfg.effort_for("setup"), "max")
+        self.assertEqual(cfg.effort_for("chat"), "high")
+        # Task without override falls back to legacy global
+        cfg2 = resolve_curator({
+            "curator": {"provider": "claude", "effort": "xhigh", "efforts": {"setup": "low"}}
+        })
+        self.assertEqual(cfg2.effort_for("setup"), "low")
+        self.assertEqual(cfg2.effort_for("chat"), "xhigh")
+        pub = cfg.as_public_dict()["efforts"]
+        self.assertEqual(pub["setup"], "max")
+        self.assertEqual(pub["chat"], "high")
+
+    def test_efforts_merge(self):
+        cur = {"curator": {
+            "provider": "claude", "command": "claude",
+            "models": {"setup": "sonnet", "chat": "sonnet"},
+            "efforts": {"setup": "low", "chat": "medium"},
+        }}
+        out = deep_merge_settings(cur, {"curator": {"efforts": {"chat": "max"}}})
+        self.assertEqual(out["curator"]["efforts"]["setup"], "low")
+        self.assertEqual(out["curator"]["efforts"]["chat"], "max")
+        out2 = deep_merge_settings(out, {"curator": {"efforts": {"chat": "default"}}})
+        self.assertNotIn("chat", out2["curator"].get("efforts") or {})
+        self.assertEqual(out2["curator"]["efforts"]["setup"], "low")
+
 
 class TestDeepMerge(unittest.TestCase):
     def test_curator_models_merge(self):
@@ -190,7 +223,7 @@ class TestEnsure(unittest.TestCase):
         self.assertIn("curator", out)
         self.assertEqual(out["curator"]["models"]["chat"], "opus")
         self.assertEqual(out["agents"]["chat"], "opus")
-        self.assertEqual(out["curator"]["menu"]["claude"], ["sonnet", "opus", "haiku"])
+        self.assertEqual(out["curator"]["menu"]["claude"], ["haiku", "sonnet", "opus"])
 
     def test_ensure_preserves_menu(self):
         out = ensure_curator_settings({
@@ -201,7 +234,7 @@ class TestEnsure(unittest.TestCase):
                 "menu": {"claude": ["opus"], "grok": ["grok-4.5"]},
             },
         })
-        self.assertEqual(out["curator"]["menu"]["claude"], ["opus"])
+        self.assertEqual(out["curator"]["menu"]["claude"], ["opus"])  # single id, already ranked
         self.assertEqual(out["curator"]["menu"]["grok"], ["grok-4.5"])
 
     def test_ensure_preserves_idle_timeout(self):
@@ -219,7 +252,7 @@ class TestCatalog(unittest.TestCase):
             claude.chmod(0o755)
             with mock.patch.dict(os.environ, {"PATH": td}):
                 cat = curator.build_catalog({})
-        self.assertEqual(cat["menu"]["claude"], ["sonnet", "opus", "haiku"])
+        self.assertEqual(cat["menu"]["claude"], ["haiku", "sonnet", "opus"])
         self.assertNotIn("fable", cat["menu"].get("claude", []))
         providers = {p["id"]: p for p in cat["providers"]}
         self.assertTrue(providers["claude"]["command_exists"])
@@ -229,8 +262,14 @@ class TestCatalog(unittest.TestCase):
         for mid in ("sonnet", "opus", "haiku"):
             self.assertIn(mid, claude_visible)
         self.assertNotIn("fable", claude_visible)
-        # Unchecked providers should not contribute visible rows unless forced active
-        grok_visible = [v for v in cat["visible"] if v["provider"] == "grok" and not v.get("forced")]
+        # Visible and models_by_provider are A–Z by display label.
+        self.assertEqual(claude_visible, ["haiku", "opus", "sonnet"])
+        self.assertEqual(
+            cat["models_by_provider"]["claude"],
+            ["fable", "haiku", "opus", "sonnet"],
+        )
+        # Unchecked providers contribute no visible rows
+        grok_visible = [v for v in cat["visible"] if v["provider"] == "grok"]
         self.assertEqual(grok_visible, [])
 
     def test_menu_merge(self):
@@ -240,6 +279,30 @@ class TestCatalog(unittest.TestCase):
         out = deep_merge_settings(cur, {"curator": {"menu": {"grok": ["grok-4.5"]}}})
         self.assertEqual(out["curator"]["menu"]["claude"], ["sonnet"])
         self.assertEqual(out["curator"]["menu"]["grok"], ["grok-4.5"])
+
+    def test_synthetic_cli_skips_catalog_ids(self):
+        """Active/menu Grok (etc.) ids must not become “Custom CLI model id” twins."""
+        syn = curator.synthetic_cli_models(
+            {"cli": ["local-x", "grok-4.5", "sonnet"]},
+            {"setup": "grok-4.5", "chat": "grok-composer-2.5-fast"},
+        )
+        ids = [m["id"] for m in syn]
+        self.assertEqual(ids, ["local-x"])
+        cat = curator.build_catalog({
+            "curator": {
+                "provider": "grok",
+                "command": "grok",
+                "models": {"setup": "grok-4.5", "chat": "grok-4.5"},
+                "menu": {"cli": ["grok-4.5", "only-custom"]},
+            },
+        })
+        by_id = {}
+        for m in cat["models"]:
+            by_id.setdefault(m["id"], []).append(m)
+        self.assertEqual(len(by_id["grok-4.5"]), 1)
+        self.assertEqual(by_id["grok-4.5"][0]["provider"], "grok")
+        self.assertNotIn("Custom CLI", by_id["grok-4.5"][0].get("blurb") or "")
+        self.assertEqual(by_id["only-custom"][0]["provider"], "cli")
 
     def test_egress_and_admin_deep_merge(self):
         cur = {"egress": {"routes": {"handoff": "peers"}}, "admin": {"fleet_panels": False}}
@@ -251,7 +314,8 @@ class TestCatalog(unittest.TestCase):
         self.assertEqual(out["egress"]["routes"]["launch"], "launch-directives")
         self.assertTrue(out["admin"]["fleet_panels"])
 
-    def test_visible_force_includes_active(self):
+    def test_visible_does_not_force_include_active(self):
+        """Unchecked active chat model stays off the desk menu — no lock / force-include."""
         cat = curator.build_catalog({
             "curator": {
                 "provider": "claude",
@@ -261,9 +325,9 @@ class TestCatalog(unittest.TestCase):
             },
         })
         ids = {(v["provider"], v["id"]) for v in cat["visible"]}
-        self.assertIn(("claude", "fable"), ids)
-        forced = next(v for v in cat["visible"] if v["id"] == "fable")
-        self.assertTrue(forced.get("forced"))
+        self.assertIn(("claude", "sonnet"), ids)
+        self.assertNotIn(("claude", "fable"), ids)
+        self.assertTrue(all(not v.get("forced") for v in cat["visible"]))
 
 
 if __name__ == "__main__":

@@ -69,6 +69,26 @@ class KettlePalette(unittest.TestCase):
         self.assertIn("bg: '--ansi-0'", body)
         self.assertIn("fg: '--ansi-7'", body)
 
+    def test_light_slots_use_ink_not_paper(self):
+        """Text slots in light mode must use ink (ansi-7), not paper (ansi-0).
+
+        A prior bug mapped agent/ctx* to --ansi-0, making prose invisible on light canvases.
+        """
+        themes_src = THEMES_PATH.read_text(encoding="utf-8")
+        m = re.search(r"const SLOTS_LIGHT = \{([^}]+)\}", themes_src)
+        self.assertIsNotNone(m, "SLOTS_LIGHT missing from themes.js")
+        body = m.group(1)
+        for role in ("ctxhead", "ctxbody", "cmthead", "agent"):
+            # role: '--ansi-N' — must not be paper
+            rm = re.search(rf"{role}:\s*'--ansi-(\d+)'", body)
+            self.assertIsNotNone(rm, f"SLOTS_LIGHT missing {role}")
+            idx = int(rm.group(1))
+            self.assertNotEqual(
+                idx, 0,
+                f"SLOTS_LIGHT.{role} maps to paper (ansi-0); use ink (ansi-7)",
+            )
+            self.assertEqual(idx, 7, f"SLOTS_LIGHT.{role} should be ink (ansi-7), got {idx}")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

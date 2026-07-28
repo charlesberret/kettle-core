@@ -50,9 +50,10 @@ const SLOTS_DARK = {
   comment: '--ansi-4', agent: '--ansi-7', user: '--ansi-4',
 };
 
+// Light: same index roles as dark — paper is 0, ink/text is 7 (not inverted).
 const SLOTS_LIGHT = {
-  mdhead: '--ansi-4', ctxhead: '--ansi-0', ctxbody: '--ansi-0', cmthead: '--ansi-0',
-  comment: '--ansi-4', agent: '--ansi-0', user: '--ansi-4',
+  mdhead: '--ansi-4', ctxhead: '--ansi-7', ctxbody: '--ansi-7', cmthead: '--ansi-7',
+  comment: '--ansi-4', agent: '--ansi-7', user: '--ansi-4',
 };
 
 const SLOT_OPACITY_DARK = { agent: 58 };
@@ -89,7 +90,7 @@ const BUILTIN_THEMES = {
       SLOTS_LIGHT, IFACE_LIGHT, IFACE_OPACITY_LIGHT, SLOT_OPACITY_LIGHT,
     ),
   },
-  tokyoNight: {
+  'tokyo-night': {
     label: 'Tokyo Night',
     dark: pack(
       ['#1a1b26', '#f7768e', '#9ece6a', '#e0af68', '#7aa2f7', '#bb9af7', '#7dcfff', '#c0caf5',
@@ -122,10 +123,13 @@ const BUILTIN_THEMES = {
         '#073642', '#cb4b16', '#586e75', '#657b83', '#839496', '#6c71c4', '#93a1a1', '#fdf6e3'],
       SLOTS_DARK, IFACE_DARK, IFACE_OPACITY_DARK, SLOT_OPACITY_DARK,
     ),
+    // Light keeps base03 in ansi-15 for the dual palette; surfaces use base2/base3 (8/0).
     light: pack(
       ['#fdf6e3', '#dc322f', '#859900', '#b58900', '#268bd2', '#d33682', '#2aa198', '#657b83',
         '#eee8d5', '#cb4b16', '#93a1a1', '#839496', '#657b83', '#6c71c4', '#586e75', '#002b36'],
-      SLOTS_LIGHT, IFACE_LIGHT, IFACE_OPACITY_LIGHT, SLOT_OPACITY_LIGHT,
+      SLOTS_LIGHT,
+      Object.assign({}, IFACE_LIGHT, { panel: '--ansi-8', panel2: '--ansi-0' }),
+      IFACE_OPACITY_LIGHT, SLOT_OPACITY_LIGHT,
     ),
   },
   gruvbox: {
@@ -141,19 +145,6 @@ const BUILTIN_THEMES = {
       SLOTS_LIGHT, IFACE_LIGHT, IFACE_OPACITY_LIGHT, SLOT_OPACITY_LIGHT,
     ),
   },
-  oneDark: {
-    label: 'One Dark',
-    dark: pack(
-      ['#282c34', '#e06c75', '#98c379', '#e5c07b', '#61afef', '#c678dd', '#56b6c2', '#abb2bf',
-        '#3e4451', '#be5046', '#98c379', '#d19a66', '#61afef', '#c678dd', '#56b6c2', '#ffffff'],
-      SLOTS_DARK, IFACE_DARK, IFACE_OPACITY_DARK, SLOT_OPACITY_DARK,
-    ),
-    light: pack(
-      ['#fafafa', '#e45649', '#50a14f', '#c18401', '#4078f2', '#a626a4', '#0184bc', '#383a42',
-        '#e5e5e6', '#e06c75', '#98c379', '#e5c07b', '#61afef', '#c678dd', '#56b6c2', '#ffffff'],
-      SLOTS_LIGHT, IFACE_LIGHT, IFACE_OPACITY_LIGHT, SLOT_OPACITY_LIGHT,
-    ),
-  },
   classic: {
     label: 'Classic ANSI',
     dark: pack(
@@ -163,7 +154,7 @@ const BUILTIN_THEMES = {
     ),
     light: pack(
       ['#ffffff', '#cd0000', '#00cd00', '#cdcd00', '#0000ee', '#cd00cd', '#00cdcd', '#000000',
-        '#e5e5e5', '#ff0000', '#00ff00', '#ffff00', '#5c5cff', '#ff00ff', '#00ffff', '#000000'],
+        '#e5e5e5', '#ff0000', '#00ff00', '#ffff00', '#5c5cff', '#ff00ff', '#00ffff', '#ffffff'],
       SLOTS_LIGHT, IFACE_LIGHT, IFACE_OPACITY_LIGHT, SLOT_OPACITY_LIGHT,
     ),
   },

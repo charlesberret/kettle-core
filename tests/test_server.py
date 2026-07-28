@@ -85,6 +85,13 @@ class HelperTests(Base):
             server.get_project("")
         self.assertEqual(server.get_project("t")["id"], "t")
 
+    def test_git_commit_activity_delegates(self):
+        # Pure layers live in gitmap.py; server keeps a thin alias.
+        act = server.git_commit_activity(self.root, weeks=8)
+        self.assertTrue(act["ok"])
+        self.assertFalse(act["git"])
+        self.assertEqual(act["weeks"], 8)
+
     def test_resolve_projects_path_env_wins(self):
         explicit = self.tmp / "explicit-projects.json"
         prev = os.environ.get("DESK_PROJECTS")
@@ -684,9 +691,9 @@ class EndpointTests(Base):
         self.assertIn("models", j)
         self.assertIn("visible", j)
         self.assertIn("menu", j)
-        self.assertEqual(j["menu"]["claude"], ["sonnet", "opus", "haiku"])
+        self.assertEqual(j["menu"]["claude"], ["haiku", "sonnet", "opus"])
         # Seeded checkmarks — fable not in default menu
-        visible_ids = {v["id"] for v in j["visible"] if v["provider"] == "claude" and not v.get("forced")}
+        visible_ids = {v["id"] for v in j["visible"] if v["provider"] == "claude"}
         self.assertNotIn("fable", visible_ids)
         # Persist custom menu
         _http("POST", f"{self.base}/api/settings", {
@@ -694,6 +701,69 @@ class EndpointTests(Base):
         })
         _, j2 = _http("GET", f"{self.base}/api/curator/catalog")
         self.assertEqual(j2["menu"]["claude"], ["opus"])
+
+    def test_git_activity_route_nongit(self):
+        s, j = _http("GET", f"{self.base}/api/git/activity?project=t&weeks=8")
+        self.assertEqual(s, 200)
+        self.assertTrue(j.get("ok"))
+        self.assertFalse(j.get("git"))  # fixture root is not a git repo
+        self.assertEqual(j.get("weeks"), 8)
+        self.assertEqual(j.get("cells"), [])
+        self.assertEqual(j.get("dow_start"), 0)
+        s2, _ = _http("GET", f"{self.base}/api/git/activity")
+        self.assertEqual(s2, 400)  # project required
+
+    def test_git_activity_route_with_commits_adaptive(self):
+        """HTTP contract: temp git project → adaptive weeks + week grain when sparse."""
+        import subprocess
+        from datetime import date, timedelta
+        try:
+            subprocess.run(["git", "--version"], capture_output=True, check=True)
+        except (OSError, subprocess.CalledProcessError):
+            self.skipTest("git not on PATH")
+        subprocess.run(["git", "init"], cwd=self.root, check=True, capture_output=True)
+        subprocess.run(
+            ["git", "config", "user.email", "test@example.com"],
+            cwd=self.root, check=True, capture_output=True,
+        )
+        subprocess.run(
+            ["git", "config", "user.name", "Test"],
+            cwd=self.root, check=True, capture_output=True,
+        )
+        f = self.root / "note.txt"
+        env = os.environ.copy()
+        today = date.today()
+        for i, offset in enumerate((5, 0)):
+            f.write_text(f"line {i}\n")
+            subprocess.run(["git", "add", "note.txt"], cwd=self.root, check=True, capture_output=True)
+            d = today - timedelta(days=offset)
+            stamp = d.isoformat() + "T12:00:00"
+            env["GIT_AUTHOR_DATE"] = stamp
+            env["GIT_COMMITTER_DATE"] = stamp
+            subprocess.run(
+                ["git", "commit", "-m", f"c{i}"],
+                cwd=self.root, check=True, capture_output=True, env=env,
+            )
+        # adaptive (no weeks=)
+        s, j = _http("GET", f"{self.base}/api/git/activity?project=t")
+        self.assertEqual(s, 200)
+        self.assertTrue(j["ok"])
+        self.assertTrue(j["git"])
+        self.assertTrue(j.get("adaptive"))
+        self.assertIn(j.get("grain"), ("day", "week"))
+        self.assertGreaterEqual(j["total"], 2)
+        self.assertIn("first_date", j)
+        self.assertIn("last_date", j)
+        self.assertTrue(any(c.get("level", 0) >= 1 for c in j["cells"] if c.get("count")))
+        # levels are sevenths (0–7); sparse history stays low
+        lit = [c for c in j["cells"] if c.get("count")]
+        self.assertTrue(all(1 <= c.get("level", 0) <= 7 for c in lit))
+        self.assertTrue(all(c.get("level", 0) <= 3 for c in lit))
+        # fixed weeks still works
+        s2, j2 = _http("GET", f"{self.base}/api/git/activity?project=t&weeks=4")
+        self.assertEqual(s2, 200)
+        self.assertEqual(j2["weeks"], 4)
+        self.assertFalse(j2.get("adaptive"))
 
     # ---- provider capability table + read-only enforcement (brief 06) ----
 

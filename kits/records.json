@@ -1,8 +1,9 @@
 {
   "name": "Records",
   "kind": "records",
+  "tagline": "Integrity, freshness, and deduplication",
   "lens": "Read for integrity, freshness, and deduplication. Flag malformed or missing fields, records gone stale against their source of truth, probable duplicates, and gaps in coverage.",
-  "urgency": "high = a schema/format violation or a record contradicting its source of truth; medium = staleness, gaps, or likely duplicates; low = formatting.",
+  "urgency": "- high: a schema/format violation or a record contradicting its source of truth.\n- medium: staleness, gaps, or likely duplicates.\n- low: formatting.",
   "firstQueue": "Surface the records most likely to be stale, malformed, or duplicated, and any whose source of truth has changed.",
   "tools": [],
   "interview": [
@@ -19,12 +20,12 @@
     }
   ],
   "sweepChecks": [
-    "every entry assessed",
-    "no append-only record touched",
-    "schema/format conformance checked",
-    "duplicates flagged, never auto-merged",
-    "MEMORY kept under ~80 lines",
-    "FAMILIARITY deepened or left intact when nothing new about the project",
-    "listed SWEEP-ACTIONS carried out or egressed (never transmit external systems from the desk)"
+    "- every entry assessed",
+    "- no append-only record touched",
+    "- schema/format conformance checked",
+    "- duplicates flagged, never auto-merged",
+    "- MEMORY kept under ~80 lines",
+    "- FAMILIARITY deepened or left intact when nothing new about the project",
+    "- listed SWEEP-ACTIONS carried out or egressed (never transmit external systems from the desk)"
   ]
 }

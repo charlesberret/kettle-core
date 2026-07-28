@@ -25,13 +25,14 @@ settings.json shape (preferred):
         "chat": "sonnet",
               },
       "menu": {
-        "claude": ["sonnet", "opus", "haiku"]
+        "claude": ["haiku", "sonnet", "opus"]
       }
     }
   }
 
-`menu.<provider>` = ordered model ids shown in the desk model selector.
-Missing menu is seeded (Claude sonnet/opus/haiku only) — not "show everything".
+`menu.<provider>` = model ids shown in the desk model selector (checkmarks).
+Order is always lower → higher calibre (see MODEL_CALIBRE), not freeform.
+Missing menu is seeded (Claude haiku/sonnet/opus) — not "show everything".
 
 Legacy (still read): top-level "model" and "agents": {setup, chat}. Glance task was removed.
 """
@@ -79,7 +80,8 @@ DEFAULT_COMMAND = {
 }
 
 KNOWN_PROVIDERS = frozenset({"claude", "grok", "chatgpt", "gemini", "cli"})
-PROVIDER_ORDER = ("claude", "grok", "chatgpt", "gemini", "cli")
+# Built-ins A–Z by product name (Claude, Codex, Gemini, Grok); Custom CLI last.
+PROVIDER_ORDER = ("claude", "chatgpt", "gemini", "grok", "cli")
 
 # Labels for Admin / ping diagnostics
 STREAM_LABEL = {
@@ -119,51 +121,91 @@ PROVIDER_HINT = {
 }
 
 # Desk menu checkmarks — seeded on first ensure (not the full catalog).
+# Order is lower → higher calibre (normalize_menu re-sorts to MODEL_CALIBRE).
 DEFAULT_MENU: dict[str, list[str]] = {
-    "claude": ["sonnet", "opus", "haiku"],
+    "claude": ["haiku", "sonnet", "opus"],
 }
 
+# Calibre rank within a provider: lower number = lighter / cheaper (list first).
+# Unknown ids sort after ranked catalog models (stable by id).
+MODEL_CALIBRE: dict[str, int] = {
+    # Claude
+    "haiku": 10,
+    "sonnet": 20,
+    "opus": 30,
+    "fable": 40,
+    # Grok
+    "grok-composer-2.5-fast": 10,
+    "grok-4.5": 20,
+    # ChatGPT / Codex
+    "gpt-5-mini": 10,
+    "o4-mini": 20,
+    "gpt-5.1": 30,
+    "o3": 40,
+    # Gemini
+    "gemini-2.0-flash": 10,
+    "gemini-2.5-flash": 20,
+    "gemini-2.5-pro": 30,
+}
+
+
+def sort_models_by_calibre(ids: list[str]) -> list[str]:
+    """Stable lower→higher calibre; unlisted (custom) ids after catalog models."""
+    def key(mid: str) -> tuple[int, int, str]:
+        rank = MODEL_CALIBRE.get(mid)
+        if rank is None:
+            return (1, 0, mid)
+        return (0, rank, mid)
+
+    return sorted(ids, key=key)
+
+
 # Canonical model catalog (single source of truth for UIs).
+# Within each provider, list lower → higher calibre (menu / select order).
 CATALOG_MODELS: list[dict[str, Any]] = [
+    # Claude: haiku → sonnet → opus → fable
+    {"id": "haiku", "provider": "claude", "label": "Haiku",
+     "blurb": "Fast and cheap — light turns.",
+     "good_for": ["chat"], "effort_supported": True},
     {"id": "sonnet", "provider": "claude", "label": "Sonnet",
      "blurb": "Balanced default for chat and sweeps.",
      "good_for": ["setup", "chat"], "effort_supported": True},
     {"id": "opus", "provider": "claude", "label": "Opus",
      "blurb": "Heavier reasoning for founding and hard sweeps.",
      "good_for": ["setup", "chat"], "effort_supported": True},
-    {"id": "haiku", "provider": "claude", "label": "Haiku",
-     "blurb": "Fast and cheap — light turns.",
-     "good_for": ["chat"], "effort_supported": True},
     {"id": "fable", "provider": "claude", "label": "Fable",
      "blurb": "Optional Claude family id — enable after you confirm it works.",
+     "good_for": ["chat"], "effort_supported": True},
+    # Grok: fast composer → primary
+    {"id": "grok-composer-2.5-fast", "provider": "grok", "label": "Composer 2.5 fast",
+     "blurb": "Faster Grok for light turns.",
      "good_for": ["chat"], "effort_supported": True},
     {"id": "grok-4.5", "provider": "grok", "label": "Grok 4.5",
      "blurb": "Primary Grok Build CLI model.",
      "good_for": ["setup", "chat"], "effort_supported": True},
-    {"id": "grok-composer-2.5-fast", "provider": "grok", "label": "Composer 2.5 fast",
-     "blurb": "Faster Grok for light turns.",
+    # ChatGPT / Codex: mini / small → primary → reasoning
+    {"id": "gpt-5-mini", "provider": "chatgpt", "label": "GPT-5 mini",
+     "blurb": "Cheaper Codex model for light turns.",
+     "good_for": ["chat"], "effort_supported": True},
+    {"id": "o4-mini", "provider": "chatgpt", "label": "o4-mini",
+     "blurb": "Smaller reasoning Codex model.",
      "good_for": ["chat"], "effort_supported": True},
     {"id": "gpt-5.1", "provider": "chatgpt", "label": "GPT-5.1",
      "blurb": "Primary Codex / ChatGPT model.",
      "good_for": ["setup", "chat"], "effort_supported": True},
-    {"id": "gpt-5-mini", "provider": "chatgpt", "label": "GPT-5 mini",
-     "blurb": "Cheaper Codex model for light turns.",
-     "good_for": ["chat"], "effort_supported": True},
     {"id": "o3", "provider": "chatgpt", "label": "o3",
      "blurb": "Reasoning-oriented Codex model.",
      "good_for": ["setup", "chat"], "effort_supported": True},
-    {"id": "o4-mini", "provider": "chatgpt", "label": "o4-mini",
-     "blurb": "Smaller reasoning Codex model.",
-     "good_for": ["chat"], "effort_supported": True},
-    {"id": "gemini-2.5-pro", "provider": "gemini", "label": "Gemini 2.5 Pro",
-     "blurb": "Primary Gemini CLI model.",
-     "good_for": ["setup", "chat"], "effort_supported": False},
-    {"id": "gemini-2.5-flash", "provider": "gemini", "label": "Gemini 2.5 Flash",
-     "blurb": "Fast Gemini for light turns.",
-     "good_for": ["chat"], "effort_supported": False},
+    # Gemini: older/faster flash → pro
     {"id": "gemini-2.0-flash", "provider": "gemini", "label": "Gemini 2.0 Flash",
      "blurb": "Earlier Gemini flash id.",
      "good_for": ["chat"], "effort_supported": False},
+    {"id": "gemini-2.5-flash", "provider": "gemini", "label": "Gemini 2.5 Flash",
+     "blurb": "Fast Gemini for light turns.",
+     "good_for": ["chat"], "effort_supported": False},
+    {"id": "gemini-2.5-pro", "provider": "gemini", "label": "Gemini 2.5 Pro",
+     "blurb": "Primary Gemini CLI model.",
+     "good_for": ["setup", "chat"], "effort_supported": False},
     # Custom CLI has no fixed catalog — model ids come from curator.menu.cli
     # (user-configured) and are synthesized in build_catalog.
 ]
@@ -306,7 +348,16 @@ def apply_curator_selection(
 
     if effort is not None:
         e = str(effort).strip()
-        patch["curator"]["effort"] = e if e and e.lower() != "default" else "default"
+        if not e or e.lower() == "default":
+            # Per-task clear: store empty so effort_for falls through
+            patch["curator"]["efforts"] = {task: "default"}
+            # Keep legacy global in sync when chat is the task
+            if task == "chat":
+                patch["curator"]["effort"] = "default"
+        else:
+            patch["curator"]["efforts"] = {task: e}
+            if task == "chat":
+                patch["curator"]["effort"] = e
 
     if command and str(command).strip() and "command" not in patch["curator"]:
         patch["curator"]["command"] = str(command).strip()
@@ -355,18 +406,18 @@ DEFAULT_COMMAND_VALUES = frozenset(DEFAULT_COMMAND.values())
 
 
 def models_by_provider() -> dict[str, list[str]]:
-    """Ordered model ids per provider from the canonical catalog."""
+    """Model ids per provider, lower → higher calibre."""
     out: dict[str, list[str]] = {p: [] for p in PROVIDER_ORDER}
     for row in CATALOG_MODELS:
         p = row["provider"]
         mid = row["id"]
         if p in out and mid not in out[p]:
             out[p].append(mid)
-    return out
+    return {p: sort_models_by_calibre(ids) for p, ids in out.items()}
 
 
 def normalize_menu(raw: Any) -> dict[str, list[str]]:
-    """Normalize curator.menu to {provider: [model_id, ...]}."""
+    """Normalize curator.menu to {provider: [model_id, ...]} sorted by calibre."""
     if not isinstance(raw, dict):
         return {}
     out: dict[str, list[str]] = {}
@@ -386,7 +437,7 @@ def normalize_menu(raw: Any) -> dict[str, list[str]]:
                 continue
             seen.add(mid)
             ids.append(mid)
-        out[p] = ids
+        out[p] = sort_models_by_calibre(ids)
     return out
 
 
@@ -441,10 +492,17 @@ def provider_readiness(
     return out
 
 
+def _label_sort_key(row: dict[str, Any]) -> tuple[str, str]:
+    """A–Z by display label, then id (matches settings UI sortModelsAlpha)."""
+    mid = (row.get("id") or "").strip()
+    lab = (row.get("label") or mid).strip()
+    return (lab.casefold(), mid.casefold())
+
+
 def build_catalog(settings: Optional[dict] = None) -> dict[str, Any]:
     """
     Full catalog payload for UIs: models, provider readiness, menu checkmarks,
-    and `visible` = ready ∩ checked (+ force-include active chat model).
+    and `visible` = ready ∩ checked (no force-include of the active chat model).
     """
     settings = settings if isinstance(settings, dict) else {}
     cfg = resolve_curator(settings)
@@ -464,19 +522,16 @@ def build_catalog(settings: Optional[dict] = None) -> dict[str, Any]:
     # Built-in catalog + user-defined Custom CLI ids from menu / active models.
     catalog = [dict(row) for row in CATALOG_MODELS]
     catalog.extend(synthetic_cli_models(menu, cfg.models))
-    active_chat = (cfg.models.get("chat") or "").strip()
-    if active_chat == "default":
-        active_chat = ""
     visible: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
 
-    def _add_visible(row: dict[str, Any], *, forced: bool = False) -> None:
+    def _add_visible(row: dict[str, Any]) -> None:
         key = (row["provider"], row["id"])
         if key in seen:
             return
         seen.add(key)
         item = dict(row)
-        item["forced"] = forced
+        item["forced"] = False
         item["ready"] = ready_by.get(row["provider"], False)
         visible.append(item)
 
@@ -491,30 +546,33 @@ def build_catalog(settings: Optional[dict] = None) -> dict[str, Any]:
         if checked and ready_by.get(p, False):
             _add_visible(row)
 
-    # Active chat model always remains selectable (even if unchecked / CLI missing).
-    if active_chat:
-        match = next(
-            (r for r in catalog
-             if r["provider"] == cfg.provider and r["id"] == active_chat),
-            None,
-        )
-        if match:
-            _add_visible(match, forced=True)
-        else:
-            _add_visible(
-                {
-                    "id": active_chat,
-                    "provider": cfg.provider,
-                    "label": active_chat,
-                    "blurb": "Active custom model id.",
-                    "good_for": ["chat"],
-                    "effort_supported": True,
-                },
-                forced=True,
-            )
-
     mbp = models_by_provider()
-    mbp["cli"] = [m["id"] for m in catalog if m.get("provider") == "cli"]
+    mbp["cli"] = sort_models_by_calibre(
+        [m["id"] for m in catalog if m.get("provider") == "cli"]
+    )
+    # Re-key models_by_provider A–Z by catalog label (settings UI convention).
+    label_for: dict[str, str] = {
+        m["id"]: (m.get("label") or m["id"]) for m in catalog if m.get("id")
+    }
+    for p, ids in list(mbp.items()):
+        mbp[p] = sorted(
+            ids,
+            key=lambda mid: (
+                (label_for.get(mid) or mid).casefold(),
+                mid.casefold(),
+            ),
+        )
+    # visible rows: keep provider order, A–Z by label within each provider
+    visible_sorted: list[dict[str, Any]] = []
+    for p in PROVIDER_ORDER:
+        chunk = [v for v in visible if v.get("provider") == p]
+        chunk.sort(key=_label_sort_key)
+        visible_sorted.extend(chunk)
+    # any leftover providers not in PROVIDER_ORDER
+    leftover = [v for v in visible if v.get("provider") not in set(PROVIDER_ORDER)]
+    leftover.sort(key=lambda v: (v.get("provider") or "",) + _label_sort_key(v))
+    visible_sorted.extend(leftover)
+    visible = visible_sorted
 
     return {
         "providers": providers,
@@ -537,7 +595,11 @@ def build_catalog(settings: Optional[dict] = None) -> dict[str, Any]:
             "provider": cfg.provider,
             "command": cfg.command,
             "models": dict(cfg.models),
-            "effort": cfg.effort or "default",
+            "effort": cfg.effort_for("chat") or "default",
+            "efforts": {
+                t: (cfg.efforts.get(t) or cfg.effort or "default")
+                for t in DEFAULT_MODELS
+            },
             "capabilities": runtime.capabilities_for(cfg.provider),
         },
     }
@@ -548,16 +610,20 @@ class CuratorConfig:
     provider: str = "claude"
     command: str = "claude"
     models: dict[str, str] = field(default_factory=lambda: dict(DEFAULT_MODELS))
-    # Reasoning / effort level. Provider-specific names (claude: low…max;
-    # grok: none…xhigh; chatgpt: low…ultra). Empty / "default" = omit CLI flag.
+    # Legacy single effort (fallback when per-task efforts[task] is unset).
+    # Provider-specific names (claude: low…max; grok: low…xhigh; chatgpt: low…ultra).
+    # Empty / "default" = omit CLI flag.
     effort: str = ""
+    # Per-task effort overrides: {setup, chat} → level id (same names as EFFORT_BY_PROVIDER).
+    efforts: dict[str, str] = field(default_factory=dict)
 
     def stream_format(self) -> str:
         return STREAM_LABEL.get(self.provider, "unknown")
 
     def effort_for(self, task: str = "chat") -> Optional[str]:
-        """Resolved effort for a turn."""
-        e = (self.effort or "").strip()
+        """Resolved effort for a turn (per-task, then legacy global)."""
+        task = task if task in DEFAULT_MODELS else "chat"
+        e = (self.efforts.get(task) or self.effort or "").strip()
         if not e or e.lower() == "default":
             return None
         return e
@@ -604,13 +670,18 @@ class CuratorConfig:
 
     def as_public_dict(self) -> dict[str, Any]:
         resolved = self.resolved_command()
+        efforts_pub = {
+            t: (self.efforts.get(t) or self.effort or "default")
+            for t in DEFAULT_MODELS
+        }
         out: dict[str, Any] = {
             "provider": self.provider,
             "command": self.command,
             "command_resolved": resolved,
             "command_exists": self.command_exists(),
             "models": dict(self.models),
-            "effort": self.effort or "default",
+            "effort": self.effort_for("chat") or "default",
+            "efforts": efforts_pub,
             "stream": self.stream_format(),
             "capabilities": runtime.capabilities_for(self.provider),
         }
@@ -633,19 +704,30 @@ def default_models_for(provider: str) -> dict[str, str]:
 
 
 def synthetic_cli_models(menu: Optional[dict] = None, active_models: Optional[dict] = None) -> list[dict[str, Any]]:
-    """User-configured Custom CLI model rows (no hard-coded Claude clones)."""
+    """User-configured Custom CLI model rows (no hard-coded Claude clones).
+
+    Never re-lists ids that already live in CATALOG_MODELS under a first-class
+    provider (claude/grok/chatgpt/gemini). Those rows already have real labels
+    and blurbs; synthesizing them as ``provider=cli`` was overwriting Grok (and
+    other) catalog copy with “Custom CLI model id” in the sitting UI.
+    """
+    known_catalog = {
+        m["id"] for m in CATALOG_MODELS
+        if m.get("id") and m.get("provider") != "cli"
+    }
     ids: list[str] = []
     seen: set[str] = set()
     for mid in (menu or {}).get("cli") or []:
         m = str(mid or "").strip()
-        if not m or m == "default" or m in seen:
+        if not m or m == "default" or m in seen or m in known_catalog:
             continue
         seen.add(m)
         ids.append(m)
     if isinstance(active_models, dict):
         for task in ("setup", "chat"):
             m = str(active_models.get(task) or "").strip()
-            if m and m != "default" and m not in seen:
+            # Active chat may be a catalog id (e.g. grok-4.5) — do not invent a CLI twin.
+            if m and m != "default" and m not in seen and m not in known_catalog:
                 seen.add(m)
                 ids.append(m)
     return [
@@ -718,8 +800,21 @@ def resolve_curator(settings: Optional[dict] = None) -> CuratorConfig:
     if effort.lower() == "default":
         effort = ""
 
+    efforts: dict[str, str] = {}
+    raw_efforts = block.get("efforts")
+    if isinstance(raw_efforts, dict):
+        for k in DEFAULT_MODELS:
+            v = raw_efforts.get(k)
+            if not isinstance(v, str):
+                continue
+            ev = v.strip()
+            if not ev or ev.lower() == "default":
+                continue
+            efforts[k] = ev
+
     return CuratorConfig(
-        provider=provider, command=command, models=models, effort=effort,
+        provider=provider, command=command, models=models,
+        effort=effort, efforts=efforts,
     )
 
 
@@ -742,7 +837,7 @@ def ensure_curator_settings(settings: dict) -> dict:
     # key set silently ate them — `idle_timeout_s` needed a hand-written rescue, and
     # `allow_unfenced_readonly` (brief 06's security override) was dropped entirely
     # until 2026-07-21. Preserve-by-default, normalize only what we own.
-    MANAGED = ("provider", "command", "models", "menu", "effort")
+    MANAGED = ("provider", "command", "models", "menu", "effort", "efforts")
     cur: dict[str, Any] = {k: v for k, v in prior_curator.items() if k not in MANAGED}
     cur.update({
         "provider": cfg.provider,
@@ -752,6 +847,8 @@ def ensure_curator_settings(settings: dict) -> dict:
     })
     if cfg.effort:
         cur["effort"] = cfg.effort
+    if cfg.efforts:
+        cur["efforts"] = dict(cfg.efforts)
     out["curator"] = cur
     out["agents"] = dict(cfg.models)
     return out
@@ -765,8 +862,9 @@ def deep_merge_settings(cur: dict, patch: dict) -> dict:
             base = dict(out.get("curator") or {})
             models_patch = val.get("models")
             menu_patch = val.get("menu")
+            efforts_patch = val.get("efforts")
             for k, v in val.items():
-                if k in ("models", "menu"):
+                if k in ("models", "menu", "efforts"):
                     continue
                 base[k] = v
             provider = str(base.get("provider") or "claude").strip().lower() or "claude"
@@ -798,6 +896,20 @@ def deep_merge_settings(cur: dict, patch: dict) -> dict:
                 base["menu"] = menu
             elif "menu" not in base or not normalize_menu(base.get("menu")):
                 base["menu"] = default_menu()
+            if isinstance(efforts_patch, dict):
+                efforts = dict(base.get("efforts") or {})
+                for tk, ev in efforts_patch.items():
+                    if tk not in DEFAULT_MODELS or not isinstance(ev, str):
+                        continue
+                    e = ev.strip()
+                    if not e or e.lower() == "default":
+                        efforts.pop(tk, None)
+                    else:
+                        efforts[tk] = e
+                if efforts:
+                    base["efforts"] = efforts
+                else:
+                    base.pop("efforts", None)
             # Always coerce models to the active provider after any curator patch.
             base["models"] = sanitize_models_for_provider(provider, base.get("models"))
             out["curator"] = base

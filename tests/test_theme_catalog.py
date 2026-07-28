@@ -66,12 +66,87 @@ class ThemeCatalog(unittest.TestCase):
         self.assertIn("--ansi-0", web["dark"]["colors"])
         self.assertTrue(web["dark"]["iface"]["bg"].startswith("--ansi-"))
         self.assertTrue(web["dark"]["slots"]["mdhead"].startswith("--ansi-"))
+        # Catalog merge must retain sitting opacity defaults (packs omit them).
+        self.assertEqual(web["dark"]["ifaceOpacity"]["muted"], 58)
+        self.assertEqual(web["light"]["ifaceOpacity"]["muted"], 52)
+        self.assertEqual(web["light"]["slotOpacity"]["agent"], 48)
+        self.assertEqual(web["light"]["slots"]["agent"], "--ansi-7")
+        self.assertEqual(web["light"]["iface"]["bg"], "--ansi-0")
+        self.assertEqual(web["light"]["iface"]["fg"], "--ansi-7")
+
+    @staticmethod
+    def _rel_luminance(hexv: str) -> float:
+        h = hexv.lstrip("#")
+        rgb = [int(h[i : i + 2], 16) / 255.0 for i in (0, 2, 4)]
+
+        def f(c: float) -> float:
+            return c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+
+        r, g, b = (f(c) for c in rgb)
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+    def test_every_bundled_pack_has_working_light_and_dark(self):
+        """Standard packs ship both modes; light text uses ink; light panels stay light."""
+        ids = theme_catalog.list_theme_ids()
+        # kettle + classic + gruvbox + material + nord + solarized + tokyo-night
+        self.assertGreaterEqual(len(ids), 7)
+        self.assertNotIn("one-dark", ids)
+        for tid in ids:
+            pack = theme_catalog.load_theme(tid)
+            if pack.get("_source") != "bundled":
+                continue
+            for which in ("dark", "light"):
+                self.assertIn(which, pack, f"{tid} missing {which}")
+                block = pack[which]
+                self.assertEqual(len(block["ansi"]), 16, tid)
+                iface = block.get("iface") or {}
+                slots = block.get("slots") or {}
+                bg_i = int(iface.get("bg", 0))
+                fg_i = int(iface.get("fg", 7))
+                self.assertNotEqual(
+                    block["ansi"][bg_i],
+                    block["ansi"][fg_i],
+                    f"{tid}.{which}: bg and fg must differ",
+                )
+                if which == "light":
+                    # Paper-in-0 / ink-in-7 convention used by themes.js and sittings.
+                    self.assertEqual(bg_i, 0, f"{tid}.light.iface.bg")
+                    self.assertEqual(fg_i, 7, f"{tid}.light.iface.fg")
+                    for role in theme_catalog.TEXT_SLOT_KEYS:
+                        idx = int(slots[role])
+                        self.assertNotEqual(
+                            idx, bg_i,
+                            f"{tid}.light.slots.{role}={idx} is paper (invisible text)",
+                        )
+                        self.assertEqual(
+                            idx, 7,
+                            f"{tid}.light.slots.{role} should be ink (7), got {idx}",
+                        )
+                    # Surfaces must stay light (panel→ansi-15 breaks when 15 is dark ink).
+                    for role in ("bg", "panel", "panel2"):
+                        idx = int(iface[role])
+                        lum = self._rel_luminance(block["ansi"][idx])
+                        self.assertGreater(
+                            lum, 0.45,
+                            f"{tid}.light.iface.{role}→ansi-{idx} is too dark "
+                            f"({block['ansi'][idx]}, L={lum:.2f})",
+                        )
 
     def test_catalog_payload_full(self):
         cat = theme_catalog.catalog_payload(full=True)
         self.assertEqual(cat["default"], "kettle")
         self.assertIn("kettle", cat["packs"])
         self.assertIn("--ansi-0", cat["packs"]["kettle"]["dark"]["colors"])
+        # Every bundled pack exposes a light side through the web catalog.
+        for meta in cat["themes"]:
+            if meta.get("source") != "bundled":
+                continue
+            tid = meta["id"]
+            self.assertIn(tid, cat["packs"])
+            web = cat["packs"][tid]
+            self.assertIn("light", web)
+            self.assertIn("--ansi-0", web["light"]["colors"])
+            self.assertEqual(web["light"]["slots"]["agent"], "--ansi-7")
 
     def test_install_user_pack(self):
         base = theme_catalog.load_theme("kettle")

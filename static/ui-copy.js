@@ -19,7 +19,7 @@
     chatPlaceholderProposing: "Ask to revise the proposal — or edit it, then Found Desk",
 
     /* Editor / mid chrome */
-    editorPlaceholder: "select a file from the queue",
+    editorPlaceholder: "",
     editorPlaceholderFounding: "Founding Interview — work in the agent pane on the right",
     editorPlaceholderProposing: "Desk Proposal — edit, then use Found Desk",
     commentPlaceholder:

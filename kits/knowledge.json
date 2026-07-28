@@ -1,8 +1,9 @@
 {
   "name": "Knowledge",
   "kind": "knowledge",
+  "tagline": "Coherence across the whole body of work",
   "lens": "Read for coherence across the whole body: internal consistency, intact cross-references, and freedom from contradiction. Flag where a document contradicts another or a standing decision, where a link or reference has gone stale, where terms have drifted apart, and where the record's integrity is at risk.",
-  "urgency": "high = a contradiction with another document or a standing decision, or a threat to record integrity; medium = stale cross-references, term drift, or missing currency; low = wording.",
+  "urgency": "- high: a contradiction with another document or a standing decision, or a threat to record integrity.\n- medium: stale cross-references, term drift, or missing currency.\n- low: wording.",
   "firstQueue": "Surface the governing or most-referenced documents first, and anything recently touched whose consistency with the rest of the corpus is unverified.",
   "tools": [],
   "interview": [
@@ -19,12 +20,12 @@
     }
   ],
   "sweepChecks": [
-    "every entry assessed",
-    "no append-only or canonical record rewritten without a ruling",
-    "contradictions surfaced, never silently resolved",
-    "stale cross-references fixed or flagged",
-    "MEMORY kept under ~80 lines",
-    "FAMILIARITY deepened or left intact when nothing new about the project",
-    "listed SWEEP-ACTIONS carried out or egressed (never transmit external systems from the desk)"
+    "- every entry assessed",
+    "- no append-only or canonical record rewritten without a ruling",
+    "- contradictions surfaced, never silently resolved",
+    "- stale cross-references fixed or flagged",
+    "- MEMORY kept under ~80 lines",
+    "- FAMILIARITY deepened or left intact when nothing new about the project",
+    "- listed SWEEP-ACTIONS carried out or egressed (never transmit external systems from the desk)"
   ]
 }
