@@ -8,15 +8,18 @@ The two tests that matter most are the regressions for the haywire token bar:
 `test_done_ctx_ignores_result_aggregate` — they pin the exact bug (summing a turn's
 cache re-reads into the context bar so it sails past the window) so it can't return.
 """
+import io
 import json
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+from unittest import mock
 
 import runtime
 from runtime import (
-    UsageMeter, SessionLedger, build_cmd, build_argv, normalize,
-    tools_argv, system_append_argv, effort_argv,
+    UsageMeter, SessionLedger, Runtime, build_cmd, build_argv, normalize,
+    tools_argv, system_append_argv, effort_argv, session_name_argv,
 )
 
 
@@ -61,6 +64,23 @@ class TestUsageMeter(unittest.TestCase):
         m = UsageMeter(window=100)
         m.feed_assistant({"input_tokens": 500})
         self.assertEqual(m.fraction, 1.0)
+
+    def test_snapshot_and_zero_window(self):
+        m = UsageMeter(window=0)
+        m.feed_assistant({"input_tokens": 10, "output_tokens": 2})
+        m.feed_result({"total_cost_usd": 0.125})
+        self.assertEqual(m.fraction, 0.0)
+        snap = m.snapshot()
+        self.assertEqual(snap["context"], 10)
+        self.assertEqual(snap["output"], 2)
+        self.assertEqual(snap["cost"], 0.125)
+        self.assertEqual(snap["fraction"], 0.0)
+
+    def test_empty_usage_does_not_reset_context(self):
+        m = UsageMeter()
+        m.feed_assistant({"input_tokens": 1000})
+        m.feed_assistant({})  # occupancy 0 — keep prior context
+        self.assertEqual(m.context_tokens, 1000)
 
 
 class TestNormalize(unittest.TestCase):
@@ -334,6 +354,129 @@ class TestDialectArgv(unittest.TestCase):
         self.assertEqual(effort_argv("high", "gemini"), [])  # no flag yet
         self.assertEqual(effort_argv("default", "claude"), [])
         self.assertEqual(effort_argv("", "claude"), [])
+        self.assertEqual(effort_argv("high", "codex"),
+                         ["-c", "model_reasoning_effort=high"])
+
+    def test_session_name_argv_claude_only(self):
+        self.assertEqual(session_name_argv("desk", "claude"), ["--name", "desk"])
+        self.assertEqual(session_name_argv("desk", "cli"), ["--name", "desk"])
+        self.assertEqual(session_name_argv("desk", "grok"), [])
+        self.assertEqual(session_name_argv("", "claude"), [])
+
+    def test_system_append_empty_and_prompt_prefix_providers(self):
+        self.assertEqual(system_append_argv("", "claude"), [])
+        self.assertEqual(system_append_argv("hi", "chatgpt"), [])
+        self.assertEqual(system_append_argv("hi", "gemini"), [])
+        self.assertEqual(system_append_argv("hi", "codex"), [])
+
+    def test_unknown_tools_tier_is_empty(self):
+        self.assertEqual(tools_argv("nope", "claude"), [])
+        self.assertEqual(tools_argv("glance", "grok"), [])
+
+    def test_build_argv_string_cfg_with_model_and_prefix_system(self):
+        cmd = build_argv(
+            "gemini",
+            "hi",
+            system_append="be brief",
+            model="gemini-2.5-flash",
+            tools_tier="interview",
+        )
+        self.assertEqual(cmd[0], "gemini")
+        self.assertIn("--model", cmd)
+        self.assertIn("gemini-2.5-flash", cmd)
+        # Gemini folds system text into the prompt, not argv flags.
+        joined = " ".join(cmd)
+        self.assertIn("be brief", joined)
+        self.assertNotIn("--append-system-prompt", cmd)
+        self.assertNotIn("--rules", cmd)
+
+    def test_build_argv_chatgpt_session_name_omitted_on_resume(self):
+        cmd = build_argv(
+            SimpleNamespace(provider="chatgpt", command="codex",
+                            resolved_command=lambda: "codex"),
+            "more",
+            session_id="thr-1",
+            session_name="ignored-on-resume",
+            effort="low",
+        )
+        self.assertEqual(cmd[:5], ["codex", "exec", "resume", "thr-1", "--json"])
+        self.assertNotIn("--name", cmd)
+        self.assertIn("model_reasoning_effort=low", cmd)
+
+
+class TestNormalizeEdgeCases(unittest.TestCase):
+    def test_codex_file_change_and_mcp_tools(self):
+        lines = [
+            _ev({"type": "item.completed", "item": {
+                "type": "file_change", "path": "/p/a.md"}}),
+            _ev({"type": "item.started", "item": {
+                "type": "mcp_tool_call", "tool": "search"}}),
+            _ev({"type": "item.completed", "item": {
+                "type": "file_edit",
+                "changes": [{"path": "/p/b.md"}]}}),
+        ]
+        tools = [e for e in normalize(lines) if e["t"] == "tool"]
+        self.assertEqual(tools[0]["tool"], "Edit")
+        self.assertEqual(tools[0]["path"], "/p/a.md")
+        self.assertEqual(tools[1]["tool"], "search")
+        self.assertEqual(tools[2]["path"], "/p/b.md")
+
+    def test_codex_turn_failed(self):
+        lines = [_ev({"type": "turn.failed",
+                       "error": {"message": "rate limited"}})]
+        evs = list(normalize(lines))
+        self.assertEqual(evs[0], {"t": "error", "s": "rate limited"})
+        self.assertEqual(evs[1]["t"], "done")
+        self.assertEqual(evs[1]["error"], "rate limited")
+
+    def test_gemini_tool_result_ignored_and_result_response(self):
+        lines = [
+            _ev({"type": "tool_result", "output": "ok"}),
+            _ev({"type": "result", "response": "final answer",
+                 "stats": {"models": {"m": {"tokens": {
+                     "input": 40, "output": 5, "cached": 10}}}}}),
+        ]
+        evs = list(normalize(lines))
+        self.assertEqual([e["t"] for e in evs], ["text", "usage", "done"])
+        self.assertEqual(evs[0]["s"], "final answer")
+        self.assertEqual(evs[1]["context"], 50)
+
+    def test_result_error_shapes(self):
+        dict_err = list(normalize([_ev({
+            "type": "result", "error": {"message": "boom"}})]))
+        self.assertEqual(dict_err[-1]["error"], "boom")
+        str_err = list(normalize([_ev({
+            "type": "result", "error": "nope"})]))
+        self.assertEqual(str_err[-1]["error"], "nope")
+
+    def test_grok_end_with_error_object(self):
+        lines = [_ev({
+            "type": "end",
+            "sessionId": "g1",
+            "error": {"message": "quota"},
+            "usage": {"input_tokens": 3, "output_tokens": 1},
+        })]
+        evs = list(normalize(lines))
+        done = next(e for e in evs if e["t"] == "done")
+        self.assertEqual(done["error"], "quota")
+        self.assertTrue(any(e["t"] == "error" and e["s"] == "quota" for e in evs))
+
+    def test_error_event_with_nested_message(self):
+        evs = list(normalize([_ev({
+            "type": "error", "error": {"message": "nested"}})]))
+        self.assertEqual(evs, [{"t": "error", "s": "nested"}])
+
+    def test_text_gap_fixer_skips_empty_and_whitespace_join(self):
+        lines = [
+            _ev({"type": "assistant", "message": {"content": [
+                {"type": "text", "text": "Hello."}]}}),
+            _ev({"type": "assistant", "message": {"content": [
+                {"type": "text", "text": ""}]}}),
+            _ev({"type": "assistant", "message": {"content": [
+                {"type": "text", "text": " World"}]}}),
+        ]
+        texts = [e["s"] for e in normalize(lines) if e["t"] == "text"]
+        self.assertEqual(texts, ["Hello.", " World"])
 
 
 class TestProviderCapabilities(unittest.TestCase):
@@ -407,6 +550,89 @@ class TestSessionLedger(unittest.TestCase):
             led.append_turn("s", "user", "b")
             text = led.path("s").read_text()
             self.assertEqual(len([ln for ln in text.splitlines() if ln.strip()]), 2)
+
+    def test_turns_skips_corrupt_and_non_object_lines(self):
+        with tempfile.TemporaryDirectory() as d:
+            led = SessionLedger(Path(d))
+            led.append_turn("s", "user", "ok")
+            path = led.path("s")
+            with path.open("a", encoding="utf-8") as fp:
+                fp.write("not-json\n")
+                fp.write("\n")
+                fp.write(json.dumps(["array"]) + "\n")
+                fp.write(json.dumps({"role": "user", "message": "kept"}) + "\n")
+            turns = led.turns("s")
+            self.assertEqual(len(turns), 2)
+            self.assertEqual(turns[0]["message"], "ok")
+            self.assertEqual(turns[1]["message"], "kept")
+
+
+class TestRuntimeSpawn(unittest.TestCase):
+    def test_spawn_normalizes_stream_and_persists_ledger(self):
+        stream = "\n".join([
+            _ev({"type": "system", "subtype": "init", "model": "m",
+                 "session_id": "sid-1"}),
+            _ev({"type": "assistant", "message": {"content": [
+                {"type": "text", "text": "hello"},
+                {"type": "tool_use", "name": "Read",
+                 "input": {"file_path": "/p/x.md"}},
+            ], "usage": {"input_tokens": 10, "output_tokens": 2}}}),
+            _ev({"type": "result", "is_error": False, "total_cost_usd": 0.01}),
+            "",
+        ]) + "\n"
+
+        class FakeProc:
+            def __init__(self):
+                self.stdout = io.StringIO(stream)
+                self.returncode = 0
+
+            def wait(self, timeout=None):
+                return 0
+
+            def poll(self):
+                return 0
+
+            def kill(self):
+                raise AssertionError("kill should not run after exit")
+
+        with tempfile.TemporaryDirectory() as d:
+            rt = Runtime("claude", Path(d) / "sessions")
+            with mock.patch("runtime.subprocess.Popen", return_value=FakeProc()):
+                evs = list(rt.spawn("hi", cwd=d))
+            kinds = [e["t"] for e in evs]
+            self.assertEqual(kinds[0], "model")
+            self.assertIn("text", kinds)
+            self.assertIn("tool", kinds)
+            self.assertEqual(kinds[-1], "done")
+            turns = rt.ledger.turns("sid-1")
+            self.assertEqual(len(turns), 1)
+            self.assertEqual(turns[0]["message"], "hi")
+            self.assertEqual(turns[0]["agent_text"], "hello")
+            self.assertTrue(turns[0]["tools"][0].startswith("Read"))
+
+    def test_spawn_nonzero_exit_emits_error(self):
+        class FakeProc:
+            def __init__(self):
+                self.stdout = io.StringIO("")
+                self.returncode = 2
+
+            def wait(self, timeout=None):
+                return 2
+
+            def poll(self):
+                return 2
+
+            def kill(self):
+                pass
+
+        with tempfile.TemporaryDirectory() as d:
+            rt = Runtime("claude", Path(d))
+            with mock.patch("runtime.subprocess.Popen", return_value=FakeProc()):
+                evs = list(rt.spawn("hi", cwd=d, session_id="pre"))
+            self.assertTrue(any(
+                e["t"] == "error" and "exited 2" in e["s"] for e in evs
+            ))
+            self.assertEqual(len(rt.ledger.turns("pre")), 1)
 
 
 if __name__ == "__main__":
