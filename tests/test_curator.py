@@ -316,14 +316,20 @@ class TestCatalog(unittest.TestCase):
 
     def test_visible_does_not_force_include_active(self):
         """Unchecked active chat model stays off the desk menu — no lock / force-include."""
-        cat = curator.build_catalog({
-            "curator": {
-                "provider": "claude",
-                "command": "claude",
-                "models": {"setup": "opus", "chat": "fable"},
-                "menu": {"claude": ["sonnet"]},
-            },
-        })
+        # Pin PATH so checked∩ready visibility is deterministic on CI hosts without claude.
+        with tempfile.TemporaryDirectory(prefix="kettle-catalog-") as td:
+            claude = Path(td) / "claude"
+            claude.write_text("#!/bin/sh\nexit 0\n")
+            claude.chmod(0o755)
+            with mock.patch.dict(os.environ, {"PATH": td}):
+                cat = curator.build_catalog({
+                    "curator": {
+                        "provider": "claude",
+                        "command": "claude",
+                        "models": {"setup": "opus", "chat": "fable"},
+                        "menu": {"claude": ["sonnet"]},
+                    },
+                })
         ids = {(v["provider"], v["id"]) for v in cat["visible"]}
         self.assertIn(("claude", "sonnet"), ids)
         self.assertNotIn(("claude", "fable"), ids)
