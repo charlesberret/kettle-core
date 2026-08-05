@@ -707,8 +707,9 @@ class EndpointTests(Base):
         self.assertEqual(s, 200)
         self.assertTrue(j.get("ok"))
         self.assertFalse(j.get("git"))  # fixture root is not a git repo
+        self.assertEqual(j.get("source"), "mtime")  # filesystem fallback
         self.assertEqual(j.get("weeks"), 8)
-        self.assertEqual(j.get("cells"), [])
+        self.assertIsInstance(j.get("cells"), list)
         self.assertEqual(j.get("dow_start"), 0)
         s2, _ = _http("GET", f"{self.base}/api/git/activity")
         self.assertEqual(s2, 400)  # project required

@@ -203,9 +203,17 @@ def _normalize_event(ev: dict, meter: UsageMeter,
         return
 
     if t == "end":
+        # Grok Build CLI terminal event. Emit *model before usage* so the
+        # context bar can size the window (e.g. grok-4.5 → 500k) before painting
+        # occupancy — usage-first used to flash 100% red against the 200k default.
         sid = ev.get("sessionId") or ev.get("session_id")
         if sid and on_session:
             on_session(sid)
+        model = "?"
+        mu = ev.get("modelUsage")
+        if isinstance(mu, dict) and mu:
+            model = next(iter(mu))
+        yield {"t": "model", "s": model, "session": sid}
         usage = ev.get("usage") if isinstance(ev.get("usage"), dict) else {}
         if usage:
             meter.feed_assistant({
@@ -217,11 +225,6 @@ def _normalize_event(ev: dict, meter: UsageMeter,
                 "output_tokens": int(usage.get("output_tokens") or 0),
             })
             yield {"t": "usage", **meter.snapshot()}
-        model = "?"
-        mu = ev.get("modelUsage")
-        if isinstance(mu, dict) and mu:
-            model = next(iter(mu))
-        yield {"t": "model", "s": model, "session": sid}
         stop = str(ev.get("stopReason") or ev.get("stop_reason") or "").strip()
         err = None
         raw_err = ev.get("error")

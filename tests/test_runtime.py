@@ -114,6 +114,31 @@ class TestNormalize(unittest.TestCase):
         self.assertNotIn("Scanning", str(act))
         self.assertIn("text", kinds)
 
+    def test_grok_end_emits_model_before_usage(self):
+        """Context bar sizes the window from model; usage-first flashed false 100% red."""
+        lines = [
+            _ev({
+                "type": "end",
+                "sessionId": "g1",
+                "modelUsage": {"grok-4.5": {"inputTokens": 120000}},
+                "usage": {
+                    "input_tokens": 120000,
+                    "output_tokens": 800,
+                    "cache_read_input_tokens": 0,
+                    "cache_creation_input_tokens": 0,
+                },
+            }),
+        ]
+        evs = list(normalize(lines))
+        kinds = [e["t"] for e in evs]
+        self.assertIn("model", kinds)
+        self.assertIn("usage", kinds)
+        self.assertLess(kinds.index("model"), kinds.index("usage"))
+        model = next(e for e in evs if e["t"] == "model")
+        self.assertEqual(model["s"], "grok-4.5")
+        usage = next(e for e in evs if e["t"] == "usage")
+        self.assertEqual(usage["context"], 120000)
+
     def test_tool_use_carries_name_and_path(self):
         # consumers auto-log file edits off these structured fields
         lines = [_ev({"type": "assistant", "message": {"content": [
