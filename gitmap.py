@@ -1,29 +1,33 @@
-"""Local git contribution heatmap for a project root.
+"""Local activity heatmap for a project root (desk chrome strip).
 
-Pinned decisions (desk chrome strip next to the project selector):
+Pinned decisions (next to the project selector):
   - Root: the registered project root only (no walk-up to a parent monorepo).
-  - Window: **adaptive** to repo age by default (min 2 … max 26 weeks), stretch
+  - Window: **adaptive** to history age by default (min 2 … max 26 weeks), stretch
     full strip width; optional fixed ``weeks=`` still allowed via API.
   - Grain: **day** grid when dense enough; **week** bars when sparse / young
     (so new projects fill the slot instead of a sea of empty day cells).
   - Week start: Sunday (classic GitHub); day grain = columns weeks × rows Sun→Sat.
-  - Scope: ``git log --all`` (every ref), all authors.
-  - Levels: 0–7 in **sevenths** of full intensity (1 commit / 1 active day =
-    1/7). Absolute and relative scales; quieter of the two wins.
-  - Network: none — subprocess ``git`` against the on-disk work tree only.
+  - **Source priority:** git commits when the root is a work tree; otherwise
+    **filesystem mtime** (files touched per day — useful for Seafile / notes /
+    System trees that aren't under git).
+  - Git scope: ``git log --all`` (every ref), all authors.
+  - Levels: 0–7 in **sevenths** of full intensity (1 commit or 1 file-touch /
+    1 active day = 1/7). Absolute and relative scales; quieter of the two wins.
+  - Network: none — local ``git`` or ``os.walk`` only.
 
 Layers (build / test bottom-up):
   1. probe   — is this path a git work tree?
-  2. history — commit counts by calendar day + first-commit date
-  3. grid    — day or week cells with level 0–4
+  2. history — commit counts *or* mtime file counts by calendar day + first date
+  3. grid    — day or week cells with level 0–7
   4. payload — assemble the API/UI dict (``git_commit_activity``)
 """
 
 from __future__ import annotations
 
 import math
+import os
 import subprocess
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Optional
 
@@ -37,6 +41,15 @@ SPARSE_ACTIVE_DAYS = 15
 SPARSE_TOTAL_COMMITS = 20
 # Sunday-first columns (GitHub classic). 0=Sun … 6=Sat.
 DOW_START_SUNDAY = 0
+
+# mtime walk (non-git fallback) — skip desk machinery + VCS + heavy noise
+MTIME_SKIP_DIRS = {
+    ".kettle", ".setsweep", ".git", "node_modules", "__pycache__",
+    ".venv", "venv", ".mypy_cache", ".pytest_cache", "dist", "build",
+    ".cache", ".tox", ".eggs", "eggs", ".idea", ".vscode",
+}
+# Cap walk so a huge home-folder desk never freezes the sitting
+MTIME_MAX_FILES = 12_000
 
 
 def clamp_weeks(weeks: Any, default: int = DEFAULT_WEEKS) -> int:
@@ -337,11 +350,17 @@ def build_grid(
     return cells, total, max_c
 
 
-def empty_payload(weeks: int = DEFAULT_WEEKS, *, git: bool = False) -> dict[str, Any]:
+def empty_payload(
+    weeks: int = DEFAULT_WEEKS,
+    *,
+    git: bool = False,
+    source: str = "none",
+) -> dict[str, Any]:
     weeks = clamp_weeks(weeks)
     return {
         "ok": True,
         "git": git,
+        "source": source,  # "git" | "mtime" | "none"
         "weeks": weeks,
         "grain": "day",
         "rows": 7,
@@ -353,6 +372,162 @@ def empty_payload(weeks: int = DEFAULT_WEEKS, *, git: bool = False) -> dict[str,
     }
 
 
+def _local_date_from_mtime(ts: float, *, today: date) -> Optional[date]:
+    """Calendar date for a unix mtime in the local timezone; clamp wild values."""
+    try:
+        dt = datetime.fromtimestamp(ts).date()
+    except (OSError, OverflowError, ValueError):
+        return None
+    # Ignore far-future / pre-epoch noise from broken clocks or placeholders
+    if dt.year < 1990 or dt > today:
+        return None
+    return dt
+
+
+def mtime_counts_by_day(
+    root: Path,
+    *,
+    today: Optional[date] = None,
+    max_files: int = MTIME_MAX_FILES,
+) -> tuple[dict[str, int], Optional[date], int, bool]:
+    """Walk *root* and count files by last-modified calendar day.
+
+    Returns ``(counts, oldest_date, files_seen, truncated)``.
+    Skips desk machinery / VCS / common build noise. Does not open file bodies.
+    """
+    root = Path(root).expanduser().resolve()
+    day = today or date.today()
+    counts: dict[str, int] = {}
+    oldest: Optional[date] = None
+    seen = 0
+    truncated = False
+    if not root.is_dir():
+        return counts, oldest, seen, truncated
+
+    skip = MTIME_SKIP_DIRS
+    for dirpath, dirnames, filenames in os.walk(root):
+        # prune in place
+        dirnames[:] = sorted(
+            d for d in dirnames
+            if d not in skip and not d.startswith(".")
+        )
+        for fn in filenames:
+            if fn.startswith("."):
+                continue
+            p = Path(dirpath) / fn
+            try:
+                st = p.stat()
+            except OSError:
+                continue
+            if not os.path.isfile(p):
+                continue
+            seen += 1
+            if seen > max_files:
+                truncated = True
+                return counts, oldest, seen - 1, truncated
+            mday = _local_date_from_mtime(st.st_mtime, today=day)
+            if mday is None:
+                continue
+            key = mday.isoformat()
+            counts[key] = counts.get(key, 0) + 1
+            if oldest is None or mday < oldest:
+                oldest = mday
+    return counts, oldest, seen, truncated
+
+
+def _grid_payload(
+    counts: dict[str, int],
+    *,
+    first_sunday: date,
+    last: date,
+    n_weeks: int,
+    use_adaptive: bool,
+    git: bool,
+    source: str,
+    repo_first: Optional[date] = None,
+    files_seen: Optional[int] = None,
+    truncated: bool = False,
+) -> dict[str, Any]:
+    """Shared day/week grid assembly for git and mtime sources."""
+    day_cells, total, max_c, active_days = build_day_grid(
+        counts, first_sunday, last, n_weeks,
+    )
+    if should_use_week_grain(total=total, active_days=active_days):
+        cells, total, max_c = build_week_grid(counts, first_sunday, last, n_weeks)
+        grain, rows = "week", 1
+    else:
+        cells, grain, rows = day_cells, "day", 7
+
+    out: dict[str, Any] = {
+        "ok": True,
+        "git": git,
+        "source": source,
+        "weeks": n_weeks,
+        "grain": grain,
+        "rows": rows,
+        "adaptive": use_adaptive,
+        "dow_start": DOW_START_SUNDAY,
+        "first_date": first_sunday.isoformat(),
+        "last_date": last.isoformat(),
+        "total": total,
+        "max": max_c,
+        "cells": cells,
+    }
+    if repo_first is not None:
+        out["repo_first"] = repo_first.isoformat()
+    if files_seen is not None:
+        out["files_seen"] = files_seen
+    if truncated:
+        out["truncated"] = True
+    return out
+
+
+def mtime_file_activity(
+    root: Path,
+    weeks: Optional[int] = None,
+    *,
+    today: Optional[date] = None,
+    adaptive: Optional[bool] = None,
+) -> dict[str, Any]:
+    """Filesystem mtime heatmap — used when the project root is not a git work tree."""
+    root = Path(root).expanduser().resolve()
+    day = today or date.today()
+    use_adaptive = adaptive if adaptive is not None else (weeks is None)
+
+    if not root.is_dir():
+        n = clamp_weeks(weeks if weeks is not None else DEFAULT_WEEKS)
+        out = empty_payload(n, git=False, source="mtime")
+        out["adaptive"] = use_adaptive
+        return out
+
+    counts, oldest, files_seen, truncated = mtime_counts_by_day(root, today=day)
+
+    if use_adaptive:
+        n_weeks = weeks_for_repo_age(day, oldest)
+    else:
+        n_weeks = clamp_weeks(weeks if weeks is not None else DEFAULT_WEEKS)
+
+    if use_adaptive and oldest is not None:
+        first_sunday = sunday_on_or_before(oldest)
+        last = day
+        n_weeks = weeks_for_repo_age(day, oldest)
+    else:
+        first_sunday, last = window_bounds(day, n_weeks)
+
+    return _grid_payload(
+        counts,
+        first_sunday=first_sunday,
+        last=last,
+        n_weeks=n_weeks,
+        use_adaptive=use_adaptive,
+        git=False,
+        source="mtime",
+        repo_first=oldest,
+        files_seen=files_seen,
+        truncated=truncated,
+    )
+
+
 def git_commit_activity(
     root: Path,
     weeks: Optional[int] = None,
@@ -362,28 +537,35 @@ def git_commit_activity(
 ) -> dict[str, Any]:
     """Full payload for UIs / ``GET /api/git/activity``.
 
+    Git work trees → commit heatmap (``source=git``).
+    Otherwise → filesystem mtime heatmap (``source=mtime``).
+
     *weeks*:
-      - ``None`` → adaptive window from first commit (default).
+      - ``None`` → adaptive window from first commit / first file mtime (default).
       - int → fixed window (clamped).
     *today* is injectable for deterministic tests.
     """
     root = Path(root).expanduser().resolve()
     day = today or date.today()
     use_adaptive = adaptive if adaptive is not None else (weeks is None)
-    repo_first = first_commit_date(root) if (root.is_dir() and probe_git(root)) else None
+
+    if not root.is_dir():
+        n = clamp_weeks(weeks if weeks is not None else DEFAULT_WEEKS)
+        out = empty_payload(n, git=False, source="none")
+        out["adaptive"] = use_adaptive
+        return out
+
+    if not probe_git(root):
+        return mtime_file_activity(
+            root, weeks=weeks, today=day, adaptive=use_adaptive,
+        )
+
+    repo_first = first_commit_date(root)
 
     if use_adaptive:
         n_weeks = weeks_for_repo_age(day, repo_first)
     else:
         n_weeks = clamp_weeks(weeks if weeks is not None else DEFAULT_WEEKS)
-
-    base = empty_payload(n_weeks, git=False)
-    base["adaptive"] = use_adaptive
-    if repo_first:
-        base["repo_first"] = repo_first.isoformat()
-
-    if not root.is_dir() or not probe_git(root):
-        return base
 
     # Adaptive: left edge is the Sunday of the first commit (not "today − N weeks"),
     # so young repos don't lose their earliest days to min-week padding.
@@ -396,37 +578,20 @@ def git_commit_activity(
         first_sunday, last = window_bounds(day, n_weeks)
     counts, err = commit_counts_by_day(root, first_sunday)
     if err:
-        out = empty_payload(n_weeks, git=True)
-        out["adaptive"] = use_adaptive
-        out["error"] = err
-        out["first_date"] = first_sunday.isoformat()
-        out["last_date"] = last.isoformat()
-        if repo_first:
-            out["repo_first"] = repo_first.isoformat()
+        # Prefer mtime over a broken-empty git strip when log fails.
+        out = mtime_file_activity(
+            root, weeks=weeks, today=day, adaptive=use_adaptive,
+        )
+        out["git_error"] = err
         return out
 
-    day_cells, total, max_c, active_days = build_day_grid(
-        counts, first_sunday, last, n_weeks,
+    return _grid_payload(
+        counts,
+        first_sunday=first_sunday,
+        last=last,
+        n_weeks=n_weeks,
+        use_adaptive=use_adaptive,
+        git=True,
+        source="git",
+        repo_first=repo_first,
     )
-    if should_use_week_grain(total=total, active_days=active_days):
-        cells, total, max_c = build_week_grid(counts, first_sunday, last, n_weeks)
-        grain, rows = "week", 1
-    else:
-        cells, grain, rows = day_cells, "day", 7
-
-    return {
-        "ok": True,
-        "git": True,
-        "weeks": n_weeks,
-        "grain": grain,
-        "rows": rows,
-        "adaptive": use_adaptive,
-        "dow_start": DOW_START_SUNDAY,
-        "first_date": first_sunday.isoformat(),
-        "last_date": last.isoformat(),
-        "repo_first": repo_first.isoformat() if repo_first else None,
-        "cells": cells,
-        "total": total,
-        "max": max_c,
-        "active_days": active_days,
-    }

@@ -105,23 +105,26 @@ Single source of truth for desk/settings model UIs:
 
 ### `GET /api/git/activity?project=<id>&weeks=auto`
 
-Local git contribution heatmap for the project root (desk chrome strip next to the
+Local activity heatmap for the project root (desk chrome strip next to the
 project selector). Implementation: [`gitmap.py`](./gitmap.py).
 
 | Pin | Choice |
 |-----|--------|
 | Root | Registered project `root` only (no parent walk-up) |
-| Window | **Adaptive** by default (repo age → 2–26 weeks). Pass `weeks=N` to force fixed. |
+| Source | **`git`** when the root is a work tree (commit heatmap); else **`mtime`** (files by last-modified day — Seafile / notes / System trees) |
+| Window | **Adaptive** by default (history age → 2–26 weeks). Pass `weeks=N` to force fixed. |
 | Grain | `day` when dense; `week` (one bar per week) when sparse / young |
 | Week start | **Sunday** (GitHub classic) for day grain |
-| Scope | `git log --all`, all authors |
-| Levels | 0–7 in **sevenths** of full (1 commit / 1 active day = 1/7); quieter of absolute × relative |
+| Git scope | `git log --all`, all authors |
+| mtime walk | Skips `.kettle` / `.git` / `node_modules` / venvs / build noise; caps at 12k files |
+| Levels | 0–7 in **sevenths** of full (1 commit or 1 file-touch / 1 active day = 1/7); quieter of absolute × relative |
 | Network | None |
 
 ```json
 {
   "ok": true,
   "git": true,
+  "source": "git",
   "weeks": 8,
   "grain": "week",
   "rows": 1,
@@ -138,8 +141,10 @@ project selector). Implementation: [`gitmap.py`](./gitmap.py).
 }
 ```
 
+Non-git example (`source: "mtime"`): `count` is files whose mtime falls on that day/week;
+UI paints the strip with the link (blue) wash instead of good (green).
+
 - Omit `weeks` / `weeks=auto` → adaptive. `weeks=4` → fixed 4-week window.
-- Not a git work tree: `{ "ok": true, "git": false, "cells": [], … }`.
 - Day grain: `rows=7`, cells column-major (week × weekday). Week grain: `rows=1`, one cell per week.
 - Restart the server after updating `gitmap.py` / `py-modules`.
 

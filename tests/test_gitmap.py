@@ -8,7 +8,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import gitmap
@@ -160,6 +160,47 @@ class LevelAndGrid(unittest.TestCase):
         self.assertGreaterEqual(cells[0]["count"], 2)
 
 
+class MtimeFallback(unittest.TestCase):
+    """Filesystem mtime path — no git required."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(prefix="kettle-mtime-"))
+        self.root = self.tmp / "desk"
+        self.root.mkdir()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_mtime_counts_and_skips_noise(self):
+        today = date(2026, 7, 28)
+        (self.root / "note.md").write_text("hi\n")
+        noise = self.root / "node_modules" / "pkg"
+        noise.mkdir(parents=True)
+        (noise / "index.js").write_text("x\n")
+        t = datetime(2026, 7, 15, 10, 0, 0).timestamp()
+        os.utime(self.root / "note.md", (t, t))
+        counts, oldest, seen, trunc = gitmap.mtime_counts_by_day(
+            self.root, today=today,
+        )
+        self.assertFalse(trunc)
+        self.assertEqual(seen, 1)
+        self.assertEqual(counts.get("2026-07-15"), 1)
+        self.assertEqual(oldest, date(2026, 7, 15))
+
+    def test_mtime_payload_adaptive(self):
+        today = date(2026, 7, 28)
+        p = self.root / "only.md"
+        p.write_text("body\n")
+        t = datetime(2026, 7, 10, 9, 0, 0).timestamp()
+        os.utime(p, (t, t))
+        act = gitmap.mtime_file_activity(self.root, weeks=None, today=today)
+        self.assertEqual(act["source"], "mtime")
+        self.assertFalse(act["git"])
+        self.assertTrue(act["adaptive"])
+        self.assertGreaterEqual(act["total"], 1)
+        self.assertTrue(act["cells"])
+
+
 @unittest.skipUnless(_git_available(), "git not on PATH")
 class ProbeAndHistory(unittest.TestCase):
     def setUp(self):
@@ -185,12 +226,28 @@ class ProbeAndHistory(unittest.TestCase):
         self.assertIsNone(err)
         self.assertGreaterEqual(counts.get(today.isoformat(), 0), 1)
 
-    def test_payload_nongit(self):
-        act = gitmap.git_commit_activity(self.root, weeks=8)
+    def test_payload_nongit_uses_mtime(self):
+        """Non-git roots get a filesystem mtime heatmap (not an empty strip)."""
+        today = date(2026, 7, 28)
+        # Two files with distinct mtimes inside the fixed window
+        a = self.root / "a.md"
+        b = self.root / "b.md"
+        a.write_text("alpha\n")
+        b.write_text("beta\n")
+        t_a = datetime(2026, 7, 20, 12, 0, 0).timestamp()
+        t_b = datetime(2026, 7, 27, 12, 0, 0).timestamp()
+        os.utime(a, (t_a, t_a))
+        os.utime(b, (t_b, t_b))
+        act = gitmap.git_commit_activity(self.root, weeks=8, today=today)
         self.assertTrue(act["ok"])
         self.assertFalse(act["git"])
-        self.assertEqual(act["cells"], [])
+        self.assertEqual(act["source"], "mtime")
         self.assertEqual(act["weeks"], 8)
+        self.assertGreaterEqual(act["total"], 2)
+        self.assertTrue(act["cells"])
+        lit = [c for c in act["cells"] if c.get("count")]
+        self.assertTrue(lit)
+        self.assertTrue(all(1 <= c["level"] <= 7 for c in lit))
 
     def test_payload_sparse_uses_week_grain_and_adaptive(self):
         _init_repo(self.root)

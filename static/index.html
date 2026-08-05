@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <!-- Bump this when sitting UI changes; title shows it so we can confirm the shell loaded. -->
-<meta name="kettle-ui" content="2026-08-02f">
-<title>kettle · ui-2026-07-28p</title>
+<meta name="kettle-ui" content="2026-08-02z">
+<title>kettle · ui-2026-07-28z</title>
 <style>
   /*
    * Type & chrome roles — single source of sitting hierarchy.
@@ -76,11 +76,13 @@
   body.desktop-shell {
     --titlebar-h:28px; --win-resize-inset:12px;
   }
-  /* Drag strip inset from corners so top-left/right resize handles stay live */
-  body.desktop-shell::before {
-    content:''; position:fixed; top:0;
-    left:var(--win-resize-inset); right:var(--win-resize-inset);
-    height:var(--titlebar-h); -webkit-app-region:drag; z-index:10000;
+  /* Real drag strip (not ::before — Electron often ignores app-region on pseudos).
+     Left inset clears traffic lights; right inset keeps corner resize grips live. */
+  #titlebar-drag { display:none; }
+  body.desktop-shell #titlebar-drag {
+    display:block; position:fixed; top:0; left:78px; right:var(--win-resize-inset);
+    height:var(--titlebar-h); z-index:10000;
+    -webkit-app-region:drag; background:transparent; pointer-events:auto;
   }
   /* Panels and controls must opt out of drag so queue clicks and editing work */
   body.desktop-shell #left,
@@ -107,8 +109,8 @@
     --mid-head-inset: calc(var(--titlebar-h) + 17px);
   }
   body.desktop-shell #midtools { top:calc(var(--titlebar-h) + 4px); }
+  /* Project row is always the top chrome of #right (founding status sits below it). */
   body.desktop-shell #desk-proj { padding-top:calc(var(--titlebar-h) + 4px); }
-  body.desktop-shell #foundinghead { padding-top:calc(var(--titlebar-h) + 5px); }
   #left, #mid, #right { min-height:0; height:100%; overflow:hidden; }
 
   /*
@@ -270,24 +272,42 @@
   body.nofile  #approve, body.nofile #comment, body.nofile  #viewmode, body.nofile  #findtoggle,
   body.noproj  #sweepbtn { opacity:.35; pointer-events:none; }
   body.founding #sweepbtn, body.founding #approve, body.founding #comment, body.founding #metaedit { opacity:.35; pointer-events:none; }
-  body.founding #desk-path, body.founding #desk-brief, body.founding #ritual,
-  body.founding #divBrief { display:none; }
+  /* Founding: hide path/brief/ritual and collapse the empty desk head so chat
+     can use the full column (long interview streams need that height). */
+  body.founding #desk-path, body.founding #desk-brief, body.founding #desk-scroller,
+  body.founding #ritual, body.founding #divBrief, body.founding #divDesk { display:none; }
+  body.founding #desk-top {
+    flex:0 0 auto !important; height:auto !important; max-height:none !important;
+    min-height:0 !important; overflow:visible;
+  }
+  /* Project row only — no leftover brief chrome under the select. */
+  body.founding #desk-chrome { box-shadow:none; }
+  body.founding #desk-proj { padding-bottom:8px; }
   /* Charter proposal: only Approve applies — no comment / sweep yet */
   body.proposing #sweepbtn,
   body.proposing #comment { opacity:.35; pointer-events:none; }
-  /* Desk-proposal phase: make the next step impossible to miss */
+  /* Desk-proposal phase: solid link-blue CTA (matches ritual approve ink).
+     Must beat later #approve:hover blue wash — inverted white+hover-blue was hideous. */
   body.proposing #approve {
-    background: var(--fg); color: var(--bg); border-color: var(--fg); font-weight: 700;
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--acc) 55%, transparent),
-                0 0 18px color-mix(in srgb, var(--acc) 35%, transparent);
+    background: color-mix(in srgb, var(--link) 42%, var(--panel2));
+    color: var(--fg);
+    border-color: color-mix(in srgb, var(--link) 72%, var(--line));
+    font-weight: 700;
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--link) 40%, transparent),
+                0 0 16px color-mix(in srgb, var(--link) 28%, transparent);
     animation: approvePulse 1.6s ease-in-out infinite;
   }
-  body.proposing #approve:hover { filter: brightness(1.08); }
+  body.proposing #approve:hover:not(:disabled) {
+    filter: brightness(1.06);
+    background: color-mix(in srgb, var(--link) 56%, var(--panel2));
+    border-color: var(--link);
+    color: var(--fg);
+  }
   @keyframes approvePulse {
-    0%, 100% { box-shadow: 0 0 0 2px color-mix(in srgb, var(--acc) 45%, transparent),
-                           0 0 10px color-mix(in srgb, var(--acc) 25%, transparent); }
-    50% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--acc) 75%, transparent),
-                      0 0 22px color-mix(in srgb, var(--acc) 45%, transparent); }
+    0%, 100% { box-shadow: 0 0 0 2px color-mix(in srgb, var(--link) 38%, transparent),
+                           0 0 10px color-mix(in srgb, var(--link) 22%, transparent); }
+    50% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--link) 62%, transparent),
+                      0 0 20px color-mix(in srgb, var(--link) 36%, transparent); }
   }
   .msg.guide {
     margin: 10px 14px; padding: 12px 14px; border-radius: 8px;
@@ -380,12 +400,12 @@
   #commenthint { color:var(--dim); font-size:11px; }
 
   /* modals — shared chrome for setup / add-project / add-model / sweep-confirm */
-  #addbg, #setupbg, #addmodelbg, #addproviderbg { position:fixed; inset:0; background:rgba(0,0,0,.55); display:none;
+  #addbg, #setupbg, #addmodelbg, #addproviderbg, #refoundbg { position:fixed; inset:0; background:rgba(0,0,0,.55); display:none;
              align-items:center; justify-content:center; z-index:20; }
   /* Sit above Settings (#admin is z-index 10050 — above desktop titlebar drag strip) */
-  #addmodelbg, #addproviderbg { z-index:10100; }
-  #addbg.open, #setupbg.open, #addmodelbg.open, #addproviderbg.open { display:flex; }
-  #addmodal, #setupmodal, #sweepconfirm {
+  #addmodelbg, #addproviderbg, #refoundbg { z-index:10100; }
+  #addbg.open, #setupbg.open, #addmodelbg.open, #addproviderbg.open, #refoundbg.open { display:flex; }
+  #addmodal, #setupmodal, #sweepconfirm, #refoundmodal {
                  background:var(--panel); border:1px solid var(--line); border-radius:8px;
                  width:min(560px, 90vw); padding:22px 24px; display:flex;
                  flex-direction:column; gap:14px; box-shadow:0 14px 44px rgba(0,0,0,.38); }
@@ -430,10 +450,10 @@
     box-shadow:0 12px 40px color-mix(in srgb, var(--bg) 55%, transparent);
     font:13px/1.45 var(--ui-font); box-sizing:border-box;
   }
-  #addmodal h2, #setupmodal h2, #addmodelmodal h2, #addprovidermodal h2, #sweepconfirm h2 {
+  #addmodal h2, #setupmodal h2, #addmodelmodal h2, #addprovidermodal h2, #sweepconfirm h2, #refoundmodal h2 {
                     margin:0 0 2px; font-size:12px; letter-spacing:.16em; text-transform:uppercase;
                     color:var(--acc); }
-  #addmodal .mrow, #setupmodal .mrow, #addmodelmodal .mrow, #addprovidermodal .mrow {
+  #addmodal .mrow, #setupmodal .mrow, #addmodelmodal .mrow, #addprovidermodal .mrow, #refoundmodal .mrow {
     display:flex; align-items:center; gap:12px;
   }
   #addmodal .mrow .lbl, #setupmodal .mrow .lbl, #addmodelmodal .mrow .lbl, #addprovidermodal .mrow .lbl {
@@ -453,8 +473,9 @@
     outline:none; border-color:var(--acc);
     box-shadow:0 0 0 2px color-mix(in srgb, var(--acc) 25%, transparent);
   }
-  #addmodal .mnote, #setupmodal .mnote, #addmodelmodal .mnote, #addprovidermodal .mnote {
+  #addmodal .mnote, #setupmodal .mnote, #addmodelmodal .mnote, #addprovidermodal .mnote, #refoundmodal .mnote {
     color:var(--text-secondary); font-size:12px; line-height:1.55; }
+  #refoundmodal .mnote strong { color:var(--text-primary); font-weight:600; }
   #addmodelmodal .mfields, #addprovidermodal .mfields { display:flex; flex-direction:column; gap:10px; }
   #addmodelmodal .mfields .mrow input,
   #addprovidermodal .mfields .mrow input,
@@ -677,7 +698,7 @@
     /* empty day — clearly a cell, not “missing UI” */
     background:color-mix(in srgb, var(--fg) 14%, var(--panel2));
   }
-  /* Intensity in sevenths (l1 = 1/7 … l7 = full). Even steps of --good wash. */
+  /* Intensity in sevenths (l1 = 1/7 … l7 = full). Git = --good; mtime = --link. */
   #gitmap .gitmap-cell.l1 { background:color-mix(in srgb, var(--good) 14%, var(--panel2)); }
   #gitmap .gitmap-cell.l2 { background:color-mix(in srgb, var(--good) 26%, var(--panel2)); }
   #gitmap .gitmap-cell.l3 { background:color-mix(in srgb, var(--good) 38%, var(--panel2)); }
@@ -685,8 +706,17 @@
   #gitmap .gitmap-cell.l5 { background:color-mix(in srgb, var(--good) 64%, var(--panel2)); }
   #gitmap .gitmap-cell.l6 { background:color-mix(in srgb, var(--good) 78%, var(--panel2)); }
   #gitmap .gitmap-cell.l7 { background:color-mix(in srgb, var(--good) 92%, var(--panel2)); }
+  /* Non-git projects: filesystem mtime (link wash so it reads as "files", not commits). */
+  #gitmap.gitmap-mtime .gitmap-cell.l1 { background:color-mix(in srgb, var(--link) 16%, var(--panel2)); }
+  #gitmap.gitmap-mtime .gitmap-cell.l2 { background:color-mix(in srgb, var(--link) 28%, var(--panel2)); }
+  #gitmap.gitmap-mtime .gitmap-cell.l3 { background:color-mix(in srgb, var(--link) 40%, var(--panel2)); }
+  #gitmap.gitmap-mtime .gitmap-cell.l4 { background:color-mix(in srgb, var(--link) 52%, var(--panel2)); }
+  #gitmap.gitmap-mtime .gitmap-cell.l5 { background:color-mix(in srgb, var(--link) 64%, var(--panel2)); }
+  #gitmap.gitmap-mtime .gitmap-cell.l6 { background:color-mix(in srgb, var(--link) 78%, var(--panel2)); }
+  #gitmap.gitmap-mtime .gitmap-cell.l7 { background:color-mix(in srgb, var(--link) 92%, var(--panel2)); }
   #gitmap.gitmap-empty { opacity:.85; }
   #gitmap.gitmap-nogit { opacity:.7; }
+  #gitmap.gitmap-mtime { opacity:1; }
   #gitmap.gitmap-loading { opacity:.55; }
   #gitmap.gitmap-err {
     border-color:color-mix(in srgb, var(--warn) 45%, var(--line));
@@ -881,47 +911,47 @@
     flex:1; min-width:0; line-height:1.35; font-size:13px;
     overflow-wrap:anywhere; word-break:break-word;
   }
-  .msg.confirm-card .cc-elab { display:block; width:100%; box-sizing:border-box; margin-top:8px; min-height:44px;
-                               background:var(--bg); color:var(--fg); border:1px solid var(--line); border-radius:5px;
-                               padding:6px 8px; font:inherit; resize:vertical; }
-  .msg.confirm-card .cc-elab::placeholder { color:var(--dim); opacity:0.85; }
+  /* Auto-grow with text (growTextarea); manual resize handle not needed. */
+  .msg.confirm-card .cc-elab {
+    display:block; width:100%; box-sizing:border-box; margin-top:8px;
+    min-height:44px; max-height:min(40vh, 320px);
+    background:var(--bg); color:var(--fg); border:1px solid var(--line); border-radius:5px;
+    padding:6px 8px; font:13px/1.35 var(--ui-font);
+    resize:none; overflow-y:hidden; field-sizing:content; /* modern browsers; JS backfills */
+  }
+  /* Placeholder smaller than option text (13px); gray, not body-white --dim */
+  .msg.confirm-card .cc-elab::placeholder {
+    font-size:11px; color:var(--text-secondary); opacity:1;
+  }
+  .msg.confirm-card .cc-elab::-webkit-input-placeholder {
+    font-size:11px; color:var(--text-secondary); opacity:1;
+  }
+  .msg.confirm-card .cc-elab::-moz-placeholder {
+    font-size:11px; color:var(--text-secondary); opacity:1;
+  }
   .msg.confirm-card .cc-actions { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:10px; }
   .msg.confirm-card .cc-hint { font-size:12px; color:var(--dim); }
-  /* Soft blue glow on Confirm — draws the eye without shouting */
+  /* Confirm CTA: primary ink on a firm link-tint — readable, no pale glow */
   .msg.confirm-card .cc-confirm {
-    --cc-blue: color-mix(in srgb, var(--link, #4daafc) 88%, #fff);
-    background: color-mix(in srgb, var(--link, #4daafc) 78%, var(--btn-primary-bg, var(--acc)));
-    border-color: color-mix(in srgb, var(--link, #4daafc) 55%, transparent);
-    color: #fff;
-    box-shadow:
-      0 0 0 1px color-mix(in srgb, var(--link, #4daafc) 35%, transparent),
-      0 0 10px color-mix(in srgb, var(--link, #4daafc) 38%, transparent),
-      0 0 22px color-mix(in srgb, var(--link, #4daafc) 22%, transparent);
-    animation: cc-glow 2.6s ease-in-out infinite;
+    background: color-mix(in srgb, var(--link) 28%, var(--panel2));
+    border-color: color-mix(in srgb, var(--link) 65%, var(--line));
+    color: var(--fg);
+    font-weight: 600;
+    box-shadow: none;
   }
   .msg.confirm-card .cc-confirm:hover:not(:disabled) {
-    filter: brightness(1.06);
+    background: color-mix(in srgb, var(--link) 40%, var(--panel2));
+    border-color: var(--link);
+    color: var(--fg);
   }
   .msg.confirm-card .cc-confirm:disabled {
-    animation: none; opacity: .55; box-shadow: none;
+    opacity: .55;
   }
-  @keyframes cc-glow {
-    0%, 100% {
-      box-shadow:
-        0 0 0 1px color-mix(in srgb, var(--link, #4daafc) 30%, transparent),
-        0 0 8px color-mix(in srgb, var(--link, #4daafc) 28%, transparent),
-        0 0 16px color-mix(in srgb, var(--link, #4daafc) 14%, transparent);
-    }
-    50% {
-      box-shadow:
-        0 0 0 1px color-mix(in srgb, var(--link, #4daafc) 50%, transparent),
-        0 0 14px color-mix(in srgb, var(--link, #4daafc) 48%, transparent),
-        0 0 28px color-mix(in srgb, var(--link, #4daafc) 28%, transparent);
-    }
+  /* Post re-found offer — same card surface, two clear choices */
+  .msg.refound-offer .rf-q {
+    color:var(--text-primary); font-size:13.5px; font-weight:600; line-height:1.4; margin:0 0 12px;
   }
-  @media (prefers-reduced-motion: reduce) {
-    .msg.confirm-card .cc-confirm { animation: none; }
-  }
+  .msg.refound-offer .cc-actions { margin-top:0; }
   .msg.agent.cc-pending { color:var(--dim); font-style:italic; }
   .msg.tool { color:var(--acc); font-size:12.5px; margin:5px 0; padding:3px 0 3px 10px;
               border-left:2px solid color-mix(in srgb, var(--acc) 55%, var(--line));
@@ -931,12 +961,19 @@
   .msg.ctx .ctxhead { color:var(--slot-ctxhead, var(--fg)); font-size:12px; margin-bottom:4px; }
   .msg.sys .blabel { color:var(--muted); }
   .msg.sys .bbody { color:var(--fg); font-size:13px; white-space:pre-wrap; }
-  /* founding interview — lives in the agent chat (right pane), not the editor */
+  /* founding interview status — under the project bar (not above it) */
   body.proposing #foundinghead { display:none; }
-  #foundinghead { display:none; flex:none; padding:9px 14px; border-bottom:1px solid var(--line);
-                  color:var(--acc); font-size:13px; align-items:center; justify-content:space-between; gap:10px; }
+  #foundinghead {
+    display:none; flex:none; padding:8px 14px;
+    border-top:1px solid var(--line); border-bottom:1px solid var(--line);
+    color:var(--acc); font-size:13px; align-items:center; justify-content:space-between; gap:10px;
+  }
   body.founding #foundinghead { display:flex; }
   #foundinghead .ivacts { display:flex; gap:7px; flex:none; flex-wrap:wrap; justify-content:flex-end; }
+  /* Grey out skip / draft as soon as the user submits the interview (or finishes) */
+  #foundinghead .ivacts button:disabled {
+    opacity:.4; pointer-events:none; cursor:default;
+  }
   #addkit:invalid { color:color-mix(in srgb, var(--fg) 34%, var(--bg)); }
   #addkit option { color:var(--fg); }
   #chatbar { flex:none; display:flex; gap:8px; padding:10px 14px; border-top:1px solid var(--line); }
@@ -961,7 +998,8 @@
     /* Default size fits widest tabs (Agents model list / rows); paths still flex */
     left:14vw; top:2vh; width:min(100vw - 24px, max(72vw, 920px)); height:96vh;
     max-width:calc(100vw - 24px); max-height:calc(100vh - 16px);
-    min-width:min(480px, calc(100vw - 24px)); min-height:200px; overflow:hidden; resize:none;
+    /* Floor keeps Projects rows from crushing path/curator past their min widths */
+    min-width:min(560px, calc(100vw - 24px)); min-height:200px; overflow:hidden; resize:none;
     padding:0; border:1px solid var(--line); border-radius:10px;
     box-shadow:0 12px 40px color-mix(in srgb, var(--bg) 55%, transparent);
     font:13px/1.45 var(--ui-font);
@@ -1426,8 +1464,9 @@
   #admin .kitpick-wrap {
     flex:1 1 320px; min-width:280px; max-width:min(100%, 36em);
   }
+  /* Projects tab curator kit — ~⅓ narrower than the old 22em face; shrinks with the row */
   #admin .pkit-wrap {
-    flex:none; width:22em; min-width:18em; max-width:28em;
+    flex:0 1 14.5em; width:14.5em; min-width:9em; max-width:18.5em;
   }
   #admin .kitpick-face,
   #admin .pkit-face {
@@ -1592,11 +1631,30 @@
     color:var(--text-secondary); font-weight:400; font-size:12px;
   }
   #admin .agent-menu-models .achk input { margin-top:0; }
-  #admin .projrow { gap:6px; }
-  #admin .projrow .pname { flex:0 0 130px; padding:4px 7px; font:inherit; }
-  #admin .projrow .proot { flex:1 1 220px; min-width:160px; color:var(--dim); padding:4px 7px; font:inherit; }
+  /* One line always: condense path + curator before wrapping; floors stop further squeeze. */
+  #admin .projrow {
+    gap:6px; flex-wrap:nowrap; min-width:0;
+  }
+  #admin .projrow .pname {
+    flex:0 1 110px; width:110px; min-width:72px; max-width:130px;
+    padding:4px 7px; font:inherit;
+  }
+  #admin .projrow .proot {
+    flex:1 1 140px; min-width:88px; /* floor — stop condensing path further */
+    color:var(--dim); padding:4px 7px; font:inherit;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  /* Same floors as #admin .pkit-wrap (re-stated so .projrow rules don't zero them) */
+  #admin .projrow .pkit-wrap {
+    flex:0 1 14.5em; width:14.5em; min-width:9em; max-width:18.5em;
+  }
   #admin .projrow .pdel, #admin .projrow .prefound { color:var(--dim); }
   #admin .projrow .prefound { flex:none; font-size:11px; }
+  /* Fixed chrome (depth + buttons) never shrinks — path/kit absorb the squeeze */
+  #admin .projrow .pdepth,
+  #admin .projrow .psave,
+  #admin .projrow .prefound,
+  #admin .projrow .pdel { flex-shrink:0; }
 
   /* horizontal (row) divider — desk chrome vs chat in the right pane */
   .hdivider { cursor:row-resize; height:5px; flex:0 0 5px; flex-grow:0; flex-shrink:0;
@@ -1629,6 +1687,7 @@
 </style>
 </head>
 <body>
+<div id="titlebar-drag" aria-hidden="true"></div>
 
 <div id="left">
   <div id="queue">
@@ -1693,13 +1752,6 @@
 <div id="divR" class="divider" title="drag to resize"></div>
 
 <div id="right">
-  <div id="foundinghead">
-    <span class="ivtitle">founding interview · <span id="ivpname"></span></span>
-    <span class="ivacts">
-      <button id="ivskip" type="button" class="btn btn-sm btn-ghost" title="leave founding for later — open the project as-is (no charter or queue yet); reselect it to resume founding">skip for now</button>
-      <button id="ivfinish" type="button" class="btn btn-sm btn-ghost" title="skip remaining chat and draft the desk proposal now">Draft Proposal ✓</button>
-    </span>
-  </div>
   <div id="desk-top">
     <div id="desk-chrome">
       <div id="desk-proj">
@@ -1720,6 +1772,14 @@
         <div id="briefbody" class="brief-body"></div>
       </div>
     </div>
+  </div>
+  <!-- Founding status sits under the project bar (hidden unless body.founding). -->
+  <div id="foundinghead">
+    <span class="ivtitle">founding interview</span>
+    <span class="ivacts">
+      <button id="ivskip" type="button" class="btn btn-sm btn-ghost" title="leave founding for later — open the project as-is (no charter or queue yet); reselect it to resume founding">skip for now</button>
+      <button id="ivfinish" type="button" class="btn btn-sm btn-ghost" title="skip remaining chat and draft the desk proposal now">Draft Proposal ✓</button>
+    </span>
   </div>
   <div id="divBrief" class="hdivider" title="drag to resize brief / chat"></div>
   <div id="ritual" class="actions-ritual" role="group" aria-label="Desk actions">
@@ -1822,6 +1882,23 @@
     <div style="display:flex;justify-content:flex-end;gap:8px;">
       <button id="sweepcancel" class="btn btn-md btn-ghost">cancel</button>
       <button id="sweepgo" class="btn btn-md btn-primary">sweep</button>
+    </div>
+  </div>
+</div>
+
+<div id="refoundbg">
+  <div id="refoundmodal" role="dialog" aria-modal="true" aria-labelledby="refoundmodal-h">
+    <h2 id="refoundmodal-h">Re-found this project?</h2>
+    <p class="mnote" style="margin:0">
+      <strong id="refoundname">—</strong> will be reset to an unfounded seed.
+      The current <code>.kettle</code> desk is copied to a backup first; your project
+      folder and files are not deleted. The next time you open the project, the
+      founding interview starts over.
+    </p>
+    <div class="mrow" style="margin-top:4px">
+      <span style="flex:1"></span>
+      <button type="button" id="refoundcancel" class="btn btn-md btn-ghost" title="Esc">cancel</button>
+      <button type="button" id="refoundgo" class="btn btn-md btn-primary" title="confirm re-found">re-found</button>
     </div>
   </div>
 </div>
@@ -3611,16 +3688,8 @@ function renderQueue(){
   qlist.innerHTML = '';
   qlist.setAttribute('role', 'listbox');
   qlist.setAttribute('aria-label', 'project queue');
-  // Founding with no content yet — orient the user to the agent pane (brief 22).
+  // Founding: empty queue stays empty — no instructional filler in the list.
   if(!list.length && document.body.classList.contains('founding')){
-    const hint = document.createElement('div');
-    hint.className = 'qfounding-hint';
-    hint.innerHTML =
-      '<strong>' + esc(uic('foundingQueueHintTitle', 'Founding')) + '</strong>' +
-      esc(uic('foundingQueueHintBody',
-        'The curator is in the agent pane. Answer there, then Draft Proposal ✓ when ready. ' +
-        'The queue fills after you use Found Desk on the proposal.'));
-    qlist.appendChild(hint);
     syncChrome();
     return;
   }
@@ -4476,7 +4545,7 @@ async function foundFromProposal(){
     const r = await fetch('/api/found', {method:'POST',
       body: JSON.stringify({project: pid, model: agentModel('setup')})});
     if(!r.ok){ const j = await r.json(); throw j.error; }
-    await pipeStream(r, null, {trackCtx:true});
+    await pipeStream(r, null, {trackCtx:true, model: agentModel('setup')});
     PROJECT_SESSION = true;
     addMsg('sys', '— desk founded —');
   } catch(err){ addMsg('err', String(err)); }
@@ -4503,7 +4572,25 @@ function flushChatlog(){  // settle any pending save before the project switches
   if(PROJECT) postChatlog(PROJECT, CHATLOG);
 }
 
+/** Scrub / normalize retired founding sys lines so old chatlogs match current copy. */
+function scrubChatText(cls, text){
+  if(typeof text !== 'string') return text;
+  if(cls !== 'sys') return text;
+  let t = text
+    // Drop the old "starts in this pane" tail
+    .replace(/\s*[—–-]\s*interview starts in this pane\.?/gi, '')
+    // Normalize kickoff lines to the current phrasing
+    .replace(/^Registered\b.*$/i, 'Registering new project…')
+    .replace(/^Reading the folder\.?…?$/i, 'Reading folder contents…')
+    .replace(/^Beginning Interview\.?…?$/i, 'Beginning interview…')
+    .replace(/\.\.+/g, '.')
+    .trim();
+  // If scrub left a bare "Registered." style line, force the new copy
+  if(/^Registered\.?$/i.test(t)) t = 'Registering new project…';
+  return t;
+}
 function addMsg(cls, text){
+  text = scrubChatText(cls, text);
   logChat(cls, text);
   const d = document.createElement('div');
   d.className = 'msg ' + cls;
@@ -4735,13 +4822,13 @@ function ensureInterviewStartAnchor(beforeNode){
     anchor = document.createElement('div');
     anchor.id = 'interview-start';
     anchor.className = 'msg sys';
-    anchor.textContent = 'Beginning Interview…';
+    anchor.textContent = 'Beginning interview…';
     // Keep transcript honest when we synthesize the banner for restored cards
-    if(!restoring) logChat('sys', 'Beginning Interview…');
+    if(!restoring) logChat('sys', 'Beginning interview…');
   } else {
     anchor.id = 'interview-start';
     if(!/beginning interview/i.test(anchor.textContent || ''))
-      anchor.textContent = 'Beginning Interview…';
+      anchor.textContent = 'Beginning interview…';
   }
   // Always sit the banner immediately above the card so tool spam / survey
   // preamble is not stuck between the title line and the pretty questions.
@@ -4759,9 +4846,7 @@ function renderConfirmCard(host, card){
   ensureInterviewStartAnchor(host);
   host.className = 'msg confirm-card';
   host.textContent = '';
-  // Drop survey preamble on the card — banner + questions is the whole screen.
-  const title = document.createElement('h2'); title.className = 'cc-title';
-  title.textContent = 'Desk Confirmation Card'; host.appendChild(title);
+  // No card title — questions start immediately under the kickoff banner.
   card.sections.forEach((sec, si) => {
     const wrap = document.createElement('div'); wrap.className = 'cc-section';
     wrap.dataset.num = sec.num || String(si + 1);
@@ -4787,8 +4872,12 @@ function renderConfirmCard(host, card){
     elab.value = '';  // always empty for user free response
     elab.placeholder = 'Elaborate (optional)';  // label lives in the field
     elab.setAttribute('aria-label', 'Elaborate (optional)');
+    // Grow with typed text (same helper as chat / comment composers)
+    elab.addEventListener('input', () => growElaborate(elab));
     wrap.appendChild(elab);
     host.appendChild(wrap);
+    // After layout, size empty field to min (and any restored value if present)
+    requestAnimationFrame(() => growElaborate(elab));
   });
   const actions = document.createElement('div'); actions.className = 'cc-actions';
   const send = document.createElement('button'); send.type = 'button';
@@ -4806,6 +4895,8 @@ function renderConfirmCard(host, card){
     }));
     const text = serializeConfirmCard({ preamble: '', sections, epilogue: '' });
     send.disabled = true;
+    // Immediately grey out founding status actions — no second draft/skip while proposing.
+    setFoundingActionsEnabled(false);
     // Clear interview questions from chat — ticks still go to the API; the card is clutter once submitted.
     const chat = $('chat');
     for(const el of [...chat.querySelectorAll('.msg.confirm-card')]) el.remove();
@@ -4824,9 +4915,7 @@ function renderConfirmCard(host, card){
       await finishInterview();
     }
   };
-  const hint = document.createElement('span'); hint.className = 'cc-hint';
-  hint.textContent = 'Tick what fits — free text in Elaborate is “other.” Chat below also works if the card fails to render.';
-  actions.append(send, hint); host.appendChild(actions);
+  actions.append(send); host.appendChild(actions);
   // Card is complete — release the kickoff freeze (viewport stays on the banner).
   unlockInterviewScroll();
   return true;
@@ -4846,6 +4935,9 @@ function maybeUpgradeConfirmCard(node, text){
 async function pipeStream(r, out, opts){
   const say = out || addMsg;  // default sink: the right chat pane
   const trackCtx = !!(opts && opts.trackCtx);  // only genuine chat turns drive the context bar
+  // Prime the window from the model we *asked* for — stream "model" events often
+  // arrive after the first usage, which used to paint 100% red against the 200k default.
+  if(trackCtx && opts && opts.model) applyCtxModel(opts.model);
   const coalesceAgent = !out;  // default chat: one bubble per turn (needed for confirm-card upgrade)
   const reader = r.body.getReader();
   const dec = new TextDecoder();
@@ -4902,7 +4994,7 @@ async function pipeStream(r, out, opts){
         // Keep it in chrome rather than flooding the user's transcript.
         if(busy) setSpinLabel(String(ev.s || '').trim() || 'working');
       }
-      else if(ev.t === 'model'){ if(trackCtx){ CTX_WINDOW = windowFor(ev.s); setCtxBar(CTX_USED); } }
+      else if(ev.t === 'model'){ if(trackCtx) applyCtxModel(ev.s); }
       else if(ev.t === 'usage'){ if(trackCtx && ev.context != null) setCtxBar(ev.context); }  // live, per message
       else if(ev.t === 'done'){
         if(trackCtx && ev.ctx != null) setCtxBar(ev.ctx);
@@ -5011,7 +5103,7 @@ async function runTurn(m){
   try {
     const r = await fetch('/api/chat', {method:'POST',
       body: JSON.stringify({id: cur ? cur.id : null, message: m, project: PROJECT, model: agentModel('chat')})});
-    const stream = await pipeStream(r, null, {trackCtx:true});
+    const stream = await pipeStream(r, null, {trackCtx:true, model: agentModel('chat')});
     PROJECT_SESSION = true;  // a live project session now exists (server persisted its id)
     await refreshOpenFile(stream && stream.wrote);
   } catch(err){ addMsg('err', String(err)); }
@@ -5049,7 +5141,7 @@ async function sweep(thrust){
     const r = await fetch('/api/sweep', {method:'POST',
       body: JSON.stringify({project: PROJECT, model: agentModel('setup'),
         thrust: (thrust || '').trim()})});
-    await pipeStream(r, null, {trackCtx:true});
+    await pipeStream(r, null, {trackCtx:true, model: agentModel('setup')});
     PROJECT_SESSION = true;   // the sweep ran on the project session — it continues the thread
     addMsg('sys', '— sweep finished —');
   } catch(err){ addMsg('err', String(err)); }
@@ -5182,6 +5274,22 @@ function deskReservedHeight(){
 function applyDeskSplit(){
   const top = $('desk-top'), wrap = $('chatwrap'), right = $('right');
   if(!top || !wrap || !right) return;
+  const chatMin = 72;
+
+  // Founding interview: no brief/ritual — collapse desk head to content (project row)
+  // and give the chat column the rest of the height for long survey streams.
+  if(document.body.classList.contains('founding')){
+    top.style.flex = '0 0 auto';
+    top.style.height = '';
+    top.style.maxHeight = '';
+    top.style.minHeight = '0';
+    wrap.style.flex = '1 1 0';
+    wrap.style.height = '';
+    wrap.style.maxHeight = '';
+    wrap.style.minHeight = chatMin + 'px';
+    return;
+  }
+
   // Ritual / dividers / comment are content-sized siblings. Only desk-top height is
   // locked to a fraction of the leftover space; chat takes the rest (flex 1).
   // Using grow factors on both (old path) let free space land in the wrong row
@@ -5190,7 +5298,6 @@ function applyDeskSplit(){
   f = clamp(f, 0.12, 0.78);
   SETTINGS.colWidths.deskTopFrac = f;
 
-  const chatMin = 72;
   const reserved = deskReservedHeight();
   const shared = Math.max(0, (right.clientHeight || 0) - reserved);
   let topH = Math.round(shared * f);
@@ -5465,7 +5572,7 @@ function buildProjRows(drafts){
       syncProjDirty();
     };
     saveBtn.onclick = () => saveProj(p.id, row);
-    row.querySelector('.prefound').onclick = (e) => refoundProj(p.id, e.currentTarget);
+    row.querySelector('.prefound').onclick = () => refoundProj(p.id);
     row.querySelector('.pdel').onclick = (e) => deleteProj(p.id, e.currentTarget);
     box.appendChild(row);
     syncProjDirty(); // apply draft → dirty state
@@ -5522,8 +5629,79 @@ async function saveAllProjs(){
 }
 const PROJ_REMOVE_WARN =
   'Removing a project only unregisters it from Kettle. The project folder and its .kettle config stay on disk. Files are untouched.';
-const PROJ_REFOUND_WARN =
-  "This drops the project's Kettle configuration, saves a backup .kettle config, and triggers a fresh interview process the next time you load the project.";
+let REFOUND_PENDING = null;  // project id awaiting confirm modal
+function openRefoundConfirm(id){
+  REFOUND_PENDING = id;
+  const p = PROJECTS.find(x => x.id === id);
+  const nameEl = $('refoundname');
+  if(nameEl) nameEl.textContent = (p && p.name) ? p.name : id;
+  const bg = $('refoundbg');
+  if(bg) bg.classList.add('open');
+  try { $('refoundgo').focus(); } catch(_){}
+}
+function closeRefoundConfirm(){
+  REFOUND_PENDING = null;
+  const bg = $('refoundbg');
+  if(bg) bg.classList.remove('open');
+}
+async function confirmRefound(){
+  const id = REFOUND_PENDING;
+  closeRefoundConfirm();
+  if(!id) return;
+  try {
+    const r = await jpost('/api/projects/refound', {id});
+    SKIPPED_FOUNDING.delete(id);  // clear any prior “skip for now”
+    buildProjRows();
+    // Load the reset desk without auto-starting the interview — offer first.
+    await loadProject(id, {skipFoundingInterview: true});
+    offerRefoundInterview(id, r.backup);
+  } catch(err){ addMsg('err', 're-found failed: ' + err); }
+}
+/** After a desk reset: ask whether to start founding now or wait. */
+function offerRefoundInterview(id, backupPath){
+  const chat = $('chat'); if(!chat) return;
+  // Quiet sys line (no path dump as the only outcome)
+  addMsg('sys', 'Desk reset — previous setup backed up.');
+  const card = document.createElement('div');
+  card.className = 'msg confirm-card refound-offer';
+  card.setAttribute('role', 'group');
+  card.setAttribute('aria-label', 'Begin founding interview?');
+  const q = document.createElement('div');
+  q.className = 'rf-q';
+  q.textContent = 'Would you like to build a fresh Kettle setup now?';
+  const actions = document.createElement('div');
+  actions.className = 'cc-actions';
+  const yes = document.createElement('button');
+  yes.type = 'button';
+  yes.className = 'btn btn-sm btn-primary';
+  yes.textContent = 'Yes, begin the interview';
+  yes.onclick = () => {
+    card.remove();
+    SKIPPED_FOUNDING.delete(id);
+    if(PROJECT !== id){
+      loadProject(id).catch(err => addMsg('err', String(err)));
+      return;
+    }
+    // Standard founding kickoff (survey + interview stream)
+    enterInterview({});
+  };
+  const no = document.createElement('button');
+  no.type = 'button';
+  no.className = 'btn btn-sm btn-ghost';
+  no.textContent = 'No, remind me next time';
+  no.onclick = () => {
+    card.remove();
+    SKIPPED_FOUNDING.add(id);
+    exitInterview();
+    setProposingChrome(false);
+    renderQueue();
+    addMsg('sys', 'OK — open this project again when you want to found it.');
+  };
+  actions.append(yes, no);
+  card.append(q, actions);
+  chat.appendChild(card);
+  chatScrollToBottom();
+}
 async function deleteProj(id, btn){
   if(btn.dataset.armed !== '1'){            // two-click arm (WKWebView blocks native confirm)
     btn.dataset.armed = '1'; btn.textContent = 'remove?'; btn.classList.add('arm');
@@ -5544,26 +5722,8 @@ async function deleteProj(id, btn){
     renderProjOptions(); buildProjRows();
   } catch(err){ addMsg('err', 'delete failed: ' + err); }
 }
-async function refoundProj(id, btn){
-  if(btn.dataset.armed !== '1'){            // two-click arm (resetting a desk is destructive)
-    btn.dataset.armed = '1'; btn.textContent = 're-found?'; btn.classList.add('arm');
-    btn.title = PROJ_REFOUND_WARN;
-    addMsg('sys', PROJ_REFOUND_WARN);
-    setTimeout(() => {
-      if(btn.isConnected){
-        btn.dataset.armed = ''; btn.textContent = 're-found'; btn.classList.remove('arm');
-        btn.title = 'Re-found this project';
-      }
-    }, 4500);
-    return;
-  }
-  try {
-    const r = await jpost('/api/projects/refound', {id});
-    addMsg('sys', `"${id}" desk reset to its founding seed — old desk backed up to ${r.backup}`);
-    buildProjRows();
-    if(PROJECT === id){ await loadProject(id); }   // re-enters the fresh founding interview
-    else addMsg('sys', `select ${id} to run its founding interview`);
-  } catch(err){ addMsg('err', 're-found failed: ' + err); }
+function refoundProj(id){
+  openRefoundConfirm(id);
 }
 
 /* ---- admin · agents: provider select (+ Add Provider) + per-task models + effort ---- */
@@ -6149,15 +6309,25 @@ if($('addroot')){
    Phase C (approve proposal): curator digests the edited proposal, founds desk, first batch.
    Chat stays live through B so the user can ask for proposal revisions. */
 const SKIPPED_FOUNDING = new Set();   // desks the user chose to open un-founded this session
+/** Enable/disable skip + Draft Proposal while founding chrome is visible. */
+function setFoundingActionsEnabled(on){
+  for(const id of ['ivskip', 'ivfinish']){
+    const el = $(id);
+    if(!el) continue;
+    el.disabled = !on;
+  }
+}
 function setFoundingChrome(on){
   document.body.classList.toggle('founding', !!on);
   if(on) document.body.classList.remove('proposing');
   else if(interviewScrollLock) unlockInterviewScroll();
-  const p = PROJECTS.find(x => x.id === PROJECT);
-  if($('ivpname')) $('ivpname').textContent = p ? p.name : (PROJECT || '');
+  // Re-arm actions whenever founding chrome comes back; leave disabled when leaving.
+  setFoundingActionsEnabled(!!on);
   $('chatin').placeholder = on
     ? uic('chatPlaceholderFounding', 'Chat with the Kettle agent…')
     : uic('chatPlaceholder', 'Chat with the Kettle agent…');
+  // Collapse or restore desk-top height (empty brief/ritual must not hog the column)
+  if(typeof applyDeskSplit === 'function') applyDeskSplit();
   if(on){
     try { $('chatin').focus({ preventScroll: true }); }
     catch(_){ $('chatin').focus(); }
@@ -6174,6 +6344,7 @@ function setProposingChrome(on){
   $('chatin').placeholder = on
     ? uic('chatPlaceholderProposing', 'Ask to revise the proposal — or edit it, then Found Desk')
     : uic('chatPlaceholder', 'Chat with the Kettle agent…');
+  if(typeof applyDeskSplit === 'function') applyDeskSplit();
   if(on) $('chatin').focus();
 }
 function enterInterview(opts){
@@ -6190,11 +6361,10 @@ function enterInterview(opts){
       lockInterviewScroll();  // freeze before any stream tokens arrive
       ivTurn('(the user has returned to the interview — restate in two plain lines where things stand and what you still need; no dense status dump)');
     } else {
-      const p = PROJECTS.find(x => x.id === PROJECT);
       // Status lines are logged but hidden for the freeze (iv-pre-hide).
-      addMsg('sys', 'Registered ' + (p ? p.name : PROJECT) + ' — interview starts in this pane.');
-      addMsg('sys', 'Reading the folder…');
-      const start = addMsg('sys', 'Beginning Interview…');
+      addMsg('sys', 'Registering new project…');
+      addMsg('sys', 'Reading folder contents…');
+      const start = addMsg('sys', 'Beginning interview…');
       if(start) start.id = 'interview-start';
       // Freeze BEFORE the long survey stream — growth below cannot move the view.
       lockInterviewScroll();
@@ -6225,7 +6395,7 @@ async function ivTurn(m){
     const r = await fetch('/api/interview', {method:'POST',
       body: JSON.stringify({project: PROJECT, message: m, model: agentModel('setup')})});
     if(!r.ok){ const j = await r.json(); throw j.error; }
-    await pipeStream(r, null, {trackCtx:true});
+    await pipeStream(r, null, {trackCtx:true, model: agentModel('setup')});
     PROJECT_SESSION = true;
   } catch(err){
     addMsg('err', String(err));
@@ -6272,6 +6442,8 @@ function clearProposalGuideChrome(){
 }
 async function finishInterview(){
   if(busy) return;
+  // Grey out before exitInterview hides the bar (and if chrome lingers mid-stream).
+  setFoundingActionsEnabled(false);
   const pid = PROJECT;
   exitInterview();
   // Avoid stacking a second drafting banner if the card submit already added one.
@@ -6283,7 +6455,7 @@ async function finishInterview(){
     const r = await fetch('/api/propose', {method:'POST',
       body: JSON.stringify({project: pid, model: agentModel('setup')})});
     if(!r.ok){ const j = await r.json(); throw j.error; }
-    await pipeStream(r, null, {trackCtx:true});
+    await pipeStream(r, null, {trackCtx:true, model: agentModel('setup')});
     PROJECT_SESSION = true;
   } catch(err){ addMsg('err', String(err)); }
   busy = false; hideSpin(); $('sweepbtn').disabled = false;
@@ -6336,6 +6508,7 @@ async function revealQueue(pid, opts){
 
 /* Escape hatch — open an un-founded desk as-is. Session-scoped skip. */
 function skipInterview(){
+  setFoundingActionsEnabled(false);
   const pid = PROJECT;
   SKIPPED_FOUNDING.add(pid);
   exitInterview();
@@ -6368,6 +6541,15 @@ function growTextarea(el, maxLines = 10, maxHeightPx){
 function autoGrow(){ growTextarea($('chatin'), 10); }
 function autoGrowComment(){
   growTextarea($('commentin'), 10, Math.floor(window.innerHeight * 0.5));
+}
+/** Founding confirm-card "Elaborate" boxes — grow with text, cap ~half the chat column. */
+function growElaborate(el){
+  if(!el) return;
+  const chat = $('chat');
+  const cap = chat
+    ? Math.max(88, Math.floor(chat.clientHeight * 0.45))
+    : Math.floor(window.innerHeight * 0.35);
+  growTextarea(el, 16, cap);
 }
 
 $('editor').addEventListener('input', onEditorInput);
@@ -6467,6 +6649,14 @@ $('addbg').addEventListener('keydown', e => trapTab($('addmodal'), e));
 $('setupbg').addEventListener('keydown', e => trapTab($('setupmodal'), e));
 $('sweepbg').addEventListener('keydown', e => trapTab($('sweepconfirm'), e));
 $('admin').addEventListener('keydown', e => trapTab($('admin'), e));
+if($('refoundbg')){
+  $('refoundbg').addEventListener('keydown', e => trapTab($('refoundmodal'), e));
+  $('refoundbg').addEventListener('mousedown', e => {
+    if(e.target === $('refoundbg')) closeRefoundConfirm();
+  });
+}
+if($('refoundcancel')) $('refoundcancel').onclick = closeRefoundConfirm;
+if($('refoundgo')) $('refoundgo').onclick = () => { confirmRefound().catch(err => addMsg('err', String(err))); };
 $('chatin').addEventListener('input', autoGrow);
 $('chatin').addEventListener('keydown', e => {
   if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); send(); }
@@ -6484,7 +6674,8 @@ document.addEventListener('keydown', e => {
   }
   if(e.key === 'Escape'){
     // setupbg is deliberately not dismissible — it is the hard curator gate.
-    if($('addproviderbg') && $('addproviderbg').classList.contains('open')) closeAddProviderModal();
+    if($('refoundbg') && $('refoundbg').classList.contains('open')) closeRefoundConfirm();
+    else if($('addproviderbg') && $('addproviderbg').classList.contains('open')) closeAddProviderModal();
     else if($('addmodelbg') && $('addmodelbg').classList.contains('open')) closeAddModelModal();
     else if($('addbg').classList.contains('open')) closeAddProj();
     else if($('sweepbg').style.display === 'flex'){ $('sweepbg').style.display = 'none'; $('sweepthrust').value = ''; }
@@ -6493,22 +6684,69 @@ document.addEventListener('keydown', e => {
   }
 });
 
-// context window is model-specific (opus/fable carry ~1M; sonnet/haiku ~200K). CTX_WINDOW
-// is updated from each turn's reported model (the stream's 'model' event), not hard-coded.
-const CTX_WINDOWS = { opus: 1000000, fable: 1000000, sonnet: 200000, haiku: 200000 };
+// context window is model-specific. Defaults: grok-4.5 is Kettle's setup model
+// (500k). CTX_WINDOW is primed from the requested model before the stream, then
+// refined by the stream's `model` event. Occupancy that exceeds the assumed
+// window promotes the denominator (false 100% red → honest fraction).
+// Longest key match wins — 'grok-4.5' must beat bare 'grok-4'.
+const CTX_WINDOW_TIERS = [128000, 200000, 256000, 500000, 1000000, 2000000];
+const CTX_WINDOWS = {
+  opus: 1000000, fable: 1000000,
+  sonnet: 200000, haiku: 200000,
+  // Grok family (xAI docs; desk chrome order-of-magnitude, not billing truth)
+  'grok-4.5': 500000,
+  'grok-4-fast': 2000000,
+  'grok-4': 256000,
+  'grok-3': 131072,
+  'grok-composer': 256000,
+  'grok-build': 256000,
+  grok: 256000,
+  // Codex / Gemini
+  'gpt-5': 200000, o3: 200000, 'o4-mini': 200000,
+  'gemini-2.5-pro': 1000000, 'gemini-2.5-flash': 1000000, 'gemini-2.0': 1000000,
+};
 function windowFor(model){
-  const m = (model || '').toLowerCase();
-  for(const k in CTX_WINDOWS) if(m.includes(k)) return CTX_WINDOWS[k];
+  const m = String(model || '').toLowerCase();
+  if(!m || m === '?') return null;  // unknown — keep current assumption
+  // Longest key match wins (grok-4.5 before grok-4; gemini-2.5-pro before gemini-2.0)
+  let best = null, bestLen = -1;
+  for(const k of Object.keys(CTX_WINDOWS)){
+    if(m.includes(k) && k.length > bestLen){
+      best = CTX_WINDOWS[k];
+      bestLen = k.length;
+    }
+  }
+  if(best != null) return best;
+  // Anthropic long-context / Claude 4 family often report as claude-*-4-*
+  if(/opus|claude-opus|claude-4|sonnet-4|1m|1\.0m/.test(m)) return 1000000;
+  // Grok family catch-all if id shape is unfamiliar
+  if(/grok/.test(m)) return 256000;
   return 200000;
+}
+/** Promote CTX_WINDOW when measured occupancy exceeds it (assumed window too small). */
+function promoteCtxWindow(used){
+  const n = Number(used) || 0;
+  if(n <= CTX_WINDOW) return;
+  for(const tier of CTX_WINDOW_TIERS){
+    if(n <= tier){ CTX_WINDOW = Math.max(CTX_WINDOW, tier); return; }
+  }
+  CTX_WINDOW = Math.max(CTX_WINDOW, n);
+}
+function applyCtxModel(model){
+  const w = windowFor(model);
+  if(w != null) CTX_WINDOW = w;
+  promoteCtxWindow(CTX_USED);
+  setCtxBar(CTX_USED);
 }
 let CTX_WINDOW = 200000;
 let CTX_USED = 0;
 const fmtK = n => n >= 1e6 ? +(n / 1e6).toFixed(1) + 'M' : n >= 1000 ? (n / 1000).toFixed(n < 10000 ? 1 : 0) + 'k' : String(n);
 function setCtxBar(used){
   CTX_USED = used || 0;
+  promoteCtxWindow(CTX_USED);
   const bar = $('ctxbar'), fill = $('ctxfill');
   if(!bar || !fill) return;
-  const frac = Math.min(1, CTX_USED / CTX_WINDOW);
+  const frac = CTX_WINDOW > 0 ? Math.min(1, CTX_USED / CTX_WINDOW) : 0;
   const hue = 120 * (1 - frac);  // green → red
   fill.style.width = (frac * 100).toFixed(1) + '%';
   fill.style.background = `hsl(${hue}, 55%, 48%)`;
@@ -6516,21 +6754,25 @@ function setCtxBar(used){
   if(lab) lab.textContent = 'context';
   const act = (SETTINGS.ctxClick === 'clear') ? 'clear' : 'compact';
   bar.title = 'context: ' + CTX_USED.toLocaleString() + ' / ' + CTX_WINDOW.toLocaleString()
-    + ' tokens — click to ' + act + " this file's session";
+    + ' tokens — click to ' + act + " this project's session";
   bar.setAttribute('aria-valuenow', String(Math.round(frac * 100)));
   bar.setAttribute('aria-valuemin', '0');
   bar.setAttribute('aria-valuemax', '100');
 }
 
-/* ── Git contribution strip (desk project row) ─────────────────────────────
+/* ── Activity strip (desk project row) ─────────────────────────────────────
    Layers (mirror backend gitmap.py):
      5. slot     — #gitmap chrome geometry (CSS)
      6. renderer — paint cells from a payload (no fetch)
      7. lifecycle — refresh on project load; cancel stale responses
-   Data: GET /api/git/activity?project=  (adaptive weeks; local git only)
+   Data: GET /api/git/activity?project=
+     source=git   → commit heatmap (green)
+     source=mtime → filesystem mtime heatmap for non-git roots (link blue)
    grain=day → weeks × 7; grain=week → one fat bar per week (sparse histories). */
 const GITMAP_PLACEHOLDER_WEEKS = 12;
-const GITMAP_STATES = ['gitmap-nogit', 'gitmap-empty', 'gitmap-err', 'gitmap-loading'];
+const GITMAP_STATES = [
+  'gitmap-nogit', 'gitmap-empty', 'gitmap-err', 'gitmap-loading', 'gitmap-mtime',
+];
 
 /** (5) Clear state classes on the slot. */
 function gitMapClearState(el){
@@ -6565,29 +6807,35 @@ function renderGitMap(data, errMsg){
   gitMapClearState(el);
   const weeks = (data && data.weeks) || GITMAP_PLACEHOLDER_WEEKS;
   const grain = (data && data.grain) || 'day';
+  const source = (data && data.source) || (data && data.git ? 'git' : 'none');
+  const isMtime = source === 'mtime';
+  const unit = isMtime ? 'file' : 'commit';
+  const units = isMtime ? 'files' : 'commits';
 
   if(errMsg){
     el.classList.add('gitmap-err');
-    el.title = 'git activity unavailable: ' + errMsg;
+    el.title = 'activity unavailable: ' + errMsg;
     el.replaceChildren(gitMapEmptyGrid(weeks, grain));
     return;
   }
   if(!data){
     el.classList.add('gitmap-nogit');
-    el.title = 'git activity: no project loaded';
+    el.title = 'activity: no project loaded';
     el.replaceChildren(gitMapEmptyGrid(weeks, 'day'));
     return;
   }
-  if(!data.git){
+  if(data.error && !Array.isArray(data.cells)){
+    el.classList.add('gitmap-err');
+    el.title = 'activity unavailable: ' + data.error;
+    el.replaceChildren(gitMapEmptyGrid(weeks, grain));
+    return;
+  }
+
+  // Non-git without an mtime payload (legacy server) → empty strip
+  if(!data.git && source !== 'mtime' && !(data.cells && data.cells.length)){
     el.classList.add('gitmap-nogit');
     el.title = 'not a git repository (project root has no .git)';
     el.replaceChildren(gitMapEmptyGrid(weeks, 'day'));
-    return;
-  }
-  if(data.error){
-    el.classList.add('gitmap-err');
-    el.title = 'git activity unavailable: ' + data.error;
-    el.replaceChildren(gitMapEmptyGrid(weeks, grain));
     return;
   }
 
@@ -6597,17 +6845,24 @@ function renderGitMap(data, errMsg){
   grid.className = 'gitmap-grid' + (grain === 'week' ? ' grain-week' : '');
   grid.style.gridTemplateColumns = `repeat(${weeks}, minmax(0, 1fr))`;
   grid.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
-  const unit = grain === 'week' ? 'week' : 'day';
+  if(isMtime) el.classList.add('gitmap-mtime');
+
   if(!data.total){
     el.classList.add('gitmap-empty');
-    el.title = 'no commits in the last ' + weeks + ' weeks';
+    el.title = isMtime
+      ? 'no file changes in the last ' + weeks + ' weeks (by mtime)'
+      : 'no commits in the last ' + weeks + ' weeks';
   } else {
     const span = data.first_date && data.last_date
       ? ' (' + data.first_date + ' → ' + data.last_date + ')' : '';
-    const adapt = data.adaptive ? ' · window fits repo age' : '';
+    const adapt = data.adaptive
+      ? (isMtime ? ' · window fits file age' : ' · window fits repo age')
+      : '';
     const gnote = grain === 'week' ? ' · weekly bars' : '';
-    el.title = data.total.toLocaleString() + ' commits · ' + weeks + ' weeks'
-      + span + adapt + gnote + ' — hover a cell for the count';
+    const kind = isMtime ? ' · file mtime (not git)' : '';
+    const trunc = data.truncated ? ' · walk capped' : '';
+    el.title = data.total.toLocaleString() + ' ' + units + ' · ' + weeks + ' weeks'
+      + span + adapt + gnote + kind + trunc + ' — hover a cell for the count';
   }
   const n = weeks * rows;
   for(let i = 0; i < n; i++){
@@ -6621,11 +6876,13 @@ function renderGitMap(data, errMsg){
     if(grain === 'week' && when){
       const range = whenEnd && whenEnd !== when ? (when + ' → ' + whenEnd) : when;
       const days = cell.active_days != null ? cell.active_days : lvl;
-      c.title = (count === 1 ? '1 commit' : count + ' commits')
+      c.title = (count === 1 ? '1 ' + unit : count + ' ' + units)
         + ' · ' + days + '/7 days · week of ' + range;
     } else {
       c.title = when
-        ? (count === 1 ? '1 commit on ' + when : count + ' commits on ' + when)
+        ? (count === 1
+            ? '1 ' + unit + (isMtime ? ' touched on ' : ' on ') + when
+            : count + ' ' + units + (isMtime ? ' touched on ' : ' on ') + when)
         : '';
     }
     grid.appendChild(c);
@@ -6646,7 +6903,7 @@ async function refreshGitMap(pid){
   // Loading placeholder so the slot never looks “broken empty”
   gitMapClearState(el);
   el.classList.add('gitmap-loading');
-  el.title = 'loading git activity…';
+  el.title = 'loading activity…';
   el.replaceChildren(gitMapEmptyGrid(GITMAP_PLACEHOLDER_WEEKS, 'week'));
   try {
     // No weeks= → adaptive window + grain from gitmap.py
@@ -6685,6 +6942,24 @@ function addOut(n){ SESSION_OUT += (n || 0); setCost(); }
 // founding survey alone can run 100s of K). Compact at phase boundaries and when context
 // runs high, so the single thread stays lean. CTX_COMPACT_AT is a fraction of the window.
 const CTX_COMPACT_AT = 0.7;
+/**
+ * After /compact the stream's usage is the *pre*-compaction size (server note on
+ * /api/compact) — painting it would leave the bar full/red while the transcript
+ * says "context compacted". Drop to a residual estimate until the next real turn
+ * reports true occupancy.
+ */
+function setCtxBarAfterCompact(){
+  // Summary + system prompt still occupy some window; ~8–12% is a safe desk estimate.
+  const residual = Math.max(8000, Math.round(CTX_WINDOW * 0.1));
+  setCtxBar(Math.min(residual, Math.round(CTX_WINDOW * 0.2)));
+  const bar = $('ctxbar');
+  if(bar){
+    const act = (SETTINGS.ctxClick === 'clear') ? 'clear' : 'compact';
+    bar.title = 'context: ~' + CTX_USED.toLocaleString() + ' / ' + CTX_WINDOW.toLocaleString()
+      + ' tokens (post-compact estimate — refreshes on next chat) — click to ' + act
+      + " this project's session";
+  }
+}
 async function runCompact(){
   if(!PROJECT_SESSION) return;
   busy = true; showSpin();
@@ -6692,7 +6967,9 @@ async function runCompact(){
   try {
     const r = await fetch('/api/compact', {method:'POST',
       body: JSON.stringify({project: PROJECT, model: agentModel('chat')})});
-    await pipeStream(r, null, {trackCtx:false});  // the compact turn's usage is the OLD size; the bar refreshes on the next real turn
+    // Do not trackCtx: compact usage is pre-size and would peg the bar at 100%.
+    await pipeStream(r, null, {trackCtx:false, model: agentModel('chat')});
+    setCtxBarAfterCompact();
     addMsg('sys', 'context compacted \u2014 the thread continues, summarized');
   } catch(err){ addMsg('err', 'compact failed: ' + err); }
   busy = false; hideSpin();
@@ -6718,7 +6995,8 @@ if($('ctxbar')) $('ctxbar').onclick = async () => {
   await runCompact();
 };
 
-async function loadProject(pid){
+async function loadProject(pid, opts){
+  opts = opts || {};
   if(dirty){ try { await save(); } catch(e){} }
   flushChatlog();  // settle the outgoing project's transcript before switching
   PROJECT = pid;
@@ -6739,13 +7017,19 @@ async function loadProject(pid){
   } catch(e){ /* absent or unreadable: start fresh */ }
   if(PROJECT !== pid) return;   // a newer selection superseded this load mid-fetch
   // Drop retired file-select brief dumps (cls=ctx / glance) — brief lives in the desk pane.
-  const cleaned = msgs.filter(m => m && m.cls !== 'ctx' && m.cls !== 'glance');
-  if(cleaned.length !== msgs.length){
-    CHATLOG = cleaned;
-    // Persist the cleaned transcript so old brief dumps don't reappear next load.
+  // Scrub retired founding filler strings from older sessions.
+  let cleaned = msgs.filter(m => m && m.cls !== 'ctx' && m.cls !== 'glance');
+  let scrubbed = false;
+  cleaned = cleaned.map(m => {
+    if(!m || typeof m.text !== 'string') return m;
+    const t = scrubChatText(m.cls, m.text);
+    if(t !== m.text){ scrubbed = true; return Object.assign({}, m, {text: t}); }
+    return m;
+  });
+  CHATLOG = cleaned;
+  if(scrubbed || cleaned.length !== msgs.length){
+    // Persist so retired filler doesn't reappear next load.
     try { postChatlog(pid, CHATLOG); } catch(e){}
-  } else {
-    CHATLOG = cleaned;
   }
   restoring = true;
   $('chat').innerHTML = '';
@@ -6776,15 +7060,29 @@ async function loadProject(pid){
   exitInterview();
   setProposingChrome(false);
   if(unfounded){
+    // After re-found: load the seed but wait for the explicit offer card (don't auto-kick).
+    if(opts.skipFoundingInterview){
+      setFoundingChrome(false);
+      {
+        const takeaway = $('takeaway');
+        const briefEl = $('briefbody');
+        if(takeaway){ takeaway.hidden = true; takeaway.textContent = ''; }
+        if(briefEl) briefEl.innerHTML = '';
+      }
+      renderInfo(null);
+      $('editor').placeholder = '';
+      renderQueue();
+      return;
+    }
     setFoundingChrome(true);  // so renderQueue can show the founding empty-state
     {
       const takeaway = $('takeaway');
       const briefEl = $('briefbody');
       if(takeaway){ takeaway.hidden = true; takeaway.textContent = ''; }
-      if(briefEl) briefEl.innerHTML = '<span class="muted">Answer the curator in the agent pane. When ready, use Draft Proposal ✓ — then Found Desk.</span>';
+      if(briefEl) briefEl.innerHTML = '';
     }
     renderInfo(null);
-    $('editor').placeholder = 'founding interview — work in the agent pane on the right';
+    $('editor').placeholder = '';
     renderQueue();
     enterInterview({resume: ivst.status === 'interviewing'});
     return;
