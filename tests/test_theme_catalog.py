@@ -168,6 +168,182 @@ class ThemeCatalog(unittest.TestCase):
                 ids = theme_catalog.list_theme_ids()
                 self.assertIn("unit-test-theme", ids)
 
+    def test_install_user_pack_rejects_bad_payloads(self):
+        with self.assertRaises(ValueError):
+            theme_catalog.install_user_pack(["not", "an", "object"])
+        base = theme_catalog.load_theme("kettle")
+        bad_id = {
+            "schema_version": 1,
+            "id": "bad id!",
+            "label": "Nope",
+            "dark": base["dark"],
+            "light": base["light"],
+        }
+        with self.assertRaises(ValueError):
+            theme_catalog.install_user_pack(bad_id)
+
+    def test_validate_pack_mode_errors(self):
+        base = theme_catalog.load_theme("kettle")
+        cases = [
+            ({"schema_version": 2, "id": "x", "label": "x",
+              "dark": base["dark"], "light": base["light"]},
+             "unsupported schema_version"),
+            ({"schema_version": 1, "id": "", "label": "x",
+              "dark": base["dark"], "light": base["light"]},
+             "id and label"),
+            ({"schema_version": 1, "id": "x", "label": "x",
+              "dark": base["dark"]},
+             "missing light"),
+            ({"schema_version": 1, "id": "x", "label": "x",
+              "dark": {**base["dark"], "ansi": ["#000000"] * 15},
+              "light": base["light"]},
+             "ansi must be 16"),
+            ({"schema_version": 1, "id": "x", "label": "x",
+              "dark": {**base["dark"], "ansi": ["red"] + ["#000000"] * 15},
+              "light": base["light"]},
+             "#RRGGBB"),
+            ({"schema_version": 1, "id": "x", "label": "x",
+              "dark": {**base["dark"], "iface": "nope"},
+              "light": base["light"]},
+             "iface must be an object"),
+            ({"schema_version": 1, "id": "x", "label": "x",
+              "dark": {**base["dark"], "iface": {"bg": 99}},
+              "light": base["light"]},
+             "must be 0–15"),
+        ]
+        for pack, needle in cases:
+            with self.subTest(needle=needle):
+                with self.assertRaises(ValueError) as ctx:
+                    theme_catalog.validate_pack(pack)
+                self.assertIn(needle, str(ctx.exception))
+
+    def test_read_json_rejects_non_object(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "arr.json"
+            path.write_text("[1, 2]", encoding="utf-8")
+            with self.assertRaises(ValueError):
+                theme_catalog._read_json(path)
+
+    def test_active_theme_id_from_settings(self):
+        self.assertEqual(
+            theme_catalog.active_theme_id_from_settings(None),
+            "kettle",
+        )
+        self.assertEqual(
+            theme_catalog.active_theme_id_from_settings({"builtinTheme": "nord"}),
+            "nord",
+        )
+        self.assertEqual(
+            theme_catalog.active_theme_id_from_settings({"theme": "tokyo-night"}),
+            "tokyo-night",
+        )
+
+    def test_prefer_dark_mode_env(self):
+        with mock.patch.dict("os.environ", {"KETTLE_THEME_MODE": "light"}):
+            self.assertFalse(theme_catalog.prefer_dark_mode())
+        with mock.patch.dict("os.environ", {"KETTLE_THEME_MODE": "day"}):
+            self.assertFalse(theme_catalog.prefer_dark_mode())
+        with mock.patch.dict("os.environ", {"KETTLE_THEME_MODE": "dark"}):
+            self.assertTrue(theme_catalog.prefer_dark_mode())
+        with mock.patch.dict("os.environ", {}, clear=False):
+            # Without env override, non-darwin defaults to dark.
+            env = {k: v for k, v in __import__("os").environ.items()
+                   if k != "KETTLE_THEME_MODE"}
+            with mock.patch.dict("os.environ", env, clear=True):
+                with mock.patch.object(theme_catalog.sys, "platform", "linux"):
+                    self.assertTrue(theme_catalog.prefer_dark_mode())
+
+    def test_user_themes_dir_env_and_platforms(self):
+        with tempfile.TemporaryDirectory() as td:
+            custom = Path(td) / "themes"
+            with mock.patch.dict("os.environ", {"KETTLE_THEMES_DIR": str(custom)}):
+                self.assertEqual(theme_catalog.user_themes_dir(), custom)
+        with mock.patch.dict("os.environ", {}, clear=False):
+            env = {k: v for k, v in __import__("os").environ.items()
+                   if k not in {"KETTLE_THEMES_DIR", "XDG_CONFIG_HOME", "APPDATA"}}
+            with mock.patch.dict("os.environ", env, clear=True):
+                with mock.patch.object(theme_catalog.sys, "platform", "linux"):
+                    path = theme_catalog.user_themes_dir()
+                    self.assertTrue(str(path).endswith("kettle/themes"))
+                with mock.patch.object(theme_catalog.sys, "platform", "darwin"):
+                    path = theme_catalog.user_themes_dir()
+                    self.assertIn("Application Support", str(path))
+                with mock.patch.object(theme_catalog.sys, "platform", "win32"):
+                    with mock.patch.dict("os.environ", {"APPDATA": "/appdata"}):
+                        path = theme_catalog.user_themes_dir()
+                        self.assertEqual(path, Path("/appdata/Kettle/themes"))
+
+    def test_load_theme_falls_back_to_default(self):
+        with tempfile.TemporaryDirectory() as td:
+            with mock.patch.object(theme_catalog, "user_themes_dir",
+                                   return_value=Path(td)):
+                pack = theme_catalog.load_theme("does-not-exist-xyz")
+        self.assertEqual(pack["id"], "kettle")
+
+    def test_ansi_colors_and_syntax_table(self):
+        pack = theme_catalog.load_theme("kettle")
+        dark = theme_catalog.ansi_colors(pack, dark=True)
+        light = theme_catalog.ansi_colors(pack, dark=False)
+        self.assertEqual(len(dark), 16)
+        self.assertNotEqual(dark[0], light[7])  # paper vs ink typically differ
+        table = theme_catalog.syntax_color_table(pack, dark=True)
+        self.assertIn("keyword", table)
+        self.assertTrue(table["keyword"].startswith("#"))
+        # Unknown role falls back through SYNTAX_ROLE_DEFAULTS → fg.
+        self.assertEqual(
+            theme_catalog.resolve_role_hex(pack, "not-a-real-role", dark=True),
+            theme_catalog.resolve_role_hex(pack, "fg", dark=True),
+        )
+
+    def test_catalog_skips_broken_user_packs(self):
+        with tempfile.TemporaryDirectory() as td:
+            udir = Path(td)
+            (udir / "broken.json").write_text('{"id": "broken"}', encoding="utf-8")
+            with mock.patch.object(theme_catalog, "user_themes_dir", return_value=udir):
+                cat = theme_catalog.catalog_payload(full=False)
+            ids = [t["id"] for t in cat["themes"]]
+            self.assertNotIn("broken", ids)
+            self.assertIn("kettle", ids)
+
+    def test_list_theme_ids_falls_back_when_index_corrupt(self):
+        with tempfile.TemporaryDirectory() as td:
+            bdir = Path(td) / "bundled"
+            bdir.mkdir()
+            (bdir / "index.json").write_text("{not json", encoding="utf-8")
+            # Minimal valid pack so glob fallback has something to list.
+            base = theme_catalog.load_theme("kettle")
+            (bdir / "solo.json").write_text(json.dumps({
+                "schema_version": 1, "id": "solo", "label": "Solo",
+                "dark": base["dark"], "light": base["light"],
+            }), encoding="utf-8")
+            with mock.patch.object(theme_catalog, "bundled_themes_dir",
+                                   return_value=bdir):
+                with mock.patch.object(theme_catalog, "user_themes_dir",
+                                       return_value=Path(td) / "empty-user"):
+                    ids = theme_catalog.list_theme_ids()
+            self.assertEqual(ids, ["solo"])
+
+    def test_default_theme_id_falls_back_on_bad_index(self):
+        with tempfile.TemporaryDirectory() as td:
+            bdir = Path(td)
+            (bdir / "index.json").write_text("{", encoding="utf-8")
+            with mock.patch.object(theme_catalog, "bundled_themes_dir",
+                                   return_value=bdir):
+                self.assertEqual(theme_catalog.default_theme_id(), "kettle")
+
+    def test_pack_to_web_merges_custom_opacity(self):
+        pack = theme_catalog.load_theme("kettle")
+        pack["dark"] = {
+            **pack["dark"],
+            "ifaceOpacity": {"muted": 40},
+            "slotOpacity": {"agent": 33},
+        }
+        web = theme_catalog.pack_to_web(pack)
+        self.assertEqual(web["dark"]["ifaceOpacity"]["muted"], 40)
+        self.assertEqual(web["dark"]["slotOpacity"]["agent"], 33)
+        # Untouched defaults remain.
+        self.assertEqual(web["dark"]["ifaceOpacity"]["panel"], 92)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
