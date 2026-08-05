@@ -32,6 +32,42 @@ class ContractIdentity(unittest.TestCase):
         for key in ("api_version", "desk_schema_version"):
             self.assertIs(type(identity[key]), int)
             self.assertGreaterEqual(identity[key], 0)
+        self.assertEqual(identity["api_version"], kettle_contract.API_VERSION)
+        self.assertEqual(
+            identity["desk_schema_version"], kettle_contract.DESK_SCHEMA_VERSION
+        )
+
+    def test_core_version_falls_back_to_distribution_metadata(self):
+        # Corrupt/missing pyproject → installed dist metadata, then "unknown".
+        with mock.patch.object(kettle_contract, "Path") as path_cls:
+            fake = mock.Mock()
+            fake.is_file.return_value = False
+            path_cls.return_value.with_name.return_value = fake
+            with mock.patch.object(
+                kettle_contract.importlib.metadata,
+                "version",
+                return_value="9.9.9",
+            ):
+                self.assertEqual(kettle_contract.core_version(), "9.9.9")
+            with mock.patch.object(
+                kettle_contract.importlib.metadata,
+                "version",
+                side_effect=kettle_contract.importlib.metadata.PackageNotFoundError,
+            ):
+                self.assertEqual(kettle_contract.core_version(), "unknown")
+
+    def test_core_version_ignores_unreadable_pyproject(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bad = Path(tmp) / "pyproject.toml"
+            bad.write_text("not = valid [ toml", encoding="utf-8")
+            with mock.patch.object(kettle_contract, "Path") as path_cls:
+                path_cls.return_value.with_name.return_value = bad
+                with mock.patch.object(
+                    kettle_contract.importlib.metadata,
+                    "version",
+                    return_value="1.2.3",
+                ):
+                    self.assertEqual(kettle_contract.core_version(), "1.2.3")
 
     def test_family_parser_accepts_both_manifest_key_styles(self):
         with tempfile.TemporaryDirectory() as tmp:
