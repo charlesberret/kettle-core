@@ -5,6 +5,16 @@ and Desk schema have their own integer contract versions.
 
 ## Unreleased
 
+### Added
+
+- `kettle doctor` expands beyond PATH / `py-modules` mapping: Python + package install
+  mode, active curator CLI resolve (`curator.provider_readiness`), registry readability,
+  desk integrity (`queue.json` parse + desk dirs), legacy `.setsweep/` migration hints,
+  runtime discovery (`~/.cache/kettle/server.json`), and a localhost `/api/ping` when
+  discovery lists a non-conventional port (never binds or probes `4242`).
+- CI `package-install` job: build wheel, audit flat-layout contents, clean-venv wheel
+  install smoke, and pipx-style isolated install smoke on Python 3.11 and 3.14.
+
 ### Changed
 
 - Renamed the product and canonical commands from Setsweep to Kettle.
