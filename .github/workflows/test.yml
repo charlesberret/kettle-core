@@ -137,8 +137,10 @@ jobs:
         run: |
           /tmp/kettle-wheel-venv/bin/python - <<'PY'
           import json
+          import os
           import socket
           import subprocess
+          import tempfile
           import time
           import urllib.request
           from pathlib import Path
@@ -149,15 +151,25 @@ jobs:
           sock.close()
           assert port != 4242
 
-          discovery = Path.home() / ".cache/kettle/server.json"
-          if discovery.is_file():
-              discovery.unlink()
+          # Isolated registry/settings so ping's curator heal can write settings.json.
+          tmp = Path(tempfile.mkdtemp(prefix="kettle-wheel-smoke-"))
+          registry = tmp / "projects.json"
+          registry.write_text('{"projects": []}\n', encoding="utf-8")
+          env = os.environ.copy()
+          env["DESK_PROJECTS"] = str(registry)
+          env["HOME"] = str(tmp / "home")
+          Path(env["HOME"], ".cache/kettle").mkdir(parents=True)
+          discovery = Path(env["HOME"]) / ".cache/kettle/server.json"
 
           proc = subprocess.Popen(
-              ["/tmp/kettle-wheel-venv/bin/kettle", "--web", "--port", str(port), "--no-open"],
-              stdout=subprocess.PIPE,
-              stderr=subprocess.STDOUT,
+              [
+                  "/tmp/kettle-wheel-venv/bin/kettle",
+                  "--web", "--port", str(port), "--no-open", "--replace",
+              ],
+              stdout=subprocess.DEVNULL,
+              stderr=subprocess.PIPE,
               text=True,
+              env=env,
           )
           try:
               base = f"http://127.0.0.1:{port}"
@@ -165,9 +177,16 @@ jobs:
               token = None
               last_err = None
               while time.time() < deadline:
+                  if proc.poll() is not None:
+                      err = proc.stderr.read() if proc.stderr else ""
+                      raise AssertionError(
+                          f"server exited early rc={proc.returncode}: {err}"
+                      )
                   try:
                       if discovery.is_file():
-                          token = json.loads(discovery.read_text(encoding="utf-8")).get("token")
+                          token = json.loads(
+                              discovery.read_text(encoding="utf-8")
+                          ).get("token")
                       if not token:
                           raise RuntimeError("discovery token not ready")
                       req = urllib.request.Request(
@@ -181,8 +200,7 @@ jobs:
                       last_err = e
                       time.sleep(0.2)
               else:
-                  out = proc.stdout.read() if proc.stdout else ""
-                  raise AssertionError(f"server did not become ready: {last_err}\n{out}")
+                  raise AssertionError(f"server did not become ready: {last_err}")
 
               assert ping.get("app") in {"kettle", "setsweep"}, ping
               assert ping.get("version"), ping

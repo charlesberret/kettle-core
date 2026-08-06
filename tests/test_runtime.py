@@ -597,7 +597,7 @@ class TestRuntimeSpawn(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as d:
             rt = Runtime("claude", Path(d) / "sessions")
-            with mock.patch("runtime.subprocess.Popen", return_value=FakeProc()):
+            with mock.patch("kettle.runtime.subprocess.Popen", return_value=FakeProc()):
                 evs = list(rt.spawn("hi", cwd=d))
             kinds = [e["t"] for e in evs]
             self.assertEqual(kinds[0], "model")
@@ -627,7 +627,7 @@ class TestRuntimeSpawn(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as d:
             rt = Runtime("claude", Path(d))
-            with mock.patch("runtime.subprocess.Popen", return_value=FakeProc()):
+            with mock.patch("kettle.runtime.subprocess.Popen", return_value=FakeProc()):
                 evs = list(rt.spawn("hi", cwd=d, session_id="pre"))
             self.assertTrue(any(
                 e["t"] == "error" and "exited 2" in e["s"] for e in evs

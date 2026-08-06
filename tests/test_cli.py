@@ -116,7 +116,7 @@ class CliTests(unittest.TestCase):
                 "status": "pending", "brief": "Check it", "ask": "ok?",
             }],
         }))
-        with mock.patch("tui_editor.edit_file", return_value=0) as edit:
+        with mock.patch("kettle.tui_editor.edit_file", return_value=0) as edit:
             code, out, err = self.run_cli(["open", proj["id"], "draft"])
         self.assertEqual((code, err), (0, ""))
         self.assertIn("built-in editor", out)
@@ -132,7 +132,7 @@ class CliTests(unittest.TestCase):
             "entries": [{"id": "draft", "path": str(target), "status": "pending"}],
         }))
         with mock.patch.dict(os.environ, {"EDITOR": "true"}), \
-                mock.patch("cli.subprocess.call", return_value=0) as call:
+                mock.patch("kettle.cli.subprocess.call", return_value=0) as call:
             code, out, _ = self.run_cli(["open", proj["id"], "draft", "--external"])
         self.assertEqual(code, 0)
         self.assertIn("opening", out)
@@ -148,8 +148,8 @@ class CliTests(unittest.TestCase):
             "entries": [{"id": "draft", "path": str(target), "status": "pending"}],
         }))
         # edit_file returns 3 → no tty → external fallback
-        with mock.patch("tui_editor.edit_file", return_value=3), \
-                mock.patch("cli.subprocess.call", return_value=0) as call:
+        with mock.patch("kettle.tui_editor.edit_file", return_value=3), \
+                mock.patch("kettle.cli.subprocess.call", return_value=0) as call:
             code, out, err = self.run_cli(["edit", proj["id"], "draft"])
         self.assertEqual(code, 0)
         self.assertIn("no tty", err)
@@ -326,7 +326,7 @@ class CliTests(unittest.TestCase):
         )
         by_name = {r["name"]: r for r in rows}
         self.assertTrue(by_name["py-modules-list"]["ok"])
-        self.assertIn("PACKAGE_MODULES", by_name["py-modules-list"]["detail"])
+        self.assertIn("caller", by_name["py-modules-list"]["detail"])
         self.assertTrue(by_name["install-mapping"]["ok"])
 
     def test_install_doctor_green_when_canonical_and_mapped(self):
