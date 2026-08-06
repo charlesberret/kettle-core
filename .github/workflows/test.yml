@@ -120,13 +120,14 @@ jobs:
           python -m venv /tmp/kettle-pipx-style
           /tmp/kettle-pipx-style/bin/pip install -U pip
           /tmp/kettle-pipx-style/bin/pip install dist/kettle-*.whl
-          PATH="/tmp/kettle-pipx-style/bin:$PATH" hash -r
-          which kettle
+          export PATH="/tmp/kettle-pipx-style/bin:$PATH"
+          hash -r
+          command -v kettle
           kettle --help >/dev/null
           python - <<'PY'
-          import subprocess, sys
+          import shutil
           # Ensure the resolving kettle is the isolated one, not the checkout.
-          out = subprocess.check_output(["which", "kettle"], text=True).strip()
+          out = shutil.which("kettle") or ""
           assert out.startswith("/tmp/kettle-pipx-style/"), out
           print("pipx-style kettle:", out)
           PY
