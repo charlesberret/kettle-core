@@ -17,8 +17,10 @@ Source: [github.com/charlesberret/kettle-core](https://github.com/charlesberret/
 | PATH shim (exactly one) | e.g. `~/.local/bin/kettle` → `~/.kettle-venv/bin/kettle` |
 
 `kettle doctor` reports which `kettle` wins on `PATH`, whether it resolves to the
-canonical venv, and whether every `py-modules` entry is importable. It never repairs and
-never deletes PATH entries.
+canonical venv, whether every `py-modules` entry is importable, registry/desk integrity,
+active curator CLI resolve, runtime discovery, and a localhost ping when discovery lists
+a non-conventional port. It never repairs, never deletes PATH entries, and never binds
+or probes port `4242`.
 
 ### Quick start — CLI + browser
 
@@ -52,7 +54,10 @@ name even though the file is in the tree:
 ```
 
 `kettle doctor` checks that every name in `py-modules` is importable and present in the
-installed distribution's top-level list.
+installed distribution's top-level list. It also prints Python/package version, install
+mode (editable vs wheel), provider CLI readiness, registry/desk integrity (including
+legacy `.setsweep/` hints), and server discovery status. Failing rows point at this file
+or `ARCHITECTURE.md`. Exit status is nonzero when any check fails.
 
 ### PATH hygiene (you run these; agents never delete PATH entries)
 
@@ -90,7 +95,7 @@ kettle open    <project> <id>   open the file in $EDITOR
 kettle chat    <project> [id]   talk to the curator
 kettle lineage <project>        who edited what
 kettle bind    <project>        add lineage directive to CLAUDE.md
-kettle doctor                   install health
+kettle doctor                   install + runtime health
 kettle sweep-status <project>   CLOSE readiness
 kettle sweep-close  <project>   quiet mechanical CLOSE
 kettle sweep-archive <project>  archive queue entries
@@ -99,6 +104,18 @@ kettle egress-status <project>  list staged egress memos
 ```
 
 Full help: `kettle --help` / `kettle <cmd> --help`.
+
+## Wheel / pipx installs (CI-verified; limited)
+
+CI builds a wheel and installs it into a clean venv (and a pipx-style isolated venv) on
+supported Python versions. That proves console scripts and flat `py-modules` import
+cleanly. **Editable install remains the supported path for real use** — the current flat
+layout does **not** ship `static/` or `kits/` inside the wheel, so a non-editable install
+cannot serve the browser UI or load kit prompts from package data.
+
+Follow-up (package restructure under `kettle/` with bundled resources): see
+[`docs/briefs/11-package-restructure.md`](./docs/briefs/11-package-restructure.md) and
+the Installation section of [`ROADMAP.md`](./ROADMAP.md).
 
 ## Auth — Kettle stores no key
 
@@ -135,6 +152,9 @@ do not race. Durable charter/memory files under `.kettle/` may sync normally. Se
 
 - **Canonical install is `~/.kettle-venv` with one PATH shim** — see above.
 - **Editable install (`-e`) is the supported mode.** It keeps `static/` resolving from the
-  source tree. A non-editable wheel would need a package restructure — deferred.
+  source tree. Wheel/pipx CI verifies import + console-script smoke only until the
+  package restructure lands.
 - **Reinstall after every `py-modules` change** — see the reinstall rule and the comment
   next to `py-modules` in `pyproject.toml`.
+- **`kettle doctor` is read-only** — it never creates desks, rewrites settings, or probes
+  port `4242`.
