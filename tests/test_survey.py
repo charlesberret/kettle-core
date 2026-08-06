@@ -5,8 +5,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import kits
-import survey
+import kettle.kits as kits
+import kettle.survey as survey
 
 
 class TestBuildSurvey(unittest.TestCase):

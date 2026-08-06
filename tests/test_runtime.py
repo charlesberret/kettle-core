@@ -16,8 +16,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
-import runtime
-from runtime import (
+import kettle.runtime as runtime
+from kettle.runtime import (
     UsageMeter, SessionLedger, Runtime, build_cmd, build_argv, normalize,
     tools_argv, system_append_argv, effort_argv, session_name_argv,
 )

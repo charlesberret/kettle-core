@@ -11,7 +11,7 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
-import server
+from . import server
 
 
 def _entry_comment(e: dict) -> str:
@@ -249,7 +249,7 @@ def publish_approval_egress(proj: dict, entries: list[dict] | None = None) -> di
     Lists approved entries (cleared) and remaining pending entries (still blocked).
     No-op (returns published=False) when there is nothing useful to say.
     """
-    import egress as _egress
+    from . import egress as _egress
 
     q = server.load_queue(proj)
     all_entries = list(entries if entries is not None else (q.get("entries") or []))

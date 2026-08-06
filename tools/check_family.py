@@ -57,7 +57,7 @@ def core_version(core: Repo) -> str:
 
 
 def contract_versions(core: Repo) -> tuple[int, int]:
-    path = core.path / "kettle_contract.py"
+    path = core.path / "kettle" / "kettle_contract.py"
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     found: dict[str, int] = {}
     for node in tree.body:

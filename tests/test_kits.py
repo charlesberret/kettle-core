@@ -4,13 +4,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import kits
+import kettle.kits as kits
 
 
 class KitsTest(unittest.TestCase):
     def setUp(self):
         # the real shipped kits, beside this test
-        self.shipped = Path(__file__).resolve().parents[1] / "kits"
+        self.shipped = Path(__file__).resolve().parents[1] / "kettle" / "kits"
 
     # ---- defaults ----
 
@@ -182,7 +182,7 @@ class RegisterTest(unittest.TestCase):
     """Registration + scope helpers (kit assignment is the user's explicit pick now —
     there is no auto-detection)."""
     def setUp(self):
-        import server
+        import kettle.server as server
         self.server = server
         self._home = server.HOME
         self.tmp = Path(tempfile.mkdtemp())

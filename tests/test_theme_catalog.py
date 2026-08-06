@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-import theme_catalog
+import kettle.theme_catalog as theme_catalog
 
 
 class ThemeCatalog(unittest.TestCase):

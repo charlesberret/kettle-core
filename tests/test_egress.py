@@ -9,8 +9,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import egress
-import server
+import kettle.egress as egress
+import kettle.server as server
 
 
 class EgressTests(unittest.TestCase):
