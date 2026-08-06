@@ -6,9 +6,9 @@ import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from unittest import mock
 
-import cli
-import server
-import kettle_main
+import kettle.cli as cli
+import kettle.server as server
+import kettle.kettle_main as kettle_main
 
 
 class EntrypointTest(unittest.TestCase):

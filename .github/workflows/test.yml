@@ -51,9 +51,7 @@ jobs:
           python -m coverage report >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
 
-  # Wheel / pipx-style install (flat py-modules layout). Editable remains the
-  # supported contributor path; a full package restructure (bundled static/kits)
-  # is still required before a wheel can serve the browser UI — see INSTALL.md.
+  # Wheel / pipx-style install with bundled static/ and kits/ package data.
   package-install:
     strategy:
       fail-fast: false
@@ -71,7 +69,7 @@ jobs:
           python -m pip install -U pip build
           python -m build --wheel --outdir dist
           ls -la dist
-      - name: Wheel contents audit (flat layout expectations)
+      - name: Wheel contents audit (package layout + bundled resources)
         run: |
           python - <<'PY'
           import zipfile
@@ -84,29 +82,50 @@ jobs:
           assert len(dist_infos) == 1, dist_infos
           info = dist_infos[0]
           required = {
-              "cli.py", "server.py", "kettle_main.py", "curator.py",
+              "kettle/__init__.py",
+              "kettle/cli.py",
+              "kettle/server.py",
+              "kettle/kettle_main.py",
+              "kettle/curator.py",
+              "kettle/static/index.html",
+              "kettle/kits/_base.md",
+              "kettle/projects.example.json",
               f"{info}/entry_points.txt",
               f"{info}/top_level.txt",
           }
           missing = sorted(r for r in required if r not in names)
           assert not missing, f"wheel missing {missing}"
-          # Documented follow-up (brief 11): static/ and kits/ are not packaged yet.
-          leaked = [n for n in names if n.startswith("static/") or n.startswith("kits/")]
-          assert not leaked, f"unexpected packaged resources (restructure landed?): {leaked}"
-          print("wheel ok:", wheel.name, f"({len(names)} files)")
+          # Bundled resources must ship under the kettle package prefix.
+          static = [n for n in names if n.startswith("kettle/static/")]
+          kits = [n for n in names if n.startswith("kettle/kits/")]
+          assert static, "wheel missing kettle/static/ package data"
+          assert kits, "wheel missing kettle/kits/ package data"
+          print("wheel ok:", wheel.name, f"({len(names)} files; static={len(static)} kits={len(kits)})")
           PY
       - name: Clean venv wheel install + console script smoke
         run: |
           python -m venv /tmp/kettle-wheel-venv
           /tmp/kettle-wheel-venv/bin/pip install -U pip
           /tmp/kettle-wheel-venv/bin/pip install dist/kettle-*.whl
-          /tmp/kettle-wheel-venv/bin/kettle --help | head -n 5
+          /tmp/kettle-wheel-venv/bin/kettle --help | head -n 8
           /tmp/kettle-wheel-venv/bin/python - <<'PY'
           import importlib
-          for name in ("cli", "server", "curator", "kettle_main", "kettle_contract"):
+          import kettle
+          for name in (
+              "kettle.cli",
+              "kettle.server",
+              "kettle.curator",
+              "kettle.kettle_main",
+              "kettle.kettle_contract",
+          ):
               importlib.import_module(name)
-          import kettle_contract
+          from kettle import kettle_contract
+          assert kettle.__version__
+          assert kettle_contract.core_version() == kettle.__version__
           print("core_version", kettle_contract.core_version())
+          from importlib.resources import files
+          assert files("kettle").joinpath("static/index.html").is_file()
+          assert files("kettle").joinpath("kits/_base.md").is_file()
           PY
           # doctor must run (exit 0/1 depending on PATH/provider); never crash
           set +e
@@ -114,6 +133,83 @@ jobs:
           code=$?
           set -e
           test "$code" -eq 0 -o "$code" -eq 1
+      - name: Wheel server smoke (ephemeral port; never 4242)
+        run: |
+          /tmp/kettle-wheel-venv/bin/python - <<'PY'
+          import json
+          import socket
+          import subprocess
+          import time
+          import urllib.request
+          from pathlib import Path
+
+          sock = socket.socket()
+          sock.bind(("127.0.0.1", 0))
+          port = sock.getsockname()[1]
+          sock.close()
+          assert port != 4242
+
+          discovery = Path.home() / ".cache/kettle/server.json"
+          if discovery.is_file():
+              discovery.unlink()
+
+          proc = subprocess.Popen(
+              ["/tmp/kettle-wheel-venv/bin/kettle", "--web", "--port", str(port), "--no-open"],
+              stdout=subprocess.PIPE,
+              stderr=subprocess.STDOUT,
+              text=True,
+          )
+          try:
+              base = f"http://127.0.0.1:{port}"
+              deadline = time.time() + 15
+              token = None
+              last_err = None
+              while time.time() < deadline:
+                  try:
+                      if discovery.is_file():
+                          token = json.loads(discovery.read_text(encoding="utf-8")).get("token")
+                      if not token:
+                          raise RuntimeError("discovery token not ready")
+                      req = urllib.request.Request(
+                          base + "/api/ping",
+                          headers={"X-Kettle-Token": token},
+                      )
+                      with urllib.request.urlopen(req, timeout=0.5) as resp:
+                          ping = json.loads(resp.read())
+                      break
+                  except Exception as e:  # noqa: BLE001
+                      last_err = e
+                      time.sleep(0.2)
+              else:
+                  out = proc.stdout.read() if proc.stdout else ""
+                  raise AssertionError(f"server did not become ready: {last_err}\n{out}")
+
+              assert ping.get("app") in {"kettle", "setsweep"}, ping
+              assert ping.get("version"), ping
+              with urllib.request.urlopen(base + "/", timeout=2) as resp:
+                  html = resp.read()
+              assert b"<html" in html.lower() or b"<!doctype" in html.lower(), html[:200]
+              req = urllib.request.Request(
+                  base + "/api/kits",
+                  headers={"X-Kettle-Token": token},
+              )
+              with urllib.request.urlopen(req, timeout=2) as resp:
+                  kits = json.loads(resp.read())
+              kinds = {k.get("_key") or k.get("kind") for k in kits.get("kits", [])}
+              assert len(kits.get("kits", [])) >= 5, kits
+              print(
+                  "wheel server smoke ok",
+                  ping.get("version"),
+                  "kits",
+                  sorted(x for x in kinds if x),
+              )
+          finally:
+              proc.terminate()
+              try:
+                  proc.wait(timeout=5)
+              except subprocess.TimeoutExpired:
+                  proc.kill()
+          PY
       - name: pipx-style isolated install smoke
         run: |
           # Mimic pipx: isolated venv + console scripts on PATH, no source checkout.

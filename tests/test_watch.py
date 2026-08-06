@@ -13,7 +13,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
-import kettle_watch as w
+import kettle.kettle_watch as w
 
 
 class ResolveIntakeTest(unittest.TestCase):

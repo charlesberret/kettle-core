@@ -12,7 +12,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-CORE_JS = ROOT / "static" / "ui-copy.js"
+CORE_JS = ROOT / "kettle" / "static" / "ui-copy.js"
 VSCODE_TS = ROOT.parent / "kettle-vscode" / "src" / "uiCopy.ts"
 
 # Keys every sitting surface must define
