@@ -19,8 +19,10 @@ import difflib
 import json
 import math
 import os
+import hmac
 import queue
 import re
+import secrets
 import shutil
 import signal
 import subprocess
@@ -106,9 +108,11 @@ SETTINGS_PATH = PROJECTS_PATH.parent / "settings.json"
 CLAUDE = shutil.which("claude") or str(HOME / ".local/bin/claude")
 SERVER_PORT = None  # bound port, recorded at startup for the admin report
 SERVER_STARTED = None  # ISO timestamp, set at bind
+SERVER_TOKEN = None  # per-boot auth token; required on every /api/ request
 DEFAULT_PORT = 4242  # one port for native app and web mode alike — a bookmarked
                      # tab always reaches the live server, never a stale orphan
-RUNTIME_PATH = HOME / ".cache/kettle/server.json"  # informational record of the bind
+RUNTIME_PATH = HOME / ".cache/kettle/server.json"  # discovery: port + token (mode 0600)
+TOKEN_HEADER = "X-Kettle-Token"
 QUEUE_LOCK = threading.Lock()
 SETTINGS_LOCK = threading.Lock()
 PROJECTS_LOCK = threading.Lock()
@@ -1324,7 +1328,7 @@ def _project_debug(proj: dict, *, fleet_panels: bool = False) -> dict:
         info["chatlog"] = (rd / "chatlog.json").exists()
         info["sessions"] = (rd / "sessions").is_dir()
     except Exception as e:  # noqa: BLE001 — report, never raise
-        info["error"] = repr(e)
+        info["error"] = str(e)
     # Optional persona-family progress: only when fleet_panels is on *and*
     # settings.admin.persona_family_relpath is set (no product-default personal path).
     if fleet_panels:
@@ -1407,6 +1411,53 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def send_err(self, status: int, error: str, code: str):
+        """Uniform error envelope: {error, code} with str messages (never repr)."""
+        self.send_json({"error": error, "code": code}, status)
+
+    @staticmethod
+    def _host_allowed(host: str) -> bool:
+        h = (host or "").strip().lower()
+        if h in ("127.0.0.1", "localhost"):
+            return True
+        if h.startswith("127.0.0.1:") or h.startswith("localhost:"):
+            _, _, port_s = h.partition(":")
+            return port_s.isdigit() and 1 <= int(port_s) <= 65535
+        return False
+
+    def _origin_allowed(self, origin: str) -> bool:
+        port = SERVER_PORT or DEFAULT_PORT
+        allowed = {
+            f"http://127.0.0.1:{port}",
+            f"http://localhost:{port}",
+        }
+        return origin.strip() in allowed
+
+    def check_request_guards(self, *, require_token: bool) -> bool:
+        """Host + Origin (+ optional token) gates. False ⇒ response already sent."""
+        if not self._host_allowed(self.headers.get("Host", "")):
+            self.send_err(403, "invalid Host header", "bad_host")
+            return False
+        origin = self.headers.get("Origin")
+        if origin is not None and origin != "" and not self._origin_allowed(origin):
+            self.send_err(403, "cross-origin request blocked", "bad_origin")
+            return False
+        if require_token:
+            got = self.headers.get(TOKEN_HEADER)
+            if (
+                not SERVER_TOKEN
+                or not isinstance(got, str)
+                or not hmac.compare_digest(got, SERVER_TOKEN)
+            ):
+                self.send_err(
+                    403,
+                    "missing or invalid X-Kettle-Token "
+                    "(read token from ~/.cache/kettle/server.json)",
+                    "auth",
+                )
+                return False
+        return True
+
     def read_body(self) -> dict:
         n = min(int(self.headers.get("Content-Length", 0)), 10_000_000)
         return json.loads(self.rfile.read(n) or b"{}")
@@ -1431,9 +1482,19 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         url = urlparse(self.path)
         qs = parse_qs(url.query)
+        api = url.path.startswith("/api/")
+        if not self.check_request_guards(require_token=api):
+            return
         try:
             if url.path in ("/", "/index.html"):
                 body = (STATIC / "index.html").read_bytes()
+                # Inject per-boot token so same-origin UI can authorize /api/ calls.
+                if SERVER_TOKEN:
+                    meta = (
+                        f'<meta name="kettle-token" content="{SERVER_TOKEN}">'
+                    ).encode()
+                    if b'<meta name="kettle-token"' not in body:
+                        body = body.replace(b"<head>", b"<head>\n" + meta, 1)
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
                 # Sitting UI iterates quickly — never let Electron/browser keep a stale shell.
@@ -1535,7 +1596,10 @@ class Handler(BaseHTTPRequestHandler):
                 eid = qs.get("id", [None])[0]
                 ent = next((x for x in load_queue(proj).get("entries", [])
                             if str(x.get("id")) == str(eid)), None)
-                text = entry_diff_text(proj, ent) if ent else ""
+                if ent is None:
+                    self.send_err(404, f"unknown entry id: {eid}", "not_found")
+                    return
+                text = entry_diff_text(proj, ent)
                 # `text` is canonical; `diff` kept for older clients
                 self.send_json({"text": text, "diff": text})
             elif url.path == "/api/diffstat":
@@ -1543,7 +1607,10 @@ class Handler(BaseHTTPRequestHandler):
                 eid = qs.get("id", [None])[0]
                 ent = next((x for x in load_queue(proj).get("entries", [])
                             if str(x.get("id")) == str(eid)), None)
-                stat = entry_diffstat(proj, ent) if ent else None
+                if ent is None:
+                    self.send_err(404, f"unknown entry id: {eid}", "not_found")
+                    return
+                stat = entry_diffstat(proj, ent)
                 # `stat` is canonical; `diff` kept for older clients (same key, different type — avoid)
                 self.send_json({"stat": stat, "diff": stat})
             elif url.path == "/api/git/activity":
@@ -1595,16 +1662,18 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 self.send_json({"error": "not found"}, 404)
         except PermissionError as e:
-            self.send_json({"error": str(e)}, 403)
-        except FileNotFoundError:
-            self.send_json({"error": "file not found"}, 404)
+            self.send_err(403, str(e), "forbidden")
+        except FileNotFoundError as e:
+            self.send_err(404, str(e) or "file not found", "not_found")
         except KeyError as e:
-            self.send_json({"error": f"missing/unknown: {e}"}, 400)
+            self.send_err(400, f"missing/unknown: {e}", "bad_request")
         except Exception as e:  # noqa: BLE001
-            self.send_json({"error": repr(e)}, 500)
+            self.send_err(500, str(e), "internal")
 
     def do_POST(self):
         url = urlparse(self.path)
+        if not self.check_request_guards(require_token=url.path.startswith("/api/")):
+            return
         try:
             d = self.read_body()
             if url.path == "/api/save":
@@ -1765,12 +1834,16 @@ class Handler(BaseHTTPRequestHandler):
                 self.open_link(d)
             else:
                 self.send_json({"error": "not found"}, 404)
+        except json.JSONDecodeError as e:
+            self.send_err(400, str(e), "bad_json")
         except PermissionError as e:
-            self.send_json({"error": str(e)}, 403)
+            self.send_err(403, str(e), "forbidden")
+        except FileNotFoundError as e:
+            self.send_err(404, str(e) or "file not found", "not_found")
         except KeyError as e:
-            self.send_json({"error": f"missing/unknown: {e}"}, 400)
+            self.send_err(400, f"missing/unknown: {e}", "bad_request")
         except Exception as e:  # noqa: BLE001
-            self.send_json({"error": repr(e)}, 500)
+            self.send_err(500, str(e), "internal")
 
     # ---- the right-pane agent ----
     # ---- info-pane field edits (whitelist; never touches path/id/session) ----
@@ -2439,7 +2512,7 @@ class Handler(BaseHTTPRequestHandler):
                 cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
             )
         except Exception as exc:  # noqa: BLE001 — executable missing / spawn refused
-            self.send_json({"error": f"curator failed to start: {exc}"}, 500)
+            self.send_err(500, f"curator failed to start: {exc}", "internal")
             return
 
         # From this point the response belongs to the NDJSON stream. Any later failure is
@@ -2560,7 +2633,7 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as e:  # noqa: BLE001
             stop_process()
             if has_streamed:
-                emit({"t": "error", "s": repr(e)})
+                emit({"t": "error", "s": str(e)})
                 emit({"t": "done"})
         finally:
             if record_user_message is not None and cap["sid"]:
@@ -2594,26 +2667,49 @@ def _record_bind(port: int) -> None:
     """Stamp identity globals + ~/.cache/kettle/server.json after a successful bind.
 
     Shared by `start_server` (tests / daemon) and `main` (blocking sidecar / CLI web).
-    `/api/ping` is the authority; the cache file is informational for discovery.
+    Generates a per-boot token (mode 0600 discovery file). `/api/ping` remains the
+    identity authority; the cache also carries the token viewports must send.
     """
-    global SERVER_PORT, SERVER_STARTED
+    global SERVER_PORT, SERVER_STARTED, SERVER_TOKEN
     SERVER_PORT = port
     SERVER_STARTED = subprocess.run(
         ["date", "+%Y-%m-%dT%H:%M:%S%z"],
         capture_output=True, text=True,
     ).stdout.strip()
+    SERVER_TOKEN = secrets.token_urlsafe(32)
     try:
         RUNTIME_PATH.parent.mkdir(parents=True, exist_ok=True)
-        RUNTIME_PATH.write_text(json.dumps({
+        payload = {
             "pid": os.getpid(),
             "port": SERVER_PORT,
             "started": SERVER_STARTED,
             "url": f"http://127.0.0.1:{SERVER_PORT}/",
             "projects": str(PROJECTS_PATH),
             "settings": str(SETTINGS_PATH),
-        }))
+            "token": SERVER_TOKEN,
+        }
+        # Atomic write at mode 0600 so the token is not world-readable.
+        tmp = RUNTIME_PATH.with_name(RUNTIME_PATH.name + ".tmp")
+        fd = os.open(str(tmp), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(json.dumps(payload))
+        os.replace(tmp, RUNTIME_PATH)
+        try:
+            os.chmod(RUNTIME_PATH, 0o600)
+        except OSError:
+            pass
     except OSError:
         pass
+
+
+def _discovery_token() -> str | None:
+    """Token from the discovery file (for circuit-breaker ping of a live predecessor)."""
+    try:
+        data = json.loads(RUNTIME_PATH.read_text(encoding="utf-8"))
+        tok = data.get("token")
+        return tok if isinstance(tok, str) and tok else None
+    except (OSError, json.JSONDecodeError, TypeError, ValueError):
+        return None
 
 
 def start_server(port: int = 0) -> tuple[ThreadingHTTPServer, int]:
@@ -2627,8 +2723,11 @@ def start_server(port: int = 0) -> tuple[ThreadingHTTPServer, int]:
 def _ping_kettle(port: int, timeout: float = 0.8) -> dict | None:
     """Answer of /api/ping for Kettle or its transitional Setsweep predecessor."""
     try:
-        with urllib.request.urlopen(
-                f"http://127.0.0.1:{port}/api/ping", timeout=timeout) as r:
+        req = urllib.request.Request(f"http://127.0.0.1:{port}/api/ping")
+        tok = _discovery_token()
+        if tok:
+            req.add_header(TOKEN_HEADER, tok)
+        with urllib.request.urlopen(req, timeout=timeout) as r:
             j = json.loads(r.read())
             return j if j.get("app") in {"kettle", "setsweep"} else None
     except Exception:  # noqa: BLE001 — closed port, timeout, non-JSON: all mean "not ours"

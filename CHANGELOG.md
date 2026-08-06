@@ -34,6 +34,8 @@ and Desk schema have their own integer contract versions.
 
 - Registered-root file fencing, loopback-only serving, deterministic founding
   survey, and staged egress remain release invariants.
+- Localhost HTTP hardening: per-boot `X-Kettle-Token` (discovery file mode 0600),
+  Host/Origin rejection, and normalized `{error, code}` envelopes (`str(e)` only).
 
 ## 0.2.0
 
