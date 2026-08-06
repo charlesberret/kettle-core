@@ -7,11 +7,16 @@ and Desk schema have their own integer contract versions.
 
 ### Added
 
+- `kettle migrate`: dry-run-first migration of `.setsweep/` desks → `.kettle/` (and the
+  legacy Setsweep user registry when clearly applicable). Default is dry-run; pass
+  `--apply` to write. Refuses split desks (both directories present) so a project never
+  keeps two writable desks. See `INSTALL.md` § Migrating from Setsweep.
 - `kettle doctor` expands beyond PATH / package-module mapping: Python + package install
   mode, active curator CLI resolve (`curator.provider_readiness`), registry readability,
-  desk integrity (`queue.json` parse + desk dirs), legacy `.setsweep/` migration hints,
-  runtime discovery (`~/.cache/kettle/server.json`), and a localhost `/api/ping` when
-  discovery lists a non-conventional port (never binds or probes `4242`).
+  desk integrity (`queue.json` parse + desk dirs), legacy `.setsweep/` migration hints
+  (pointing at `kettle migrate`), runtime discovery (`~/.cache/kettle/server.json`), and
+  a localhost `/api/ping` when discovery lists a non-conventional port (never binds or
+  probes `4242`).
 - CI `package-install` job: build wheel, audit bundled `static/` + `kits/` package data,
   clean-venv wheel install smoke, ephemeral-port server smoke, and pipx-style isolated
   install smoke on Python 3.11 and 3.14.
