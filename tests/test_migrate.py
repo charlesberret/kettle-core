@@ -190,13 +190,20 @@ class MigrateTests(unittest.TestCase):
             self.assertFalse(legacy_settings.exists())
 
     def test_help_lists_migrate(self):
-        code, out, err = self.run_cli(["--help"])
-        self.assertEqual((code, err), (0, ""))
-        self.assertIn("migrate", out)
-        code2, out2, err2 = self.run_cli(["migrate", "--help"])
-        self.assertEqual((code2, err2), (0, ""))
-        self.assertIn("--apply", out2)
-        self.assertIn("dry-run", out2.lower())
+        out, err = io.StringIO(), io.StringIO()
+        with redirect_stdout(out), redirect_stderr(err):
+            with self.assertRaises(SystemExit) as cm:
+                cli.main(["--help"])
+        self.assertEqual(cm.exception.code, 0)
+        self.assertIn("migrate", out.getvalue())
+        out2, err2 = io.StringIO(), io.StringIO()
+        with redirect_stdout(out2), redirect_stderr(err2):
+            with self.assertRaises(SystemExit) as cm2:
+                cli.main(["migrate", "--help"])
+        self.assertEqual(cm2.exception.code, 0)
+        help_text = out2.getvalue()
+        self.assertIn("--apply", help_text)
+        self.assertIn("dry-run", help_text.lower())
 
 
 if __name__ == "__main__":
