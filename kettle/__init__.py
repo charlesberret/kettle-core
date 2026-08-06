@@ -21,6 +21,7 @@ PACKAGE_MODULES = (
     "kettle_watch",
     "kits",
     "lineage",
+    "migrate",
     "runtime",
     "server",
     "survey",

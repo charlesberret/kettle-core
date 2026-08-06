@@ -29,6 +29,7 @@ to open ``$EDITOR`` instead when you want your own tools.
   kettle egress <project>        stage a desk egress memo (.kettle/outbound/)
   kettle egress-status <project> list staged egress memos
   kettle doctor                  install + runtime health (PATH, desks, provider, server)
+  kettle migrate [--apply]       dry-run (default) migrate .setsweep/ → .kettle/
 
 Run: python3 cli.py <command> …    (PROJECTS via DESK_PROJECTS env, same as the server)
 """
@@ -50,6 +51,7 @@ from . import curator
 from . import egress
 from . import kettle_contract
 from . import lineage
+from . import migrate
 from . import runtime
 from . import server
 from . import sweepkit
@@ -485,16 +487,17 @@ def desk_doctor_checks(
             "name": "legacy-migration",
             "ok": False,
             "detail": "both .kettle/ and .setsweep/ present (split risk): "
-                      + ", ".join(both_desks[:5]),
-            "docs": "INSTALL.md § Registering a desk · ROADMAP Migration",
+                      + ", ".join(both_desks[:5])
+                      + " — resolve manually; kettle migrate refuses split desks",
+            "docs": "INSTALL.md § Migrating from Setsweep · kettle migrate --help",
         })
     elif legacy_only:
         rows.append({
             "name": "legacy-migration",
             "ok": True,
-            "detail": "legacy .setsweep/ desk(s) in use (migrate when ready): "
+            "detail": "legacy .setsweep/ desk(s) in use — kettle migrate: "
                       + ", ".join(legacy_only[:5]),
-            "docs": "INSTALL.md § Registering a desk · ROADMAP Migration",
+            "docs": "INSTALL.md § Migrating from Setsweep · kettle migrate --help",
         })
     else:
         rows.append({
@@ -1153,6 +1156,17 @@ def cmd_doctor(_args) -> int:
     return 0
 
 
+def cmd_migrate(args) -> int:
+    """Dry-run-first migration of .setsweep/ desks (and legacy user registry)."""
+    apply = bool(getattr(args, "apply", False)) and not bool(getattr(args, "dry_run", False))
+    project_ids = list(args.project) if getattr(args, "project", None) else None
+    plan = migrate.run_migrate(apply=apply, project_ids=project_ids)
+    sys.stdout.write(migrate.format_report(plan, apply_requested=apply))
+    if plan.refusals:
+        return 1
+    return 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
         prog="kettle", description="CLI viewport over the desk.",
@@ -1168,6 +1182,8 @@ def main(argv=None) -> int:
                "  kettle chat    kettle               # talk to the desk\n"
                "  kettle chat    kettle <entry-id>    # about one file\n"
                "  kettle doctor                      # install + runtime health\n"
+               "  kettle migrate                     # dry-run .setsweep/ → .kettle/\n"
+               "  kettle migrate --apply             # write the migration\n"
                "  kettle sweep-status kettle\n"
                "  kettle sweep-close  kettle\n"
                "  kettle refresh-briefs kettle\n"
@@ -1177,13 +1193,38 @@ def main(argv=None) -> int:
     sub = ap.add_subparsers(
         dest="cmd",
         metavar="{projects,add,init,found,queue,open,edit,themes,lineage,bind,chat,doctor,"
-                "sweep-status,sweep-close,sweep-archive,refresh-briefs,egress,egress-status}")
+                "migrate,sweep-status,sweep-close,sweep-archive,refresh-briefs,"
+                "egress,egress-status}")
     sub.add_parser("projects", help="list registered desks").set_defaults(fn=cmd_projects)
     sub.add_parser("themes", help="list bundled and user color themes").set_defaults(fn=cmd_themes)
     sub.add_parser(
         "doctor",
         help="install + runtime health (PATH, desks, provider CLI, server discovery)",
     ).set_defaults(fn=cmd_doctor)
+    mig = sub.add_parser(
+        "migrate",
+        help="migrate .setsweep/ desks → .kettle/ (dry-run by default; pass --apply to write)",
+        description=(
+            "Migrate legacy Setsweep desks and, when applicable, the legacy user "
+            "registry into Kettle paths. Dry-run by default — prints the plan and "
+            "writes nothing. Pass --apply to rename .setsweep/ → .kettle/ (refuses "
+            "when both desks already exist for a project)."
+        ),
+    )
+    mig_mode = mig.add_mutually_exclusive_group()
+    mig_mode.add_argument(
+        "--apply", action="store_true",
+        help="write changes (default is dry-run)",
+    )
+    mig_mode.add_argument(
+        "--dry-run", action="store_true",
+        help="show the plan only (default)",
+    )
+    mig.add_argument(
+        "project", nargs="*",
+        help="optional project id(s); default: all registered desks + user registry",
+    )
+    mig.set_defaults(fn=cmd_migrate)
     a = sub.add_parser("add", help="register a folder as a desk")
     a.add_argument("path"); a.add_argument("--name", default=None); a.set_defaults(fn=cmd_add)
     i = sub.add_parser("init", help="register the current folder as a desk")
