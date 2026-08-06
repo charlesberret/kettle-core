@@ -148,23 +148,20 @@ class MigrateTests(unittest.TestCase):
         """Legacy user registry migrates when DESK_PROJECTS is unset."""
         home = self.tmp / "home"
         xdg = home / "xdg"
-        legacy_dir = xdg / "setsweep"
-        kettle_dir = xdg / "kettle"
-        legacy_dir.mkdir(parents=True)
-        legacy_reg = legacy_dir / "projects.json"
-        legacy_settings = legacy_dir / "settings.json"
-        legacy_reg.write_text('{"projects": []}', encoding="utf-8")
-        legacy_settings.write_text('{"theme": "kettle"}', encoding="utf-8")
-
-        # Clear override so plan_registry sees a real legacy path
+        # Clear override so plan_registry sees a real legacy path. Place the
+        # fixture at whatever platform path server.legacy_user_projects_path()
+        # resolves to (XDG on Linux; Application Support on macOS).
         os.environ.pop("DESK_PROJECTS", None)
         with mock.patch.object(server, "HOME", home), \
              mock.patch.dict(os.environ, {"XDG_CONFIG_HOME": str(xdg)}, clear=False):
-            # Re-point for clarity in assertions
             kettle_path = server.user_projects_path()
             legacy_path = server.legacy_user_projects_path()
-            self.assertEqual(legacy_path, legacy_reg)
-            self.assertEqual(kettle_path, kettle_dir / "projects.json")
+            kettle_dir = kettle_path.parent
+            legacy_path.parent.mkdir(parents=True, exist_ok=True)
+            legacy_path.write_text('{"projects": []}', encoding="utf-8")
+            (legacy_path.parent / "settings.json").write_text(
+                '{"theme": "kettle"}', encoding="utf-8"
+            )
 
             plan = migrate.run_migrate(
                 apply=False,
@@ -174,7 +171,7 @@ class MigrateTests(unittest.TestCase):
             )
             kinds = {a.kind for a in plan.actions}
             self.assertIn("registry-move", kinds)
-            self.assertTrue(legacy_reg.is_file())
+            self.assertTrue(legacy_path.is_file())
             self.assertFalse(kettle_path.exists())
 
             plan2 = migrate.run_migrate(
@@ -185,9 +182,9 @@ class MigrateTests(unittest.TestCase):
             )
             self.assertTrue(plan2.applied)
             self.assertTrue(kettle_path.is_file())
-            self.assertFalse(legacy_reg.exists())
+            self.assertFalse(legacy_path.exists())
             self.assertTrue((kettle_dir / "settings.json").is_file())
-            self.assertFalse(legacy_settings.exists())
+            self.assertFalse((legacy_path.parent / "settings.json").exists())
 
     def test_help_lists_migrate(self):
         out, err = io.StringIO(), io.StringIO()
