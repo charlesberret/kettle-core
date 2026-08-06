@@ -7,10 +7,10 @@ live under `.local/` and are gitignored.
 
 ## Architecture
 
-Python backend (`server.py`, `runtime.py`, `lineage.py`, `kits.py`, `cli.py`, `curator.py`,
-`egress.py`, `sweepkit.py`) plus a folder-watcher entry point (`kettle_watch.py`) and a
-launcher shim (`kettle_main.py`). No third-party *runtime* dependencies — the server and CLI
-viewport are stdlib-only. Single-file frontend at `static/index.html` (plus vendored
+Python backend under `kettle/` (`server.py`, `runtime.py`, `lineage.py`, `kits.py`, `cli.py`,
+`curator.py`, `egress.py`, `sweepkit.py`) plus a folder-watcher entry point (`kettle_watch.py`)
+and a launcher shim (`kettle_main.py`). No third-party *runtime* dependencies — the server and
+CLI viewport are stdlib-only. Single-file frontend at `kettle/static/index.html` (plus vendored
 `marked.min.js`, `purify.min.js`, `themes.js`, fonts). Three-pane layout: agent-curated queue ·
 user's editor · project-aware review agent.
 
@@ -56,9 +56,9 @@ tests, and recovery steps.
 
 | File | Why it's run-critical |
 |---|---|
-| `server.py` | Entire backend: routes, file-fence (`safe_path`), atomic writes, circuit-breaker |
-| `static/index.html` | Entire single-file frontend — a JS error can blank the window |
-| `kettle_main.py` | Launcher shim for desktop / console entry |
+| `kettle/server.py` | Entire backend: routes, file-fence (`safe_path`), atomic writes, circuit-breaker |
+| `kettle/static/index.html` | Entire single-file frontend — a JS error can blank the window |
+| `kettle/kettle_main.py` | Launcher shim for desktop / console entry |
 | `projects.json` | Live-read registry (user-local; gitignored in this tree) |
 | `settings.json` | Live-read settings; deep-merge for `curator` / `agents` / `egress` / `admin` |
 
@@ -72,11 +72,12 @@ and must be checked against the live tree before reuse.
 
 ## Conventions
 
-- Flat-layout package; install editable (`pip install -e .`) so `static/` resolves from the repo
-  root. Canonical venv: `~/.kettle-venv` — see `INSTALL.md` and `kettle doctor`.
+- Package layout under `kettle/` with bundled `static/` and `kits/`; install editable
+  (`pip install -e .`) for contributors, or from a wheel for a self-contained UI. Canonical
+  venv: `~/.kettle-venv` — see `INSTALL.md` and `kettle doctor`.
 - Architecture invariants hold: localhost-only, file-fence on every route, append-only records
   never auto-mutated, user's words beat the files, memory is distillation, every automated
   actor beats a healthbeacon. Full list in [`ARCHITECTURE.md`](./ARCHITECTURE.md).
 - Dominant workflow is drive-by: prefer fast, targeted, self-contained changes.
-- Before touching `server.py` or `static/index.html`, check git status and coordinate with any
-  in-flight branch work on those files.
+- Before touching `kettle/server.py` or `kettle/static/index.html`, check git status and
+  coordinate with any in-flight branch work on those files.

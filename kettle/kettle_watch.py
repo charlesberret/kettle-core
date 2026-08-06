@@ -29,10 +29,10 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR))
 try:
-    import kits  # the per-kind curator playbook (lens · urgency · first-queue heuristic)
+    from . import kits  # the per-kind curator playbook (lens · urgency · first-queue heuristic)
 except ImportError:
     kits = None
-from server import resolve_projects_path
+from .server import resolve_projects_path
 
 HOME = Path.home()
 PROJECTS = resolve_projects_path()

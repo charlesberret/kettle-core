@@ -6,8 +6,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-import curator
-from curator import CuratorConfig, deep_merge_settings, ensure_curator_settings, resolve_curator
+import kettle.curator as curator
+from kettle.curator import CuratorConfig, deep_merge_settings, ensure_curator_settings, resolve_curator
 
 
 class TestResolveCurator(unittest.TestCase):
@@ -129,14 +129,14 @@ class TestResolveCurator(unittest.TestCase):
         self.assertEqual(out["curator"]["models"]["chat"], "sonnet")
 
     def test_apply_curator_selection_model_sets_provider(self):
-        from curator import apply_curator_selection
+        from kettle.curator import apply_curator_selection
         out = apply_curator_selection({}, model="grok-4.5")
         self.assertEqual(out["curator"]["provider"], "grok")
         self.assertEqual(out["curator"]["models"]["chat"], "grok-4.5")
         self.assertEqual(out["curator"]["command"], "grok")
 
     def test_apply_curator_selection_rejects_mismatched_pair(self):
-        from curator import apply_curator_selection
+        from kettle.curator import apply_curator_selection
         with self.assertRaises(ValueError):
             apply_curator_selection({}, provider="claude", model="grok-4.5")
 

@@ -25,8 +25,8 @@ import urllib.request
 from contextlib import redirect_stderr
 from pathlib import Path
 
-import server
-import kettle_contract
+import kettle.server as server
+import kettle.kettle_contract as kettle_contract
 
 
 def _auth_headers(extra=None):
@@ -612,7 +612,7 @@ class EndpointTests(Base):
             extra_server.server_close()
 
     def test_save_logs_user_edit_to_lineage(self):
-        import lineage
+        import kettle.lineage as lineage
         f = self.root / "alpha.md"
         s, _ = _http("POST", f"{self.base}/api/save",
                      {"path": str(f), "content": "user's own edit\n"})

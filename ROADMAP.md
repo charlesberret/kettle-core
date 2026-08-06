@@ -26,13 +26,13 @@ contracts are still at `0`.
 
 ### Installation
 
-- Restructure the flat modules into a package with bundled `static/` and `kits/`
-  resources (still required before a wheel can serve the browser UI).
-- Wheel and pipx-style install verification in CI (flat `py-modules` layout;
-  editable remains the supported contributor path).
+- ~~Restructure the flat modules into a package with bundled `static/` and `kits/`
+  resources~~ (done — wheel serves the browser UI; editable remains the contributor path).
+- Wheel and pipx-style install verification in CI (package layout + server smoke).
 - Expanded `kettle doctor`: provider CLI resolve, registry/desk integrity,
-  runtime discovery, legacy `.setsweep/` hints (auth-token and metrics beacons
-  remain follow-ups).
+  runtime discovery, legacy `.setsweep/` hints (metrics beacons remain follow-ups).
+- Reserve the PyPI name `kettle` with a minimal placeholder upload when publish
+  credentials are available.
 
 ### Security
 

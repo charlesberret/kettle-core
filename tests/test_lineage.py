@@ -11,7 +11,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import lineage
+import kettle.lineage as lineage
 
 
 class LineageTest(unittest.TestCase):
