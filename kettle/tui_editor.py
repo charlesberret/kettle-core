@@ -15,8 +15,8 @@ import signal
 from dataclasses import dataclass, field
 from pathlib import Path
 
-import syntax
-import theme_catalog
+from . import syntax
+from . import theme_catalog
 
 # Soft limits: full-buffer highlighting is O(n); past these, use plain text.
 HIGHLIGHT_MAX_LINES = 8_000

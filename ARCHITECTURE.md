@@ -107,13 +107,14 @@ do not relabel user claims. CLI: `kettle lineage` / `kettle bind`. HTTP:
 
 ## Layout of this package
 
-Flat Python modules at repo root (`server.py`, `cli.py`, `runtime.py`, …), stdlib-only
-runtime for server and CLI. Install **editable** (`pip install -e .`) so `static/` and
-the registry resolve from the source tree. Canonical install path: `~/.kettle-venv`
-(see [`INSTALL.md`](./INSTALL.md)). `kettle doctor` checks PATH and editable mapping.
+Python package under `kettle/` (`server.py`, `cli.py`, `runtime.py`, …), stdlib-only
+runtime for server and CLI, with `static/` and `kits/` shipped as package data. Install
+**editable** (`pip install -e .`) for contributors, or from a wheel for a self-contained
+UI. Canonical install path: `~/.kettle-venv` (see [`INSTALL.md`](./INSTALL.md)).
+`kettle doctor` checks PATH and package-module importability.
 
-**Sitting UI** is only `static/index.html` (plus themes/fonts). Type hierarchy, buttons,
-and meta-pane rules: [`docs/UI.md`](./docs/UI.md). Desktop does not fork that file.
+**Sitting UI** is only `kettle/static/index.html` (plus themes/fonts). Type hierarchy,
+buttons, and meta-pane rules: [`docs/UI.md`](./docs/UI.md). Desktop does not fork that file.
 
 ## Further reading
 

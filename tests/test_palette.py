@@ -8,8 +8,8 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-PALETTE_PATH = ROOT / "static" / "kettle-palette.json"
-THEMES_PATH = ROOT / "static" / "themes.js"
+PALETTE_PATH = ROOT / "kettle" / "static" / "kettle-palette.json"
+THEMES_PATH = ROOT / "kettle" / "static" / "themes.js"
 
 
 def _extract_kettle_pack_arrays(themes_src: str) -> tuple[list[str], list[str]]:

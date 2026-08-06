@@ -13,7 +13,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
-import kettle_contract
+import kettle.kettle_contract as kettle_contract
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
@@ -37,37 +37,33 @@ class ContractIdentity(unittest.TestCase):
             identity["desk_schema_version"], kettle_contract.DESK_SCHEMA_VERSION
         )
 
-    def test_core_version_falls_back_to_distribution_metadata(self):
-        # Corrupt/missing pyproject → installed dist metadata, then "unknown".
-        with mock.patch.object(kettle_contract, "Path") as path_cls:
-            fake = mock.Mock()
-            fake.is_file.return_value = False
-            path_cls.return_value.with_name.return_value = fake
-            with mock.patch.object(
-                kettle_contract.importlib.metadata,
-                "version",
-                return_value="9.9.9",
-            ):
-                self.assertEqual(kettle_contract.core_version(), "9.9.9")
-            with mock.patch.object(
-                kettle_contract.importlib.metadata,
-                "version",
-                side_effect=kettle_contract.importlib.metadata.PackageNotFoundError,
-            ):
-                self.assertEqual(kettle_contract.core_version(), "unknown")
+    def test_core_version_uses_kettle_dunder_version(self):
+        import kettle as kettle_pkg
 
-    def test_core_version_ignores_unreadable_pyproject(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            bad = Path(tmp) / "pyproject.toml"
-            bad.write_text("not = valid [ toml", encoding="utf-8")
-            with mock.patch.object(kettle_contract, "Path") as path_cls:
-                path_cls.return_value.with_name.return_value = bad
-                with mock.patch.object(
-                    kettle_contract.importlib.metadata,
-                    "version",
-                    return_value="1.2.3",
-                ):
-                    self.assertEqual(kettle_contract.core_version(), "1.2.3")
+        with mock.patch.object(kettle_pkg, "__version__", "9.9.9"):
+            self.assertEqual(kettle_contract.core_version(), "9.9.9")
+
+    def test_read_version_falls_back_when_dist_missing(self):
+        import importlib.metadata
+
+        import kettle as kettle_pkg
+
+        with mock.patch.object(
+            kettle_pkg.importlib.metadata,
+            "version",
+            side_effect=importlib.metadata.PackageNotFoundError,
+        ):
+            # Source-tree pyproject still available beside the package.
+            with (ROOT / "pyproject.toml").open("rb") as fp:
+                expected = str(tomllib.load(fp)["project"]["version"])
+            self.assertEqual(kettle_pkg._read_version(), expected)
+
+        with mock.patch.object(
+            kettle_pkg.importlib.metadata,
+            "version",
+            side_effect=importlib.metadata.PackageNotFoundError,
+        ), mock.patch.object(kettle_pkg.tomllib, "load", side_effect=OSError("nope")):
+            self.assertEqual(kettle_pkg._read_version(), "unknown")
 
     def test_family_parser_accepts_both_manifest_key_styles(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -120,7 +116,8 @@ class FamilyCheckCommand(unittest.TestCase):
             '[project]\nname = "kettle"\nversion = "0.2.0"\n',
             encoding="utf-8",
         )
-        (core / "kettle_contract.py").write_text(
+        (core / "kettle").mkdir()
+        (core / "kettle" / "kettle_contract.py").write_text(
             "API_VERSION = 0\nDESK_SCHEMA_VERSION = 0\n",
             encoding="utf-8",
         )

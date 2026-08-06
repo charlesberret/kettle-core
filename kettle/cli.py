@@ -41,19 +41,18 @@ import json
 import os
 import subprocess
 import sys
-import tomllib
 import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Any
 
-import curator
-import egress
-import kettle_contract
-import lineage
-import runtime
-import server
-import sweepkit
+from . import curator
+from . import egress
+from . import kettle_contract
+from . import lineage
+from . import runtime
+from . import server
+from . import sweepkit
 
 # Canonical install (brief 20). Doctor flags any other winner on PATH.
 CANONICAL_VENV = Path.home() / ".kettle-venv"
@@ -89,20 +88,11 @@ def _which_all(cmd: str = "kettle") -> list[Path]:
     return out
 
 
-def _py_modules_from_pyproject(path: Path | None = None) -> list[str]:
-    """Read the setuptools py-modules list from pyproject.toml (source of truth).
+def _package_modules() -> list[str]:
+    """Importable dotted names under the kettle package (doctor source of truth)."""
+    from kettle import PACKAGE_MODULES
 
-    Wheel installs do not ship pyproject.toml beside the modules; callers that
-    need a module list should fall back to the installed top_level.txt.
-    """
-    if path is None:
-        # Prefer the live source tree next to this module (editable install).
-        path = Path(__file__).resolve().parent / "pyproject.toml"
-    if not path.is_file():
-        return []
-    data = tomllib.loads(path.read_text(encoding="utf-8"))
-    modules = data.get("tool", {}).get("setuptools", {}).get("py-modules") or []
-    return [str(m) for m in modules]
+    return ["kettle", *[f"kettle.{name}" for name in PACKAGE_MODULES]]
 
 
 def _installed_top_level(dist_name: str = DIST_NAME) -> list[str] | None:
@@ -115,6 +105,19 @@ def _installed_top_level(dist_name: str = DIST_NAME) -> list[str] | None:
     if text is None:
         return None
     return [line.strip() for line in text.splitlines() if line.strip()]
+
+
+# Back-compat alias used by older tests / callers.
+def _py_modules_from_pyproject(path: Path | None = None) -> list[str]:
+    """Return package submodule short names (not flat py-modules).
+
+    ``path`` is accepted for call-site compatibility and ignored — the module
+    list lives in ``kettle.PACKAGE_MODULES`` after the package restructure.
+    """
+    del path  # unused; kept so monkeypatches/tests keep a stable signature
+    from kettle import PACKAGE_MODULES
+
+    return list(PACKAGE_MODULES)
 
 
 def _package_install_info(dist_name: str = DIST_NAME) -> tuple[str, str]:
@@ -207,23 +210,34 @@ def install_doctor_checks(
     *,
     path_hits: list[Path] | None = None,
     py_modules: list[str] | None = None,
+    package_modules: list[str] | None = None,
     top_level: Any = ...,
     canonical: Path = CANONICAL_KETTLE,
 ) -> list[dict]:
     """Read-only install health rows for `kettle doctor` (brief 20; expanded by brief 18).
 
     Each row: {name, ok, detail, docs}. `ok` False means doctor should exit nonzero.
+
+    ``py_modules`` is a legacy alias for short submodule names (without the
+    ``kettle.`` prefix). Prefer ``package_modules`` with dotted import names.
     """
     rows: list[dict] = []
     hits = path_hits if path_hits is not None else _which_all("kettle")
     if top_level is ...:
         top_level = _installed_top_level()
-    modules = py_modules if py_modules is not None else _py_modules_from_pyproject()
-    modules_source = "pyproject.toml"
-    if not modules and isinstance(top_level, list) and top_level:
-        # Wheel / non-editable install: no pyproject beside modules.
-        modules = list(top_level)
-        modules_source = "installed top_level"
+    if package_modules is not None:
+        modules = list(package_modules)
+        modules_source = "caller"
+    elif py_modules is not None:
+        # Legacy short names → dotted package imports.
+        modules = [
+            n if n == "kettle" or n.startswith("kettle.") else f"kettle.{n}"
+            for n in py_modules
+        ]
+        modules_source = "caller"
+    else:
+        modules = _package_modules()
+        modules_source = "kettle.PACKAGE_MODULES"
 
     # --- python + package ---
     py_ok = sys.version_info >= (3, 11)
@@ -285,22 +299,22 @@ def install_doctor_checks(
                 "docs": "INSTALL.md § Canonical install",
             })
 
-    # --- py-modules importable + present in installed top_level ---
+    # --- package modules importable + kettle present in installed top_level ---
     if not modules:
         rows.append({
             "name": "py-modules-list",
             "ok": False,
-            "detail": "could not read tool.setuptools.py-modules from pyproject.toml "
-                      "(and no installed top_level)",
+            "detail": "could not resolve kettle.PACKAGE_MODULES",
             "docs": "INSTALL.md § Reinstall rule",
         })
         return rows
 
+    # Row name kept as py-modules-list for doctor output stability.
     rows.append({
         "name": "py-modules-list",
         "ok": True,
         "detail": f"{len(modules)} modules from {modules_source}",
-        "docs": "pyproject.toml py-modules",
+        "docs": "kettle/__init__.py PACKAGE_MODULES",
     })
 
     if top_level is None:
@@ -312,20 +326,20 @@ def install_doctor_checks(
             "docs": "INSTALL.md § Reinstall rule",
         })
     else:
-        missing_map = [m for m in modules if m not in top_level]
-        if missing_map:
+        # Package layout: top_level.txt lists the distribution package name only.
+        if "kettle" not in top_level:
+            listed = ", ".join(top_level) if top_level else "(empty)"
             rows.append({
                 "name": "install-mapping",
                 "ok": False,
-                "detail": "py-modules missing from installed top_level (reinstall editable): "
-                          + ", ".join(missing_map),
+                "detail": "installed top_level missing 'kettle' (reinstall): " + listed,
                 "docs": "INSTALL.md § Reinstall rule",
             })
         else:
             rows.append({
                 "name": "install-mapping",
                 "ok": True,
-                "detail": "installed top_level covers py-modules",
+                "detail": "installed top_level includes kettle package",
                 "docs": "INSTALL.md § Reinstall rule",
             })
 
@@ -341,7 +355,7 @@ def install_doctor_checks(
         rows.append({
             "name": "py-modules-importable",
             "ok": False,
-            "detail": "not importable (stale editable MAPPING?): "
+            "detail": "not importable (reinstall editable?): "
                       + ", ".join(missing_import),
             "docs": "INSTALL.md § Reinstall rule",
         })
@@ -349,7 +363,7 @@ def install_doctor_checks(
         rows.append({
             "name": "py-modules-importable",
             "ok": True,
-            "detail": f"all {len(modules)} py-modules importable",
+            "detail": f"all {len(modules)} package modules importable",
             "docs": "INSTALL.md § Reinstall rule",
         })
 
@@ -926,8 +940,8 @@ def cmd_open(args) -> int:
     if getattr(args, "external", False):
         return _open_external(path)
 
-    import theme_catalog
-    import tui_editor
+    from . import theme_catalog
+    from . import tui_editor
 
     try:
         settings = server.load_settings()
@@ -954,7 +968,7 @@ def cmd_edit(args) -> int:
 
 def cmd_themes(args) -> int:
     """List bundled and user theme packs; mark the marquee default."""
-    import theme_catalog
+    from . import theme_catalog
 
     default = theme_catalog.default_theme_id()
     print(f"default (marquee): {default}")

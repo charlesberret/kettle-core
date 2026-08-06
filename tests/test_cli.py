@@ -17,8 +17,8 @@ from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest import mock
 
-import cli
-import server
+import kettle.cli as cli
+import kettle.server as server
 
 
 class CliTests(unittest.TestCase):
@@ -116,7 +116,7 @@ class CliTests(unittest.TestCase):
                 "status": "pending", "brief": "Check it", "ask": "ok?",
             }],
         }))
-        with mock.patch("tui_editor.edit_file", return_value=0) as edit:
+        with mock.patch("kettle.tui_editor.edit_file", return_value=0) as edit:
             code, out, err = self.run_cli(["open", proj["id"], "draft"])
         self.assertEqual((code, err), (0, ""))
         self.assertIn("built-in editor", out)
@@ -132,7 +132,7 @@ class CliTests(unittest.TestCase):
             "entries": [{"id": "draft", "path": str(target), "status": "pending"}],
         }))
         with mock.patch.dict(os.environ, {"EDITOR": "true"}), \
-                mock.patch("cli.subprocess.call", return_value=0) as call:
+                mock.patch("kettle.cli.subprocess.call", return_value=0) as call:
             code, out, _ = self.run_cli(["open", proj["id"], "draft", "--external"])
         self.assertEqual(code, 0)
         self.assertIn("opening", out)
@@ -148,8 +148,8 @@ class CliTests(unittest.TestCase):
             "entries": [{"id": "draft", "path": str(target), "status": "pending"}],
         }))
         # edit_file returns 3 → no tty → external fallback
-        with mock.patch("tui_editor.edit_file", return_value=3), \
-                mock.patch("cli.subprocess.call", return_value=0) as call:
+        with mock.patch("kettle.tui_editor.edit_file", return_value=3), \
+                mock.patch("kettle.cli.subprocess.call", return_value=0) as call:
             code, out, err = self.run_cli(["edit", proj["id"], "draft"])
         self.assertEqual(code, 0)
         self.assertIn("no tty", err)
@@ -294,15 +294,15 @@ class CliTests(unittest.TestCase):
         self.assertIn("grok-4.5", cmd)
 
     def test_install_doctor_flags_stale_mapping_and_path_extras(self):
-        """Brief 20: doctor catches PATH strays and py-modules missing from top_level."""
+        """Brief 20: doctor catches PATH strays and top_level missing the kettle package."""
         canon = Path("/tmp/fake-venv/bin/kettle")
         rows = cli.install_doctor_checks(
             path_hits=[
                 Path("/opt/homebrew/bin/kettle"),
                 Path("/Users/me/.local/bin/kettle"),
             ],
-            py_modules=["cli", "server", "egress", "sweepkit"],
-            top_level=["cli", "server"],  # egress + sweepkit missing → stale MAPPING
+            package_modules=["kettle", "kettle.cli", "kettle.server"],
+            top_level=["cli", "server"],  # flat leftovers — missing kettle package
             canonical=canon,
         )
         by_name = {r["name"]: r for r in rows}
@@ -312,31 +312,30 @@ class CliTests(unittest.TestCase):
         self.assertFalse(by_name["kettle-path-extras"]["ok"])
         self.assertIn("extra on PATH", by_name["kettle-path-extras"]["detail"])
         self.assertFalse(by_name["install-mapping"]["ok"])
-        self.assertIn("egress", by_name["install-mapping"]["detail"])
-        self.assertIn("sweepkit", by_name["install-mapping"]["detail"])
+        self.assertIn("kettle", by_name["install-mapping"]["detail"])
         # Real modules remain importable in this process even when top_level is stale.
         self.assertTrue(by_name["py-modules-importable"]["ok"])
 
-    def test_install_doctor_falls_back_to_top_level_without_pyproject(self):
-        """Wheel installs have no pyproject beside modules; use installed top_level."""
+    def test_install_doctor_accepts_package_top_level(self):
+        """Wheel/editable installs list only the kettle package in top_level.txt."""
         rows = cli.install_doctor_checks(
             path_hits=[cli.CANONICAL_KETTLE],
-            py_modules=[],  # simulate missing pyproject
-            top_level=["cli", "server", "curator", "kettle_main"],
+            package_modules=["kettle", "kettle.cli", "kettle.server"],
+            top_level=["kettle"],
             canonical=cli.CANONICAL_KETTLE,
         )
         by_name = {r["name"]: r for r in rows}
         self.assertTrue(by_name["py-modules-list"]["ok"])
-        self.assertIn("installed top_level", by_name["py-modules-list"]["detail"])
+        self.assertIn("caller", by_name["py-modules-list"]["detail"])
         self.assertTrue(by_name["install-mapping"]["ok"])
 
     def test_install_doctor_green_when_canonical_and_mapped(self):
-        modules = cli._py_modules_from_pyproject()
-        self.assertIn("egress", modules)
+        modules = cli._package_modules()
+        self.assertIn("kettle.egress", modules)
         rows = cli.install_doctor_checks(
             path_hits=[cli.CANONICAL_KETTLE],
-            py_modules=modules,
-            top_level=list(modules),
+            package_modules=modules,
+            top_level=["kettle"],
             canonical=cli.CANONICAL_KETTLE,
         )
         self.assertTrue(all(r["ok"] for r in rows), rows)

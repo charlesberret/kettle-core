@@ -5,9 +5,10 @@ server and the CLI viewport are pure stdlib — no pip runtime dependencies.
 
 Source: [github.com/charlesberret/kettle-core](https://github.com/charlesberret/kettle-core)
 
-## Canonical install
+## Canonical install (editable)
 
-**One install, one name on PATH.**
+**One install, one name on PATH.** Contributors and day-to-day use still prefer an
+editable checkout so docs and kits edit in place.
 
 | Piece | Location |
 |---|---|
@@ -17,7 +18,7 @@ Source: [github.com/charlesberret/kettle-core](https://github.com/charlesberret/
 | PATH shim (exactly one) | e.g. `~/.local/bin/kettle` → `~/.kettle-venv/bin/kettle` |
 
 `kettle doctor` reports which `kettle` wins on `PATH`, whether it resolves to the
-canonical venv, whether every `py-modules` entry is importable, registry/desk integrity,
+canonical venv, whether every package module is importable, registry/desk integrity,
 active curator CLI resolve, runtime discovery, and a localhost ping when discovery lists
 a non-conventional port. It never repairs, never deletes PATH entries, and never binds
 or probes port `4242`.
@@ -31,6 +32,7 @@ python3 -m venv ~/.kettle-venv
 ~/.kettle-venv/bin/pip install -e .
 ~/.kettle-venv/bin/kettle projects        # the CLI viewport
 ~/.kettle-venv/bin/kettle --web           # browser mode
+python3 -c "import kettle; print(kettle.__version__)"
 ```
 
 Put **one** shim on your PATH pointing at the venv (not a second copy of the script):
@@ -44,20 +46,19 @@ kettle doctor                                            # install health
 
 ### Reinstall rule (editable)
 
-This package is **flat** (`py-modules` in `pyproject.toml`). An editable install records
-that list in the finder MAPPING at install time. **Adding a module to `py-modules`
-requires reinstalling editable**, or the CLI dies with `ModuleNotFoundError` for the new
-name even though the file is in the tree:
+The installable unit is the `kettle/` package. New `.py` files under `kettle/` are
+picked up by package discovery after reinstall when metadata is stale. If doctor
+reports modules not importable, reinstall editable:
 
 ```sh
 ~/.kettle-venv/bin/pip install -e .
 ```
 
-`kettle doctor` checks that every name in `py-modules` is importable and present in the
-installed distribution's top-level list. It also prints Python/package version, install
-mode (editable vs wheel), provider CLI readiness, registry/desk integrity (including
-legacy `.setsweep/` hints), and server discovery status. Failing rows point at this file
-or `ARCHITECTURE.md`. Exit status is nonzero when any check fails.
+`kettle doctor` checks that the installed `top_level` includes `kettle` and that every
+name in `kettle.PACKAGE_MODULES` is importable. It also prints Python/package version,
+install mode (editable vs wheel), provider CLI readiness, registry/desk integrity
+(including legacy `.setsweep/` hints), and server discovery status. Failing rows point
+at this file or `ARCHITECTURE.md`. Exit status is nonzero when any check fails.
 
 ### PATH hygiene (you run these; agents never delete PATH entries)
 
@@ -65,6 +66,26 @@ If `which -a kettle` shows more than one winner, retire strays so a single shim 
 at `~/.kettle-venv/bin/kettle`. Common extras: a Homebrew or pip-user console script,
 and leftover shell shims from older installs. Keep only the symlink under a dir on PATH
 (e.g. `~/.local/bin/kettle`), then `hash -r` and re-run `kettle doctor`.
+
+## Wheel / pipx installs
+
+The wheel ships the `kettle` package **plus** bundled `static/` (web UI) and `kits/`
+(prompts and kind playbooks), so a non-editable install can serve the browser UI.
+
+```sh
+python3 -m pip install path/to/kettle-*.whl
+# or, once published:  pipx install kettle
+kettle --web --port 0          # use an ephemeral port in automation; never probe 4242
+kettle doctor
+python3 -c "import kettle; print(kettle.__version__)"
+```
+
+CI builds the wheel, audits package data, installs into a clean venv, and smokes
+`kettle --help`, imports, doctor, and a short server boot (`GET /`, `/api/ping`,
+`/api/kits`) on an ephemeral port.
+
+Editable install remains the supported contributor path; wheel/pipx is for users who
+want a self-contained install without a checkout.
 
 ## Other ways to open Kettle
 
@@ -103,19 +124,7 @@ kettle egress <project> …       stage a desk egress memo
 kettle egress-status <project>  list staged egress memos
 ```
 
-Full help: `kettle --help` / `kettle <cmd> --help`.
-
-## Wheel / pipx installs (CI-verified; limited)
-
-CI builds a wheel and installs it into a clean venv (and a pipx-style isolated venv) on
-supported Python versions. That proves console scripts and flat `py-modules` import
-cleanly. **Editable install remains the supported path for real use** — the current flat
-layout does **not** ship `static/` or `kits/` inside the wheel, so a non-editable install
-cannot serve the browser UI or load kit prompts from package data.
-
-Follow-up (package restructure under `kettle/` with bundled resources): see
-[`docs/briefs/11-package-restructure.md`](./docs/briefs/11-package-restructure.md) and
-the Installation section of [`ROADMAP.md`](./ROADMAP.md).
+Full help: `kettle --help` / `kettle <cmd> --help` (help prints `kettle.__version__`).
 
 ## Auth — Kettle stores no key
 
@@ -132,7 +141,7 @@ No API key is ever entered into Kettle.
 
 ## Registering a desk
 
-The project registry is `projects.json` (see `projects.example.json`). Override with
+The project registry is `projects.json` (see `kettle/projects.example.json`). Override with
 `DESK_PROJECTS`. Resolution without an override prefers the shared Kettle user registry
 when it exists (`~/Library/Application Support/Kettle/projects.json` on macOS), then an
 existing legacy Setsweep registry, then a repo-local `projects.json` in a source checkout.
@@ -151,10 +160,13 @@ do not race. Durable charter/memory files under `.kettle/` may sync normally. Se
 ## Notes for the maintainer
 
 - **Canonical install is `~/.kettle-venv` with one PATH shim** — see above.
-- **Editable install (`-e`) is the supported mode.** It keeps `static/` resolving from the
-  source tree. Wheel/pipx CI verifies import + console-script smoke only until the
-  package restructure lands.
-- **Reinstall after every `py-modules` change** — see the reinstall rule and the comment
-  next to `py-modules` in `pyproject.toml`.
+- **Layout is the `kettle/` package** with `static/` and `kits/` as package data.
+  `APPDIR` resolves via `importlib.resources.files()` (PyInstaller still uses `_MEIPASS`).
+- **Version** is single-sourced in `pyproject.toml`, exposed as `kettle.__version__`,
+  and reported by `GET /api/ping` and `kettle --help`.
+- **Editable and wheel installs are both supported** for serving the UI; editable remains
+  the contributor path.
 - **`kettle doctor` is read-only** — it never creates desks, rewrites settings, or probes
   port `4242`.
+- **PyPI placeholder upload** (reserve the `kettle` name with a minimal 0.0.1) remains a
+  follow-up until publish credentials are confirmed in this environment.

@@ -36,24 +36,39 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-import kits     # curator kits: the per-kind playbook (lens · urgency · first-queue · sweep checks)
-import lineage  # who-edited-what: agent edits self-record to the desk's working record
-import runtime  # viewport-neutral agent adapter: spawn · usage normalizer · session ledger
-import curator as curator_mod  # pluggable curator backends (claude CLI default)
-import kettle_contract  # core/API/desk-schema identity for every viewport
-import survey as survey_mod  # deterministic founding survey (tool-less interview Phase A)
-import sweepkit  # mechanical sweep close-kit (status · archive · stage · thin log)
-import theme_catalog  # bundled + user color theme packs (web, desktop, CLI)
-import gitmap  # local git contribution heatmap (desk chrome; no network)
+from . import kits     # curator kits: the per-kind playbook (lens · urgency · first-queue · sweep checks)
+from . import lineage  # who-edited-what: agent edits self-record to the desk's working record
+from . import runtime  # viewport-neutral agent adapter: spawn · usage normalizer · session ledger
+from . import curator as curator_mod  # pluggable curator backends (claude CLI default)
+from . import kettle_contract  # core/API/desk-schema identity for every viewport
+from . import survey as survey_mod  # deterministic founding survey (tool-less interview Phase A)
+from . import sweepkit  # mechanical sweep close-kit (status · archive · stage · thin log)
+from . import theme_catalog  # bundled + user color theme packs (web, desktop, CLI)
+from . import gitmap  # local git contribution heatmap (desk chrome; no network)
 
 HOME = Path.home()
 
 
 def _app_dir() -> Path:
-    """Repo root in dev; PyInstaller extract dir when frozen as a bundled sidecar."""
+    """Package data root (static/, kits/); PyInstaller extract dir when frozen.
+
+    Uses importlib.resources.files() so wheel and editable installs resolve the
+    same package tree. Callers still receive a concrete Path for read/glob APIs.
+    """
     if getattr(sys, "frozen", False):
         return Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
-    return Path(__file__).resolve().parent
+    package_dir = Path(__file__).resolve().parent
+    try:
+        from importlib.resources import files
+
+        root = files(__package__ or "kettle")
+        # On-disk packages (editable + extracted wheels): files() sees static/kits;
+        # Path(__file__).parent is that same directory for Path-based callers.
+        if root.joinpath("static").is_dir() or root.joinpath("kits").is_dir():
+            return package_dir
+    except (ModuleNotFoundError, TypeError, OSError, AttributeError):
+        pass
+    return package_dir
 
 
 APPDIR = _app_dir()
@@ -96,9 +111,10 @@ def resolve_projects_path() -> Path:
     legacy = legacy_user_projects_path()
     if legacy.exists():
         return legacy
-    repo = APPDIR / "projects.json"
-    if repo.exists():
-        return repo
+    # Package dir (rare) or editable checkout repo root (parent of kettle/).
+    for repo in (APPDIR / "projects.json", APPDIR.parent / "projects.json"):
+        if repo.exists():
+            return repo
     return user
 
 
@@ -1139,7 +1155,7 @@ def register_project(name: str, root: str, kit: str | None = None,
         atomic_write(qp, json.dumps(
             dict(EMPTY_QUEUE, curated="awaiting founding curation"),
             indent=2, ensure_ascii=False))
-    import egress as _egress
+    from . import egress as _egress
     _egress.ensure_egress(proj)
     return proj
 
@@ -2124,7 +2140,7 @@ class Handler(BaseHTTPRequestHandler):
                 prompt += f"\n\n{label}:\n{text}"
         if QUEUE_SCHEMA:
             prompt += "\n\n" + QUEUE_SCHEMA
-        import egress as _egress
+        from . import egress as _egress
         try:
             prompt += "\n\n" + _egress.status_for_prompt(proj)
         except OSError:

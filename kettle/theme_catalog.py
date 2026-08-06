@@ -55,11 +55,11 @@ SYNTAX_ROLE_DEFAULTS = {
 
 
 def appdir() -> Path:
-    """Repo / install root that contains ``static/`` (same rule as server)."""
+    """Package data root that contains ``static/`` (same tree as server.APPDIR)."""
     here = Path(__file__).resolve().parent
     if (here / "static" / "themes").is_dir():
         return here
-    # Editable / wheel layout fallbacks
+    # Editable / unusual layouts: walk common fallbacks.
     for candidate in (here, Path.cwd()):
         if (candidate / "static" / "themes").is_dir():
             return candidate
