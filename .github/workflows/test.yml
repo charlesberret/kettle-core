@@ -50,3 +50,84 @@ jobs:
           echo '```text' >> "$GITHUB_STEP_SUMMARY"
           python -m coverage report >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+  # Wheel / pipx-style install (flat py-modules layout). Editable remains the
+  # supported contributor path; a full package restructure (bundled static/kits)
+  # is still required before a wheel can serve the browser UI — see INSTALL.md.
+  package-install:
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.14"]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+      - name: Build wheel
+        run: |
+          python -m pip install -U pip build
+          python -m build --wheel --outdir dist
+          ls -la dist
+      - name: Wheel contents audit (flat layout expectations)
+        run: |
+          python - <<'PY'
+          import zipfile
+          from pathlib import Path
+          wheels = sorted(Path("dist").glob("kettle-*.whl"))
+          assert wheels, "no wheel built"
+          wheel = wheels[-1]
+          names = zipfile.ZipFile(wheel).namelist()
+          dist_infos = sorted({n.split("/")[0] for n in names if n.endswith(".dist-info/METADATA")})
+          assert len(dist_infos) == 1, dist_infos
+          info = dist_infos[0]
+          required = {
+              "cli.py", "server.py", "kettle_main.py", "curator.py",
+              f"{info}/entry_points.txt",
+              f"{info}/top_level.txt",
+          }
+          missing = sorted(r for r in required if r not in names)
+          assert not missing, f"wheel missing {missing}"
+          # Documented follow-up (brief 11): static/ and kits/ are not packaged yet.
+          leaked = [n for n in names if n.startswith("static/") or n.startswith("kits/")]
+          assert not leaked, f"unexpected packaged resources (restructure landed?): {leaked}"
+          print("wheel ok:", wheel.name, f"({len(names)} files)")
+          PY
+      - name: Clean venv wheel install + console script smoke
+        run: |
+          python -m venv /tmp/kettle-wheel-venv
+          /tmp/kettle-wheel-venv/bin/pip install -U pip
+          /tmp/kettle-wheel-venv/bin/pip install dist/kettle-*.whl
+          /tmp/kettle-wheel-venv/bin/kettle --help | head -n 5
+          /tmp/kettle-wheel-venv/bin/python - <<'PY'
+          import importlib
+          for name in ("cli", "server", "curator", "kettle_main", "kettle_contract"):
+              importlib.import_module(name)
+          import kettle_contract
+          print("core_version", kettle_contract.core_version())
+          PY
+          # doctor must run (exit 0/1 depending on PATH/provider); never crash
+          set +e
+          /tmp/kettle-wheel-venv/bin/kettle doctor
+          code=$?
+          set -e
+          test "$code" -eq 0 -o "$code" -eq 1
+      - name: pipx-style isolated install smoke
+        run: |
+          # Mimic pipx: isolated venv + console scripts on PATH, no source checkout.
+          python -m venv /tmp/kettle-pipx-style
+          /tmp/kettle-pipx-style/bin/pip install -U pip
+          /tmp/kettle-pipx-style/bin/pip install dist/kettle-*.whl
+          export PATH="/tmp/kettle-pipx-style/bin:$PATH"
+          hash -r
+          command -v kettle
+          kettle --help >/dev/null
+          python - <<'PY'
+          import shutil
+          # Ensure the resolving kettle is the isolated one, not the checkout.
+          out = shutil.which("kettle") or ""
+          assert out.startswith("/tmp/kettle-pipx-style/"), out
+          print("pipx-style kettle:", out)
+          PY

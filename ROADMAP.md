@@ -27,11 +27,12 @@ contracts are still at `0`.
 ### Installation
 
 - Restructure the flat modules into a package with bundled `static/` and `kits/`
-  resources.
-- Verify wheel and `pipx` installation in CI while keeping editable installs
-  excellent for contributors.
-- Expand `kettle doctor` to cover provider availability, registry selection,
-  desk integrity, runtime discovery, and legacy migration state.
+  resources (still required before a wheel can serve the browser UI).
+- Wheel and pipx-style install verification in CI (flat `py-modules` layout;
+  editable remains the supported contributor path).
+- Expanded `kettle doctor`: provider CLI resolve, registry/desk integrity,
+  runtime discovery, legacy `.setsweep/` hints (auth-token and metrics beacons
+  remain follow-ups).
 
 ### Security
 

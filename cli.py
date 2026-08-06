@@ -28,7 +28,7 @@ to open ``$EDITOR`` instead when you want your own tools.
   kettle refresh-briefs <project> rewrite cold-re-entry briefs on the current queue
   kettle egress <project>        stage a desk egress memo (.kettle/outbound/)
   kettle egress-status <project> list staged egress memos
-  kettle doctor                  install health (which kettle, py-modules mapping)
+  kettle doctor                  install + runtime health (PATH, desks, provider, server)
 
 Run: python3 cli.py <command> …    (PROJECTS via DESK_PROJECTS env, same as the server)
 """
@@ -42,9 +42,14 @@ import os
 import subprocess
 import sys
 import tomllib
+import urllib.error
+import urllib.request
 from pathlib import Path
+from typing import Any
 
+import curator
 import egress
+import kettle_contract
 import lineage
 import runtime
 import server
@@ -54,6 +59,8 @@ import sweepkit
 CANONICAL_VENV = Path.home() / ".kettle-venv"
 CANONICAL_KETTLE = CANONICAL_VENV / "bin" / "kettle"
 DIST_NAME = "kettle"
+# Never probe the conventional live port (docs/ENGINEERING.md). Discovery only.
+_DOCTOR_PING_TIMEOUT_S = 0.8
 
 
 def _k(n) -> str:
@@ -83,7 +90,11 @@ def _which_all(cmd: str = "kettle") -> list[Path]:
 
 
 def _py_modules_from_pyproject(path: Path | None = None) -> list[str]:
-    """Read the setuptools py-modules list from pyproject.toml (source of truth)."""
+    """Read the setuptools py-modules list from pyproject.toml (source of truth).
+
+    Wheel installs do not ship pyproject.toml beside the modules; callers that
+    need a module list should fall back to the installed top_level.txt.
+    """
     if path is None:
         # Prefer the live source tree next to this module (editable install).
         path = Path(__file__).resolve().parent / "pyproject.toml"
@@ -106,11 +117,97 @@ def _installed_top_level(dist_name: str = DIST_NAME) -> list[str] | None:
     return [line.strip() for line in text.splitlines() if line.strip()]
 
 
+def _package_install_info(dist_name: str = DIST_NAME) -> tuple[str, str]:
+    """Return (version, install_mode) for the installed distribution."""
+    try:
+        dist = importlib.metadata.distribution(dist_name)
+    except importlib.metadata.PackageNotFoundError:
+        return "unknown", "not-installed"
+    version = dist.version or "unknown"
+    # PEP 610 direct_url.json distinguishes editable checkouts from wheels.
+    try:
+        text = dist.read_text("direct_url.json")
+    except (FileNotFoundError, OSError):
+        text = None
+    if text:
+        try:
+            meta = json.loads(text)
+        except json.JSONDecodeError:
+            meta = {}
+        dir_info = meta.get("dir_info") if isinstance(meta, dict) else None
+        if isinstance(dir_info, dict) and dir_info.get("editable"):
+            return version, "editable"
+        if isinstance(meta, dict) and meta.get("url", "").startswith("file:"):
+            return version, "local-path"
+    return version, "wheel-or-sdist"
+
+
+def _read_settings_readonly() -> dict:
+    """Load settings.json without healing or rewriting (doctor is read-only)."""
+    path = server.SETTINGS_PATH
+    if not path.is_file():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8") or "{}")
+    except (OSError, json.JSONDecodeError, UnicodeError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _registry_raw() -> tuple[Path, object | None, str | None]:
+    """Return (path, parsed_json_or_None, error_detail_or_None). Never creates files."""
+    path = server.PROJECTS_PATH
+    if not path.exists():
+        return path, {"projects": []}, None
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except OSError as e:
+        return path, None, f"unreadable: {e}"
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as e:
+        return path, None, f"invalid JSON: {e}"
+    return path, data, None
+
+
+def _read_discovery(path: Path | None = None) -> tuple[dict | None, str | None]:
+    """Parse ~/.cache/kettle/server.json. Returns (info, error). Missing → (None, None)."""
+    p = path if path is not None else server.RUNTIME_PATH
+    if not p.is_file():
+        return None, None
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, UnicodeError) as e:
+        return None, f"unreadable discovery: {e}"
+    if not isinstance(data, dict):
+        return None, "discovery is not a JSON object"
+    return data, None
+
+
+def _ping_localhost(port: int, timeout: float = _DOCTOR_PING_TIMEOUT_S) -> dict | None:
+    """GET /api/ping on loopback only. Never binds; never probes port 4242."""
+    if not isinstance(port, int) or port <= 0 or port == server.DEFAULT_PORT:
+        # Refuse the conventional live port so tools never disturb a bookmarked desk.
+        return None
+    try:
+        with urllib.request.urlopen(
+            f"http://127.0.0.1:{port}/api/ping", timeout=timeout,
+        ) as resp:
+            payload = json.loads(resp.read())
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError, ValueError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    if payload.get("app") not in {"kettle", "setsweep"}:
+        return None
+    return payload
+
+
 def install_doctor_checks(
     *,
     path_hits: list[Path] | None = None,
     py_modules: list[str] | None = None,
-    top_level: list[str] | None | object = ...,
+    top_level: Any = ...,
     canonical: Path = CANONICAL_KETTLE,
 ) -> list[dict]:
     """Read-only install health rows for `kettle doctor` (brief 20; expanded by brief 18).
@@ -119,9 +216,30 @@ def install_doctor_checks(
     """
     rows: list[dict] = []
     hits = path_hits if path_hits is not None else _which_all("kettle")
-    modules = py_modules if py_modules is not None else _py_modules_from_pyproject()
     if top_level is ...:
         top_level = _installed_top_level()
+    modules = py_modules if py_modules is not None else _py_modules_from_pyproject()
+    modules_source = "pyproject.toml"
+    if not modules and isinstance(top_level, list) and top_level:
+        # Wheel / non-editable install: no pyproject beside modules.
+        modules = list(top_level)
+        modules_source = "installed top_level"
+
+    # --- python + package ---
+    py_ok = sys.version_info >= (3, 11)
+    rows.append({
+        "name": "python-version",
+        "ok": py_ok,
+        "detail": f"{sys.version.split()[0]} ({sys.executable})",
+        "docs": "INSTALL.md § Canonical install",
+    })
+    pkg_version, install_mode = _package_install_info()
+    rows.append({
+        "name": "package-version",
+        "ok": install_mode != "not-installed",
+        "detail": f"{DIST_NAME} {pkg_version} ({install_mode})",
+        "docs": "INSTALL.md § Canonical install",
+    })
 
     # --- which kettle ---
     if not hits:
@@ -157,7 +275,7 @@ def install_doctor_checks(
                 "ok": False,
                 "detail": f"{len(extras)} extra on PATH: "
                           + ", ".join(str(p) for p in extras),
-                "docs": "INSTALL.md § PATH retirement checklist",
+                "docs": "INSTALL.md § PATH hygiene",
             })
         else:
             rows.append({
@@ -172,7 +290,8 @@ def install_doctor_checks(
         rows.append({
             "name": "py-modules-list",
             "ok": False,
-            "detail": "could not read tool.setuptools.py-modules from pyproject.toml",
+            "detail": "could not read tool.setuptools.py-modules from pyproject.toml "
+                      "(and no installed top_level)",
             "docs": "INSTALL.md § Reinstall rule",
         })
         return rows
@@ -180,7 +299,7 @@ def install_doctor_checks(
     rows.append({
         "name": "py-modules-list",
         "ok": True,
-        "detail": f"{len(modules)} modules in pyproject.toml",
+        "detail": f"{len(modules)} modules from {modules_source}",
         "docs": "pyproject.toml py-modules",
     })
 
@@ -234,6 +353,329 @@ def install_doctor_checks(
             "docs": "INSTALL.md § Reinstall rule",
         })
 
+    return rows
+
+
+def desk_doctor_checks(
+    *,
+    projects: list[dict] | None = None,
+    registry_path: Path | None = None,
+    registry_data: Any = ...,
+    registry_error: Any = ...,
+) -> list[dict]:
+    """Read-only registry + desk integrity + legacy migration hints (brief 18)."""
+    rows: list[dict] = []
+    if registry_data is ... or registry_error is ...:
+        path, data, err = _registry_raw()
+        if registry_path is None:
+            registry_path = path
+        if registry_data is ...:
+            registry_data = data
+        if registry_error is ...:
+            registry_error = err
+    elif registry_path is None:
+        registry_path = server.PROJECTS_PATH
+
+    if registry_error:
+        rows.append({
+            "name": "registry",
+            "ok": False,
+            "detail": f"{registry_path}: {registry_error}",
+            "docs": "INSTALL.md § Registering a desk",
+        })
+        return rows
+
+    if not isinstance(registry_data, dict) or not isinstance(
+        registry_data.get("projects"), list,
+    ):
+        rows.append({
+            "name": "registry",
+            "ok": False,
+            "detail": f"{registry_path}: expected object with projects[]",
+            "docs": "INSTALL.md § Registering a desk",
+        })
+        return rows
+
+    proj_list = projects if projects is not None else list(registry_data.get("projects") or [])
+    rows.append({
+        "name": "registry",
+        "ok": True,
+        "detail": f"{registry_path} ({len(proj_list)} project(s))",
+        "docs": "INSTALL.md § Registering a desk",
+    })
+
+    problems: list[str] = []
+    legacy_only: list[str] = []
+    both_desks: list[str] = []
+    for proj in proj_list:
+        if not isinstance(proj, dict):
+            problems.append("non-object project entry")
+            continue
+        pid = str(proj.get("id") or "?")
+        root_raw = proj.get("root")
+        if not root_raw:
+            problems.append(f"{pid}: missing root")
+            continue
+        try:
+            root = Path(str(root_raw)).expanduser().resolve()
+        except OSError as e:
+            problems.append(f"{pid}: bad root ({e})")
+            continue
+        if not root.is_dir():
+            problems.append(f"{pid}: root missing ({root})")
+            continue
+        kettle_desk = root / ".kettle"
+        setsweep_desk = root / ".setsweep"
+        if kettle_desk.is_dir() and setsweep_desk.is_dir():
+            both_desks.append(pid)
+        elif setsweep_desk.is_dir() and not kettle_desk.exists():
+            legacy_only.append(pid)
+        desk = kettle_desk if kettle_desk.exists() or not setsweep_desk.exists() else setsweep_desk
+        if not desk.is_dir():
+            # Unfounded / never-opened desk: registry entry alone is fine.
+            continue
+        queue = desk / "runtime" / "queue.json"
+        if not queue.is_file():
+            problems.append(f"{pid}: desk present but queue.json missing ({queue})")
+            continue
+        try:
+            qdata = json.loads(queue.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError, UnicodeError) as e:
+            problems.append(f"{pid}: queue.json unreadable ({e})")
+            continue
+        if not isinstance(qdata, dict) or "entries" not in qdata:
+            problems.append(f"{pid}: queue.json missing entries[]")
+
+    if problems:
+        rows.append({
+            "name": "desk-integrity",
+            "ok": False,
+            "detail": "; ".join(problems[:5])
+                      + (f" (+{len(problems) - 5} more)" if len(problems) > 5 else ""),
+            "docs": "ARCHITECTURE.md · INSTALL.md § Registering a desk",
+        })
+    else:
+        rows.append({
+            "name": "desk-integrity",
+            "ok": True,
+            "detail": (
+                f"{len(proj_list)} desk(s) ok"
+                if proj_list else "no desks registered"
+            ),
+            "docs": "ARCHITECTURE.md · INSTALL.md § Registering a desk",
+        })
+
+    # Split state is a real failure; legacy-only is an informational hint (still ok).
+    if both_desks:
+        rows.append({
+            "name": "legacy-migration",
+            "ok": False,
+            "detail": "both .kettle/ and .setsweep/ present (split risk): "
+                      + ", ".join(both_desks[:5]),
+            "docs": "INSTALL.md § Registering a desk · ROADMAP Migration",
+        })
+    elif legacy_only:
+        rows.append({
+            "name": "legacy-migration",
+            "ok": True,
+            "detail": "legacy .setsweep/ desk(s) in use (migrate when ready): "
+                      + ", ".join(legacy_only[:5]),
+            "docs": "INSTALL.md § Registering a desk · ROADMAP Migration",
+        })
+    else:
+        rows.append({
+            "name": "legacy-migration",
+            "ok": True,
+            "detail": "no legacy .setsweep/ desks in registry",
+            "docs": "INSTALL.md § Registering a desk",
+        })
+
+    return rows
+
+
+def runtime_doctor_checks(
+    *,
+    settings: dict | None = None,
+    provider_ready: dict | None = None,
+    discovery: Any = ...,
+    discovery_error: Any = ...,
+    ping: Any = ...,
+) -> list[dict]:
+    """Read-only provider + discovery + server reachability rows (brief 18).
+
+    Auth-token enforcement is owned elsewhere; doctor only reports CLI resolve and
+    an optional localhost ping from the discovery record (never binds, never probes
+    the conventional live port 4242).
+    """
+    rows: list[dict] = []
+    settings = settings if settings is not None else _read_settings_readonly()
+    try:
+        cfg = curator.resolve_curator(settings)
+    except Exception as e:  # noqa: BLE001 — doctor must keep going
+        rows.append({
+            "name": "provider-cli",
+            "ok": False,
+            "detail": f"curator resolve failed: {e}",
+            "docs": "INSTALL.md § Auth",
+        })
+        cfg = None
+
+    if cfg is not None:
+        if provider_ready is None:
+            provider_ready = curator.provider_readiness(
+                cfg.provider,
+                active_provider=cfg.provider,
+                active_command=cfg.command,
+            )
+        exists = bool(provider_ready.get("command_exists"))
+        cmd = provider_ready.get("command_resolved") or provider_ready.get("command") or "?"
+        label = provider_ready.get("label") or cfg.provider
+        rows.append({
+            "name": "provider-cli",
+            "ok": exists,
+            "detail": (
+                f"{label}: {cmd}"
+                if exists else
+                f"{label}: `{provider_ready.get('command') or cmd}` not on PATH"
+            ),
+            "docs": "INSTALL.md § Auth",
+        })
+
+    if discovery is ... or discovery_error is ...:
+        info, err = _read_discovery()
+        if discovery is ...:
+            discovery = info
+        if discovery_error is ...:
+            discovery_error = err
+
+    if discovery_error:
+        rows.append({
+            "name": "runtime-discovery",
+            "ok": False,
+            "detail": discovery_error,
+            "docs": "ARCHITECTURE.md · docs/ENGINEERING.md",
+        })
+        rows.append({
+            "name": "server-reachable",
+            "ok": False,
+            "detail": "skipped (discovery unreadable)",
+            "docs": "ARCHITECTURE.md · docs/ENGINEERING.md",
+        })
+        return rows
+
+    if discovery is None:
+        rows.append({
+            "name": "runtime-discovery",
+            "ok": True,
+            "detail": f"no discovery record at {server.RUNTIME_PATH} (server not running)",
+            "docs": "ARCHITECTURE.md · docs/ENGINEERING.md",
+        })
+        rows.append({
+            "name": "server-reachable",
+            "ok": True,
+            "detail": "server not running (CLI-only is fine)",
+            "docs": "INSTALL.md § Viewports",
+        })
+        return rows
+
+    port = discovery.get("port")
+    pid = discovery.get("pid")
+    url = discovery.get("url") or (f"http://127.0.0.1:{port}/" if port else "?")
+    rows.append({
+        "name": "runtime-discovery",
+        "ok": isinstance(port, int) and port > 0,
+        "detail": f"port={port} pid={pid} url={url}",
+        "docs": "ARCHITECTURE.md · docs/ENGINEERING.md",
+    })
+
+    if not (isinstance(port, int) and port > 0):
+        rows.append({
+            "name": "server-reachable",
+            "ok": False,
+            "detail": "discovery missing a usable port",
+            "docs": "ARCHITECTURE.md · docs/ENGINEERING.md",
+        })
+        return rows
+
+    if port == server.DEFAULT_PORT:
+        # Policy: tooling must not probe 4242. Report discovery only.
+        rows.append({
+            "name": "server-reachable",
+            "ok": True,
+            "detail": (
+                f"discovery lists conventional port {port}; "
+                "skipping probe (see docs/ENGINEERING.md)"
+            ),
+            "docs": "docs/ENGINEERING.md",
+        })
+        return rows
+
+    if ping is ...:
+        ping = _ping_localhost(port)
+
+    if ping is None:
+        rows.append({
+            "name": "server-reachable",
+            "ok": False,
+            "detail": f"no kettle /api/ping on 127.0.0.1:{port} (stale discovery?)",
+            "docs": "ARCHITECTURE.md · docs/ENGINEERING.md",
+        })
+        return rows
+
+    local_ver = kettle_contract.core_version()
+    remote_ver = ping.get("version")
+    ver_note = (
+        f"version={remote_ver}"
+        if remote_ver == local_ver
+        else f"version={remote_ver} (local {local_ver})"
+    )
+    # Version skew is a warning detail; reachability itself is the hard check.
+    # Auth token presence is owned by the security workstream — not reported here.
+    rows.append({
+        "name": "server-reachable",
+        "ok": True,
+        "detail": f"GET /api/ping ok on :{port} ({ver_note})",
+        "docs": "ARCHITECTURE.md · API.md",
+    })
+    return rows
+
+
+def doctor_checks(
+    *,
+    path_hits: list[Path] | None = None,
+    py_modules: list[str] | None = None,
+    top_level: Any = ...,
+    canonical: Path = CANONICAL_KETTLE,
+    projects: list[dict] | None = None,
+    registry_path: Path | None = None,
+    registry_data: Any = ...,
+    registry_error: Any = ...,
+    settings: dict | None = None,
+    provider_ready: dict | None = None,
+    discovery: Any = ...,
+    discovery_error: Any = ...,
+    ping: Any = ...,
+) -> list[dict]:
+    """Full read-only doctor table: install + desks + provider/runtime."""
+    rows = install_doctor_checks(
+        path_hits=path_hits,
+        py_modules=py_modules,
+        top_level=top_level,
+        canonical=canonical,
+    )
+    rows.extend(desk_doctor_checks(
+        projects=projects,
+        registry_path=registry_path,
+        registry_data=registry_data,
+        registry_error=registry_error,
+    ))
+    rows.extend(runtime_doctor_checks(
+        settings=settings,
+        provider_ready=provider_ready,
+        discovery=discovery,
+        discovery_error=discovery_error,
+        ping=ping,
+    ))
     return rows
 
 
@@ -678,8 +1120,8 @@ def cmd_egress_status(args) -> int:
 
 
 def cmd_doctor(_args) -> int:
-    """Install health (brief 20). Brief 18 expands with server/curator/beacon rows."""
-    rows = install_doctor_checks()
+    """Install + runtime health (brief 20 install seed; brief 18 expansion). Read-only."""
+    rows = doctor_checks()
     width = max((len(r["name"]) for r in rows), default=8)
     failed = 0
     for r in rows:
@@ -691,9 +1133,9 @@ def cmd_doctor(_args) -> int:
             print(f"        → {r['docs']}")
     print()
     if failed:
-        print(f"doctor: {failed} check(s) failed — see INSTALL.md")
+        print(f"doctor: {failed} check(s) failed — see INSTALL.md / ARCHITECTURE.md")
         return 1
-    print("doctor: all install checks green")
+    print("doctor: all checks green")
     return 0
 
 
@@ -711,7 +1153,7 @@ def main(argv=None) -> int:
                "  kettle themes\n"
                "  kettle chat    kettle               # talk to the desk\n"
                "  kettle chat    kettle <entry-id>    # about one file\n"
-               "  kettle doctor                      # install health\n"
+               "  kettle doctor                      # install + runtime health\n"
                "  kettle sweep-status kettle\n"
                "  kettle sweep-close  kettle\n"
                "  kettle refresh-briefs kettle\n"
@@ -726,7 +1168,7 @@ def main(argv=None) -> int:
     sub.add_parser("themes", help="list bundled and user color themes").set_defaults(fn=cmd_themes)
     sub.add_parser(
         "doctor",
-        help="install health: which kettle, py-modules mapping (brief 20; brief 18 expands)",
+        help="install + runtime health (PATH, desks, provider CLI, server discovery)",
     ).set_defaults(fn=cmd_doctor)
     a = sub.add_parser("add", help="register a folder as a desk")
     a.add_argument("path"); a.add_argument("--name", default=None); a.set_defaults(fn=cmd_add)
