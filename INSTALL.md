@@ -117,6 +117,7 @@ kettle chat    <project> [id]   talk to the curator
 kettle lineage <project>        who edited what
 kettle bind    <project>        add lineage directive to CLAUDE.md
 kettle doctor                   install + runtime health
+kettle migrate [--apply]        migrate .setsweep/ → .kettle/ (dry-run by default)
 kettle sweep-status <project>   CLOSE readiness
 kettle sweep-close  <project>   quiet mechanical CLOSE
 kettle sweep-archive <project>  archive queue entries
@@ -152,6 +153,30 @@ An existing `<root>/.setsweep/` desk remains active in place until explicitly
 migrated, preventing split state. Add a project with `kettle add <dir>`, by editing
 the registry, or via the app's admin panel. The
 bundled Electron `.app` always uses Application Support (sets `DESK_PROJECTS`).
+
+### Migrating from Setsweep
+
+`kettle migrate` renames legacy desks and, when applicable, moves the legacy user
+registry. **Dry-run is the default** (prints the plan, writes nothing). Pass
+`--apply` to write.
+
+```sh
+kettle migrate              # dry-run: show what would change
+kettle migrate --apply      # rename .setsweep/ → .kettle/ (and registry if needed)
+kettle migrate --apply mydesk   # one project only (skips user-registry move)
+```
+
+Rules:
+
+- One writable desk per project: if both `.kettle/` and `.setsweep/` already exist,
+  migrate **refuses** (exit status 1) and changes nothing. Resolve the split by hand.
+- Happy path is a rename of `.setsweep/` → `.kettle/` (not a copy that leaves both).
+- When `DESK_PROJECTS` is unset and only the legacy Setsweep user registry exists,
+  `--apply` moves `projects.json` (and a sibling `settings.json` when present) to the
+  Kettle user path. If the Kettle registry already exists, the registry step is skipped.
+
+`kettle doctor` reports legacy desks and split risk; its docs pointer names this
+section and `kettle migrate --help`.
 
 **Sync tip:** exclude `.kettle/runtime/` from file-sync tools so the queue/chatlog/snapshots
 do not race. Durable charter/memory files under `.kettle/` may sync normally. See

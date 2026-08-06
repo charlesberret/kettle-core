@@ -46,9 +46,9 @@ contracts are still at `0`.
 
 ### Migration
 
-- Add an explicit, dry-run-first `kettle migrate` command for `.setsweep/` desks
-  and legacy user registries.
-- Never maintain two writable desks for one project.
+- ~~Add an explicit, dry-run-first `kettle migrate` command for `.setsweep/` desks
+  and legacy user registries.~~ (`kettle migrate` / `--apply`; see INSTALL.md)
+- Never maintain two writable desks for one project (migrate refuses split desks).
 - Publish a deprecation window before removing the old command aliases or
   process identity.
 
