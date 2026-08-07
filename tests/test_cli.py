@@ -17,8 +17,8 @@ from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest import mock
 
-import cli
-import server
+import kettle.cli as cli
+import kettle.server as server
 
 
 class CliTests(unittest.TestCase):
@@ -116,7 +116,7 @@ class CliTests(unittest.TestCase):
                 "status": "pending", "brief": "Check it", "ask": "ok?",
             }],
         }))
-        with mock.patch("tui_editor.edit_file", return_value=0) as edit:
+        with mock.patch("kettle.tui_editor.edit_file", return_value=0) as edit:
             code, out, err = self.run_cli(["open", proj["id"], "draft"])
         self.assertEqual((code, err), (0, ""))
         self.assertIn("built-in editor", out)
@@ -132,7 +132,7 @@ class CliTests(unittest.TestCase):
             "entries": [{"id": "draft", "path": str(target), "status": "pending"}],
         }))
         with mock.patch.dict(os.environ, {"EDITOR": "true"}), \
-                mock.patch("cli.subprocess.call", return_value=0) as call:
+                mock.patch("kettle.cli.subprocess.call", return_value=0) as call:
             code, out, _ = self.run_cli(["open", proj["id"], "draft", "--external"])
         self.assertEqual(code, 0)
         self.assertIn("opening", out)
@@ -148,8 +148,8 @@ class CliTests(unittest.TestCase):
             "entries": [{"id": "draft", "path": str(target), "status": "pending"}],
         }))
         # edit_file returns 3 → no tty → external fallback
-        with mock.patch("tui_editor.edit_file", return_value=3), \
-                mock.patch("cli.subprocess.call", return_value=0) as call:
+        with mock.patch("kettle.tui_editor.edit_file", return_value=3), \
+                mock.patch("kettle.cli.subprocess.call", return_value=0) as call:
             code, out, err = self.run_cli(["edit", proj["id"], "draft"])
         self.assertEqual(code, 0)
         self.assertIn("no tty", err)
@@ -294,34 +294,48 @@ class CliTests(unittest.TestCase):
         self.assertIn("grok-4.5", cmd)
 
     def test_install_doctor_flags_stale_mapping_and_path_extras(self):
-        """Brief 20: doctor catches PATH strays and py-modules missing from top_level."""
+        """Brief 20: doctor catches PATH strays and top_level missing the kettle package."""
         canon = Path("/tmp/fake-venv/bin/kettle")
         rows = cli.install_doctor_checks(
             path_hits=[
                 Path("/opt/homebrew/bin/kettle"),
                 Path("/Users/me/.local/bin/kettle"),
             ],
-            py_modules=["cli", "server", "egress", "sweepkit"],
-            top_level=["cli", "server"],  # egress + sweepkit missing → stale MAPPING
+            package_modules=["kettle", "kettle.cli", "kettle.server"],
+            top_level=["cli", "server"],  # flat leftovers — missing kettle package
             canonical=canon,
         )
         by_name = {r["name"]: r for r in rows}
+        self.assertIn("python-version", by_name)
+        self.assertIn("package-version", by_name)
         self.assertFalse(by_name["kettle-on-path"]["ok"])
         self.assertFalse(by_name["kettle-path-extras"]["ok"])
         self.assertIn("extra on PATH", by_name["kettle-path-extras"]["detail"])
         self.assertFalse(by_name["install-mapping"]["ok"])
-        self.assertIn("egress", by_name["install-mapping"]["detail"])
-        self.assertIn("sweepkit", by_name["install-mapping"]["detail"])
+        self.assertIn("kettle", by_name["install-mapping"]["detail"])
         # Real modules remain importable in this process even when top_level is stale.
         self.assertTrue(by_name["py-modules-importable"]["ok"])
 
-    def test_install_doctor_green_when_canonical_and_mapped(self):
-        modules = cli._py_modules_from_pyproject()
-        self.assertIn("egress", modules)
+    def test_install_doctor_accepts_package_top_level(self):
+        """Wheel/editable installs list only the kettle package in top_level.txt."""
         rows = cli.install_doctor_checks(
             path_hits=[cli.CANONICAL_KETTLE],
-            py_modules=modules,
-            top_level=list(modules),
+            package_modules=["kettle", "kettle.cli", "kettle.server"],
+            top_level=["kettle"],
+            canonical=cli.CANONICAL_KETTLE,
+        )
+        by_name = {r["name"]: r for r in rows}
+        self.assertTrue(by_name["py-modules-list"]["ok"])
+        self.assertIn("caller", by_name["py-modules-list"]["detail"])
+        self.assertTrue(by_name["install-mapping"]["ok"])
+
+    def test_install_doctor_green_when_canonical_and_mapped(self):
+        modules = cli._package_modules()
+        self.assertIn("kettle.egress", modules)
+        rows = cli.install_doctor_checks(
+            path_hits=[cli.CANONICAL_KETTLE],
+            package_modules=modules,
+            top_level=["kettle"],
             canonical=cli.CANONICAL_KETTLE,
         )
         self.assertTrue(all(r["ok"] for r in rows), rows)
@@ -331,6 +345,158 @@ class CliTests(unittest.TestCase):
         self.assertEqual(err, "")
         self.assertIn("kettle-on-path", out)
         self.assertIn("py-modules-importable", out)
+        self.assertIn("provider-cli", out)
+        self.assertIn("registry", out)
+        self.assertIn("desk-integrity", out)
+        self.assertIn("server-reachable", out)
+
+    def test_desk_doctor_flags_corrupt_registry_and_queue(self):
+        """Broken scratch registry / queue.json turn the matching doctor rows red."""
+        bad_reg = self.tmp / "broken-projects.json"
+        bad_reg.write_text("{not-json", encoding="utf-8")
+        rows = cli.desk_doctor_checks(
+            registry_path=bad_reg,
+            registry_data=None,
+            registry_error="invalid JSON: Expecting property name",
+        )
+        by_name = {r["name"]: r for r in rows}
+        self.assertFalse(by_name["registry"]["ok"])
+        self.assertIn("INSTALL.md", by_name["registry"]["docs"])
+
+        root = self.tmp / "scratch-desk"
+        root.mkdir()
+        desk = root / ".kettle"
+        (desk / "runtime").mkdir(parents=True)
+        (desk / "runtime" / "queue.json").write_text("not-json", encoding="utf-8")
+        proj = {"id": "scratch", "name": "Scratch", "root": str(root)}
+        rows2 = cli.desk_doctor_checks(
+            projects=[proj],
+            registry_path=self.registry,
+            registry_data={"projects": [proj]},
+            registry_error=None,
+        )
+        by2 = {r["name"]: r for r in rows2}
+        self.assertTrue(by2["registry"]["ok"])
+        self.assertFalse(by2["desk-integrity"]["ok"])
+        self.assertIn("queue.json", by2["desk-integrity"]["detail"])
+        self.assertIn("ARCHITECTURE.md", by2["desk-integrity"]["docs"])
+
+    def test_desk_doctor_legacy_hint_and_split_failure(self):
+        legacy_root = self.tmp / "legacy-only"
+        legacy_root.mkdir()
+        (legacy_root / ".setsweep" / "runtime").mkdir(parents=True)
+        (legacy_root / ".setsweep" / "runtime" / "queue.json").write_text(
+            json.dumps({"entries": []}), encoding="utf-8",
+        )
+        legacy_proj = {"id": "legacy", "name": "Legacy", "root": str(legacy_root)}
+        rows = cli.desk_doctor_checks(
+            projects=[legacy_proj],
+            registry_path=self.registry,
+            registry_data={"projects": [legacy_proj]},
+            registry_error=None,
+        )
+        by_name = {r["name"]: r for r in rows}
+        self.assertTrue(by_name["desk-integrity"]["ok"])
+        self.assertTrue(by_name["legacy-migration"]["ok"])
+        self.assertIn(".setsweep", by_name["legacy-migration"]["detail"])
+
+        split_root = self.tmp / "split-desk"
+        split_root.mkdir()
+        for name in (".kettle", ".setsweep"):
+            (split_root / name / "runtime").mkdir(parents=True)
+            (split_root / name / "runtime" / "queue.json").write_text(
+                json.dumps({"entries": []}), encoding="utf-8",
+            )
+        split_proj = {"id": "split", "name": "Split", "root": str(split_root)}
+        rows2 = cli.desk_doctor_checks(
+            projects=[split_proj],
+            registry_path=self.registry,
+            registry_data={"projects": [split_proj]},
+            registry_error=None,
+        )
+        by2 = {r["name"]: r for r in rows2}
+        self.assertFalse(by2["legacy-migration"]["ok"])
+        self.assertIn("split risk", by2["legacy-migration"]["detail"])
+
+    def test_runtime_doctor_flags_missing_provider_and_dead_server(self):
+        """Missing curator CLI and stale discovery both fail with docs pointers."""
+        rows = cli.runtime_doctor_checks(
+            settings={"curator": {"provider": "grok", "command": "grok-not-installed-xyz"}},
+            provider_ready={
+                "id": "grok",
+                "label": "Grok Build CLI",
+                "command": "grok-not-installed-xyz",
+                "command_resolved": "grok-not-installed-xyz",
+                "command_exists": False,
+            },
+            discovery=None,
+            discovery_error=None,
+            ping=None,
+        )
+        by_name = {r["name"]: r for r in rows}
+        self.assertFalse(by_name["provider-cli"]["ok"])
+        self.assertIn("not on PATH", by_name["provider-cli"]["detail"])
+        self.assertIn("INSTALL.md", by_name["provider-cli"]["docs"])
+        self.assertTrue(by_name["server-reachable"]["ok"])  # no discovery → CLI-only ok
+
+        rows2 = cli.runtime_doctor_checks(
+            settings={"curator": {"provider": "claude", "command": "claude"}},
+            provider_ready={
+                "id": "claude",
+                "label": "Claude Code",
+                "command": "claude",
+                "command_resolved": "/bin/claude",
+                "command_exists": True,
+            },
+            discovery={"port": 59999, "pid": 1, "url": "http://127.0.0.1:59999/"},
+            discovery_error=None,
+            ping=None,  # injected dead ping
+        )
+        by2 = {r["name"]: r for r in rows2}
+        self.assertTrue(by2["provider-cli"]["ok"])
+        self.assertTrue(by2["runtime-discovery"]["ok"])
+        self.assertFalse(by2["server-reachable"]["ok"])
+        self.assertIn("stale discovery", by2["server-reachable"]["detail"])
+        self.assertIn("ENGINEERING.md", by2["server-reachable"]["docs"])
+
+    def test_doctor_checks_combines_layers_and_exits_nonzero(self):
+        modules = cli._py_modules_from_pyproject()
+        rows = cli.doctor_checks(
+            path_hits=[cli.CANONICAL_KETTLE],
+            py_modules=modules,
+            top_level=list(modules),
+            canonical=cli.CANONICAL_KETTLE,
+            projects=[],
+            registry_path=self.registry,
+            registry_data={"projects": []},
+            registry_error=None,
+            settings={"curator": {"provider": "claude", "command": "missing-cli-zzz"}},
+            provider_ready={
+                "id": "claude",
+                "label": "Claude Code",
+                "command": "missing-cli-zzz",
+                "command_resolved": "missing-cli-zzz",
+                "command_exists": False,
+            },
+            discovery={"port": 58888, "pid": 9},
+            discovery_error=None,
+            ping=None,
+        )
+        names = [r["name"] for r in rows]
+        for expected in (
+            "python-version", "package-version", "kettle-on-path",
+            "registry", "desk-integrity", "legacy-migration",
+            "provider-cli", "runtime-discovery", "server-reachable",
+        ):
+            self.assertIn(expected, names)
+        self.assertTrue(any(not r["ok"] for r in rows))
+        with mock.patch.object(cli, "doctor_checks", return_value=rows):
+            code, out, err = self.run_cli(["doctor"])
+        self.assertEqual(code, 1)
+        self.assertEqual(err, "")
+        self.assertIn("FAIL", out)
+        self.assertIn("provider-cli", out)
+        self.assertIn("→", out)
 
 
 if __name__ == "__main__":

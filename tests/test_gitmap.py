@@ -11,7 +11,7 @@ import unittest
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-import gitmap
+import kettle.gitmap as gitmap
 
 
 def _git_available() -> bool:

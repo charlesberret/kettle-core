@@ -9,8 +9,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import server
-import sweepkit
+import kettle.server as server
+import kettle.sweepkit as sweepkit
 
 
 class SweepkitBase(unittest.TestCase):

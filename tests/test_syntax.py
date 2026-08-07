@@ -6,8 +6,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import syntax
-import tui_editor
+import kettle.syntax as syntax
+import kettle.tui_editor as tui_editor
 
 
 class LanguageDetection(unittest.TestCase):

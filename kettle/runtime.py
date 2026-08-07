@@ -33,7 +33,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable, Iterable, Iterator, Optional
 
-import lineage
+from . import lineage
 
 DEFAULT_WINDOW = 200_000
 
@@ -419,7 +419,17 @@ class SessionLedger:
         p = self.path(session_id)
         if not p.exists():
             return []
-        return [json.loads(ln) for ln in p.read_text(encoding="utf-8").splitlines() if ln.strip()]
+        out: list[dict] = []
+        for ln in p.read_text(encoding="utf-8").splitlines():
+            if not ln.strip():
+                continue
+            try:
+                rec = json.loads(ln)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(rec, dict):
+                out.append(rec)
+        return out
 
 
 # ---------- tool tiers (abstract) + dialect argv ----------

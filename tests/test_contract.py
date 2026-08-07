@@ -13,7 +13,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
-import kettle_contract
+import kettle.kettle_contract as kettle_contract
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
@@ -32,6 +32,38 @@ class ContractIdentity(unittest.TestCase):
         for key in ("api_version", "desk_schema_version"):
             self.assertIs(type(identity[key]), int)
             self.assertGreaterEqual(identity[key], 0)
+        self.assertEqual(identity["api_version"], kettle_contract.API_VERSION)
+        self.assertEqual(
+            identity["desk_schema_version"], kettle_contract.DESK_SCHEMA_VERSION
+        )
+
+    def test_core_version_uses_kettle_dunder_version(self):
+        import kettle as kettle_pkg
+
+        with mock.patch.object(kettle_pkg, "__version__", "9.9.9"):
+            self.assertEqual(kettle_contract.core_version(), "9.9.9")
+
+    def test_read_version_falls_back_when_dist_missing(self):
+        import importlib.metadata
+
+        import kettle as kettle_pkg
+
+        with mock.patch.object(
+            kettle_pkg.importlib.metadata,
+            "version",
+            side_effect=importlib.metadata.PackageNotFoundError,
+        ):
+            # Source-tree pyproject still available beside the package.
+            with (ROOT / "pyproject.toml").open("rb") as fp:
+                expected = str(tomllib.load(fp)["project"]["version"])
+            self.assertEqual(kettle_pkg._read_version(), expected)
+
+        with mock.patch.object(
+            kettle_pkg.importlib.metadata,
+            "version",
+            side_effect=importlib.metadata.PackageNotFoundError,
+        ), mock.patch.object(kettle_pkg.tomllib, "load", side_effect=OSError("nope")):
+            self.assertEqual(kettle_pkg._read_version(), "unknown")
 
     def test_family_parser_accepts_both_manifest_key_styles(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -84,7 +116,8 @@ class FamilyCheckCommand(unittest.TestCase):
             '[project]\nname = "kettle"\nversion = "0.2.0"\n',
             encoding="utf-8",
         )
-        (core / "kettle_contract.py").write_text(
+        (core / "kettle").mkdir()
+        (core / "kettle" / "kettle_contract.py").write_text(
             "API_VERSION = 0\nDESK_SCHEMA_VERSION = 0\n",
             encoding="utf-8",
         )

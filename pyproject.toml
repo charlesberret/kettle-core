@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -40,19 +40,27 @@ dev = [
 ]
 
 [project.scripts]
-kettle = "kettle_main:main"
-kettle-watch = "kettle_watch:main"   # the inbox folder-watch — run on a schedule (cron/timer)
+kettle = "kettle.kettle_main:main"
+kettle-watch = "kettle.kettle_watch:main"   # the inbox folder-watch — run on a schedule (cron/timer)
 # Transitional aliases. Keep old installations and automation working while the
 # public product moves to Kettle; remove only in a separately announced release.
-setsweep = "kettle_main:main"
-setsweep-watch = "kettle_watch:main"
+setsweep = "kettle.kettle_main:main"
+setsweep-watch = "kettle.kettle_watch:main"
 
 [tool.setuptools]
-# Flat layout: explicit module list (tests live under tests/, not next to modules).
-# Install editable (`pip install -e .`) so APPDIR resolves to the repo and static/
-# is found in place. After adding a name here: reinstall editable or the finder
-# MAPPING goes stale and the CLI raises ModuleNotFoundError for the new module.
-py-modules = ["kettle_main", "kettle_contract", "server", "runtime", "lineage", "cli", "kits", "curator", "sweepkit", "egress", "survey", "kettle_watch", "theme_catalog", "syntax", "tui_editor", "gitmap"]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["kettle*"]
+
+# Package data: web UI + curator kits + example registry ship inside the wheel.
+[tool.setuptools.package-data]
+kettle = [
+  "static/**/*",
+  "kits/**/*",
+  "projects.example.json",
+]
 
 [tool.ruff]
 line-length = 100
@@ -63,7 +71,7 @@ pythonpath = ["."]
 
 [tool.coverage.run]
 branch = true
-source = ["."]
+source = ["kettle"]
 omit = ["tests/*", "tools/*"]
 
 [tool.coverage.report]

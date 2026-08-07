@@ -5,7 +5,7 @@ repo: kettle-core
 touches: [pyproject.toml, all *.py (moves), server.py APPDIR, kettle_main.py, INSTALL.md]
 risk: run-critical
 depends-on: [01, 04]
-status: open
+status: done
 ---
 
 ## Context

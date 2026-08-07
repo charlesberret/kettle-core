@@ -10,9 +10,12 @@ Authoritative implementation: `server.py`. Contract tests: `tests/test_server.py
 | Rule | Detail |
 |------|--------|
 | Bind | `127.0.0.1` only |
+| Auth | Every `/api/` request requires header `X-Kettle-Token` (per-boot token from `~/.cache/kettle/server.json`) |
+| Host | `Host` must be `127.0.0.1[:port]` or `localhost[:port]` — else 403 |
+| Origin | If `Origin` is present, it must be the server's own origin — else 403 |
 | JSON keys | `snake_case` |
 | Mutations | **POST** only (no PUT/PATCH/DELETE) |
-| Errors | `{ "error": "<string>" }` with 400 / 403 / 404 / 500 |
+| Errors | `{ "error": "<string>", "code": "<slug>" }` with 400 / 403 / 404 / 500 (`str(e)`, never `repr(e)`) |
 | Project scope | **`project` is required** on every project-scoped route (query or body). Omitting it returns 400 — it no longer defaults to the first registry entry. |
 | File fence | `safe_path()` — registered roots (+ optional `KETTLE_ALLOWED_ROOTS`) |
 
@@ -149,7 +152,9 @@ UI paints the strip with the link (blue) wash instead of good (green).
 - Restart the server after updating `gitmap.py` / `py-modules`.
 
 - Set on **every** bind path (`start_server` and `main` / sidecar) via `_record_bind`.
-- Informational cache: `~/.cache/kettle/server.json` — `{ pid, port, started, url, projects, settings }`. Ping is authoritative.
+- Discovery cache: `~/.cache/kettle/server.json` (mode **0600**) — `{ pid, port, started, url, projects, settings, token }`.
+  Viewports and CLI read `token` and send it as `X-Kettle-Token` on every `/api/` call. Ping remains the identity authority.
+- The reference web UI receives the token via a served `<meta name="kettle-token">` injection (same-origin; zero user-visible change).
 - Circuit-breaker: a second launch on 4242 defers unless the predecessor is stale or `--replace` is passed.
 
 ### Registry paths (which desk am I talking to?)
@@ -212,7 +217,44 @@ heal from existing content entries. Use `POST /api/projects/refound` to start ov
 | `GET /api/diff` | `text` (string) | `diff` (same string) |
 | `GET /api/diffstat` | `stat` (`{added,removed}\|null`) | `diff` (same object) |
 
-Prefer `text` / `stat` in new clients.
+Prefer `text` / `stat` in new clients. Unknown `id` values return **404**
+`{ "error": "unknown entry id: …", "code": "not_found" }` (not an empty success).
+
+---
+
+## Auth & request guards
+
+Every route under `/api/` requires:
+
+```
+X-Kettle-Token: <token from ~/.cache/kettle/server.json>
+```
+
+Missing or wrong token → **403** `{ "error": "…", "code": "auth" }` with a short hint.
+Static assets (`/`, `/index.html`, scripts, fonts) do not require the token.
+
+Defense in depth on **all** requests (including static):
+
+| Check | Reject when | Code |
+|-------|-------------|------|
+| `Host` | not `127.0.0.1[:port]` / `localhost[:port]` | `bad_host` |
+| `Origin` | header present and not `http://127.0.0.1:<port>` / `http://localhost:<port>` | `bad_origin` |
+
+Absent `Origin` (curl, native clients) is allowed.
+
+### Error envelope
+
+Handler failures use `{ "error": "<str(e)>", "code": "<slug>" }`:
+
+| Situation | Status | `code` |
+|-----------|--------|--------|
+| Malformed JSON body | 400 | `bad_json` |
+| Missing / unknown project or field | 400 | `bad_request` |
+| Auth / Host / Origin | 403 | `auth` / `bad_host` / `bad_origin` |
+| Missing file (incl. POST `/api/save`) | 404 | `not_found` |
+| Unhandled exception | 500 | `internal` |
+
+Never `repr(e)` in response bodies.
 
 ---
 
@@ -375,7 +417,7 @@ Kits, lineage (`/api/lineage`, resolve/accept/bind), projects edit/delete/refoun
 
 | Path | Notes |
 |------|-------|
-| `/api/open-link` | macOS `open -t`; 404 uses `{ ok: false, error }` |
+| `/api/open-link` | macOS `open -t`; 404 uses `{ "error": "…", "code": "not_found" }` (no `ok: false`) |
 
 ---
 
@@ -383,5 +425,5 @@ Kits, lineage (`/api/lineage`, resolve/accept/bind), projects edit/delete/refoun
 
 1. Success envelopes still vary (`{ok}` vs bare resource). `POST /api/projects/add` returns `{ ok, project, home, …flat fields }`.
 2. Legacy `diff` key on both `/api/diff` and `/api/diffstat` remains for back-compat; new clients should use `text` / `stat`.
-3. Errors are uniformly `{ "error": string }`.
+3. Errors are `{ "error": string, "code": string }` on handler failure paths (`str(e)`, never `repr(e)`). Some older hand-written 4xx responses may still omit `code`.
 4. Two cores with different registries remain possible if `$DESK_PROJECTS` differs — check `ping.projects` before assuming a shared desk. Legacy `diff` aliases on `/api/diff` and `/api/diffstat` remain for back-compat; prefer `text` / `stat`.

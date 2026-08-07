@@ -25,13 +25,27 @@ import urllib.request
 from contextlib import redirect_stderr
 from pathlib import Path
 
-import server
-import kettle_contract
+import kettle.server as server
+import kettle.kettle_contract as kettle_contract
 
 
-def _http(method, url, body=None):
+def _auth_headers(extra=None):
+    """Attach the live per-boot token (tests read it the same way clients do)."""
+    h = {}
+    if getattr(server, "SERVER_TOKEN", None):
+        h[server.TOKEN_HEADER] = server.SERVER_TOKEN
+    if extra:
+        h.update(extra)
+    return h
+
+
+def _http(method, url, body=None, headers=None):
     data = json.dumps(body).encode() if body is not None else None
     req = urllib.request.Request(url, data=data, method=method)
+    for k, v in _auth_headers(headers).items():
+        req.add_header(k, v)
+    if data is not None and "Content-Type" not in (headers or {}):
+        req.add_header("Content-Type", "application/json")
     try:
         with urllib.request.urlopen(req, timeout=10) as r:
             return r.status, json.loads(r.read() or b"{}")
@@ -54,11 +68,14 @@ class Base(unittest.TestCase):
         }]}))
 
         self._saved = {k: getattr(server, k) for k in
-                       ("PROJECTS_PATH", "SETTINGS_PATH", "BASE_ALLOWED_ROOTS", "HOME")}
+                       ("PROJECTS_PATH", "SETTINGS_PATH", "BASE_ALLOWED_ROOTS", "HOME",
+                        "RUNTIME_PATH", "SERVER_TOKEN")}
         server.PROJECTS_PATH = registry
         server.SETTINGS_PATH = self.tmp / "settings.json"
         server.BASE_ALLOWED_ROOTS = [self.tmp]
         server.HOME = self.tmp  # so add_project's under-HOME gate accepts temp roots
+        server.RUNTIME_PATH = self.tmp / "cache" / "server.json"
+        server.SERVER_TOKEN = None
         # the queue path is DERIVED by the server (runtime_dir/queue.json), never stored
         # in the registry — mirror that here so fixture writes land where the server reads
         self.queue = server.queue_path(server.get_project("t"))
@@ -595,7 +612,7 @@ class EndpointTests(Base):
             extra_server.server_close()
 
     def test_save_logs_user_edit_to_lineage(self):
-        import lineage
+        import kettle.lineage as lineage
         f = self.root / "alpha.md"
         s, _ = _http("POST", f"{self.base}/api/save",
                      {"path": str(f), "content": "user's own edit\n"})
@@ -1065,6 +1082,8 @@ class EndpointTests(Base):
             req = urllib.request.Request(f"{self.base}/api/interview",
                                          data=json.dumps({"project": "t", "message": ""}).encode(),
                                          method="POST")
+            for k, v in _auth_headers({"Content-Type": "application/json"}).items():
+                req.add_header(k, v)
             with urllib.request.urlopen(req, timeout=10) as r:
                 body = r.read().decode()
             self.assertIn("hello", body)
@@ -1074,6 +1093,8 @@ class EndpointTests(Base):
             req2 = urllib.request.Request(f"{self.base}/api/found",
                                           data=json.dumps({"project": "t"}).encode(),
                                           method="POST")
+            for k, v in _auth_headers({"Content-Type": "application/json"}).items():
+                req2.add_header(k, v)
             with urllib.request.urlopen(req2, timeout=10) as r2:
                 r2.read()
             self.assertEqual(server.load_interview(self.proj())["status"], "founded")
@@ -1176,6 +1197,8 @@ class EndpointTests(Base):
             # queue already has entries (setUp), so bootstrap's mark_founded_if_filed must flip it
             req = urllib.request.Request(f"{self.base}/api/bootstrap",
                                          data=json.dumps({"project": "t"}).encode(), method="POST")
+            for k, v in _auth_headers({"Content-Type": "application/json"}).items():
+                req.add_header(k, v)
             with urllib.request.urlopen(req, timeout=10) as r:
                 r.read()
             self.assertEqual(server.load_interview(self.proj())["status"], "founded")
@@ -1213,7 +1236,7 @@ class EndpointTests(Base):
                            {"project": "t", "name": "no-such-note"})
             self.assertEqual(s2, 404)
             self.assertIn("error", j2)
-            self.assertNotIn("ok", j2)  # uniform error envelope: {error} only
+            self.assertNotIn("ok", j2)  # error envelope (no ok:false)
         finally:
             server.subprocess.Popen = real
 
@@ -1424,6 +1447,8 @@ class EndpointTests(Base):
         """POST and read the whole ndjson stream back as (status, text)."""
         req = urllib.request.Request(f"{self.base}{path}",
                                      data=json.dumps(body).encode(), method="POST")
+        for k, v in _auth_headers({"Content-Type": "application/json"}).items():
+            req.add_header(k, v)
         with urllib.request.urlopen(req, timeout=10) as r:
             status, text = r.status, r.read().decode()
         events = self._events(text)
@@ -1876,8 +1901,8 @@ class EndpointTests(Base):
         }).encode()
         conn = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
         conn.request("POST", "/api/chat", body=payload,
-                     headers={"Content-Type": "application/json",
-                              "Content-Length": str(len(payload))})
+                     headers=_auth_headers({"Content-Type": "application/json",
+                                           "Content-Length": str(len(payload))}))
         response = conn.getresponse()
         self.assertEqual(response.status, 200)
         first = json.loads(response.readline())
@@ -1908,8 +1933,11 @@ class EndpointTests(Base):
             "POST", f"{self.base}/api/chat",
             {"project": "t", "id": "alpha", "message": "x"})
         self.assertEqual(s0, 500)
-        self.assertEqual(list(failed), ["error"])
+        self.assertEqual(failed.get("error"), failed["error"])  # present
+        self.assertIn("error", failed)
+        self.assertIn("code", failed)
         self.assertIn("curator failed to start", failed["error"])
+        self.assertNotIn("repr(", json.dumps(failed))
         s, _ = _http("GET", f"{self.base}/api/projects")
         self.assertEqual(s, 200)
 
@@ -1950,6 +1978,7 @@ class EndpointTests(Base):
         runtime = self.tmp / "cache" / "server.json"
         saved_path = server.RUNTIME_PATH
         saved_port, saved_started = server.SERVER_PORT, server.SERVER_STARTED
+        saved_token = server.SERVER_TOKEN
         server.RUNTIME_PATH = runtime
         try:
             server._record_bind(4242)
@@ -1960,10 +1989,14 @@ class EndpointTests(Base):
             self.assertEqual(data["started"], server.SERVER_STARTED)
             self.assertEqual(data["url"], "http://127.0.0.1:4242/")
             self.assertEqual(data["projects"], str(server.PROJECTS_PATH))
+            self.assertTrue(data.get("token"))
+            self.assertEqual(data["token"], server.SERVER_TOKEN)
+            self.assertEqual(runtime.stat().st_mode & 0o777, 0o600)
         finally:
             server.RUNTIME_PATH = saved_path
             server.SERVER_PORT = saved_port
             server.SERVER_STARTED = saved_started
+            server.SERVER_TOKEN = saved_token
 
     def test_settings_multi_group_no_clobber(self):
         for patch in ({"colors": {"--c-red": "#f00"}}, {"slots": {"agent": "--c-gray5"}},
@@ -2005,6 +2038,121 @@ class EndpointTests(Base):
 
     def _entry(self, eid):
         return server.find_entry(server.load_queue(self.proj()), eid)
+
+
+class LocalhostAuthTests(EndpointTests):
+    """Per-boot token, Host/Origin gates, and error-envelope pins (brief 05)."""
+
+    def _raw(self, method, path, *, headers=None, body=None):
+        payload = None if body is None else json.dumps(body).encode()
+        conn = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
+        try:
+            hdrs = dict(headers or {})
+            if payload is not None and "Content-Type" not in hdrs:
+                hdrs["Content-Type"] = "application/json"
+            if payload is not None:
+                hdrs["Content-Length"] = str(len(payload))
+            conn.request(method, path, body=payload, headers=hdrs)
+            res = conn.getresponse()
+            raw = res.read()
+            try:
+                data = json.loads(raw or b"{}")
+            except json.JSONDecodeError:
+                data = {"_raw": raw.decode("utf-8", "replace")}
+            return res.status, data
+        finally:
+            conn.close()
+
+    def test_api_post_without_token_forbidden(self):
+        s, j = self._raw("POST", "/api/save",
+                         body={"project": "t", "path": str(self.root / "alpha.md"),
+                               "content": "x"})
+        self.assertEqual(s, 403)
+        self.assertEqual(j.get("code"), "auth")
+        self.assertIn("X-Kettle-Token", j.get("error", ""))
+
+    def test_foreign_origin_forbidden(self):
+        s, j = self._raw(
+            "POST", "/api/save",
+            headers={
+                server.TOKEN_HEADER: server.SERVER_TOKEN,
+                "Origin": "https://evil.example",
+            },
+            body={"project": "t", "path": str(self.root / "alpha.md"), "content": "x"},
+        )
+        self.assertEqual(s, 403)
+        self.assertEqual(j.get("code"), "bad_origin")
+
+    def test_evil_host_forbidden(self):
+        s, j = self._raw(
+            "GET", "/api/ping",
+            headers={
+                server.TOKEN_HEADER: server.SERVER_TOKEN,
+                "Host": "evil.tld",
+            },
+        )
+        self.assertEqual(s, 403)
+        self.assertEqual(j.get("code"), "bad_host")
+
+    def test_malformed_json_is_400_envelope(self):
+        conn = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
+        try:
+            payload = b"{not-json"
+            conn.request(
+                "POST", "/api/save", body=payload,
+                headers=_auth_headers({
+                    "Content-Type": "application/json",
+                    "Content-Length": str(len(payload)),
+                }),
+            )
+            res = conn.getresponse()
+            j = json.loads(res.read() or b"{}")
+            self.assertEqual(res.status, 400)
+            self.assertEqual(j.get("code"), "bad_json")
+            self.assertIn("error", j)
+            self.assertNotIn("JSONDecodeError(", j["error"])  # str(e), not repr(e)
+        finally:
+            conn.close()
+
+    def test_save_missing_file_is_404(self):
+        missing = self.root / "no-such-dir" / "missing.md"
+        s, j = _http("POST", f"{self.base}/api/save",
+                     {"project": "t", "path": str(missing), "content": "x"})
+        self.assertEqual(s, 404)
+        self.assertEqual(j.get("code"), "not_found")
+        self.assertIn("error", j)
+
+    def test_diff_unknown_entry_errors(self):
+        s, j = _http("GET", f"{self.base}/api/diff?project=t&id=nope")
+        self.assertEqual(s, 404)
+        self.assertEqual(j.get("code"), "not_found")
+        s2, j2 = _http("GET", f"{self.base}/api/diffstat?project=t&id=nope")
+        self.assertEqual(s2, 404)
+        self.assertEqual(j2.get("code"), "not_found")
+
+    def test_index_injects_token_meta(self):
+        s, headers, body = None, None, None
+        conn = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
+        try:
+            conn.request("GET", "/")
+            res = conn.getresponse()
+            s, body = res.status, res.read()
+        finally:
+            conn.close()
+        self.assertEqual(s, 200)
+        meta = f'meta name="kettle-token" content="{server.SERVER_TOKEN}"'.encode()
+        self.assertIn(meta, body)
+
+    def test_same_origin_origin_allowed(self):
+        s, j = self._raw(
+            "GET", "/api/ping",
+            headers={
+                server.TOKEN_HEADER: server.SERVER_TOKEN,
+                "Origin": f"http://127.0.0.1:{self.port}",
+            },
+        )
+        self.assertEqual(s, 200)
+        self.assertEqual(j.get("app"), "kettle")
 
 
 class LaunchTests(unittest.TestCase):

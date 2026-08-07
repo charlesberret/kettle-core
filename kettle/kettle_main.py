@@ -13,7 +13,7 @@ One command, two viewports onto the same desk:
   kettle chat    <project> [id]   talk to the resident curator│
   kettle sweep-status|close|archive   mechanical CLOSE helpers│
   kettle egress|egress-status         desk → ecosystem staging┘
-  kettle doctor                   install health (PATH + py-modules)
+  kettle doctor                   install health (PATH + package modules)
   kettle --help                   this message
 
 The native macOS window lives in the separate kettle-desktop Electron shell.
@@ -33,13 +33,16 @@ def main(argv=None) -> int:
     cmd = args[0] if args else None
 
     if cmd in ("-h", "--help"):
+        from kettle import __version__
+
         print((__doc__ or "").strip())
+        print(f"\nversion {__version__}")
         return 0
     if cmd in CLI_CMDS:
-        import cli
+        from . import cli
         return cli.main(args)
     if cmd in (None, "--web", "--app", "--replace"):
-        import server          # server.main() reads sys.argv (--port/--no-open)
+        from . import server          # server.main() reads sys.argv (--port/--no-open)
         return server.main() or 0
     print(f"kettle: unknown command {cmd!r} (try kettle --help)", file=sys.stderr)
     return 2

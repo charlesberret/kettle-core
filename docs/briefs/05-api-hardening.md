@@ -5,7 +5,7 @@ repo: kettle-core
 touches: [server.py, static/index.html, API.md, tests/test_server.py, plugin + desktop follow-ups]
 risk: run-critical
 depends-on: [01]
-status: open
+status: done
 ---
 
 ## Context

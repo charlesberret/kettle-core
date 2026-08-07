@@ -1,0 +1,5 @@
+recursive-include kettle/static *
+recursive-include kettle/kits *
+include kettle/projects.example.json
+global-exclude *.pyc
+global-exclude __pycache__
