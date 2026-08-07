@@ -10,7 +10,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
-import server
+from . import server
 
 KINDS = frozenset({"handoff", "escalation", "launch", "domain", "approval"})
 

@@ -3638,8 +3638,14 @@ const $ = id => document.getElementById(id);
   }, {capture: true, passive: true});
 })();
 
-async function jget(u){ const r = await fetch(u); const j = await r.json(); if(!r.ok) throw j.error; return j; }
-async function jpost(u,b){ const r = await fetch(u,{method:'POST',body:JSON.stringify(b)}); const j = await r.json(); if(!r.ok) throw j.error; return j; }
+const KETTLE_TOKEN = (document.querySelector('meta[name="kettle-token"]') || {}).content || '';
+function apiHeaders(extra){
+  const h = Object.assign({}, extra || {});
+  if(KETTLE_TOKEN) h['X-Kettle-Token'] = KETTLE_TOKEN;
+  return h;
+}
+async function jget(u){ const r = await fetch(u,{headers:apiHeaders()}); const j = await r.json(); if(!r.ok) throw j.error; return j; }
+async function jpost(u,b){ const r = await fetch(u,{method:'POST',headers:apiHeaders({'Content-Type':'application/json'}),body:JSON.stringify(b)}); const j = await r.json(); if(!r.ok) throw j.error; return j; }
 
 const esc = s => String(s==null?'':s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 function shortName(p){ if(!p) return ''; const parts = p.split('/'); return parts.slice(-2).join('/'); }
@@ -4543,6 +4549,7 @@ async function foundFromProposal(){
   busy = true; showSpin(); $('sweepbtn').disabled = true;
   try {
     const r = await fetch('/api/found', {method:'POST',
+      headers: apiHeaders({'Content-Type':'application/json'}),
       body: JSON.stringify({project: pid, model: agentModel('setup')})});
     if(!r.ok){ const j = await r.json(); throw j.error; }
     await pipeStream(r, null, {trackCtx:true, model: agentModel('setup')});
@@ -5102,6 +5109,7 @@ async function runTurn(m){
   busy = true; showSpin();
   try {
     const r = await fetch('/api/chat', {method:'POST',
+      headers: apiHeaders({'Content-Type':'application/json'}),
       body: JSON.stringify({id: cur ? cur.id : null, message: m, project: PROJECT, model: agentModel('chat')})});
     const stream = await pipeStream(r, null, {trackCtx:true, model: agentModel('chat')});
     PROJECT_SESSION = true;  // a live project session now exists (server persisted its id)
@@ -5139,6 +5147,7 @@ async function sweep(thrust){
   addMsg('sys', '— sweep started: rulings · diff · assess · ripple · log · restock —');
   try {
     const r = await fetch('/api/sweep', {method:'POST',
+      headers: apiHeaders({'Content-Type':'application/json'}),
       body: JSON.stringify({project: PROJECT, model: agentModel('setup'),
         thrust: (thrust || '').trim()})});
     await pipeStream(r, null, {trackCtx:true, model: agentModel('setup')});
@@ -6393,6 +6402,7 @@ async function ivTurn(m){
   busy = true; showSpin();
   try {
     const r = await fetch('/api/interview', {method:'POST',
+      headers: apiHeaders({'Content-Type':'application/json'}),
       body: JSON.stringify({project: PROJECT, message: m, model: agentModel('setup')})});
     if(!r.ok){ const j = await r.json(); throw j.error; }
     await pipeStream(r, null, {trackCtx:true, model: agentModel('setup')});
@@ -6453,6 +6463,7 @@ async function finishInterview(){
   busy = true; showSpin(); $('sweepbtn').disabled = true;
   try {
     const r = await fetch('/api/propose', {method:'POST',
+      headers: apiHeaders({'Content-Type':'application/json'}),
       body: JSON.stringify({project: pid, model: agentModel('setup')})});
     if(!r.ok){ const j = await r.json(); throw j.error; }
     await pipeStream(r, null, {trackCtx:true, model: agentModel('setup')});
@@ -6966,6 +6977,7 @@ async function runCompact(){
   addMsg('sys', '\u2014 compacting the working session \u2014');
   try {
     const r = await fetch('/api/compact', {method:'POST',
+      headers: apiHeaders({'Content-Type':'application/json'}),
       body: JSON.stringify({project: PROJECT, model: agentModel('chat')})});
     // Do not trackCtx: compact usage is pre-size and would peg the bar at 100%.
     await pipeStream(r, null, {trackCtx:false, model: agentModel('chat')});

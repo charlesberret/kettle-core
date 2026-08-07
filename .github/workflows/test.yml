@@ -50,3 +50,198 @@ jobs:
           echo '```text' >> "$GITHUB_STEP_SUMMARY"
           python -m coverage report >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+  # Wheel / pipx-style install with bundled static/ and kits/ package data.
+  package-install:
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.14"]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+      - name: Build wheel
+        run: |
+          python -m pip install -U pip build
+          python -m build --wheel --outdir dist
+          ls -la dist
+      - name: Wheel contents audit (package layout + bundled resources)
+        run: |
+          python - <<'PY'
+          import zipfile
+          from pathlib import Path
+          wheels = sorted(Path("dist").glob("kettle-*.whl"))
+          assert wheels, "no wheel built"
+          wheel = wheels[-1]
+          names = zipfile.ZipFile(wheel).namelist()
+          dist_infos = sorted({n.split("/")[0] for n in names if n.endswith(".dist-info/METADATA")})
+          assert len(dist_infos) == 1, dist_infos
+          info = dist_infos[0]
+          required = {
+              "kettle/__init__.py",
+              "kettle/cli.py",
+              "kettle/server.py",
+              "kettle/kettle_main.py",
+              "kettle/curator.py",
+              "kettle/static/index.html",
+              "kettle/kits/_base.md",
+              "kettle/projects.example.json",
+              f"{info}/entry_points.txt",
+              f"{info}/top_level.txt",
+          }
+          missing = sorted(r for r in required if r not in names)
+          assert not missing, f"wheel missing {missing}"
+          # Bundled resources must ship under the kettle package prefix.
+          static = [n for n in names if n.startswith("kettle/static/")]
+          kits = [n for n in names if n.startswith("kettle/kits/")]
+          assert static, "wheel missing kettle/static/ package data"
+          assert kits, "wheel missing kettle/kits/ package data"
+          print("wheel ok:", wheel.name, f"({len(names)} files; static={len(static)} kits={len(kits)})")
+          PY
+      - name: Clean venv wheel install + console script smoke
+        run: |
+          python -m venv /tmp/kettle-wheel-venv
+          /tmp/kettle-wheel-venv/bin/pip install -U pip
+          /tmp/kettle-wheel-venv/bin/pip install dist/kettle-*.whl
+          /tmp/kettle-wheel-venv/bin/kettle --help | head -n 8
+          /tmp/kettle-wheel-venv/bin/python - <<'PY'
+          import importlib
+          import kettle
+          for name in (
+              "kettle.cli",
+              "kettle.server",
+              "kettle.curator",
+              "kettle.kettle_main",
+              "kettle.kettle_contract",
+          ):
+              importlib.import_module(name)
+          from kettle import kettle_contract
+          assert kettle.__version__
+          assert kettle_contract.core_version() == kettle.__version__
+          print("core_version", kettle_contract.core_version())
+          from importlib.resources import files
+          assert files("kettle").joinpath("static/index.html").is_file()
+          assert files("kettle").joinpath("kits/_base.md").is_file()
+          PY
+          # doctor must run (exit 0/1 depending on PATH/provider); never crash
+          set +e
+          /tmp/kettle-wheel-venv/bin/kettle doctor
+          code=$?
+          set -e
+          test "$code" -eq 0 -o "$code" -eq 1
+      - name: Wheel server smoke (ephemeral port; never 4242)
+        run: |
+          /tmp/kettle-wheel-venv/bin/python - <<'PY'
+          import json
+          import os
+          import socket
+          import subprocess
+          import tempfile
+          import time
+          import urllib.request
+          from pathlib import Path
+
+          sock = socket.socket()
+          sock.bind(("127.0.0.1", 0))
+          port = sock.getsockname()[1]
+          sock.close()
+          assert port != 4242
+
+          # Isolated registry/settings so ping's curator heal can write settings.json.
+          tmp = Path(tempfile.mkdtemp(prefix="kettle-wheel-smoke-"))
+          registry = tmp / "projects.json"
+          registry.write_text('{"projects": []}\n', encoding="utf-8")
+          env = os.environ.copy()
+          env["DESK_PROJECTS"] = str(registry)
+          env["HOME"] = str(tmp / "home")
+          Path(env["HOME"], ".cache/kettle").mkdir(parents=True)
+          discovery = Path(env["HOME"]) / ".cache/kettle/server.json"
+
+          proc = subprocess.Popen(
+              [
+                  "/tmp/kettle-wheel-venv/bin/kettle",
+                  "--web", "--port", str(port), "--no-open", "--replace",
+              ],
+              stdout=subprocess.DEVNULL,
+              stderr=subprocess.PIPE,
+              text=True,
+              env=env,
+          )
+          try:
+              base = f"http://127.0.0.1:{port}"
+              deadline = time.time() + 15
+              token = None
+              last_err = None
+              while time.time() < deadline:
+                  if proc.poll() is not None:
+                      err = proc.stderr.read() if proc.stderr else ""
+                      raise AssertionError(
+                          f"server exited early rc={proc.returncode}: {err}"
+                      )
+                  try:
+                      if discovery.is_file():
+                          token = json.loads(
+                              discovery.read_text(encoding="utf-8")
+                          ).get("token")
+                      if not token:
+                          raise RuntimeError("discovery token not ready")
+                      req = urllib.request.Request(
+                          base + "/api/ping",
+                          headers={"X-Kettle-Token": token},
+                      )
+                      with urllib.request.urlopen(req, timeout=0.5) as resp:
+                          ping = json.loads(resp.read())
+                      break
+                  except Exception as e:  # noqa: BLE001
+                      last_err = e
+                      time.sleep(0.2)
+              else:
+                  raise AssertionError(f"server did not become ready: {last_err}")
+
+              assert ping.get("app") in {"kettle", "setsweep"}, ping
+              assert ping.get("version"), ping
+              with urllib.request.urlopen(base + "/", timeout=2) as resp:
+                  html = resp.read()
+              assert b"<html" in html.lower() or b"<!doctype" in html.lower(), html[:200]
+              req = urllib.request.Request(
+                  base + "/api/kits",
+                  headers={"X-Kettle-Token": token},
+              )
+              with urllib.request.urlopen(req, timeout=2) as resp:
+                  kits = json.loads(resp.read())
+              kinds = {k.get("_key") or k.get("kind") for k in kits.get("kits", [])}
+              assert len(kits.get("kits", [])) >= 5, kits
+              print(
+                  "wheel server smoke ok",
+                  ping.get("version"),
+                  "kits",
+                  sorted(x for x in kinds if x),
+              )
+          finally:
+              proc.terminate()
+              try:
+                  proc.wait(timeout=5)
+              except subprocess.TimeoutExpired:
+                  proc.kill()
+          PY
+      - name: pipx-style isolated install smoke
+        run: |
+          # Mimic pipx: isolated venv + console scripts on PATH, no source checkout.
+          python -m venv /tmp/kettle-pipx-style
+          /tmp/kettle-pipx-style/bin/pip install -U pip
+          /tmp/kettle-pipx-style/bin/pip install dist/kettle-*.whl
+          export PATH="/tmp/kettle-pipx-style/bin:$PATH"
+          hash -r
+          command -v kettle
+          kettle --help >/dev/null
+          python - <<'PY'
+          import shutil
+          # Ensure the resolving kettle is the isolated one, not the checkout.
+          out = shutil.which("kettle") or ""
+          assert out.startswith("/tmp/kettle-pipx-style/"), out
+          print("pipx-style kettle:", out)
+          PY

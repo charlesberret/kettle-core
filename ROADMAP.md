@@ -26,12 +26,13 @@ contracts are still at `0`.
 
 ### Installation
 
-- Restructure the flat modules into a package with bundled `static/` and `kits/`
-  resources.
-- Verify wheel and `pipx` installation in CI while keeping editable installs
-  excellent for contributors.
-- Expand `kettle doctor` to cover provider availability, registry selection,
-  desk integrity, runtime discovery, and legacy migration state.
+- ~~Restructure the flat modules into a package with bundled `static/` and `kits/`
+  resources~~ (done — wheel serves the browser UI; editable remains the contributor path).
+- Wheel and pipx-style install verification in CI (package layout + server smoke).
+- Expanded `kettle doctor`: provider CLI resolve, registry/desk integrity,
+  runtime discovery, legacy `.setsweep/` hints (metrics beacons remain follow-ups).
+- Reserve the PyPI name `kettle` with a minimal placeholder upload when publish
+  credentials are available.
 
 ### Security
 
@@ -45,9 +46,9 @@ contracts are still at `0`.
 
 ### Migration
 
-- Add an explicit, dry-run-first `kettle migrate` command for `.setsweep/` desks
-  and legacy user registries.
-- Never maintain two writable desks for one project.
+- ~~Add an explicit, dry-run-first `kettle migrate` command for `.setsweep/` desks
+  and legacy user registries.~~ (`kettle migrate` / `--apply`; see INSTALL.md)
+- Never maintain two writable desks for one project (migrate refuses split desks).
 - Publish a deprecation window before removing the old command aliases or
   process identity.
 
