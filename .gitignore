@@ -37,6 +37,20 @@ settings.json
 # e.g. the internal/fleet-specific design docs (DESIGN.md, LINEAGE.md) live here.
 .local/
 
+# ── Ollama persona pack (local forever) ──
+# Trial / host-local Wunderkind install, skills, eval prompts, and install.sh.
+# Not product surface — never ship this tree.
+ollama/
+
+# ── Curators (temporary ignore) ──
+# Intended product surface once we have actual excellent, shippable curator
+# packs. Ignore until then so half-built experiments stay off main.
+# Remove this block when curators/ is ready to publish.
+curators/
+
+# ── Ephemeral agent worktrees ──
+.worktrees/
+
 # ── Claude Code local state ──
 # settings.local.json is per-machine personal config; worktrees/ is ephemeral scratch
 # created when agents run in isolation. Nothing here is shared project config today —
