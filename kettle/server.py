@@ -1431,6 +1431,12 @@ class Handler(BaseHTTPRequestHandler):
         """Uniform error envelope: {error, code} with str messages (never repr)."""
         self.send_json({"error": error, "code": code}, status)
 
+    def end_headers(self):
+        # Emit CORS for allowed Origin (incl. opaque "null") so Electron file://
+        # desktop can read /api/ responses after X-Kettle-Token preflight.
+        self._emit_cors_headers()
+        super().end_headers()
+
     @staticmethod
     def _host_allowed(host: str) -> bool:
         h = (host or "").strip().lower()
@@ -1442,12 +1448,30 @@ class Handler(BaseHTTPRequestHandler):
         return False
 
     def _origin_allowed(self, origin: str) -> bool:
+        o = (origin or "").strip()
+        # Opaque origin from Electron loadFile (file://) / sandboxed documents.
+        # Still gated by X-Kettle-Token on /api/ — browsers cannot mint this token.
+        if o == "null":
+            return True
         port = SERVER_PORT or DEFAULT_PORT
         allowed = {
             f"http://127.0.0.1:{port}",
             f"http://localhost:{port}",
         }
-        return origin.strip() in allowed
+        return o in allowed
+
+    def _emit_cors_headers(self) -> None:
+        origin = self.headers.get("Origin")
+        if origin is None or origin == "" or not self._origin_allowed(origin):
+            return
+        # Echo the allowed Origin literally (including the string "null").
+        self.send_header("Access-Control-Allow-Origin", origin.strip())
+        self.send_header("Vary", "Origin")
+        self.send_header(
+            "Access-Control-Allow-Headers",
+            f"{TOKEN_HEADER}, Content-Type",
+        )
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 
     def check_request_guards(self, *, require_token: bool) -> bool:
         """Host + Origin (+ optional token) gates. False ⇒ response already sent."""
@@ -1473,6 +1497,19 @@ class Handler(BaseHTTPRequestHandler):
                 )
                 return False
         return True
+
+    def do_OPTIONS(self):
+        """CORS preflight for desktop file:// → localhost /api/ (custom token header)."""
+        url = urlparse(self.path)
+        # Preflight never carries the token; Host + Origin gates are enough.
+        if not self.check_request_guards(require_token=False):
+            return
+        if not url.path.startswith("/api/"):
+            self.send_err(404, "not found", "not_found")
+            return
+        self.send_response(204)
+        self.send_header("Content-Length", "0")
+        self.end_headers()
 
     def read_body(self) -> dict:
         n = min(int(self.headers.get("Content-Length", 0)), 10_000_000)

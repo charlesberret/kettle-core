@@ -2153,6 +2153,64 @@ class LocalhostAuthTests(EndpointTests):
         self.assertEqual(s, 200)
         self.assertEqual(j.get("app"), "kettle")
 
+    def test_opaque_null_origin_allowed_with_token(self):
+        """Electron desktop loads app/ via file:// and sends Origin: null on fetch."""
+        conn = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
+        try:
+            conn.request(
+                "GET", "/api/ping",
+                headers={
+                    server.TOKEN_HEADER: server.SERVER_TOKEN,
+                    "Origin": "null",
+                },
+            )
+            res = conn.getresponse()
+            body = json.loads(res.read() or b"{}")
+            self.assertEqual(res.status, 200)
+            self.assertEqual(body.get("app"), "kettle")
+            self.assertEqual(res.getheader("Access-Control-Allow-Origin"), "null")
+            allow = res.getheader("Access-Control-Allow-Headers") or ""
+            self.assertIn(server.TOKEN_HEADER, allow)
+        finally:
+            conn.close()
+
+    def test_opaque_null_origin_still_requires_token(self):
+        s, j = self._raw("GET", "/api/ping", headers={"Origin": "null"})
+        self.assertEqual(s, 403)
+        self.assertEqual(j.get("code"), "auth")
+
+    def test_options_preflight_for_desktop_api(self):
+        conn = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
+        try:
+            conn.request(
+                "OPTIONS", "/api/ping",
+                headers={
+                    "Origin": "null",
+                    "Access-Control-Request-Method": "GET",
+                    "Access-Control-Request-Headers": "x-kettle-token",
+                },
+            )
+            res = conn.getresponse()
+            res.read()
+            self.assertEqual(res.status, 204)
+            self.assertEqual(res.getheader("Access-Control-Allow-Origin"), "null")
+            allow = (res.getheader("Access-Control-Allow-Headers") or "").lower()
+            self.assertIn("x-kettle-token", allow)
+            methods = (res.getheader("Access-Control-Allow-Methods") or "").upper()
+            self.assertIn("GET", methods)
+            self.assertIn("POST", methods)
+            self.assertIn("OPTIONS", methods)
+        finally:
+            conn.close()
+
+    def test_options_preflight_rejects_foreign_origin(self):
+        s, j = self._raw(
+            "OPTIONS", "/api/ping",
+            headers={"Origin": "https://evil.example"},
+        )
+        self.assertEqual(s, 403)
+        self.assertEqual(j.get("code"), "bad_origin")
+
 
 class LaunchTests(unittest.TestCase):
     """start_server_preferred circuit-breaker (2026-06-13): a bare launch must never

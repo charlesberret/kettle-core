@@ -12,7 +12,7 @@ Authoritative implementation: `server.py`. Contract tests: `tests/test_server.py
 | Bind | `127.0.0.1` only |
 | Auth | Every `/api/` request requires header `X-Kettle-Token` (per-boot token from `~/.cache/kettle/server.json`) |
 | Host | `Host` must be `127.0.0.1[:port]` or `localhost[:port]` — else 403 |
-| Origin | If `Origin` is present, it must be the server's own origin — else 403 |
+| Origin | If `Origin` is present, it must be the server's own origin, or the opaque literal `null` (Electron `file://` desktop) — else 403 |
 | JSON keys | `snake_case` |
 | Mutations | **POST** only (no PUT/PATCH/DELETE) |
 | Errors | `{ "error": "<string>", "code": "<slug>" }` with 400 / 403 / 404 / 500 (`str(e)`, never `repr(e)`) |
@@ -233,9 +233,14 @@ Defense in depth on **all** requests (including static):
 | Check | Reject when | Code |
 |-------|-------------|------|
 | `Host` | not `127.0.0.1[:port]` / `localhost[:port]` | `bad_host` |
-| `Origin` | header present and not `http://127.0.0.1:<port>` / `http://localhost:<port>` | `bad_origin` |
+| `Origin` | header present and not `http://127.0.0.1:<port>` / `http://localhost:<port>` / opaque `null` | `bad_origin` |
 
-Absent `Origin` (curl, native clients) is allowed.
+Absent `Origin` (curl, native clients, VS Code extension host) is allowed.
+
+**Opaque `Origin: null`** is allowed for the Electron desktop sitting, which loads
+`app/index.html` via `file://` and calls `/api/` with `X-Kettle-Token`. Token auth
+still applies. The server answers CORS preflight (`OPTIONS /api/…`) and echoes
+`Access-Control-Allow-Origin` for allowed origins so the renderer can read responses.
 
 ### Error envelope
 

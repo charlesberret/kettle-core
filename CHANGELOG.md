@@ -5,6 +5,12 @@ and Desk schema have their own integer contract versions.
 
 ## Unreleased
 
+### Fixed
+
+- Localhost auth accepts opaque `Origin: null` (Electron desktop `file://` sitting) and
+  answers CORS `OPTIONS` preflight for `/api/` so desktop can send `X-Kettle-Token`.
+  Foreign origins remain 403; token is still required on every `/api/` request.
+
 ### Added
 
 - `kettle migrate`: dry-run-first migration of `.setsweep/` desks → `.kettle/` (and the

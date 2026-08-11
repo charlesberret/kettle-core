@@ -29,8 +29,10 @@ paths.
    serve time (it is same-origin; a `<meta>` tag is enough). Desktop and plugin read the
    discovery file they already consume; CLI reads it the same way.
 2. **Origin/Host checks** as defense in depth: reject requests whose `Origin` is present
-   and not the server's own origin; reject `Host` headers that are not
-   `127.0.0.1[:port]`/`localhost[:port]`.
+   and not the server's own origin **or the opaque literal `null`** (Electron desktop
+   loads `app/` via `file://` and Chromium sends `Origin: null`); reject `Host` headers
+   that are not `127.0.0.1[:port]`/`localhost[:port]`. Answer CORS `OPTIONS` preflight
+   for `/api/` so the desktop renderer can attach `X-Kettle-Token`.
 3. **Envelope normalization:** JSONDecodeError→400, FileNotFoundError→404 on POST,
    `{error, code}` shape with `str(e)` never `repr(e)`; `/api/diff`+`/api/diffstat`
    return an error for unknown entry ids instead of empty success.
