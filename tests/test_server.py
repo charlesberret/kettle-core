@@ -14,6 +14,7 @@ import http.client
 import io
 import json
 import os
+import signal
 import socket
 import shutil
 import sys
