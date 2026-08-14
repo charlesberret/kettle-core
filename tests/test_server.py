@@ -2225,5 +2225,104 @@ class LaunchTests(unittest.TestCase):
         self.assertEqual(self.retired, [])
 
 
+class GuardTests(Base):
+    """LAB-23: Host / Origin (+ per-boot token) validation on the localhost surface.
+
+    The guards live in Handler.check_request_guards / _host_allowed / _origin_allowed.
+    Two layers of coverage: pure allowlist unit tests, plus live-server accept/reject
+    cases driven through a raw http.client so the Host and token headers can be forged.
+    """
+
+    # ---- pure unit tests: the Host allowlist ----
+
+    def test_host_allowed_accepts_loopback(self):
+        for h in ("127.0.0.1", "localhost", "127.0.0.1:4242",
+                  "localhost:8080", "LOCALHOST", "  localhost  "):
+            self.assertTrue(server.Handler._host_allowed(h), f"should accept {h!r}")
+
+    def test_host_allowed_rejects_foreign_and_malformed(self):
+        # Foreign hosts (DNS-rebinding vectors), out-of-range ports, non-numeric
+        # ports, empty Host, and IPv6 loopback (deliberately unlisted) all fail.
+        for h in ("", "evil.com", "example.com:4242", "127.0.0.1.evil.com",
+                  "localhost.evil.com", "127.0.0.1:", "localhost:0",
+                  "localhost:99999", "127.0.0.1:abc", "[::1]", "0.0.0.0"):
+            self.assertFalse(server.Handler._host_allowed(h), f"should reject {h!r}")
+
+    # ---- live-server integration: accept + reject through the wire ----
+
+    def setUp(self):
+        super().setUp()
+        self.srv, self.port = server.start_server(0)
+        self.base = f"http://127.0.0.1:{self.port}"
+
+    def tearDown(self):
+        self.srv.shutdown()
+        self.srv.server_close()
+        super().tearDown()
+
+    def _tok(self, extra=None):
+        h = {server.TOKEN_HEADER: server.SERVER_TOKEN}
+        if extra:
+            h.update(extra)
+        return h
+
+    def _raw(self, method, path, host=None, headers=None):
+        """Raw request with full control of the Host header (and no auto-token).
+
+        `host=None` lets http.client set a valid loopback Host; pass a string to
+        forge it. Returns (status, parsed_json_or_None).
+        """
+        conn = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
+        try:
+            conn.putrequest(method, path, skip_host=(host is not None))
+            if host is not None:
+                conn.putheader("Host", host)
+            for k, v in (headers or {}).items():
+                conn.putheader(k, v)
+            conn.endheaders()
+            resp = conn.getresponse()
+            raw = resp.read()
+            try:
+                return resp.status, json.loads(raw or b"{}")
+            except json.JSONDecodeError:
+                return resp.status, None
+        finally:
+            conn.close()
+
+    def test_valid_host_no_origin_accepted(self):
+        # CLI-style client: valid Host, valid token, NO Origin header — accepted.
+        # This is the deliberate exception noted in LAB-23 for tools with no Origin.
+        s, j = self._raw("GET", "/api/ping", headers=self._tok())
+        self.assertEqual(s, 200)
+        self.assertEqual(j["app"], "kettle")
+
+    def test_same_origin_accepted(self):
+        s, j = self._raw("GET", "/api/ping",
+                         headers=self._tok({"Origin": self.base}))
+        self.assertEqual(s, 200)
+
+    def test_forged_host_rejected(self):
+        s, j = self._raw("GET", "/api/ping", host="evil.com", headers=self._tok())
+        self.assertEqual(s, 403)
+        self.assertEqual(j["code"], "bad_host")
+
+    def test_cross_origin_rejected(self):
+        s, j = self._raw("GET", "/api/ping",
+                         headers=self._tok({"Origin": "http://evil.com"}))
+        self.assertEqual(s, 403)
+        self.assertEqual(j["code"], "bad_origin")
+
+    def test_api_path_requires_token(self):
+        s, j = self._raw("GET", "/api/ping")  # valid Host, but no token
+        self.assertEqual(s, 403)
+        self.assertEqual(j["code"], "auth")
+
+    def test_non_api_path_skips_token_but_enforces_host(self):
+        # GET / carries no token requirement, yet a forged Host is still refused.
+        s, j = self._raw("GET", "/", host="evil.com")
+        self.assertEqual(s, 403)
+        self.assertEqual(j["code"], "bad_host")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
