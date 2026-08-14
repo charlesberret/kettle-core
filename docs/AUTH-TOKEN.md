@@ -43,7 +43,7 @@ token.
 | Surface | Mechanism |
 |---|---|
 | Web UI (`static/index.html`) | Server injects `<meta name="kettle-token">` into the served HTML; the page reads it and sends `X-Kettle-Token` on every `/api/` fetch. |
-| CLI / TUI (`kettle-cli`) | Reads `token` from `~/.cache/kettle/server.json` and sends `X-Kettle-Token`. |
+| CLI / TUI (`kettle-tui`) | Reads `token` from `~/.cache/kettle/server.json` and sends `X-Kettle-Token`. |
 | Editor viewports (`kettle-vscode`, `kettle-desktop`) | **Should** read `token` from the same discovery record and send it. **See Conformance — currently they do not.** |
 | Core circuit-breaker | `_discovery_token()` reads the record so a new boot can authenticate its ping to a live predecessor before deferring/replacing. |
 
@@ -89,7 +89,7 @@ Out of scope — explicitly not defended:
 | Viewport | Sends `X-Kettle-Token`? |
 |---|---|
 | Web UI | ✅ meta-tag injection |
-| `kettle-cli` | ✅ from discovery record |
+| `kettle-tui` | ✅ from discovery record |
 | `kettle-vscode` | ❌ `KettleApi` sends only `Content-Type` — **all `/api/` calls 403** |
 | `kettle-desktop` | ❌ `app/api.js` sends only `Content-Type` — **all `/api/` calls 403** |
 
