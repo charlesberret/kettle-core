@@ -1864,7 +1864,11 @@ class EndpointTests(Base):
 
     def test_hung_curator_is_killed_after_idle_timeout(self):
         pidfile = self.tmp / "hung-curator.pid"
-        server.save_settings({"curator": {"idle_timeout_s": 0.5}})
+        # Headroom over interpreter cold-start: the stub writes its pidfile as
+        # its first line, and the idle-timeout kill must not beat that write.
+        # A 0.5s timeout raced the pidfile under a slow interpreter (anaconda
+        # python in the full-suite run) — see LAB-61.
+        server.save_settings({"curator": {"idle_timeout_s": 2.0}})
         self._stub_curator_python(
             "import os, time\n"
             f"open({str(pidfile)!r}, 'w').write(str(os.getpid()))\n"
@@ -1878,6 +1882,11 @@ class EndpointTests(Base):
         events = self._events(body)
         self.assertEqual([e["t"] for e in events], ["error", "done"])
         self.assertIn("idle timeout", events[0]["s"])
+        # Defensive: the pidfile is the stub's first write, but poll briefly so
+        # a boundary race can never crash the read with FileNotFoundError.
+        deadline = time.monotonic() + 2.0
+        while not pidfile.exists() and time.monotonic() < deadline:
+            time.sleep(0.02)
         pid = int(pidfile.read_text())
         with self.assertRaises(ProcessLookupError):
             os.kill(pid, 0)

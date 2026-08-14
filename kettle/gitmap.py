@@ -177,7 +177,12 @@ def commit_counts_by_day(
                 str(root),
                 "log",
                 "--all",
-                f"--since={since.isoformat()}",
+                # Explicit 00:00:00 anchors --since to midnight of the start day.
+                # A bare `--since=YYYY-MM-DD` is an approxidate that git resolves
+                # to the current time-of-day, so a commit earlier on the boundary
+                # day is dropped — losing the first commit whenever it lands
+                # exactly on first_sunday (the adaptive window's left edge).
+                f"--since={since.isoformat()} 00:00:00",
                 "--pretty=format:%cs",
                 "--no-show-signature",
             ],
