@@ -58,6 +58,9 @@ and Desk schema have their own integer contract versions.
   survey, and staged egress remain release invariants.
 - Localhost HTTP hardening: per-boot `X-Kettle-Token` (discovery file mode 0600),
   Host/Origin rejection, and normalized `{error, code}` envelopes (`str(e)` only).
+  Host allowlist is `127.0.0.1` / `localhost` (optional port 1–65535). Origin, when
+  sent, must be the bound loopback origin; absent Origin is the CLI/native-client
+  exception. Opaque `null` / `file://` are rejected.
 
 ## 0.2.0
 

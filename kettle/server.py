@@ -1433,6 +1433,12 @@ class Handler(BaseHTTPRequestHandler):
 
     @staticmethod
     def _host_allowed(host: str) -> bool:
+        """Loopback Host allowlist: 127.0.0.1 / localhost, optional port 1–65535.
+
+        Case-insensitive. IPv6 loopback (``[::1]``) is deliberately excluded —
+        the server binds ``127.0.0.1`` only. The port need not match the bound
+        port; a numeric port is enough to reject DNS-rebinding Host names.
+        """
         h = (host or "").strip().lower()
         if h in ("127.0.0.1", "localhost"):
             return True
@@ -1441,16 +1447,33 @@ class Handler(BaseHTTPRequestHandler):
             return port_s.isdigit() and 1 <= int(port_s) <= 65535
         return False
 
-    def _origin_allowed(self, origin: str) -> bool:
-        port = SERVER_PORT or DEFAULT_PORT
+    @staticmethod
+    def _origin_allowed(origin: str, port: int | None = None) -> bool:
+        """Same-origin allowlist for browser clients.
+
+        Allowed: ``http://127.0.0.1:<port>`` and ``http://localhost:<port>``
+        (the bound port, or DEFAULT_PORT if unbound). Opaque ``null``,
+        ``file://``, and any other origin are rejected.
+
+        Deliberate exception (enforced in ``check_request_guards``, not here):
+        an absent or empty ``Origin`` is allowed so CLI / curl / the VS Code
+        extension host can call the API. Those clients still need a valid
+        ``X-Kettle-Token`` on ``/api/``.
+        """
+        p = port if port is not None else (SERVER_PORT or DEFAULT_PORT)
+        o = (origin or "").strip()
         allowed = {
-            f"http://127.0.0.1:{port}",
-            f"http://localhost:{port}",
+            f"http://127.0.0.1:{p}",
+            f"http://localhost:{p}",
         }
-        return origin.strip() in allowed
+        return o in allowed
 
     def check_request_guards(self, *, require_token: bool) -> bool:
-        """Host + Origin (+ optional token) gates. False ⇒ response already sent."""
+        """Host + Origin (+ optional token) gates. False ⇒ response already sent.
+
+        Order: Host allowlist, then Origin (if present), then the per-boot
+        token on ``/api/``. Missing Origin is the CLI exception.
+        """
         if not self._host_allowed(self.headers.get("Host", "")):
             self.send_err(403, "invalid Host header", "bad_host")
             return False

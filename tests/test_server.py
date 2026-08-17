@@ -2248,6 +2248,25 @@ class GuardTests(Base):
                   "localhost:99999", "127.0.0.1:abc", "[::1]", "0.0.0.0"):
             self.assertFalse(server.Handler._host_allowed(h), f"should reject {h!r}")
 
+    def test_origin_allowed_accepts_loopback_http(self):
+        port = server.DEFAULT_PORT
+        for o in (f"http://127.0.0.1:{port}", f"http://localhost:{port}",
+                  f"  http://127.0.0.1:{port}  "):
+            self.assertTrue(
+                server.Handler._origin_allowed(o, port), f"should accept {o!r}")
+
+    def test_origin_allowed_rejects_foreign_and_malformed(self):
+        port = server.DEFAULT_PORT
+        # Cross-site, https-on-loopback, path/slash variants, opaque null, and
+        # a loopback origin with the wrong port are all rejected. Empty Origin
+        # fails this helper; check_request_guards treats it as absent (CLI).
+        for o in ("", "https://evil.example", "http://evil.com",
+                  "http://127.0.0.1.evil.com", f"https://127.0.0.1:{port}",
+                  f"http://127.0.0.1:{port}/", "null", "file://",
+                  f"http://127.0.0.1:{port + 1}", f"http://localhost:{port + 1}"):
+            self.assertFalse(
+                server.Handler._origin_allowed(o, port), f"should reject {o!r}")
+
     # ---- live-server integration: accept + reject through the wire ----
 
     def setUp(self):
@@ -2300,6 +2319,24 @@ class GuardTests(Base):
         s, j = self._raw("GET", "/api/ping",
                          headers=self._tok({"Origin": self.base}))
         self.assertEqual(s, 200)
+
+    def test_localhost_origin_accepted(self):
+        s, j = self._raw("GET", "/api/ping",
+                         headers=self._tok({"Origin": f"http://localhost:{self.port}"}))
+        self.assertEqual(s, 200)
+        self.assertEqual(j["app"], "kettle")
+
+    def test_empty_origin_header_accepted(self):
+        # Empty Origin is treated like a missing header (CLI / some HTTP libs).
+        s, j = self._raw("GET", "/api/ping", headers=self._tok({"Origin": ""}))
+        self.assertEqual(s, 200)
+        self.assertEqual(j["app"], "kettle")
+
+    def test_opaque_null_origin_rejected(self):
+        s, j = self._raw("GET", "/api/ping",
+                         headers=self._tok({"Origin": "null"}))
+        self.assertEqual(s, 403)
+        self.assertEqual(j["code"], "bad_origin")
 
     def test_forged_host_rejected(self):
         s, j = self._raw("GET", "/api/ping", host="evil.com", headers=self._tok())

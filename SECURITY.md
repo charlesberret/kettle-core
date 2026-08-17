@@ -29,3 +29,11 @@ Kettle is a single-user, local-first application. Its server is intended to bind
 only to `127.0.0.1`; file operations must remain fenced to registered roots; and
 provider credentials remain with the provider CLI. Remote or multi-user
 deployment is not currently supported.
+
+The localhost HTTP surface additionally rejects non-loopback `Host` headers
+(DNS-rebinding defense) and, when a browser sends `Origin`, requires it to be
+the server's own `http://127.0.0.1:<port>` or `http://localhost:<port>`.
+Clients that do not send `Origin` (CLI, curl, editor hosts) are allowed
+through that gate; every `/api/` route still requires the per-boot
+`X-Kettle-Token`. Opaque `Origin: null` and `file://` are not on the
+allowlist.

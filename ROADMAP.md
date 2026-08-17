@@ -36,7 +36,10 @@ contracts are still at `0`.
 
 ### Security
 
-- Add explicit Host and Origin validation to the localhost HTTP surface.
+- ~~Add explicit Host and Origin validation to the localhost HTTP surface.~~
+  (done — `Handler.check_request_guards`; Host `127.0.0.1`/`localhost` with
+  optional port; Origin must be the bound loopback origin; absent Origin is
+  allowed for CLI/curl/native clients. See `API.md` Auth & request guards.)
 - Design a per-boot authentication token shared through the local discovery
   record.
 - Replace any provider permission that is only prompt-fenced with an enforceable

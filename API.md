@@ -237,10 +237,15 @@ Defense in depth on **all** requests (including static):
 
 | Check | Reject when | Code |
 |-------|-------------|------|
-| `Host` | not `127.0.0.1[:port]` / `localhost[:port]` | `bad_host` |
-| `Origin` | header present and not `http://127.0.0.1:<port>` / `http://localhost:<port>` | `bad_origin` |
+| `Host` | not `127.0.0.1[:port]` / `localhost[:port]` (port, if present, must be 1–65535) | `bad_host` |
+| `Origin` | header present and not `http://127.0.0.1:<bound-port>` / `http://localhost:<bound-port>` | `bad_origin` |
 
-Absent `Origin` (curl, native clients) is allowed.
+**Deliberate exceptions**
+
+- Absent or empty `Origin` (curl, CLI, VS Code/Cursor extension host) is allowed.
+  Browser clients always send Origin; this exception is for non-browser tools.
+- IPv6 loopback (`[::1]`) is not on the Host allowlist — the server binds `127.0.0.1` only.
+- Opaque `Origin: null` and `file://` are rejected (desktop should load the sitting from the localhost URL).
 
 ### Error envelope
 
