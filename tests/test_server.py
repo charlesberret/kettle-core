@@ -1038,7 +1038,9 @@ class EndpointTests(Base):
         self.assertEqual(s4, 400)
 
     def test_interview_status_lifecycle(self):
-        # a desk with queue entries is founded on read even if session was never written
+        # a desk with queue entries AND a charter is founded on read even if session
+        # was never written; queue entries alone are not enough (P1).
+        (server.desk_dir(self.proj()) / "PROJECT.md").write_text("# T\ncharter\n")
         s, j = _http("GET", f"{self.base}/api/interview?project=t")
         self.assertEqual((s, j["status"]), (200, "founded"))
         server.save_interview(self.proj(), {"session_id": "abc", "status": "interviewing"})
@@ -1047,13 +1049,62 @@ class EndpointTests(Base):
         self.assertTrue(j_pure["has_entries"])
         self.assertGreaterEqual(j_pure["entry_count"], 1)
         _, j2 = _http("GET", f"{self.base}/api/interview?project=t")
-        # queue entries on disk ⇒ founded (heals stale interviewing on read)
+        # queue entries + charter on disk ⇒ founded (heals stale interviewing on read)
         self.assertEqual(j2["status"], "founded")
         iv = server.load_interview(self.proj())
         self.assertEqual(iv["session_id"], "abc")                    # roundtrip
         server.save_interview(self.proj(), {**iv, "status": "founded"})
         _, j3 = _http("GET", f"{self.base}/api/interview?project=t")
         self.assertEqual(j3["status"], "founded")
+
+    def test_charterless_queue_reports_awaiting_founding(self):
+        # P1 regression: content entries alone must not read as founded, and a desk
+        # that was incorrectly marked founded before this predicate existed (or whose
+        # charter has since gone missing) heals back to interviewing on the next read
+        # — the real-world shape of proteus/retinue/reuse-reasoner/incanter-core.
+        self.assertFalse((server.desk_dir(self.proj()) / "PROJECT.md").exists())
+        self.assertFalse(server.mark_founded_if_filed(self.proj()))
+        _, j = _http("GET", f"{self.base}/api/interview?project=t")
+        self.assertNotEqual(j["status"], "founded")
+        self.assertTrue(j["has_entries"])  # entries are real; the desk still isn't founded
+
+        # stale prior mark (the bug this predicate closes) demotes back to interviewing
+        server.save_session(self.proj(), status="founded")
+        self.assertFalse(server.mark_founded_if_filed(self.proj()))
+        self.assertEqual(server.load_session(self.proj())["status"], "interviewing")
+
+        # writing the charter (real founding) flips it for good
+        (server.desk_dir(self.proj()) / "PROJECT.md").write_text("# T\ncharter\n")
+        self.assertTrue(server.mark_founded_if_filed(self.proj()))
+        self.assertEqual(server.load_session(self.proj())["status"], "founded")
+
+    def test_founded_demotion_ignores_empty_queue(self):
+        # a genuinely founded desk (charter on disk) must not be demoted just because
+        # its queue is briefly empty between a sweep and its restock.
+        (server.desk_dir(self.proj()) / "PROJECT.md").write_text("# T\ncharter\n")
+        server.save_session(self.proj(), status="founded")
+        self.write_queue([])
+        self.assertFalse(server.mark_founded_if_filed(self.proj()))  # no content ⇒ not (re)confirmed
+        self.assertEqual(server.load_session(self.proj())["status"], "founded")  # but not demoted
+
+    def test_found_clears_orphan_proposal_entry_once_founded(self):
+        # kits/prompts/found.md lets the curator leave the desk-proposal entry behind;
+        # a real desk (reuse-reasoner) carries one pointing at a proposal file that no
+        # longer exists. mark_founded_if_filed must clear it once the desk is truly
+        # founded, regardless of whether the proposal file is still on disk.
+        (server.desk_dir(self.proj()) / "PROJECT.md").write_text("# T\ncharter\n")
+        entries = server.load_queue(self.proj())["entries"]
+        self.write_queue(entries + [{
+            "id": server.PROPOSAL_ENTRY_ID,
+            "status": "pending",
+            "path": str(self.tmp / "long-gone" / server.PROPOSAL_FILENAME),
+            "founding_phase": "proposal",
+            "title": "Desk Proposal",
+        }])
+        self.assertTrue(server.mark_founded_if_filed(self.proj()))
+        ids = [e["id"] for e in server.load_queue(self.proj())["entries"]]
+        self.assertNotIn(server.PROPOSAL_ENTRY_ID, ids)
+        self.assertIn("alpha", ids)  # real content survives the strip
 
     def test_interviewing_persists_while_queue_empty(self):
         server.save_interview(self.proj(), {"session_id": "abc", "status": "interviewing"})
@@ -1090,7 +1141,10 @@ class EndpointTests(Base):
             self.assertIn("hello", body)
             iv = server.load_interview(self.proj())
             self.assertEqual((iv["session_id"], iv["status"]), ("sid-1", "interviewing"))
-            # found: queue already has content entries (setUp), so it must mark 'founded'
+            # found: queue already has content entries (setUp) and the charter is on
+            # disk (stubbed here — a real found turn would write it), so it must mark
+            # 'founded'
+            (server.desk_dir(self.proj()) / "PROJECT.md").write_text("# T\ncharter\n")
             req2 = urllib.request.Request(f"{self.base}/api/found",
                                           data=json.dumps({"project": "t"}).encode(),
                                           method="POST")
@@ -1192,10 +1246,13 @@ class EndpointTests(Base):
             'echo \'{"type":"result","usage":{"input_tokens":1}}\'\n')
         stub.chmod(0o755)
         server.save_session(self.proj(), session_id="old-iv", status="interviewing")
+        # queue already has entries (setUp); stand in for the charter a real bootstrap
+        # turn would write, so mark_founded_if_filed's predicate can be satisfied
+        (server.desk_dir(self.proj()) / "PROJECT.md").write_text("# T\ncharter\n")
         saved = server.CLAUDE
         server.CLAUDE = str(stub)
         try:
-            # queue already has entries (setUp), so bootstrap's mark_founded_if_filed must flip it
+            # queue + charter on disk, so bootstrap's mark_founded_if_filed must flip it
             req = urllib.request.Request(f"{self.base}/api/bootstrap",
                                          data=json.dumps({"project": "t"}).encode(), method="POST")
             for k, v in _auth_headers({"Content-Type": "application/json"}).items():

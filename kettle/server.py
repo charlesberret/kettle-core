@@ -1229,13 +1229,38 @@ def proposal_on_disk(proj: dict) -> bool:
         return False
 
 
+def clear_proposal_entry(proj: dict) -> None:
+    """Remove the desk-proposal placeholder from the queue once real founding has
+    landed. `kits/prompts/found.md` lets the curator leave it behind, and a stale one
+    can go on pointing at a proposal file long since archived, renamed, or migrated
+    away (the pre-Kettle `.setsweep/DESK-PROPOSAL.md` path is a live example)."""
+    def strip(q):
+        q["entries"] = [e for e in (q.get("entries") or []) if not is_proposal_entry(e)]
+    mutate_queue(proj, strip)
+
+
 def mark_founded_if_filed(proj: dict) -> bool:
-    """A desk is founded once the curator has filed at least one *content* queue entry
-    (not the desk-proposal placeholder). Shared by founding handlers and the CLI."""
+    """A desk is founded once it has a charter (`PROJECT.md`) on disk AND the curator
+    has filed at least one *content* queue entry (not the desk-proposal placeholder).
+    Heals both directions: promotes to founded once charter and content both land
+    (clearing any leftover desk-proposal entry), and demotes a desk stuck at
+    'founded' with no charter — a stale mark from before this predicate existed, or a
+    charter that has since gone missing — back to interviewing. Never demotes for an
+    empty *queue* alone: a genuinely founded desk's queue legitimately empties between
+    a sweep and its restock. Shared by founding handlers and the CLI."""
     try:
-        if content_entries(load_queue(proj)):
-            save_session(proj, status="founded")
+        has_charter = (desk_dir(proj) / "PROJECT.md").is_file()
+        q = load_queue(proj)
+        founded_now = has_charter and bool(content_entries(q))
+        was_founded = load_session(proj).get("status") == "founded"
+        if founded_now:
+            if not was_founded:
+                save_session(proj, status="founded")
+            if any(is_proposal_entry(e) for e in (q.get("entries") or [])):
+                clear_proposal_entry(proj)
             return True
+        if was_founded and not has_charter:
+            save_session(proj, status="interviewing")
     except Exception:  # noqa: BLE001
         pass
     return False
