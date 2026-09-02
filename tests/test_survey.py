@@ -1,12 +1,24 @@
 """Unit tests for the deterministic founding survey (Phase A)."""
 
 import json
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 
 import kettle.kits as kits
 import kettle.survey as survey
+
+
+def _git(root, *args):
+    subprocess.run(["git", "-C", str(root), *args], check=True,
+                    capture_output=True, text=True)
+
+
+def _init_git_repo(root: Path) -> None:
+    _git(root, "init", "-q")
+    _git(root, "config", "user.email", "reader@example.test")
+    _git(root, "config", "user.name", "Reader")
 
 
 class TestBuildSurvey(unittest.TestCase):
@@ -59,6 +71,58 @@ class TestBuildSurvey(unittest.TestCase):
             loaded = survey.load(p)
         self.assertEqual(loaded["root"], snap["root"])
         self.assertEqual(loaded["empty"], snap["empty"])
+
+    def test_git_activity_cites_a_real_date_and_path(self):
+        # P2: the interview opening must cite real git activity, not just presence.
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            _init_git_repo(root)
+            (root / "README.md").write_text("# Hello\n")
+            _git(root, "add", "README.md")
+            _git(root, "commit", "-q", "-m", "first commit")
+            (root / "README.md").write_text("# Hello\n\nmore\n")
+            _git(root, "add", "README.md")
+            _git(root, "commit", "-q", "-m", "second commit")
+            snap = survey.build_survey(root)
+
+        self.assertTrue(snap["signals"]["git"])
+        activity = snap["git_activity"]
+        self.assertIsNotNone(activity)
+        self.assertRegex(activity["last_commit_date"], r"^\d{4}-\d{2}-\d{2}$")
+        self.assertEqual(activity["commits_last_30d"], 2)
+        self.assertEqual(activity["author_count"], 1)
+        paths = [p["path"] for p in activity["top_changed_paths"]]
+        self.assertIn("README.md", paths)
+
+        block = survey.as_prompt_block(snap)
+        self.assertIn(activity["last_commit_date"], block)
+        self.assertIn("README.md", block)
+
+    def test_git_activity_none_for_dot_git_dir_that_is_not_a_repo(self):
+        # A bare .git/ marker (no actual repository) must not crash or fabricate dates.
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / ".git").mkdir()
+            (root / "README.md").write_text("# Hi\n")
+            snap = survey.build_survey(root)
+        self.assertTrue(snap["signals"]["git"])
+        self.assertIsNone(snap["git_activity"])
+        # falls back to mtime buckets instead of fabricating git history
+        self.assertIsNotNone(snap["mtime_buckets"])
+
+    def test_mtime_buckets_present_for_non_git_root(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / "notes.md").write_text("hi\n")
+            snap = survey.build_survey(root)
+        self.assertIsNone(snap["git_activity"])
+        buckets = snap["mtime_buckets"]
+        self.assertIsNotNone(buckets)
+        self.assertEqual(sum(buckets.values()), 1)  # the one file just written
+        self.assertIn(
+            "Recent activity (filesystem, no usable git history)",
+            survey.as_prompt_block(snap),
+        )
 
 
 class TestCardStems(unittest.TestCase):

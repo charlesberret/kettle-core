@@ -11,6 +11,8 @@ Pure: no server import, no network. Callers write the snapshot where they like
 from __future__ import annotations
 
 import json
+import os
+import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -33,6 +35,20 @@ _SKIP_DIR_NAMES = frozenset({
 _MAX_TOP = 48
 _MAX_SAMPLES = 8
 _SAMPLE_CHARS = 2400
+
+# git enrichment — bounded so a large repo's history never stalls a founding turn.
+_GIT_TIMEOUT = 5.0
+_GIT_LOG_TIMEOUT = 8.0
+_GIT_LOG_SCAN_COMMITS = 500     # window for "most-changed paths" — recent history, not full log
+_TOP_CHANGED_PATHS = 3
+
+# mtime enrichment — bounded walk, same skip set as the top-level listing.
+_MTIME_MAX_FILES = 12_000
+_MTIME_BUCKETS = (
+    ("last_24h", 1 * 86400),
+    ("last_7d", 7 * 86400),
+    ("last_30d", 30 * 86400),
+)
 
 
 def build_survey(
@@ -142,6 +158,8 @@ def build_survey(
         "top_level": top,
         "signals": signals,
         "samples": samples,
+        "git_activity": _git_activity(root_p) if has_git else None,
+        "mtime_buckets": _mtime_buckets(root_p),
         "suggested_prechecks": suggest_prechecks(empty=empty or not top, signals=signals,
                                                   samples=samples),
         "generated_at": _now(),
@@ -226,6 +244,27 @@ def as_prompt_block(survey: dict[str, Any]) -> str:
     if bits:
         lines.append("Signals: " + "; ".join(bits))
 
+    git_activity = survey.get("git_activity")
+    if git_activity:
+        lines.append(
+            f"Recent activity (git): last commit {git_activity['last_commit_date']} · "
+            f"{git_activity['commits_last_30d']} commit(s) in the last 30 days · "
+            f"{git_activity['author_count'] or 1} author(s)"
+        )
+        top_paths = git_activity.get("top_changed_paths") or []
+        if top_paths:
+            rendered = ", ".join(f"{p['path']} ({p['commits']})" for p in top_paths)
+            lines.append(f"Most-changed paths (recent history): {rendered}")
+    else:
+        buckets = survey.get("mtime_buckets")
+        if buckets:
+            lines.append(
+                "Recent activity (filesystem, no usable git history): "
+                f"{buckets['last_24h']} file(s) touched in the last 24h, "
+                f"{buckets['last_7d']} in the last 7 days, "
+                f"{buckets['last_30d']} in the last 30 days."
+            )
+
     samples = survey.get("samples") or {}
     if samples:
         lines.append("Sampled files (truncated):")
@@ -271,6 +310,94 @@ def _read_head(path: Path, n: int) -> str | None:
     if len(text) > n:
         text = text[:n].rstrip() + "\n… [truncated]"
     return text
+
+
+def _git_run(root: Path, args: list[str], *, timeout: float) -> str | None:
+    """Run one local, read-only ``git`` query. Never raises — a survey must not fail
+    or hang the founding turn because a repo is huge, shallow, or the binary is
+    missing."""
+    try:
+        proc = subprocess.run(
+            ["git", "-C", str(root), *args],
+            capture_output=True, text=True, timeout=timeout,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if proc.returncode != 0:
+        return None
+    return proc.stdout
+
+
+def _git_activity(root: Path) -> dict[str, Any] | None:
+    """Deterministic git enrichment for the survey: last commit date, commit volume
+    over the last 30 days, the most-changed paths in recent history, and a rough
+    author count. Local ``git log`` only — no network, no curator CLI. Returns None
+    when the query fails (not actually a work tree despite a ``.git`` entry, empty
+    repo, git missing) so callers can omit the section rather than show zeros."""
+    last = _git_run(root, ["log", "-1", "--format=%cs"], timeout=_GIT_TIMEOUT)
+    if last is None:
+        return None
+    last = last.strip()
+    if not last:
+        return None  # a .git dir with no commits yet — nothing to report
+
+    recent = _git_run(root, ["log", "--since=30.days", "--format=%h"], timeout=_GIT_TIMEOUT)
+    commits_30d = len([l for l in (recent or "").splitlines() if l.strip()])
+
+    changed = _git_run(
+        root,
+        ["log", f"-n{_GIT_LOG_SCAN_COMMITS}", "--name-only", "--format="],
+        timeout=_GIT_LOG_TIMEOUT,
+    )
+    counts: dict[str, int] = {}
+    for line in (changed or "").splitlines():
+        path = line.strip()
+        if path:
+            counts[path] = counts.get(path, 0) + 1
+    top_paths = [
+        {"path": p, "commits": n}
+        for p, n in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))[:_TOP_CHANGED_PATHS]
+    ]
+
+    authors = _git_run(root, ["log", "--format=%ae"], timeout=_GIT_LOG_TIMEOUT)
+    author_count = len({a.strip() for a in (authors or "").splitlines() if a.strip()}) or None
+
+    return {
+        "last_commit_date": last,
+        "commits_last_30d": commits_30d,
+        "top_changed_paths": top_paths,
+        "author_count": author_count,
+    }
+
+
+def _mtime_buckets(root: Path, *, max_files: int = _MTIME_MAX_FILES) -> dict[str, int] | None:
+    """Filesystem-mtime recency buckets (last 24h / 7d / 30d / older), skipping the
+    same noise directories as the top-level listing. Works for git and non-git roots
+    alike — the fallback signal when there is no repo, and a useful cross-check when
+    there is. Bounded so a huge tree never stalls a founding turn."""
+    buckets = {"last_24h": 0, "last_7d": 0, "last_30d": 0, "older": 0}
+    now = datetime.now(timezone.utc).timestamp()
+    scanned = 0
+    try:
+        for dirpath, dirnames, filenames in os.walk(root):
+            dirnames[:] = [d for d in dirnames if d not in _SKIP_DIR_NAMES]
+            for fname in filenames:
+                if scanned >= max_files:
+                    return buckets
+                scanned += 1
+                try:
+                    age = now - (Path(dirpath) / fname).stat().st_mtime
+                except OSError:
+                    continue
+                for label, span in _MTIME_BUCKETS:
+                    if age < span:
+                        buckets[label] += 1
+                        break
+                else:
+                    buckets["older"] += 1
+    except OSError:
+        return None
+    return buckets if scanned else None
 
 
 def _now() -> str:
