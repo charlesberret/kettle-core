@@ -1832,6 +1832,8 @@
         <input id="addroot" placeholder="folder (absolute or ~/ path)" spellcheck="false" aria-label="project folder">
         <button id="addbrowse" class="btn btn-sm btn-ghost browse" type="button" title="choose folder">browse…</button>
       </div>
+      <label for="addnote" class="mnote" style="margin:8px 0 4px">In a sentence or two: what is this, and what do you want from a second reader here?</label>
+      <textarea id="addnote" class="kitnote" required spellcheck="false" placeholder="e.g. a research folder that grows fast — flag anything that looks stale or contradicts what's already written" aria-label="founding sentence — what this is and what you want from a second reader here"></textarea>
     </div>
     <details class="add-advanced">
       <summary>more options</summary>
@@ -1845,7 +1847,6 @@
           <option value="writing">writing</option>
         </select>
         <input id="adddepth" class="kitsel" type="number" min="0" step="1" placeholder="max depth (blank = whole tree)" title="directory levels under the root to review" aria-label="max depth">
-        <textarea id="addnote" class="kitnote" spellcheck="false" placeholder="optional notes for the curator — fences, conventions, what you want a second reader for" aria-label="founding notes"></textarea>
       </div>
     </details>
     <div class="mrow">
@@ -6252,13 +6253,18 @@ async function submitAddProj(){
     $('addname').value = name;
   }
   if(!name){ addMsg('err', 'give the project a name'); return; }
+  const note = ($('addnote') && $('addnote').value.trim()) || '';
+  if(!note){
+    addMsg('err', 'a sentence or two on what this is and what you want from a second reader — required');
+    try { $('addnote').focus(); } catch(_){}
+    return;
+  }
   if(busy){ addMsg('err', 'agent busy — wait for the current stream to finish'); return; }
   let added;
   try {
     added = await jpost('/api/projects/add', {
-      name, root,
+      name, root, note,
       kit: ($('addkit') && $('addkit').value) || '',
-      note: ($('addnote') && $('addnote').value.trim()) || '',
       max_depth: ($('adddepth') && $('adddepth').value) || '',
     });
   } catch(err){ addMsg('err', 'add project failed: ' + err); return; }  // modal stays open to correct

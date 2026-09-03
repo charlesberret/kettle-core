@@ -1020,22 +1020,43 @@ class EndpointTests(Base):
     def test_add_project_valid_invalid_dup(self):
         good = self.tmp / "newproj"
         good.mkdir()
-        s, j = _http("POST", f"{self.base}/api/projects/add", {"name": "New One", "root": str(good)})
+        note = "A notes folder for the reading group — flag anything half-finished."
+        s, j = _http("POST", f"{self.base}/api/projects/add",
+                     {"name": "New One", "root": str(good), "note": note})
         self.assertEqual(s, 200)
         self.assertEqual(j["id"], "new_one")
         self.assertTrue(j.get("ok"))
         self.assertEqual(j["project"]["id"], "new_one")
         self.assertTrue((good / ".kettle" / "runtime" / "queue.json").exists())
+        self.assertEqual(server.load_session(j["project"])["founding_note"], note)
         # duplicate id
-        s2, _ = _http("POST", f"{self.base}/api/projects/add", {"name": "New One", "root": str(good)})
+        s2, _ = _http("POST", f"{self.base}/api/projects/add",
+                      {"name": "New One", "root": str(good), "note": note})
         self.assertEqual(s2, 400)
         # nonexistent dir
         s3, _ = _http("POST", f"{self.base}/api/projects/add",
-                      {"name": "Ghost", "root": str(self.tmp / "nope")})
+                      {"name": "Ghost", "root": str(self.tmp / "nope"), "note": note})
         self.assertEqual(s3, 400)
         # outside HOME fence
-        s4, _ = _http("POST", f"{self.base}/api/projects/add", {"name": "Evil", "root": "/etc"})
+        s4, _ = _http("POST", f"{self.base}/api/projects/add",
+                      {"name": "Evil", "root": "/etc", "note": note})
         self.assertEqual(s4, 400)
+
+    def test_add_project_requires_founding_sentence(self):
+        # P3: the founding sentence is the one required field at add — a stranger
+        # cannot skip past it into an empty-charter desk.
+        good = self.tmp / "noteless"
+        good.mkdir()
+        s, j = _http("POST", f"{self.base}/api/projects/add",
+                     {"name": "Noteless", "root": str(good)})
+        self.assertEqual(s, 400)
+        self.assertIn("founding sentence", j["error"])
+        self.assertFalse((good / ".kettle").exists())  # nothing registered on rejection
+
+        s2, blank = _http("POST", f"{self.base}/api/projects/add",
+                          {"name": "Noteless", "root": str(good), "note": "   "})
+        self.assertEqual(s2, 400)
+        self.assertIn("founding sentence", blank["error"])
 
     def test_interview_status_lifecycle(self):
         # a desk with queue entries AND a charter is founded on read even if session
@@ -1335,6 +1356,7 @@ class EndpointTests(Base):
         life_root.mkdir()
         s, added = _http("POST", f"{self.base}/api/projects/add", {
             "name": "Lifecycle", "root": str(life_root), "kit": "code",
+            "note": "A lifecycle fixture — review drafts as they land.",
         })
         self.assertEqual((s, added["id"]), (200, "lifecycle"))
         proj = server.get_project("lifecycle")
@@ -1756,6 +1778,39 @@ class EndpointTests(Base):
         cmd = cmds[-1]
         role = cmd[cmd.index("--append-system-prompt") + 1]
         self.assertIn("FOUNDING INTERVIEW", role)
+
+    def test_founding_sentence_quoted_first_in_interview(self):
+        # P3: the user's required founding sentence comes before the deterministic
+        # survey dump, not tacked on at the end.
+        sentence = "A batch of scanned letters — flag anything illegible or undated."
+        server.save_session(self.proj(), founding_note=sentence)
+        cmds = self._capture_cmds()
+        self._post_stream("/api/interview", {"project": "t", "message": "begin"})
+        role = cmds[-1][cmds[-1].index("--append-system-prompt") + 1]
+        self.assertIn(sentence, role)
+        # "CORE SURVEY" also appears in the role template's own opening line — anchor on
+        # the survey block's actual heading (from survey.as_prompt_block), not that phrase.
+        self.assertLess(role.index(sentence), role.index("CORE SURVEY (authoritative"))
+
+    def test_founding_sentence_quoted_first_in_propose(self):
+        sentence = "Slides for the fall course — check every claim against the syllabus."
+        server.save_session(self.proj(), founding_note=sentence)
+        cmds = self._capture_cmds()
+        self._post_stream("/api/propose", {"project": "t"})
+        prompt = cmds[-1][cmds[-1].index("-p") + 1]
+        self.assertIn(sentence, prompt)
+        self.assertIn("What This Project Is", prompt)
+        self.assertLess(prompt.index(sentence), prompt.index("Write ONE file"))
+
+    def test_founding_sentence_quoted_first_in_found(self):
+        sentence = "Household finances — nothing leaves the desk without my say."
+        server.save_session(self.proj(), founding_note=sentence)
+        cmds = self._capture_cmds()
+        self._post_stream("/api/found", {"project": "t"})
+        prompt = cmds[-1][cmds[-1].index("-p") + 1]
+        self.assertIn(sentence, prompt)
+        self.assertIn("Your Words", prompt)
+        self.assertLess(prompt.index(sentence), prompt.index("THE CHARTER"))
 
     def test_chat_uses_one_project_session_named_for_project(self):
         # first chat turn on a project CREATES the named project session (no --resume),

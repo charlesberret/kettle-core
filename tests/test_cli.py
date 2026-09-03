@@ -61,21 +61,35 @@ class CliTests(unittest.TestCase):
 
         root = self.tmp / "notes"
         root.mkdir()
-        code1, out1, err1 = self.run_cli(["add", str(root), "--name", "My Notes"])
+        code1, out1, err1 = self.run_cli(
+            ["add", str(root), "--name", "My Notes", "--note", "Reading notes — flag stale ones."])
         self.assertEqual((code1, err1), (0, ""))
         self.assertIn("registered [my_notes]", out1)
         self.assertTrue((root / ".kettle" / "runtime" / "queue.json").is_file())
+        self.assertEqual(
+            server.load_session(server.get_project("my_notes"))["founding_note"],
+            "Reading notes — flag stale ones.",
+        )
 
         code2, out2, _ = self.run_cli(["projects"])
         self.assertEqual(code2, 0)
         self.assertIn("my_notes", out2)
         self.assertIn(str(root), out2)
 
+    def test_add_requires_founding_sentence_non_interactively(self):
+        root = self.tmp / "noteless"
+        root.mkdir()
+        code, out, err = self.run_cli(["add", str(root), "--name", "Noteless"])
+        self.assertEqual(code, 2)
+        self.assertIn("founding sentence", err)
+        self.assertFalse((root / ".kettle").exists())
+
     def test_init_registers_current_directory(self):
         root = self.tmp / "current-project"
         root.mkdir()
         os.chdir(root)
-        code, out, err = self.run_cli(["init", "--name", "Current Project"])
+        code, out, err = self.run_cli(
+            ["init", "--name", "Current Project", "--note", "This working folder."])
         self.assertEqual((code, err), (0, ""))
         self.assertIn("registered [current_project]", out)
         self.assertEqual(server.project_root(server.get_project("current_project")).resolve(),

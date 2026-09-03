@@ -751,6 +751,16 @@ def scope_note(proj: dict) -> str:
             "deeper file you may open that one file, but do not expand the desk's scope to its subtree.")
 
 
+def founding_sentence_block(proj: dict, *, instruction: str) -> str:
+    """The user's own founding sentence — required at add, before the interview ever
+    starts (P3). Quoted first, ahead of survey/kit context: their words beat
+    inference. '' when somehow missing (legacy desk added before this was required)."""
+    note = (load_session(proj).get("founding_note") or "").strip()
+    if not note:
+        return ""
+    return f"THE USER'S FOUNDING SENTENCE (typed at add, before anything else — {instruction}):\n{note}"
+
+
 def build_refresh_briefs_prompt(proj: dict) -> str | None:
     """Prompt for rewriting brief+ask on the current queue only.
 
@@ -1107,13 +1117,18 @@ def slug(s: str) -> str:
 
 
 def register_project(name: str, root: str, kit: str | None = None,
-                     max_depth=None) -> dict:
+                     max_depth=None, note: str | None = None) -> dict:
     """Register a project: validate, append to the registry, seed its desk. The single
     source of truth for 'add a project', shared by the HTTP handler and the CLI so the
     fence gate (project roots must be under $HOME — registered roots extend the file-API
     fence) is enforced one way. Raises ValueError(message) on any validation failure;
     returns the project dict on success. Creates the registry if it does not exist yet
-    (first run), so a fresh install can register its first desk."""
+    (first run), so a fresh install can register its first desk.
+
+    `note` (the founding sentence) is optional *here* — this is the low-level
+    primitive other callers (migration, tests) may use without a human at the
+    keyboard. The human-facing entry points (`add_project` HTTP handler, `kettle add`
+    CLI) require it before they ever call this."""
     name = str(name or "").strip()
     root_raw = str(root or "").strip()
     if not name:
@@ -1157,6 +1172,9 @@ def register_project(name: str, root: str, kit: str | None = None,
             indent=2, ensure_ascii=False))
     from . import egress as _egress
     _egress.ensure_egress(proj)
+    note = str(note or "").strip()
+    if note:                       # the user's founding sentence → quoted first at every turn
+        save_session(proj, founding_note=note)
     return proj
 
 
@@ -2208,15 +2226,19 @@ class Handler(BaseHTTPRequestHandler):
     def add_project(self, d):
         # registration logic (validation, fence gate, registry append, desk seed) lives in
         # the module-level register_project so the CLI shares it; here we only translate.
+        note = str(d.get("note") or "").strip()
+        if not note:
+            self.send_json({
+                "error": "founding sentence required: in a sentence or two, what is this "
+                         "and what do you want from a second reader here?",
+            }, 400)
+            return
         try:
             proj = register_project(d.get("name", ""), d.get("root", ""),
-                                    d.get("kit"), d.get("max_depth"))
+                                    d.get("kit"), d.get("max_depth"), note)
         except ValueError as e:
             self.send_json({"error": str(e)}, 400)
             return
-        note = str(d.get("note") or "").strip()
-        if note:                       # the user's founding steer → woven into the charter at found
-            save_session(proj, founding_note=note)
         # Flat fields kept for the web UI (`added.id`); `project` + `ok` for typed clients.
         self.send_json({"ok": True, "project": proj, "home": str(HOME), **proj})
 
@@ -2356,12 +2378,11 @@ class Handler(BaseHTTPRequestHandler):
         if not sid:  # first turn: build survey, open named project session (no tools)
             snap = ensure_founding_survey(proj)
             role = INTERVIEW_ROLE.format(name=proj["name"], root=str(project_root(proj)))
+            fs = founding_sentence_block(
+                proj, instruction="quote it in your opening line, don't paraphrase it")
+            if fs:
+                role += "\n\n" + fs
             role += "\n\n" + survey_mod.as_prompt_block(snap)
-            note = (load_session(proj).get("founding_note") or "").strip()
-            if note:
-                role += ("\n\nThe user left a founding note — project-specific quirks and needs "
-                         "to honor; weave them into the prompt list (as defaults / deltas), "
-                         "not as blank interrogation:\n" + note)
             kit = kits.for_project(proj, APPDIR / "kits", load_settings())
             # Do not pre-tick the card from survey heuristics — blank for the user.
             # Survey text (as_prompt_block) still guides the opening prose.
@@ -2415,7 +2436,9 @@ class Handler(BaseHTTPRequestHandler):
             desk_dir=str(desk_dir(proj)), queue_path=str(queue_path(proj)),
             proposal_path=str(prop),
         )
-        prompt = PROPOSE_PROMPT.format(**fields)
+        fs = founding_sentence_block(
+            proj, instruction="open 'What This Project Is' with it, quoted")
+        prompt = (fs + "\n\n" if fs else "") + PROPOSE_PROMPT.format(**fields)
         # Single-source schema + cold-re-entry brief standard (kits/prompts/queue-schema.md).
         if QUEUE_SCHEMA:
             prompt += "\n\n" + QUEUE_SCHEMA
@@ -2428,9 +2451,6 @@ class Handler(BaseHTTPRequestHandler):
         if iv_ctx:
             prompt += ("\n\nHonor the interview prompt list / user answers when drafting "
                        "the proposal:\n" + iv_ctx)
-        note = (load_session(proj).get("founding_note") or "").strip()
-        if note:
-            prompt += ("\n\nUser's founding note (honor in the proposal):\n" + note)
         sc = scope_note(proj)
         if sc:
             prompt += "\n\n" + sc
@@ -2479,14 +2499,17 @@ class Handler(BaseHTTPRequestHandler):
         )
         has_proposal = proposal_on_disk(proj)
         if has_proposal:
-            prompt = FOUND_PROMPT.format(**fields)
+            base_prompt = FOUND_PROMPT.format(**fields)
         elif sid:
-            prompt = FOUND_LEGACY_PROMPT.format(**fields)
+            base_prompt = FOUND_LEGACY_PROMPT.format(**fields)
         else:
-            prompt = BOOTSTRAP_PROMPT.format(
+            base_prompt = BOOTSTRAP_PROMPT.format(
                 name=proj["name"], root=str(project_root(proj)),
                 desk_dir=str(desk_dir(proj)), queue_path=str(queue_path(proj)),
             )
+        fs = founding_sentence_block(
+            proj, instruction="PROJECT.md must open with it under a 'Your Words' heading")
+        prompt = (fs + "\n\n" if fs else "") + base_prompt
         # Single-source schema + cold-re-entry brief standard (kits/prompts/queue-schema.md).
         if QUEUE_SCHEMA:
             prompt += "\n\n" + QUEUE_SCHEMA
@@ -2507,10 +2530,6 @@ class Handler(BaseHTTPRequestHandler):
                 prompt += ("\n\nUse the interview confirmation card (and the user's ticks/"
                            "elaborations in this session) when writing founding-answers.md and "
                            "SWEEP-ACTIONS.md:\n" + iv_ctx)
-        note = (load_session(proj).get("founding_note") or "").strip()
-        if note:
-            prompt += ("\n\nUser's founding note (honor in the charter and first queue):\n"
-                       + note)
         sc = scope_note(proj)
         if sc:
             prompt += "\n\n" + sc

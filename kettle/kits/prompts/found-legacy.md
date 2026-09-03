@@ -1,5 +1,5 @@
 (No approved desk proposal is on file — found the desk for {name} ({root}) in one pass from the interview session and/or the files. Where user words and files disagree, THEIR WORDS WIN.
-1. THE CHARTER — write {desk_dir}/PROJECT.md (~80 lines).
+1. THE CHARTER — write {desk_dir}/PROJECT.md (~80 lines). Open with a **## Your Words** section quoting the user's founding sentence verbatim (see THE USER'S FOUNDING SENTENCE block below, if present) — nothing precedes it.
 2. THE MEMORY — seed {desk_dir}/MEMORY.md (stated + file-attested only).
 2b. THE FAMILIARITY — seed {desk_dir}/FAMILIARITY.md (~120 lines).
 2c. FOUNDING ANSWERS — write {desk_dir}/founding-answers.md from the interview if any.

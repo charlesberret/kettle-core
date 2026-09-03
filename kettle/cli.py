@@ -733,8 +733,23 @@ def _default_name(path: str) -> str:
 def cmd_add(args) -> int:
     """Register a folder as a desk (shares the server's validation + fence gate)."""
     name = args.name or _default_name(args.path)
+    note = (args.note or "").strip()
+    if not note:
+        if not sys.stdin.isatty():
+            print("founding sentence required: pass --note \"in a sentence or two, what "
+                  "is this and what do you want from a second reader here?\"", file=sys.stderr)
+            return 2
+        print("In a sentence or two: what is this, and what do you want from a second "
+              "reader here?")
+        try:
+            note = input("> ").strip()
+        except EOFError:
+            note = ""
+        if not note:
+            print("founding sentence required — nothing registered.", file=sys.stderr)
+            return 2
     try:
-        proj = server.register_project(name, args.path)
+        proj = server.register_project(name, args.path, note=note)
     except ValueError as e:
         print(f"could not register: {e}", file=sys.stderr)
         return 2
@@ -1226,9 +1241,17 @@ def main(argv=None) -> int:
     )
     mig.set_defaults(fn=cmd_migrate)
     a = sub.add_parser("add", help="register a folder as a desk")
-    a.add_argument("path"); a.add_argument("--name", default=None); a.set_defaults(fn=cmd_add)
+    a.add_argument("path"); a.add_argument("--name", default=None)
+    a.add_argument("--note", default=None,
+                   help="founding sentence — what this is and what you want from a second "
+                        "reader here (required; prompted if omitted on a TTY)")
+    a.set_defaults(fn=cmd_add)
     i = sub.add_parser("init", help="register the current folder as a desk")
-    i.add_argument("--name", default=None); i.set_defaults(fn=cmd_init)
+    i.add_argument("--name", default=None)
+    i.add_argument("--note", default=None,
+                   help="founding sentence — what this is and what you want from a second "
+                        "reader here (required; prompted if omitted on a TTY)")
+    i.set_defaults(fn=cmd_init)
     f = sub.add_parser("found", help="curator founds the desk (charter, memory, first queue)")
     f.add_argument("project"); f.add_argument("--model", default=None); f.set_defaults(fn=cmd_found)
     g = sub.add_parser("lineage", help="who edited what: agent / user / unattributed")

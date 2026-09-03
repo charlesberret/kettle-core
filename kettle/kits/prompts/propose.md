@@ -3,7 +3,7 @@
 1. Write ONE file: {proposal_path}
    This is the editable charter draft the user will review in the center pane and approve when satisfied. Sections (use these Title Case headings exactly):
    # Desk Proposal — {name}
-   ## What This Project Is — identity and purpose in the user's terms (quote them where their words were exact); kind/kit posture.
+   ## What This Project Is — open with the user's founding sentence (see THE USER'S FOUNDING SENTENCE block below, if present), quoted verbatim, before anything else; then identity and purpose in the user's terms (quote them where their words were exact); kind/kit posture.
    ## What Sittings Should Do — direction, review lens (kit default ± deltas), priorities from the interview. If they ticked **Build with me** (or greenfield / starting from scratch), say clearly that sessions and closes are collaborative: propose next work, draft with the user, queue new pieces with related project files for build/review cycles — not only curate work other agents already finished.
    ## Fences — what the curator must never auto-change; paths if named.
    ## Sweep Extras — extra close-of-sitting work (or 'nothing beyond tidy-up and restock'). Include git commit if they ticked it (and note init-if-missing). If other agents share this repo, default-include publishing approvals as desk egress on sweep. Never transmit mail/Slack from the desk; stage or egress only.
