@@ -15,9 +15,26 @@ Under `static/themes/`:
 
 - `index.json` — default id (`kettle`) and catalog
 - `kettle.json` — **marquee** product theme
+- `kettle-cerise.json`, `kettle-nectar.json`, `kettle-artichaut.json`,
+  `kettle-marseille.json`, `kettle-cobalt.json`, `kettle-graphite.json` — the
+  **glaze family**: the marquee skeleton with one enamel colour per pack
 - `nord.json`, `solarized.json`, `tokyo-night.json`, `gruvbox.json`, `material.json`, `classic.json`
 
 Shortcut for brand-only consumers: `static/kettle-palette.json` (mirrors marquee).
+
+**The marquee and the family are generated, not hand-edited.** Source of truth
+is `~/cloud/sync/design/palettes` (`library/kettle.json`, `library/kettle-glazes.json`);
+`scripts/kettle-promote.py --apply` there rewrites `kettle.json`, the six pack
+files, `index.json`, `kettle-palette.json` and the marked block in `themes.js`
+in lockstep, then runs kettle-vscode's `sync-palette`. Edit the palette, not
+these files. The desk's surfaces are shades of one body: `panel`/`activebg`
+index the ground (dark) or highlight (light) at an `ifaceOpacity` that lands
+on the measured shade step; the resolved hexes ride along in a `resolved`
+block for consumers that take hex. Glaze packs carry a `glaze` block
+(enamel, its text polarity, and a fixed-text `wash`) and a `voice`:
+*text* packs put the enamel in `acc`; *body* packs (warm hues that collide
+with a signal) keep the marquee accent and need a chrome-only role the desk
+does not yet have — see `.inbox/2026-09-11-from-designer-palettes-glaze-family.md`.
 
 ## Custom themes
 
