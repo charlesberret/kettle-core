@@ -6,7 +6,6 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import kettle.kits as kits
 import kettle.survey as survey
 
 
@@ -123,20 +122,6 @@ class TestBuildSurvey(unittest.TestCase):
             "Recent activity (filesystem, no usable git history)",
             survey.as_prompt_block(snap),
         )
-
-
-class TestCardStems(unittest.TestCase):
-    def test_card_starts_blank(self):
-        text = kits._render_stems(kits.BASE_INTERVIEW[:1])
-        self.assertNotIn("- [x]", text)
-        self.assertIn("- [ ] Brand new — starting from scratch", text)
-        self.assertIn("- [ ] In motion — active work under way", text)
-
-    def test_card_has_required_stems(self):
-        stems = kits.interview_stems(None)
-        body = "\n".join(f"### {i}. [{s['id']}] {s['stem']}" for i, s in enumerate(stems, 1))
-        self.assertEqual(kits.card_has_required_stems(body), [])
-        self.assertIn("status", kits.card_has_required_stems("no card here"))
 
 
 if __name__ == "__main__":

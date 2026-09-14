@@ -390,7 +390,7 @@ BOOTSTRAP_PROMPT = _load_prompt(
 
 # ---- the founding interview (agent chat, multi-turn) ----
 # Phase A (survey): core builds a deterministic snapshot (survey.py) — no curator tools.
-# Phase B (interview): tool-less curator turn — opening + confirmation card + discussion.
+# Phase B (interview): tool-less curator conversation (one mission question; no card).
 # Phase C (finish → propose): write ONE DESK-PROPOSAL.md and queue it for the editor.
 # Phase D (approve proposal → found): digest the *edited* proposal, write the desk, first batch.
 PROPOSAL_ENTRY_ID = "desk-proposal"
@@ -2383,15 +2383,8 @@ class Handler(BaseHTTPRequestHandler):
             if fs:
                 role += "\n\n" + fs
             role += "\n\n" + survey_mod.as_prompt_block(snap)
-            kit = kits.for_project(proj, APPDIR / "kits", load_settings())
-            # Do not pre-tick the card from survey heuristics — blank for the user.
-            # Survey text (as_prompt_block) still guides the opening prose.
-            kit_ctx = kits.as_context(kit, "interview")
-            if kit_ctx:
-                role += "\n\n" + kit_ctx
-            else:
-                role += "\n\n" + kits.as_context(
-                    {"name": "general", "interview": []}, "interview")
+            # No confirmation card (P4) — kit stems now feed only the propose turn's
+            # stated defaults, not a founding Q&A form.
             sc = scope_note(proj)
             if sc:
                 role += "\n\n" + sc
@@ -2446,11 +2439,6 @@ class Handler(BaseHTTPRequestHandler):
             kits.for_project(proj, APPDIR / "kits", load_settings()), "found")
         if kit_ctx:
             prompt += "\n\n" + kit_ctx
-        iv_kit = kits.for_project(proj, APPDIR / "kits", load_settings())
-        iv_ctx = kits.as_context(iv_kit or {"name": "general", "interview": []}, "interview")
-        if iv_ctx:
-            prompt += ("\n\nHonor the interview prompt list / user answers when drafting "
-                       "the proposal:\n" + iv_ctx)
         sc = scope_note(proj)
         if sc:
             prompt += "\n\n" + sc
@@ -2523,13 +2511,9 @@ class Handler(BaseHTTPRequestHandler):
                 "desk files — the user may have edited it in the center pane after you "
                 "drafted it. Their on-disk text is authoritative."
             )
-        else:
-            iv_kit = kits.for_project(proj, APPDIR / "kits", load_settings())
-            iv_ctx = kits.as_context(iv_kit or {"name": "general", "interview": []}, "interview")
-            if iv_ctx:
-                prompt += ("\n\nUse the interview confirmation card (and the user's ticks/"
-                           "elaborations in this session) when writing founding-answers.md and "
-                           "SWEEP-ACTIONS.md:\n" + iv_ctx)
+        # No confirmation card any more (P4) — the founding sentence and this same
+        # kit's "found" context (lens/first-queue, injected above) are what
+        # founding-answers.md / SWEEP-ACTIONS.md draw on for the no-proposal path.
         sc = scope_note(proj)
         if sc:
             prompt += "\n\n" + sc

@@ -335,17 +335,18 @@ provider **actually** guarantees under the argv `runtime.tools_argv` builds:
 
 | Provider | `read_only_tier` (interview) | `tool_allowlist` | `resume` | `effort` | `fenced_writes` (write tiers) |
 |----------|:---:|:---:|:---:|:---:|:---:|
-| claude   | ✅ tool-less (`--allowedTools` empty) | ✅ | ✅ | ✅ | ✅ |
-| cli      | ✅ tool-less | ✅ | ✅ | ✅ | ✅ |
+| claude   | ✅ tool-less (`--permission-mode plan`) | ✅ | ✅ | ✅ | ✅ |
+| cli      | ✅ tool-less (`--permission-mode plan`) | ✅ | ✅ | ✅ | ✅ |
 | chatgpt (codex) | ✅ (`--sandbox read-only`) | ❌ (sandbox, not allowlist) | ✅ | ✅ | ✅ (`workspace-write`) |
 | gemini   | ✅ (`--approval-mode plan`) | ❌ | ✅ | ❌ (no effort flag) | ✅ |
 | grok     | ✅ tool-less (`--permission-mode plan`, no Bash) | ❌ | ✅ | ✅ | ❌ (bypassPermissions + open Bash on chat/sweep) |
 
 **Founding interview (`/api/interview`)** is the trust ceremony and is **tool-less for every
 provider**: core runs a deterministic survey (`survey.py` → `.kettle/runtime/survey.json`)
-and injects it into the first turn. The curator only rephrases the snapshot into a plain
-opening + confirmation card — no shell, no writes. Users never see provider capability
-essays for founding.
+and injects it into the first turn. The curator rephrases that snapshot into a short
+conversation (one mission question in prose — no confirmation card, no shell, no writes).
+Users never see provider capability essays for founding. Register requires a founding
+sentence; a desk is founded only with `PROJECT.md` **and** a content queue entry.
 
 **Legacy / optional enforcement.** `read_only_unavailable` (HTTP 409) remains for callers that
 request a shell-bearing read-only posture from a provider that cannot guarantee it, unless

@@ -1777,7 +1777,7 @@ class EndpointTests(Base):
         self._post_stream("/api/interview", {"project": "t", "message": "begin"})
         cmd = cmds[-1]
         role = cmd[cmd.index("--append-system-prompt") + 1]
-        self.assertIn("FOUNDING INTERVIEW", role)
+        self.assertIn("a standing second reader, arriving for the first time", role)
 
     def test_founding_sentence_quoted_first_in_interview(self):
         # P3: the user's required founding sentence comes before the deterministic

@@ -36,9 +36,9 @@ contracts are still at `0`.
 
 ### Security
 
-- Add explicit Host and Origin validation to the localhost HTTP surface.
-- Design a per-boot authentication token shared through the local discovery
-  record.
+- ~~Add explicit Host and Origin validation to the localhost HTTP surface.~~
+- ~~Design a per-boot authentication token shared through the local discovery
+  record.~~ (shipped: `X-Kettle-Token` + Host/Origin; [`docs/AUTH-TOKEN.md`](./docs/AUTH-TOKEN.md))
 - Replace any provider permission that is only prompt-fenced with an enforceable
   process or filesystem boundary where the host permits it.
 - Keep remote and multi-user serving out of scope until there is a separate
@@ -51,6 +51,16 @@ contracts are still at `0`.
 - Never maintain two writable desks for one project (migrate refuses split desks).
 - Publish a deprecation window before removing the old command aliases or
   process identity.
+
+## Now: founding initiation (P1–P5)
+
+- ~~Founded = `PROJECT.md` and a content queue entry (not the proposal stub alone).~~
+- ~~Deterministic survey cites git activity and mtimes.~~
+- ~~Founding sentence required at add; quoted first in the charter.~~
+- Interview is a conversation (one mission question); sitting must not paint a
+  confirmation-card form. Leftover card CSS/parser is cleanup.
+- Next (P5): four-heading proposal diet; Found lands on the first brief in the
+  editor; cut `founding-answers.md`.
 
 ## Now: themes and the CLI sitting editor
 

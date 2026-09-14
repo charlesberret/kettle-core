@@ -520,6 +520,22 @@ class TestProviderCapabilities(unittest.TestCase):
                 f"{provider}: PROVIDER_CAPABILITIES.read_only_tier disagrees with tools_argv",
             )
 
+    def test_claude_interview_does_not_pass_bare_allowedTools(self):
+        """Claude CLI  (2026) requires a value after --allowedTools.
+
+        A founding interview used to pass the flag with no tools; that now
+        exits 1: option '--allowedTools, --allowed-tools <tools...>' argument
+        missing. plan mode is the tool-less posture.
+        """
+        for p in ("claude", "cli"):
+            argv = tools_argv("interview", p)
+            self.assertNotEqual(argv, ["--allowedTools"], p)
+            if "--allowedTools" in argv:
+                i = argv.index("--allowedTools")
+                self.assertLess(i + 1, len(argv), p)
+                self.assertFalse(str(argv[i + 1]).startswith("-"), p)
+            self.assertEqual(argv, ["--permission-mode", "plan"], p)
+
     def test_grok_interview_is_tool_less_but_writes_unfenced(self):
         # Interview: no open Bash / always-approve → read_only_tier True.
         # Chat/sweep still bypassPermissions + Bash → fenced_writes False.

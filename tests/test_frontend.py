@@ -206,10 +206,30 @@ class ViewportRitualRegressionBar(unittest.TestCase):
         self.assertNotIn("pointerEvents = 'none'", proposing)
         self.assertIn("ab.textContent = 'Found Desk'", self.function("showProposalGuide"))
 
+    def test_agent_chat_renders_gfm(self):
+        """Agent bubbles must paint GFM (headings, lists, task ticks), not raw markdown."""
+        html = INDEX.read_text(encoding="utf-8")
+        fill = function_source(html, "fillAgentMarkdown")
+        self.assertIn("_mdHtml", fill)
+        self.assertIn("sanitizeRender", fill)
+        self.assertIn("marked.parse", function_source(html, "_mdHtml"))
+        add = function_source(html, "addMsg")
+        self.assertIn("fillAgentMarkdown", add)
+        stream = function_source(html, "pipeStream")
+        self.assertIn("fillAgentMarkdown", stream)
+        self.assertRegex(html, r"\.msg\.agent\.md\s*\{")
+        self.assertIn("ui-2026-09-11a", html)
+
     def test_confirmation_card_is_blank_for_the_user(self):
         parse = self.function("parseConfirmCard")
         self.assertIn("checked: false", parse)
         self.assertNotRegex(parse, r"checked:\s*/x/i")
+
+    def test_founding_does_not_upgrade_gfm_into_a_card(self):
+        """P4: interview is a conversation. Leftover parser must not paint a form."""
+        src = self.function("maybeUpgradeConfirmCard")
+        self.assertIn("return false", src)
+        self.assertNotIn("renderConfirmCard(node", src)
 
     def test_activity_updates_chrome_and_compact_stays_connected(self):
         stream = self.function("pipeStream")

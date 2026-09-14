@@ -574,8 +574,10 @@ def tools_argv(tier: str, provider: str = "claude") -> list[str]:
         if provider == "grok":
             # plan = no project writes; no --allow Bash / --always-approve
             return ["--permission-mode", "plan"]
-        # Claude / cli: empty allowlist (no tools registered for the turn)
-        return ["--allowedTools"]
+        # Claude / cli: current CLIs require a value after --allowedTools.
+        # A bare `--allowedTools` exits 1 ("argument missing"). plan mode is
+        # the same tool-less interview posture Grok uses (no writes, no shell).
+        return ["--permission-mode", "plan"]
 
     if provider == "chatgpt":
         # Codex: sandbox policy stands in for tool allowlists

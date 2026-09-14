@@ -12,7 +12,8 @@ a sweep closes the sitting and restocks the queue.
 
 This repository owns the Python core, first-class CLI, localhost API, desk
 format, curator kits, and reference web UI. The public project home is
-**[charlesberret/kettle](https://github.com/charlesberret/kettle)**.
+**[charlesberret/kettle](https://github.com/charlesberret/kettle)**. Reviewing
+the tree: [`docs/REVIEW.md`](./docs/REVIEW.md).
 
 ```text
 queue  →  editor  →  ruling
@@ -36,8 +37,9 @@ python3 -m venv .venv
 .venv/bin/kettle --web
 ```
 
-Open [http://127.0.0.1:4242](http://127.0.0.1:4242), add a project folder, and
-complete the founding interview. You can also stay in the terminal:
+Open [http://127.0.0.1:4242](http://127.0.0.1:4242), add a project folder (a
+founding sentence is required), and complete the founding interview. You can
+also stay in the terminal:
 
 ```sh
 kettle projects

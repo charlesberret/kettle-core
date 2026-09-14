@@ -97,7 +97,7 @@ override with `settings.egress.routes` for a personal fleet.
 
 ## Sweep actions
 
-`SWEEP-ACTIONS.md` (seeded at founding from the confirmation card) lists EXTRA work after the
+`SWEEP-ACTIONS.md` (seeded at founding from kit defaults + the conversation) lists EXTRA work after the
 mechanical close / restock: git commit of sitting changes (init a repo if the project has none),
 stage outbound drafts, append a plaintext sitting log at a named path, update a sheet, file egress
 so another agent can dispatch mail/Slack/webhooks or post a report. Honor it on every sweep.

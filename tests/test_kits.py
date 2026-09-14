@@ -116,12 +116,15 @@ class KitsTest(unittest.TestCase):
         self.assertTrue(swp.count("\n- ") >= 1)
         fnd = kits.as_context(kit, "found")
         self.assertIn("First-queue heuristic:", fnd)
-        iv = kits.as_context(kit, "interview")
-        self.assertIn("Founding prompt list", iv)
-        self.assertIn("[status]", iv)
-        self.assertIn("[sweep_actions]", iv)
-        self.assertIn("[priority]", iv)  # kit-specific stem
-        self.assertIn("Kit default lens", iv)
+
+    def test_as_context_has_no_interview_mode(self):
+        # P4: founding no longer asks a confirmation card — there is no 'interview'
+        # mode to render one. interview_stems() still merges base+kit for the
+        # propose turn's stated defaults (test_interview_stems_merge_base_and_kit).
+        kit = kits.resolve("code", self.shipped)
+        self.assertEqual(kits.as_context(kit, "interview"), "")
+        self.assertFalse(hasattr(kits, "card_has_required_stems"))
+        self.assertFalse(hasattr(kits, "_render_stems"))
 
     def test_interview_stems_merge_base_and_kit(self):
         stems = kits.interview_stems(kits.resolve("inbox", self.shipped))
@@ -136,11 +139,13 @@ class KitsTest(unittest.TestCase):
         fl = next(s for s in stems if s["id"] == "fleet")
         self.assertTrue(any("coding agents" in o.lower() for o in fl["options"]))
 
-    def test_interview_without_kit_still_has_base(self):
-        iv = kits.as_context({"name": "general", "interview": []}, "interview")
-        self.assertIn("[sweep_actions]", iv)
-        self.assertIn("[fleet]", iv)
-        self.assertNotIn("Kit default lens", iv)
+    def test_interview_stems_without_kit_still_has_base(self):
+        # P4: nothing renders these into a card any more, but the merge itself
+        # (base + no kit) still feeds the propose turn's stated defaults.
+        stems = kits.interview_stems(None)
+        ids = [s["id"] for s in stems]
+        self.assertIn("sweep_actions", ids)
+        self.assertIn("fleet", ids)
 
     def test_as_context_empty(self):
         self.assertEqual(kits.as_context(None, "review"), "")

@@ -36,6 +36,7 @@ settings.json
 # ── Local-only working files (kept on disk, never published) ──
 # e.g. the internal/fleet-specific design docs (DESIGN.md, LINEAGE.md) live here.
 .local/
+.inbox/
 
 # ── Ollama persona pack (local forever) ──
 # Trial / host-local Wunderkind install, skills, eval prompts, and install.sh.

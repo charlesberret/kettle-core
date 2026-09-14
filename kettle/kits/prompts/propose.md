@@ -1,12 +1,14 @@
-(The user confirmed the interview (card returned or finish) — write the desk PROPOSAL only, not the full desk. You hold write tools for this turn. The interview checklist has been cleared from their chat pane; **you** are the live guide now.
+(The user said they're ready (or clicked Draft Proposal ✓) — write the desk PROPOSAL only, not the full desk. You hold write tools for this turn. **You** are the live guide now.
+
+There was no confirmation card — founding is a conversation now (P4). Draw What Sittings Should Do, Sweep Extras, and Other Agents / Fleet from what the founding sentence, survey, and the conversation actually said; where they said nothing, state a sensible default and let the user correct it in the center pane. Never invent a tick that was never made.
 
 1. Write ONE file: {proposal_path}
    This is the editable charter draft the user will review in the center pane and approve when satisfied. Sections (use these Title Case headings exactly):
    # Desk Proposal — {name}
    ## What This Project Is — open with the user's founding sentence (see THE USER'S FOUNDING SENTENCE block below, if present), quoted verbatim, before anything else; then identity and purpose in the user's terms (quote them where their words were exact); kind/kit posture.
-   ## What Sittings Should Do — direction, review lens (kit default ± deltas), priorities from the interview. If they ticked **Build with me** (or greenfield / starting from scratch), say clearly that sessions and closes are collaborative: propose next work, draft with the user, queue new pieces with related project files for build/review cycles — not only curate work other agents already finished.
-   ## Fences — what the curator must never auto-change; paths if named.
-   ## Sweep Extras — extra close-of-sitting work (or 'nothing beyond tidy-up and restock'). Include git commit if they ticked it (and note init-if-missing). If other agents share this repo, default-include publishing approvals as desk egress on sweep. Never transmit mail/Slack from the desk; stage or egress only.
+   ## What Sittings Should Do — direction, review lens (kit default ± deltas), priorities from the founding sentence and conversation. If they said this is collaborative / build-with-me work (or greenfield / starting from scratch), say clearly that sessions and closes are collaborative: propose next work, draft with the user, queue new pieces with related project files for build/review cycles — not only curate work other agents already finished.
+   ## Fences — what the curator must never auto-change; paths if named. Default to the handbook's own defaults (append-only records, secrets, published wording) unless the conversation said otherwise.
+   ## Sweep Extras — extra close-of-sitting work (or 'nothing beyond tidy-up and restock'). Include git commit if they mentioned it (and note init-if-missing). If other agents share this repo, default-include publishing approvals as desk egress on sweep. Never transmit mail/Slack from the desk; stage or egress only.
    ## Other Agents / Fleet — who else works this tree (or 'desk only'); what they watch; that user approve+sweep is the gate and approvals are staged under .kettle/outbound/ for pickup.
    ## Document Families & First Batch — for an existing corpus: families, key paths, what should surface first and why. For greenfield/empty: scaffold plan — first files to CREATE (typically README/overview, then ROADMAP or PLAN, then further drafts along the roadmap); say sittings will draft new material, not only review existing files.
    ## Open Questions — only genuine unresolved items, or omit.
@@ -26,13 +28,13 @@
    Do NOT file other content entries yet. Do NOT write PROJECT.md, MEMORY.md, or the rest of the desk apparatus — that waits for approve.
    (Queue schema + BRIEF STANDARD are appended below this prompt.)
 3. CLOSING GUIDE (required — several short chat lines, not one terse status):
-   After the file and queue entry exist, walk the user through what happens next (see LIVE REPORTING). Do not re-emit the interview checklist.
+   After the file and queue entry exist, walk the user through what happens next (see LIVE REPORTING). Do not re-open the conversation from turn 1.
 
 LIVE REPORTING (required — the user is watching this stream):
-The interview questions are gone from their window. Be their play-by-play guide while you work and after the document lands. Prefer many short chat lines over silence or one dense dump. Never re-print the confirmation card / GFM stems.
+Be their play-by-play guide while you work and after the document lands. Prefer many short chat lines over silence or one dense dump.
 
 **Before the first tool call:**
-- Acknowledge their answers in one warm line: you have their ticks and you're drafting the Desk Proposal now.
+- Acknowledge in one warm line: you have what they told you and you're drafting the Desk Proposal now.
 - Share 1–3 concrete observations about the repo or survey (real paths, stage, kit posture) — what you're weighing as you write. No fake file inventory; only what you already know from the interview/session.
 
 **While drafting (between tool calls):**

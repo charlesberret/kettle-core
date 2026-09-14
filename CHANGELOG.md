@@ -25,6 +25,12 @@ and Desk schema have their own integer contract versions.
 
 ### Changed
 
+- Founding interview no longer passes a bare `--allowedTools` to Claude Code
+  CLI (current CLIs require a value and exit 1). Interview uses
+  `--permission-mode plan`, same tool-less posture as Grok.
+- Founding interview is a conversation (one mission question), not a
+  confirmation-card form. Agent chat renders GFM. See `docs/REVIEW.md`.
+
 - Restructured the flat modules into the `kettle/` package; `static/`, `kits/`, and
   `projects.example.json` ship as package data so a wheel can serve the web UI.
   `APPDIR` resolves through `importlib.resources.files()` (PyInstaller `_MEIPASS` kept).

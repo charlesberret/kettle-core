@@ -2,7 +2,7 @@
 
 Core maps the project tree without a curator CLI so the interview turn can be
 tool-less (no shell / writes) under every provider. The model only rephrases the
-snapshot into a plain opening and the confirmation card.
+snapshot into a short conversation (dated observations + one mission question).
 
 Pure: no server import, no network. Callers write the snapshot where they like
 (typically ``.kettle/runtime/survey.json``).
@@ -172,7 +172,7 @@ def suggest_prechecks(
     signals: dict[str, Any],
     samples: dict[str, str],
 ) -> dict[str, list[str]]:
-    """High-confidence stem option labels to pre-check on the confirmation card.
+    """High-confidence stem option labels (legacy; P4 interview is not a card).
 
     Only include options the survey strongly supports — false pre-checks are worse
     than none. Labels must match BASE_INTERVIEW options verbatim.
@@ -273,8 +273,7 @@ def as_prompt_block(survey: dict[str, Any]) -> str:
             lines.append(text.rstrip() or "(empty)")
             lines.append(f"--- end {name} ---")
 
-    # Survey heuristics stay internal to the prose opening — never instruct pre-ticking
-    # the confirmation card (blank card for the user).
+    # Survey heuristics stay internal to the prose opening — never instruct a form.
 
     lines.append(
         "If empty/greenfield: open with new-project vs wrong-folder; scaffold only if they want."
