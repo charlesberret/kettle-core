@@ -1182,7 +1182,11 @@ def cmd_migrate(args) -> int:
     return 0
 
 
-def main(argv=None) -> int:
+def build_parser() -> tuple[argparse.ArgumentParser, argparse._SubParsersAction]:
+    """Build the CLI's argparse tree. Returns (parser, subparsers-action) so callers
+    (`main`, `command_names`) share one definition of what a subcommand is — the
+    unified entrypoint's routing table is derived from `command_names()` rather than
+    kept as a second hand-written list that can drift (see kettle_main.py)."""
     ap = argparse.ArgumentParser(
         prog="kettle", description="CLI viewport over the desk.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -1300,6 +1304,18 @@ def main(argv=None) -> int:
     eg.set_defaults(fn=cmd_egress)
     es = sub.add_parser("egress-status", help="list staged desk egress memos")
     es.add_argument("project"); es.set_defaults(fn=cmd_egress_status)
+    return ap, sub
+
+
+def command_names() -> frozenset[str]:
+    """Every subcommand `main()` dispatches — single source for the unified entrypoint's
+    routing table (kettle_main.CLI_CMDS) so the two can't drift out of sync."""
+    _, sub = build_parser()
+    return frozenset(sub.choices.keys())
+
+
+def main(argv=None) -> int:
+    ap, _sub = build_parser()
     args = ap.parse_args(argv)
     if not getattr(args, "fn", None):   # bare `kettle` → show the menu, exit clean
         ap.print_help()

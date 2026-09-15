@@ -21,12 +21,6 @@ Routing keeps web/server as the default; the CLI subcommands go through `cli.py`
 """
 import sys
 
-CLI_CMDS = {"projects", "add", "init", "found", "queue", "open", "edit", "themes",
-            "lineage", "bind", "chat",
-            "doctor",
-            "sweep-status", "sweep-close", "sweep-archive", "refresh-briefs",
-            "egress", "egress-status"}
-
 
 def main(argv=None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
@@ -38,12 +32,16 @@ def main(argv=None) -> int:
         print((__doc__ or "").strip())
         print(f"\nversion {__version__}")
         return 0
-    if cmd in CLI_CMDS:
-        from . import cli
-        return cli.main(args)
     if cmd in (None, "--web", "--app", "--replace"):
         from . import server          # server.main() reads sys.argv (--port/--no-open)
         return server.main() or 0
+    # Routing table is derived from cli.py's own subcommand table (cli.command_names())
+    # so this router and the argparse tree it forwards to can never drift apart — a
+    # subcommand added to cli.py (e.g. `migrate`) is reachable here automatically.
+    # Imported lazily so a bare/--web launch never pulls in the CLI viewport module.
+    from . import cli
+    if cmd in cli.command_names():
+        return cli.main(args)
     print(f"kettle: unknown command {cmd!r} (try kettle --help)", file=sys.stderr)
     return 2
 

@@ -54,6 +54,18 @@ class CliTests(unittest.TestCase):
         root.mkdir()
         return server.register_project(name, str(root))
 
+    def test_command_names_is_the_single_source_for_the_routing_table(self):
+        """cli.command_names() is what kettle_main derives CLI_CMDS from — regression
+        guard for the argparse tree itself, independent of kettle_main's tests."""
+        names = cli.command_names()
+        self.assertIn("migrate", names)
+        for expected in (
+            "projects", "add", "init", "found", "queue", "open", "edit", "themes",
+            "lineage", "bind", "chat", "doctor", "sweep-status", "sweep-close",
+            "sweep-archive", "refresh-briefs", "egress", "egress-status",
+        ):
+            self.assertIn(expected, names)
+
     def test_projects_add_and_list(self):
         code0, out0, _ = self.run_cli(["projects"])
         self.assertEqual(code0, 0)

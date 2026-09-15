@@ -41,6 +41,30 @@ class EntrypointTest(unittest.TestCase):
         self.assertEqual(code, 0)
         call.assert_called_once_with(["refresh-briefs", "desk"])
 
+    def test_migrate_dispatches_to_cli(self):
+        """Regression: kettle_main.CLI_CMDS used to be a hand-written literal that
+        forgot `migrate`, so `kettle migrate` exited 2 "unknown command" even though
+        INSTALL.md / ROADMAP / doctor's legacy-migration hint all point users there."""
+        with mock.patch.object(cli, "main", return_value=0) as call, \
+                mock.patch.object(server, "main") as web:
+            code = kettle_main.main(["migrate", "--apply"])
+        self.assertEqual(code, 0)
+        call.assert_called_once_with(["migrate", "--apply"])
+        web.assert_not_called()
+
+    def test_every_cli_subcommand_routes_through_the_cli_not_the_server(self):
+        """Single-source guarantee: every name cli.py's own argparse tree dispatches
+        is reachable here — kettle_main's routing table cannot drift from cli.py's."""
+        names = cli.command_names()
+        self.assertIn("migrate", names)
+        for name in names:
+            with mock.patch.object(cli, "main", return_value=0) as call, \
+                    mock.patch.object(server, "main") as web:
+                code = kettle_main.main([name])
+            self.assertEqual(code, 0, name)
+            call.assert_called_once_with([name])
+            web.assert_not_called()
+
     def test_web_flags_dispatch_to_server(self):
         with mock.patch.object(server, "main", return_value=None) as web:
             code = kettle_main.main(["--web"])
