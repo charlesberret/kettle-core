@@ -61,7 +61,8 @@ A new viewport should have:
 4. tests for discovery, contract rejection, and ritual semantics;
 5. a packaging and update path.
 
-For a non-TypeScript host, [`API.md`](../API.md) is the platform. A shared
+For a non-TypeScript host, [`API.md`](../API.md) is the platform and
+[`SITTING-FLOWS.md`](./SITTING-FLOWS.md) is the order of calls. A shared
 client should be extracted only after multiple real consumers need it.
 
 Kettle remains a single-user, loopback-only instrument. Remote and multi-user

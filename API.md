@@ -206,6 +206,8 @@ When desktop falls back to an ephemeral port, the plugin finds it via `server.js
 
 ### Founding state machine
 
+Call order and derived state per flow: [`docs/SITTING-FLOWS.md`](./docs/SITTING-FLOWS.md).
+
 | `status` | Meaning |
 |----------|---------|
 | `none` | No session / not started |

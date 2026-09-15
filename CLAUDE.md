@@ -37,7 +37,8 @@ Claude Code CLI. `/api/ping` exposes the active curator so viewports can label i
 
 Sitting visual/copy/palette changes land here; desktop inherits the sitting. VS Code must
 `sync-ui-copy` / `sync-palette` when those sources change. HTTP changes: [`API.md`](./API.md).
-Viewports: [`docs/PLATFORMS.md`](./docs/PLATFORMS.md).
+Viewports: [`docs/PLATFORMS.md`](./docs/PLATFORMS.md). Flow sequences every viewport
+follows: [`docs/SITTING-FLOWS.md`](./docs/SITTING-FLOWS.md).
 
 **Chat write tools (interim):** `/api/chat` grants Edit/Write under `--permission-mode acceptEdits`
 with the project root as cwd — same write tier as sweep for always-on implementation when the

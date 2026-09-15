@@ -10,6 +10,7 @@ structure and meaning must not.
 | [`UI.md`](./UI.md) | Type hierarchy, buttons, copy workflow, theme projection |
 | [`PLATFORMS.md`](./PLATFORMS.md) | Viewport capability levels and founding state |
 | [`API.md`](../API.md) | Wire contract for every region’s data |
+| [`SITTING-FLOWS.md`](./SITTING-FLOWS.md) | Order of calls and derived state for each flow |
 | [`ARCHITECTURE.md`](../ARCHITECTURE.md) | Desk-is-files; app is a viewport |
 | [`REVIEW.md`](./REVIEW.md) | Briefing for a full-tree review of current form |
 | `static/index.html` | Reference **layout implementation** (browser / desktop) |
