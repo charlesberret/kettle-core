@@ -158,6 +158,23 @@ class LineageTest(unittest.TestCase):
 
     # ---- optional git substrate ----
 
+    def test_git_snapshot_refuses_a_shipped_lineage_repo(self):
+        """A folder that ships .kettle/lineage.git with hooks or filters must not get
+        them run by Kettle's snapshot."""
+        import shutil as _shutil
+        import subprocess as _sp
+        if _shutil.which("git") is None:
+            self.skipTest("git not installed")
+        (self.tmp / "a.md").write_text("x\n")
+        gd = lineage._git_dir(self.tmp)
+        gd.parent.mkdir(parents=True, exist_ok=True)
+        _sp.run(["git", "init", "-q", "--bare", str(gd)], check=True)
+        marker = self.tmp / "HOOK-RAN"
+        (gd / "config").write_text((gd / "config").read_text()
+                                   + f'[filter "evil"]\n\tclean = touch {marker}\n')
+        self.assertIsNone(lineage.git_snapshot(self.tmp, "lineage: test"))
+        self.assertFalse(marker.exists())
+
     def test_git_snapshot_uses_separate_history_leaving_project_git_untouched(self):
         import shutil, subprocess
         if not shutil.which("git"):

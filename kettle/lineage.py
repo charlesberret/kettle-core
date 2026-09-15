@@ -369,11 +369,37 @@ def _git_dir(root: Path | str) -> Path:
     return desk_dir(root) / "lineage.git"
 
 
+_LINEAGE_MARKER = "kettle-lineage"   # written into lineage.git by Kettle when it creates one
+
+# Never let the lineage repo's own config run code: hooks, fsmonitor, a pager or an
+# external diff are all ways a folder that ships `.kettle/lineage.git` could execute
+# something on the next snapshot.
+_GIT_HARDENING = ["-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false",
+                  "-c", "core.pager=cat", "-c", "diff.external=", "-c", "core.sshCommand=false"]
+
+
 def _git(root: Path, *args, check: bool = True):
     import subprocess
     return subprocess.run(
-        ["git", "--git-dir", str(_git_dir(root)), "--work-tree", str(root), *args],
+        ["git", *_GIT_HARDENING, "--git-dir", str(_git_dir(root)), "--work-tree", str(root),
+         *args],
         capture_output=True, text=True, check=check)
+
+
+def _lineage_git_is_ours(gd: Path) -> bool:
+    """True for a lineage.git Kettle created: it carries the marker, or it is a legacy
+    Kettle repo (pre-marker) whose config holds only core/user settings and no filters,
+    includes or other code-bearing sections."""
+    if (gd / _LINEAGE_MARKER).is_file():
+        return True
+    try:
+        config = (gd / "config").read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return False
+    import re as _re
+    sections = {m.group(1).split()[0].lower()
+                for m in _re.finditer(r"^\s*\[([^\]]+)\]", config, _re.MULTILINE)}
+    return bool(sections) and sections <= {"core", "user"} and "Kettle" in config
 
 
 def git_snapshot(root: Path | str, message: str) -> Optional[str]:
@@ -385,10 +411,13 @@ def git_snapshot(root: Path | str, message: str) -> Optional[str]:
     root = Path(root)
     gd = _git_dir(root)
     try:
+        if gd.exists() and not _lineage_git_is_ours(gd):
+            return None   # a lineage.git Kettle did not create is never run
         if not gd.exists():
             _git(root, "init", "-q")
             _git(root, "config", "user.email", "desk@kettle.local", check=False)
             _git(root, "config", "user.name", "Kettle", check=False)
+            (gd / _LINEAGE_MARKER).write_text("created by Kettle lineage\n")
             # keep the user's .git, desk machinery, and heavy noise out of the lineage history
             (gd / "info").mkdir(parents=True, exist_ok=True)
             (gd / "info" / "exclude").write_text(

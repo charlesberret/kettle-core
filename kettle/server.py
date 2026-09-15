@@ -339,6 +339,19 @@ def _env_allowed_roots() -> list[Path]:
     return out
 
 
+def _gated_env_roots(roots: list[Path]) -> list[Path]:
+    """Drop extra fence roots that would expose home itself or credential folders — the
+    same gate project roots pass at registration."""
+    kept = []
+    for r in roots:
+        problem = project_root_problem(r)
+        if problem:
+            sys.stderr.write(f"kettle: ignoring KETTLE_ALLOWED_ROOTS entry {r}: {problem}\n")
+            continue
+        kept.append(r)
+    return kept
+
+
 # The fence = these base roots + every registered project root (see allowed_roots()). Base
 # defaults to empty for portability; the author can restore prior behavior with, e.g.,
 # KETTLE_ALLOWED_ROOTS="$HOME/cloud/sync:$HOME/Library/Mobile Documents/com~apple~CloudDocs".
@@ -849,7 +862,7 @@ def sweep_precomputed_context(proj: dict, entries: list) -> str:
             lines.append("diff:")
             lines.append(text)
         else:
-            sp = runtime_dir(proj) / "snapshots" / f"{eid}.orig"
+            sp = _snapshot_path(proj, eid)
             if sp.exists():
                 lines.append("diff: (identical to snapshot)")
             else:
@@ -1266,6 +1279,16 @@ def slug(s: str) -> str:
     return re.sub(r"[^A-Za-z0-9._-]+", "_", s).strip("_") or "x"
 
 
+def project_id_for(name: str) -> str:
+    """Registry id for a project name. ASCII names keep their familiar slug; a name with
+    no ASCII letters or digits (e.g. 書簡, Письма) gets a short stable hash instead of
+    collapsing to `x` for every such project."""
+    if re.search(r"[A-Za-z0-9]", name or ""):
+        return slug(name).lower()
+    import hashlib as _hashlib
+    return "p-" + _hashlib.sha1(name.strip().encode("utf-8")).hexdigest()[:8]
+
+
 def project_root_problem(rp: Path) -> str | None:
     """Why a resolved folder cannot be a project root, or None. Roots extend the file
     fence: every file under one becomes readable, writable and visible to curators."""
@@ -1286,6 +1309,11 @@ def project_root_problem(rp: Path) -> str | None:
         return (f"folder {rp} contains Kettle's own settings ({registry_dir}) — "
                 "choose the project's own folder")
     return None
+
+
+# Env-supplied fence roots pass the same gate as project roots (applied here, once the
+# gate exists; tests may still assign BASE_ALLOWED_ROOTS directly).
+BASE_ALLOWED_ROOTS = _gated_env_roots(BASE_ALLOWED_ROOTS)
 
 
 def register_project(name: str, root: str, kit: str | None = None,
@@ -1316,7 +1344,7 @@ def register_project(name: str, root: str, kit: str | None = None,
     problem = project_root_problem(rp)
     if problem:
         raise ValueError(problem)
-    pid = slug(name).lower()
+    pid = project_id_for(name)
     proj = {
         "id": pid,
         "name": name,
@@ -2068,16 +2096,22 @@ class Handler(BaseHTTPRequestHandler):
             elif url.path == "/api/approve":
                 proj = get_project(d.get("project"))
 
+                newly = []
+
                 def approve(q):
                     e = find_entry(q, d["id"])
+                    if e.get("status") == "approved" and e.get("approved"):
+                        return  # already bookmarked: keep the original date, log once
                     e["status"] = "approved"
                     e["approved"] = date.today().isoformat()
+                    newly.append(True)
 
                 q = mutate_queue(proj, approve)
                 e = find_entry(q, d["id"])
-                log = runtime_dir(proj) / "approvals.log"
-                with log.open("a") as f:
-                    f.write(f"{e['approved']}\t{e['id']}\t{e['path']}\t{e.get('ask','')}\n")
+                if newly:
+                    log = runtime_dir(proj) / "approvals.log"
+                    with log.open("a") as f:
+                        f.write(f"{e['approved']}\t{e['id']}\t{e['path']}\t{e.get('ask','')}\n")
                 # Proposal approve is only a bookmark here; the client streams POST /api/found
                 # so the curator digests on-disk edits and files the first content batch.
                 self.send_json({

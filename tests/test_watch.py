@@ -92,6 +92,20 @@ class NormalizeQueueTest(unittest.TestCase):
         self.assertEqual(q["entries"][0]["project_root"], str(self.tmp.resolve()))
         self.assertEqual(q["entries"][1]["status"], "approved")   # not clobbered
 
+    def test_intake_outside_the_project_in_a_credential_folder_is_refused(self):
+        import kettle.server as srv
+        saved = srv.HOME
+        home = Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: setattr(srv, "HOME", saved))
+        srv.HOME = home
+        (home / "proj").mkdir()
+        (home / ".ssh").mkdir()
+        proj = {"id": "p", "root": str(home / "proj"), "intake": {"watch": str(home / ".ssh")}}
+        self.assertIsNone(w.resolve_intake(proj))
+        (home / "drop").mkdir()
+        proj["intake"]["watch"] = str(home / "drop")
+        self.assertIsNotNone(w.resolve_intake(proj))
+
     def test_malformed_is_silent(self):
         self.qf.write_text("{not json")
         w.normalize_queue(self.qf, {"id": "p", "root": str(self.tmp)})   # must not raise

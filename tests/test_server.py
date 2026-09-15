@@ -1073,6 +1073,21 @@ class EndpointTests(Base):
         self.assertEqual(self._entry("beta")["status"], "approved")
         self.assertTrue((server.runtime_dir(self.proj()) / "approvals.log").exists())
 
+    def test_reapprove_keeps_the_first_date_and_logs_once(self):
+        _http("POST", f"{self.base}/api/approve", {"project": "t", "id": "beta"})
+        server.mutate_queue(self.proj(), lambda q: server.find_entry(q, "beta").__setitem__(
+            "approved", "2026-01-01"))
+        _http("POST", f"{self.base}/api/approve", {"project": "t", "id": "beta"})
+        self.assertEqual(self._entry("beta")["approved"], "2026-01-01")
+        log = (server.runtime_dir(self.proj()) / "approvals.log").read_text()
+        self.assertEqual(log.count("\tbeta\t"), 1)
+
+    def test_non_latin_project_names_get_distinct_ids(self):
+        a, b = server.project_id_for("書簡"), server.project_id_for("Письма")
+        self.assertNotEqual(a, b)
+        self.assertTrue(a.startswith("p-"))
+        self.assertEqual(server.project_id_for("My Notes"), "my_notes")
+
     def test_clear_session(self):
         # the project session is the unit: clear-session drops its id and active-file marker
         server.save_session(self.proj(), session_id="abc", last_entry="alpha")

@@ -1653,8 +1653,8 @@
   .msg.agent.md ul, .msg.agent.md ol { margin:0.4em 0; padding-left:1.35em; }
   .msg.agent.md li { margin:0.22em 0; }
   .msg.agent.md li > p { margin:0.12em 0; }
-  .msg.agent.md ul.contains-task-list { list-style:none; padding-left:0.2em; }
-  .msg.agent.md li.task-list-item { list-style:none; margin-left:0; }
+  /* marked 12 emits no task-list classes: match list items that start with a checkbox */
+  .msg.agent.md li:has(> input[type=checkbox]:first-child) { list-style:none; }
   .msg.agent.md input[type=checkbox] {
     accent-color:var(--acc); transform:scale(1.12); margin:0 7px 0 0; vertical-align:middle;
   }

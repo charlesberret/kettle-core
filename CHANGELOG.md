@@ -82,6 +82,14 @@ and Desk schema have their own integer contract versions.
 - The retired confirmation-card parser, renderer, CSS and tests are removed from the sitting
   (P4: founding is a conversation); the re-found offer keeps its own `refound-offer` styling.
   Founding copy in the sitting says "Draft Proposal ✓" instead of "finish ✓".
+- Smaller fixes from the review: re-approving an entry keeps its first date and logs once;
+  a project name with no ASCII letters gets a stable hashed id instead of `x`; two sweep
+  session logs in the same second no longer overwrite each other; precomputed sweep diffs
+  find snapshots for ids that need slugging; an intake folder outside the project that
+  overlaps credential folders is ignored; `KETTLE_ALLOWED_ROOTS` entries pass the same
+  gate as project roots; agent-chat task lists lose their stray bullets.
+- `lineage_git` never runs a `lineage.git` Kettle did not create, and runs git with hooks,
+  fsmonitor, pager and external diff disabled.
 - A missing or non-executable curator CLI is reported by name with a fix
   (`curator_unavailable`, 500, before any stream) instead of a traceback from `kettle chat` /
   `kettle found` or a made-up `~/.local/bin/claude` path; the CLI is resolved per turn, so

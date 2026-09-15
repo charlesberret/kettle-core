@@ -267,6 +267,10 @@ def write_session_log_stub(
     sess_dir = server.runtime_dir(proj) / "sessions"
     sess_dir.mkdir(parents=True, exist_ok=True)
     path = sess_dir / f"{stamp}-session.md"
+    n = 2
+    while path.exists():                      # two passes in one second: never overwrite
+        path = sess_dir / f"{stamp}-{n}-session.md"
+        n += 1
     lines = [
         f"# Sweep {stamp}",
         "",
@@ -289,7 +293,7 @@ def write_session_log_stub(
         lines.append("")
         lines.extend(extra_lines)
     lines.append("")
-    path.write_text("\n".join(lines), encoding="utf-8")
+    server.atomic_write(path, "\n".join(lines))
     return path
 
 

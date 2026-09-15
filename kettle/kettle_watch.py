@@ -143,6 +143,12 @@ def resolve_intake(proj: dict):
         return (p if p.is_absolute() else (root / p)).resolve()
 
     watch = _resolve(cfg["watch"], ".")
+    if not watch.is_relative_to(root.resolve()):
+        # an intake folder outside the project becomes --add-dir for a write-armed curator
+        from .server import project_root_problem
+        problem = project_root_problem(watch)
+        if problem:
+            return None
     responses = _resolve(cfg.get("responses"), "responses")
     outbound = _resolve(cfg.get("outbound"), "outbox")
     ignore = set(INTAKE_IGNORE) | {responses.name, outbound.name}

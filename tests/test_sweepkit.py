@@ -210,6 +210,13 @@ class ArchiveTests(SweepkitBase):
         self.assertNotIn("a", left)
         self.assertIn("b", left)
 
+    def test_session_log_stub_never_overwrites_a_pass_in_the_same_second(self):
+        st = sweepkit.assess_close(self.proj())
+        a = sweepkit.write_session_log_stub(self.proj(), st, stamp="2026-01-01-000000")
+        b = sweepkit.write_session_log_stub(self.proj(), st, stamp="2026-01-01-000000")
+        self.assertNotEqual(a, b)
+        self.assertTrue(a.exists() and b.exists())
+
     def test_archive_by_ids(self):
         self.write_queue([
             {"id": "a", "path": "doc.md", "status": "approved"},
