@@ -90,6 +90,15 @@ and Desk schema have their own integer contract versions.
   gate as project roots; agent-chat task lists lose their stray bullets.
 - `lineage_git` never runs a `lineage.git` Kettle did not create, and runs git with hooks,
   fsmonitor, pager and external diff disabled.
+- `kettle migrate --apply` also rewrites `<root>/.setsweep/` path prefixes in the desk's
+  `runtime/queue.json` entries and the registry `ledger` field (listed in the dry run).
+- Prompts and skills no longer hard-code `.kettle/outbound/` (a curator following it on a
+  legacy `.setsweep` desk split the desk); the founding skill describes the P4
+  conversation instead of the retired confirmation card; the interview role names the
+  "Draft Proposal ✓" button.
+- Docs match the tree: API.md routes and tool tiers, broken links, INSTALL/CLI command
+  lists, the AUTH-TOKEN conformance table, and `kettle-design-tokens.md` against
+  `kettle-palette.json`.
 - A missing or non-executable curator CLI is reported by name with a fix
   (`curator_unavailable`, 500, before any stream) instead of a traceback from `kettle chat` /
   `kettle found` or a made-up `~/.local/bin/claude` path; the CLI is resolved per turn, so
