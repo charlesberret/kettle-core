@@ -106,10 +106,28 @@ Single source of truth for desk/settings model UIs:
 - `models_by_provider` / `visible` model order = A–Z by display label within each provider.
 - `visible` = checked ∩ CLI-on-PATH only (`forced` remains on the wire as always `false`; the active chat model is no longer force-included).
 
+### `POST /api/curator`
+
+Atomic curator selection: write provider + model (+ optional effort/command/per-task
+models) in one settings merge, instead of a partial `PATCH /api/settings`. This is what
+the desk model menu calls.
+
+```json
+{ "provider": "claude", "model": "sonnet", "task": "chat", "effort": "high" }
+```
+
+`task` defaults to `"chat"` when omitted; `model` may also be paired with `models`
+(`{ "chat": "sonnet", "setup": "opus" }`) or a custom `command` for a non-default CLI.
+Invalid provider/model combinations return 400.
+
+```json
+{ "ok": true, "settings": { "…": "full settings dict" }, "active": { "provider": "claude", "command": "claude", "models": {}, "effort": "default", "…": "same shape as GET /api/curator/catalog `active`" } }
+```
+
 ### `GET /api/git/activity?project=<id>&weeks=auto`
 
 Local activity heatmap for the project root (desk chrome strip next to the
-project selector). Implementation: [`gitmap.py`](./gitmap.py).
+project selector). Implementation: [`gitmap.py`](./kettle/gitmap.py).
 
 | Pin | Choice |
 |-----|--------|
@@ -149,7 +167,8 @@ UI paints the strip with the link (blue) wash instead of good (green).
 
 - Omit `weeks` / `weeks=auto` → adaptive. `weeks=4` → fixed 4-week window.
 - Day grain: `rows=7`, cells column-major (week × weekday). Week grain: `rows=1`, one cell per week.
-- Restart the server after updating `gitmap.py` / `py-modules`.
+- Restart the server after updating `kettle/gitmap.py` or any other module under the
+  `kettle/` package (an editable install picks up `.py` changes on restart, not live).
 
 - Set on **every** bind path (`start_server` and `main` / sidecar) via `_record_bind`.
 - Discovery cache: `~/.cache/kettle/server.json` (mode **0600**) — `{ pid, port, started, url, projects, settings, token }`.
@@ -314,17 +333,35 @@ path that arms a turn.
 | Tier | Used by | Write? | Powers (abstract) |
 |------|---------|--------|-------------------|
 | `interview` | founding interview (`/api/interview`) | no | **none** (tool-less; core survey snapshot) |
-| `chat` | — (reserved) | yes (`acceptEdits`) | Read/Glob/Grep/Edit/Write + narrow shell |
-| `agent` | review chat (`/api/chat`, `kettle chat`) | yes (`acceptEdits`) | Edit/Write + everyday shell kit (`mv`/`cp`) |
-| `sweep` | founding/found, sweep (`/api/found`, `/api/sweep`, `kettle found`) | yes (`acceptEdits`) | Edit/Write + `mkdir`/`mv`/`cp`/`rm`/`tee` |
+| `chat` | HTTP review chat + compact (`/api/chat`, `/api/compact`) | yes (`acceptEdits`) | Read/Glob/Grep/Edit/Write + narrow shell (`ls`/`cat`/`head`/`tail`/`wc`) |
+| `agent` | CLI review chat (`kettle chat`) | yes (`acceptEdits`) | Read/Glob/Grep/Edit/Write + everyday shell kit (adds `echo`/`grep`/`uniq`/`diff`/`date`/`basename`/`dirname`/`mkdir`/`mv`/`cp`) |
+| `sweep` | founding/found, propose, refresh-briefs, sweep, bootstrap (`/api/found`, `/api/propose`, `/api/refresh-briefs`, `/api/sweep`, `/api/bootstrap`, `kettle found`, `kettle refresh-briefs`) | yes (`acceptEdits`) | Edit/Write + `mkdir`/`mv`/`cp`/`rm`/`tee` |
+
+The HTTP `/api/chat` route and the CLI `kettle chat` are two different tiers today
+(`chat` vs `agent`) — same write posture (`acceptEdits`, project cwd), different shell
+allowlist. Single-sourced in `runtime.TOOL_TIERS`; each caller's `tools_tier=` argument
+to `build_turn_cmd` is the ground truth if this table and the code ever disagree.
 
 ### What a tier is — and is not
 
 A tier is an **allowlist of tool names**. It constrains *which* binaries a turn may run. It
-does **not** constrain *where* those binaries write: `rm`, `mv`, `cp`, and `tee` all take
-arbitrary paths, as do `sed` and `awk` in the `agent` tier. So every write-bearing tier is
-**trusted, not fenced** — the project-root boundary is a convention the prompts ask agents to
-respect, not a boundary the system enforces.
+does **not** constrain *where* those binaries write: `Edit`/`Write` and the allowed `mv`,
+`cp`, `rm`, `tee` (`sweep`) or `mv`, `cp` (`agent`) all take arbitrary paths. So every
+write-bearing tier is **trusted, not fenced** — the project-root boundary is a convention
+the prompts ask agents to respect, not a boundary the system enforces. `sed`, `awk`,
+`rg --pre`, `fd -x`, and `find -exec` are deliberately **excluded** from every shell
+allowlist (`runtime.SHELL_KIT`/`SHELL_CHAT`/`SHELL_SWEEP`) because each can be used to run
+an arbitrary program, which would turn a Bash prefix allowlist into open execution
+(verified 2026-09-15: `rg --pre ./x.sh` ran under the `chat` tier with no denial). Search
+and listing go through the built-in Grep/Glob tools; text changes go through Edit.
+
+On the `claude` provider, every write-bearing tier (and the interview tier) additionally
+appends `--setting-sources user --strict-mcp-config` (`runtime.CLAUDE_PROJECT_ISOLATION`)
+so a registered folder's own `.claude/settings*.json` hooks and `.mcp.json` servers cannot
+run on a Kettle turn; the interview tier further passes `--tools ""` to strip Claude's
+built-in tool surface, since `--permission-mode plan` alone still leaves ~34 built-ins and
+any connected MCP tools active. These isolation flags are Claude-specific — the generic
+`cli` provider dialect does not add them.
 
 Read that plainly: a curator turn *could* write outside its project root. Nothing today stops
 it. `safe_path` fences Kettle's own **HTTP file routes** (`/api/file`, `/api/save`), which is
@@ -393,9 +430,13 @@ request a shell-bearing read-only posture from a provider that cannot guarantee 
 | GET/POST | `/api/chatlog` | JSON |
 | POST | `/api/chat` | **NDJSON** |
 | POST | `/api/compact` | **NDJSON** |
-| POST | `/api/refresh-briefs` | **NDJSON** — current-queue brief rewrite only |
 | POST | `/api/clear-session` | JSON |
 | GET/POST | `/api/settings` | JSON — POST deep-merges `curator` / `agents` / `curator.menu` / `egress` / `admin` |
+| GET | `/api/curator/catalog` | Canonical model catalog, menu checkmarks, provider readiness, `visible` desk list |
+| POST | `/api/curator` | JSON — atomic provider + model (+ effort) write; see above |
+
+`POST /api/refresh-briefs` is documented once, in Tier 1 above — it does not require the
+full sitting.
 
 Settings groups added for public installs (brief 10):
 
@@ -405,7 +446,6 @@ Settings groups added for public installs (brief 10):
 - `admin.fleet_panels` — boolean, default false. When true, `/api/admin` includes
   sentinel / desk-events / watcher beacon. Optional persona-family scan runs only when
   `admin.persona_family_relpath` is also set (relative path under a project root).
-| GET | `/api/curator/catalog` | Canonical model catalog, menu checkmarks, provider readiness, `visible` desk list |
 
 ### Tier 3 — founding
 
@@ -437,4 +477,4 @@ Kits, lineage (`/api/lineage`, resolve/accept/bind), projects edit/delete/refoun
 1. Success envelopes still vary (`{ok}` vs bare resource). `POST /api/projects/add` returns `{ ok, project, home, …flat fields }`.
 2. Legacy `diff` key on both `/api/diff` and `/api/diffstat` remains for back-compat; new clients should use `text` / `stat`.
 3. Errors are `{ "error": string, "code": string }` on handler failure paths (`str(e)`, never `repr(e)`). Some older hand-written 4xx responses may still omit `code`.
-4. Two cores with different registries remain possible if `$DESK_PROJECTS` differs — check `ping.projects` before assuming a shared desk. Legacy `diff` aliases on `/api/diff` and `/api/diffstat` remain for back-compat; prefer `text` / `stat`.
+4. Two cores with different registries remain possible if `$DESK_PROJECTS` differs — check `ping.projects` before assuming a shared desk.
