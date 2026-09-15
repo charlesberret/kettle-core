@@ -2484,6 +2484,45 @@ class LocalhostAuthTests(EndpointTests):
         self.assertEqual(s, 200)
         self.assertEqual(target.read_text(), "hello")
 
+    def test_desk_logs_and_snapshots_do_not_follow_planted_symlinks(self):
+        proj = self.proj()
+        outside = self.tmp / "outside"
+        outside.mkdir()
+        victim = outside / "victim.txt"
+        victim.write_text("untouched")
+        log = server.runtime_dir(proj) / "approvals.log"
+        log.unlink(missing_ok=True)
+        log.symlink_to(victim)
+        s, j = _http("POST", f"{self.base}/api/approve", {"project": "t", "id": "beta"})
+        self.assertEqual((s, j["code"]), (403, "unsafe_path"))
+        self.assertEqual(victim.read_text(), "untouched")
+        snaps = server.runtime_dir(proj) / "snapshots"
+        shutil.rmtree(snaps, ignore_errors=True)
+        snaps.symlink_to(outside)
+        with self.assertRaises(server.lineage.UnsafeDeskPath):
+            server.atomic_write(snaps / "alpha.orig", b"x")
+        self.assertFalse((outside / "alpha.orig").exists())
+
+    def test_refound_refuses_a_desk_that_leads_outside_the_project(self):
+        proj = self.proj()
+        desk = server.project_root(proj) / ".kettle"
+        elsewhere = self.tmp / "victim-desk"
+        shutil.copytree(desk, elsewhere)
+        (elsewhere / "note.md").write_text("keep me")
+        shutil.rmtree(desk)
+        desk.symlink_to(elsewhere)
+        s, _ = _http("POST", f"{self.base}/api/projects/refound", {"id": "t"})
+        self.assertEqual(s, 403)
+        self.assertEqual((elsewhere / "note.md").read_text(), "keep me")
+
+    def test_root_gate_is_case_insensitive_on_macos_and_covers_library(self):
+        home = server.HOME.resolve()
+        if sys.platform == "darwin":
+            self.assertIn("overlaps", server.project_root_problem(home / ".SSH"))
+        self.assertIn("Library", server.project_root_problem(home / "Library" / "Keychains"))
+        self.assertIsNone(server.project_root_problem(
+            home / "Library" / "Mobile Documents" / "com~apple~CloudDocs" / "proj"))
+
     def test_home_and_credential_folders_cannot_be_project_roots(self):
         home = server.HOME.resolve()
         self.assertIn("whole home folder", server.project_root_problem(home))

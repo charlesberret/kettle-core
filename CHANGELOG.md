@@ -88,8 +88,17 @@ and Desk schema have their own integer contract versions.
   find snapshots for ids that need slugging; an intake folder outside the project that
   overlaps credential folders is ignored; `KETTLE_ALLOWED_ROOTS` entries pass the same
   gate as project roots; agent-chat task lists lose their stray bullets.
-- `lineage_git` never runs a `lineage.git` Kettle did not create, and runs git with hooks,
-  fsmonitor, pager and external diff disabled.
+- `lineage_git` trusts only a `lineage.git` Kettle created, recorded outside every project
+  in `~/.cache/kettle/lineage-trust.json`; any other one (including one from an older Kettle)
+  is set aside untouched as `lineage.git.untrusted-<stamp>` and a fresh history starts. Its
+  config is rewritten from a fixed template before each run, repo attributes are removed,
+  and git runs with hooks, fsmonitor, pager, external diff and attributes files disabled.
+- Desk writes never follow a planted symlink: every write or append under a registered
+  project (queue, session, snapshots, archives, session logs, comments/approvals logs,
+  working record, lineage baseline, EDITING.md, the CLAUDE.md directive, inbox staging)
+  refuses a symlinked final component or a parent that leads outside the project
+  (403 `unsafe_path`). Refound refuses a desk that leads outside its project. The root gate
+  is case-insensitive on macOS and refuses `~/Library` apart from iCloud/CloudStorage.
 - `kettle migrate --apply` also rewrites `<root>/.setsweep/` path prefixes in the desk's
   `runtime/queue.json` entries and the registry `ledger` field (listed in the dry run).
 - Prompts and skills no longer hard-code `.kettle/outbound/` (a curator following it on a

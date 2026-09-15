@@ -168,9 +168,10 @@ def stage_inbox_approved(proj: dict) -> dict[str, Any]:
         try:
             src = server.safe_path(e["path"], server.project_root(proj))
             dest = outbound / src.name
-            shutil.copy2(src, dest)
+            server._confine_to_project(dest)
+            shutil.copy2(src, dest, follow_symlinks=False)
             staged.append({"id": e.get("id"), "from": str(src), "to": str(dest)})
-        except (OSError, PermissionError, KeyError, RuntimeError) as err:
+        except (OSError, PermissionError, KeyError, RuntimeError, ValueError) as err:
             errors.append({"id": e.get("id"), "error": str(err)})
     return {"staged": staged, "errors": errors, "outbound": str(outbound)}
 

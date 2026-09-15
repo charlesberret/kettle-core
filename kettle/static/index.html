@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <!-- Bump this when sitting UI changes; title shows it so we can confirm the shell loaded. -->
-<meta name="kettle-ui" content="2026-09-15e">
-<title>kettle · ui-2026-09-15e</title>
+<meta name="kettle-ui" content="2026-09-15f">
+<title>kettle · ui-2026-09-15f</title>
 <style>
   /*
    * Type & chrome roles — single source of sitting hierarchy.
@@ -4708,7 +4708,7 @@ function addMsg(cls, text){
   return d;
 }
 
-/* ---- founding confirmation card (interactive ticks from curator GFM) ---- */
+/* ---- founding interview: freeze the chat at the kickoff banner while it loads ---- */
 /**
  * Interview kickoff: FREEZE the viewport (do not chase the stream tail).
  *
@@ -6880,6 +6880,9 @@ async function loadProject(pid, opts){
     // One broken desk (unparseable queue.json, a moved folder) must not take down the
     // whole sitting: say what is wrong here and leave the other projects usable.
     if(PROJECT !== pid) return;
+    exitInterview();                 // clear the previous project's founding chrome
+    setProposingChrome(false);
+    clearProposalGuideChrome();
     Q = {curated: '', entries: []};
     renderQueue();
     renderInfo(null);

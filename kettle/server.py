@@ -671,9 +671,8 @@ def close_comments(proj: dict, entry_ids, through: int | None = None) -> None:
         return
     bound = comments_log_line_count(proj) if through is None else int(through)
     ts = date.today().isoformat()
-    with comments_log_path(proj).open("a", encoding="utf-8") as f:
-        for eid in ids:
-            f.write(f"{ts}\t{eid}\t[kettle:closed through {bound}]\n")
+    append_line(comments_log_path(proj),
+                "".join(f"{ts}\t{eid}\t[kettle:closed through {bound}]\n" for eid in ids))
 
 
 def enrich_queue_comments(proj: dict, q: dict) -> None:
@@ -746,9 +745,9 @@ def load_queue(proj: dict) -> dict:
     with QUEUE_LOCK:
         for attempt in (0, 1):
             try:
-                if not qp.exists():
+                if not os.path.lexists(qp):
                     qp.parent.mkdir(parents=True, exist_ok=True)
-                    qp.write_text(json.dumps(EMPTY_QUEUE, indent=2))
+                    atomic_write(qp, json.dumps(EMPTY_QUEUE, indent=2))
                 try:
                     return json.loads(qp.read_text())
                 except json.JSONDecodeError as e:
@@ -759,7 +758,7 @@ def load_queue(proj: dict) -> dict:
                 if attempt == 0:
                     continue
                 qp.parent.mkdir(parents=True, exist_ok=True)
-                qp.write_text(json.dumps(EMPTY_QUEUE, indent=2))
+                atomic_write(qp, json.dumps(EMPTY_QUEUE, indent=2))
                 return json.loads(qp.read_text())
     return dict(EMPTY_QUEUE)
 
@@ -1250,6 +1249,37 @@ def save_settings(patch: dict) -> dict:
         return cur
 
 
+def _confine_to_project(path: Path) -> None:
+    """When `path` lies inside a registered project, refuse it if it reaches outside
+    that project through a symlink (lineage.confine). Kettle's own files (settings,
+    registry, caches) are not under a project and pass through."""
+    p = Path(os.path.abspath(path))
+    best = None
+    try:
+        projects = load_projects()
+    except Exception:  # noqa: BLE001 — registry trouble surfaces elsewhere
+        return
+    for proj in projects:
+        try:
+            root = project_root(proj)
+        except (OSError, RuntimeError, KeyError):
+            continue
+        if p.is_relative_to(root) and (best is None or len(root.parts) > len(best.parts)):
+            best = root
+    if best is not None:
+        lineage.confine(p, best)
+
+
+def append_line(path: Path, text: str) -> None:
+    """Append to a desk log (comments, approvals) without following a planted symlink."""
+    _confine_to_project(path)
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    flags = os.O_WRONLY | os.O_CREAT | os.O_APPEND | getattr(os, "O_NOFOLLOW", 0)
+    fd = os.open(str(path), flags, 0o644)
+    with os.fdopen(fd, "a", encoding="utf-8") as f:
+        f.write(text)
+
+
 def atomic_write(path: Path, data: str | bytes) -> None:
     """Write via a fresh temp file in the same directory, then rename over `path`.
 
@@ -1257,8 +1287,9 @@ def atomic_write(path: Path, data: str | bytes) -> None:
     predictable `<name>.tmp` cannot redirect the write outside the fence. An existing
     file keeps its permission bits; a new one gets 0644."""
     path = Path(path)
+    _confine_to_project(path)
     try:
-        mode = stat.S_IMODE(path.stat().st_mode)
+        mode = stat.S_IMODE(path.lstat().st_mode) & 0o777
     except OSError:
         mode = 0o644
     fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix="." + path.name + ".", suffix=".tmp")
@@ -1297,11 +1328,24 @@ def project_root_problem(rp: Path) -> str | None:
         return f"folder must be under {HOME}"
     if rp == home:
         return f"folder cannot be your whole home folder ({HOME}) — choose the project's own folder"
+
+    def under(a: Path, b: Path) -> bool:
+        # macOS volumes are usually case-insensitive: ~/.SSH is ~/.ssh
+        fold = (lambda x: [part.casefold() for part in x.parts]) if sys.platform == "darwin" \
+            else (lambda x: list(x.parts))
+        pa, pb = fold(a), fold(b)
+        return pa[:len(pb)] == pb
+
     for sp in (home / n for n in (".ssh", ".gnupg", ".aws", ".claude", ".config", ".cache",
                                   ".kube", ".docker")):
-        if rp.is_relative_to(sp) or sp.is_relative_to(rp):
+        if under(rp, sp) or under(sp, rp):
             return (f"folder {rp} overlaps {sp}, which holds credentials or agent "
                     "configuration — choose the project's own folder")
+    library = home / "Library"
+    synced = [library / "Mobile Documents", library / "CloudStorage"]
+    if (under(rp, library) and not any(under(rp, d) for d in synced)) or rp == library:
+        return (f"folder {rp} is inside ~/Library (keychains, mail, app data) — choose the "
+                "project's own folder (iCloud Drive and CloudStorage folders are fine)")
     registry_dir = PROJECTS_PATH.parent.resolve()
     if registry_dir.is_relative_to(rp):
         # a curator with write tools in this root could rewrite settings.json
@@ -1400,6 +1444,10 @@ def refound_desk(proj: dict) -> dict:
         raise RuntimeError("a curator turn is still running on this desk — wait for it to "
                            "finish (or stop it) before refounding")
     desk = desk_dir(proj)
+    root = project_root(proj)
+    if (desk.is_symlink() or os.path.lexists(desk)) and not desk.resolve().is_relative_to(root):
+        raise lineage.UnsafeDeskPath(f"desk {desk} leads outside the project ({desk.resolve()}) "
+                                     "— refusing to reset it")
     note = ""
     sj = desk / "runtime" / "session.json"
     try:
@@ -2067,6 +2115,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json({"error": "not found"}, 404)
         except QueueCorrupt as e:
             self.send_err(409, str(e), "queue_corrupt")
+        except lineage.UnsafeDeskPath as e:
+            self.send_err(403, str(e), "unsafe_path")
         except PermissionError as e:
             self.send_err(403, str(e), "forbidden")
         except FileNotFoundError as e:
@@ -2109,9 +2159,8 @@ class Handler(BaseHTTPRequestHandler):
                 q = mutate_queue(proj, approve)
                 e = find_entry(q, d["id"])
                 if newly:
-                    log = runtime_dir(proj) / "approvals.log"
-                    with log.open("a") as f:
-                        f.write(f"{e['approved']}\t{e['id']}\t{e['path']}\t{e.get('ask','')}\n")
+                    append_line(runtime_dir(proj) / "approvals.log",
+                                f"{e['approved']}\t{e['id']}\t{e['path']}\t{e.get('ask','')}\n")
                 # Proposal approve is only a bookmark here; the client streams POST /api/found
                 # so the curator digests on-disk edits and files the first content batch.
                 self.send_json({
@@ -2183,8 +2232,8 @@ class Handler(BaseHTTPRequestHandler):
 
                 mutate_queue(proj, setc)
                 if text:
-                    with (runtime_dir(proj) / "comments.log").open("a") as f:
-                        f.write(f"{ts}\t{d['id']}\t{text.replace(chr(10), ' / ')}\n")
+                    append_line(runtime_dir(proj) / "comments.log",
+                                f"{ts}\t{d['id']}\t{text.replace(chr(10), ' / ')}\n")
                 else:
                     close_comments(proj, [d["id"]])  # a cleared note is retracted, not replayed
                 self.send_json({"ok": True, "comment": text})
@@ -2248,6 +2297,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json({"error": "not found"}, 404)
         except QueueCorrupt as e:
             self.send_err(409, str(e), "queue_corrupt")
+        except lineage.UnsafeDeskPath as e:
+            self.send_err(403, str(e), "unsafe_path")
         except json.JSONDecodeError as e:
             self.send_err(400, str(e), "bad_json")
         except PermissionError as e:

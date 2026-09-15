@@ -282,6 +282,7 @@ Handler failures use `{ "error": "<str(e)>", "code": "<slug>" }`:
 | Missing file (incl. POST `/api/save`) | 404 | `not_found` |
 | Curator CLI missing or not executable (streaming routes, before the stream starts) | 500 | `curator_unavailable` |
 | `queue.json` exists but is not valid JSON (never overwritten) | 409 | `queue_corrupt` |
+| A desk write would follow a symlink out of the project | 403 | `unsafe_path` |
 | `POST /api/projects/refound` while a curator turn is streaming on that desk | 409 | `busy` |
 | Unhandled exception | 500 | `internal` |
 
