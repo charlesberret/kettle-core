@@ -28,9 +28,14 @@ contracts are still at `0`.
 
 - ~~Restructure the flat modules into a package with bundled `static/` and `kits/`
   resources~~ (done — wheel serves the browser UI; editable remains the contributor path).
-- Wheel and pipx-style install verification in CI (package layout + server smoke).
-- Expanded `kettle doctor`: provider CLI resolve, registry/desk integrity,
-  runtime discovery, legacy `.setsweep/` hints (metrics beacons remain follow-ups).
+- ~~Wheel and pipx-style install verification in CI (package layout + server
+  smoke).~~ (shipped — `.github/workflows/test.yml` `package-install` job: wheel
+  contents audit, clean-venv install + `kettle --help`/import/doctor smoke, and an
+  ephemeral-port server boot hitting `GET /`, `/api/ping`, `/api/kits`.)
+- ~~Expanded `kettle doctor`: provider CLI resolve, registry/desk integrity,
+  runtime discovery, legacy `.setsweep/` hints~~ (shipped — see `doctor_checks()` /
+  `install_doctor_checks()` / `desk_doctor_checks()` / `runtime_doctor_checks()` in
+  `cli.py` and INSTALL.md; metrics beacons for `doctor` itself remain a follow-up).
 - Reserve the PyPI name `kettle` with a minimal placeholder upload when publish
   credentials are available.
 

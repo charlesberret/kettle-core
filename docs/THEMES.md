@@ -22,12 +22,27 @@ Under `static/themes/`:
 
 Shortcut for brand-only consumers: `static/kettle-palette.json` (mirrors marquee).
 
-**The marquee and the family are generated, not hand-edited.** Source of truth
-is `~/cloud/sync/design/palettes` (`library/kettle.json`, `library/kettle-glazes.json`);
-`scripts/kettle-promote.py --apply` there rewrites `kettle.json`, the six pack
-files, `index.json`, `kettle-palette.json` and the marked block in `themes.js`
-in lockstep, then runs kettle-vscode's `sync-palette`. Edit the palette, not
-these files. The desk's surfaces are shades of one body: `panel`/`activebg`
+**The marquee and the family are generated, not hand-edited** by the maintainer's own
+promotion pipeline: `kettle.json`, the six glaze-pack files, `index.json`,
+`kettle-palette.json`, and the marked block in `themes.js` all get rewritten in
+lockstep from a private palette library, then kettle-vscode's `sync-palette` runs.
+That library and the promotion script live **outside this repository** — there is no
+`scripts/kettle-promote.py` here, so a contributor working from a clone of
+`kettle-core` alone cannot run the full promotion. If you want to propose a palette
+change without that access:
+
+- Hand-edit the specific pack file(s) under `static/themes/` (and
+  `kettle-palette.json` if it's the marquee) directly, and open a PR — flag in the PR
+  that it bypasses the normal generator so a maintainer can re-run promotion over it
+  later without losing your change.
+- Or drop a **custom** pack into the user themes directory (see below) — no
+  promotion pipeline needed, and it never touches the bundled files at all.
+
+`tests/test_palette.py` is the drift guard: it fails if `themes.js`'s embedded
+`kettle` dark/light pack stops matching `kettle-palette.json`, so a hand-edit that
+only touches one of the two will be caught in CI.
+
+The desk's surfaces are shades of one body: `panel`/`activebg`
 index the ground (dark) or highlight (light) at an `ifaceOpacity` that lands
 on the measured shade step; the resolved hexes ride along in a `resolved`
 block for consumers that take hex. Glaze packs carry a `glaze` block
