@@ -13,7 +13,7 @@ Each step is marked:
   and say so.
 - **MAY** — convenience of the reference sitting only.
 
-**TUI marks** (kettle-tui `0619b60`, against this draft): **matched** (we do this) /
+**TUI marks** (kettle-tui, `0619b60` then updated at `9c9d8ed`): **matched** (we do this) /
 **guessed** (we reverse-engineered it; the spec now owns it) / **diverged** (we do it
 differently, and why) / **absent** (not in the TUI).
 
@@ -46,12 +46,12 @@ the discovery record and retry once. A `404` naming a missing project folder, an
 `409 {code:"queue_corrupt"}`, are **desk-local** — report them on that desk and leave the rest
 of the app usable.
 
-**TUI §0.** 1 matched (`load_discovery`). 2 **diverged** — we ping and show `version`, but we
-do not refuse an unknown `api_version`. 3 matched. 4 matched (`mutate=0` on attach and every
-later queue read). 5 matched (`GET /api/interview?mutate=0` on attach). 6 absent (no
-git/activity, chatlog, or settings fetch). Reconnect: auth retry **matched**; queue_corrupt
-desk-local **matched**; a 404 "project folder is missing" is shown as a generic `ClientError`,
-not a project-list refresh.
+**TUI §0.** 1 matched (`load_discovery`). 2 matched under D4 — ping is shown (`api N` in the
+status line) and an unknown `api_version` is not refused while core is pre-stable. 3 matched. 4 matched (`mutate=0` on attach and every
+later queue read). 5 matched (`GET /api/interview?mutate=0` on attach; an explicit refresh of
+an unfounded desk does one mutating read, per D1). 6 absent (no git/activity, chatlog, or
+settings fetch). Reconnect: auth retry **matched**; queue_corrupt desk-local **matched**; a
+404 "project folder is missing" refreshes the project list (matched, `9c9d8ed`).
 
 ---
 
@@ -96,10 +96,10 @@ unfounded desk. **MUST** then run §3.5 rather than treating it as an ordinary a
 ### 2.4 Sweep
 §4.
 
-**TUI §2.** Save matched (`POST /api/save`). Approve matched as a bookmark; **diverged** on
-the founding fork — we route Approve to Found Desk from local `phase == "proposing"`, and do
-not read `founding: true` on the approve response. Comment matched, including empty `text`
-to clear. Sweep §4.
+**TUI §2.** Save matched (`POST /api/save`). Approve matched as a bookmark, and the founding
+fork now matched (`9c9d8ed`): Approve always POSTs, and Found Desk runs only when the response
+carries `founding: true`, never from a local phase. Comment matched, including empty `text` to
+clear. Sweep §4.
 
 ---
 
@@ -216,11 +216,12 @@ optional steer for this pass.
 7. **MAY** auto-sweep when every queue entry is handled (off by default in the reference
    sitting).
 
-**TUI §4.** 1 matched (confirm modal + optional steer). 2 **diverged** — ritual is locked
-while `streaming`, but we do not clear the selected entry or the file surface. 3 matched
-locally (`streaming` blocks a second sweep); a core idle notice would show as stream text.
-4 matched (text+done). 5 matched (queue reload after the stream). 6 **absent** (we do not
-read `sweep-health.json`). 7 absent.
+**TUI §4.** 1 matched (confirm modal + optional steer). 2 matched as of `9c9d8ed`: the editor
+is read-only while a sweep streams (save and `$EDITOR` refused), and after the restock we keep
+the selected entry if it survived, else the first pending one. 3 matched locally (`streaming`
+blocks a second sweep); a core idle notice shows as stream text. 4 matched (text+done).
+5 matched (queue reload after the stream). 6 **absent** (we do not read `sweep-health.json`).
+7 absent.
 
 ---
 
@@ -250,11 +251,10 @@ read `sweep-health.json`). 7 absent.
 - `POST /api/clear-session {project}` drops the session id so the next turn starts fresh. The
   transcript stays; only the agent session resets.
 
-**TUI §5.** Chat **diverged** on `id`: with no selected entry we **omit** the key rather than
-send `id: null`. We do not paste the brief into the message (matched). Event stream: `text`
-and `error` matched; `model` / `activity` / `usage` ignored; `done.error` is handled in the
-shared `_relay_ndjson_event` (interview/propose/found/compact) but the chat and sweep loops
-are copies and still miss `done.error`. Agent text is a plain stream, not markdown.
+**TUI §5.** Chat omits `id` with no selected entry rather than sending `id: null` — both are
+correct under D2. We do not paste the brief into the message (matched). Event stream: `text`
+and `error` matched; `model` / `activity` / `usage` ignored; `done.error` is handled in the shared
+`_relay_ndjson_event`, which chat and sweep now use too (`9c9d8ed`). Agent text is a plain stream, not markdown.
 Reload-on-tool-write **absent**. chatlog **absent**. Interjection queue **absent**. Compact
 and clear-session **matched**, both manual (palette), never automatic.
 
@@ -281,8 +281,9 @@ as chat text.
 
 **TUI §6.** Auth retry **matched**. `curator_unavailable` / `queue_corrupt` / `busy` /
 `unsafe_path` **matched** (`ClientError` copy). HTTP status is checked before the NDJSON
-reader (matched). Stream `error` events matched on the shared relay; see §5 for the chat/sweep
-copy. `not_found` for a moved project folder is not a project-list refresh (same as §0).
+reader (matched). Stream `error` events matched — as of `9c9d8ed` chat and sweep share
+`_relay_ndjson_event`, so `done.error` is handled everywhere. A moved-folder `not_found` now
+refreshes `GET /api/projects` and drops the desk when it has left the registry (matched).
 
 ---
 
