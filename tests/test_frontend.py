@@ -218,7 +218,7 @@ class ViewportRitualRegressionBar(unittest.TestCase):
         stream = function_source(html, "pipeStream")
         self.assertIn("fillAgentMarkdown", stream)
         self.assertRegex(html, r"\.msg\.agent\.md\s*\{")
-        self.assertIn("ui-2026-09-15a", html)
+        self.assertIn("ui-2026-09-15b", html)
 
     def test_markdown_is_sanitized_as_a_string_before_it_reaches_the_dom(self):
         """Assigning marked output to innerHTML and cleaning the node afterwards is
@@ -247,6 +247,21 @@ class ViewportRitualRegressionBar(unittest.TestCase):
         attrs = re.search(r"ALLOWED_ATTR:\s*\[(.*?)\]", m.group(1), re.DOTALL).group(1)
         self.assertNotIn("'id'", attrs)
         self.assertIn("SANITIZE_NAMED_PROPS: true", m.group(1))
+
+    def test_found_desk_announces_founded_only_when_the_core_says_so(self):
+        found = self.function("foundFromProposal")
+        self.assertIn("st.founded === true", found)
+        self.assertLess(found.index("st.founded === true"), found.index("'— desk founded —'"))
+        self.assertIn("enterProposing(pid)", found)          # failure keeps the proposal open
+        self.assertIn("$('approve').disabled = true", found)  # no double Found Desk
+        proposing = self.function("enterProposing")
+        self.assertNotIn("isProposalEntry(e) && e.status !== 'approved')", proposing)
+
+    def test_sitting_uses_the_cores_founded_predicate(self):
+        load = self.function("loadProject")
+        self.assertIn("ivst.founded", load)
+        self.assertNotIn("const proposing = !hasContent", load)
+        self.assertNotIn("const unfounded = !hasContent", load)
 
     def test_confirmation_card_is_blank_for_the_user(self):
         parse = self.function("parseConfirmCard")

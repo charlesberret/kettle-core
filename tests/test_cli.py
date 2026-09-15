@@ -215,8 +215,10 @@ class CliTests(unittest.TestCase):
                 yield {"t": "done", "usage": {}, "cost": 0}
 
         with mock.patch.object(cli.runtime, "Runtime", FakeRuntime):
-            code, _, _ = self.run_cli(["found", proj["id"], "--model", "opus"])
-        self.assertEqual(code, 0)
+            code, out, _ = self.run_cli(["found", proj["id"], "--model", "opus"])
+        # the fake curator filed nothing: not founded is a failure exit, not a shrug
+        self.assertEqual(code, 1)
+        self.assertIn("not yet founded", out)
         call = captured[0]
         # Provider resolved from settings (default claude); the full argv is single-sourced
         # through build_turn_cmd and handed to spawn as cmd=, not extra=.
@@ -230,6 +232,42 @@ class CliTests(unittest.TestCase):
         self.assertIn("--name", cmd)                      # first turn names the session
         self.assertIn("--permission-mode", cmd)           # sweep tier is write-armed
         self.assertIn("acceptEdits", cmd)
+
+    def test_found_prompt_matches_the_server_route_and_quotes_the_founding_sentence(self):
+        proj = self.register()
+        sentence = "Letters from the archive — flag anything undated."
+        server.save_session(proj, founding_note=sentence)
+        captured = []
+
+        class FakeRuntime:
+            def __init__(self, *a, **k):
+                pass
+
+            def spawn(self, prompt, **kwargs):
+                captured.append(prompt)
+                desk = server.desk_dir(proj)
+                (desk / "PROJECT.md").write_text("## Your Words\n" + sentence + "\n")
+                server.atomic_write(server.queue_path(proj), json.dumps({"entries": [
+                    {"id": "a", "path": str(Path(proj["root"]) / "a.md"), "status": "pending"}]}))
+                yield {"t": "done", "usage": {}, "cost": 0}
+
+        with mock.patch.object(cli.runtime, "Runtime", FakeRuntime):
+            code, out, _ = self.run_cli(["found", proj["id"]])
+        self.assertEqual(code, 0)
+        self.assertIn("✓ founded", out)
+        prompt = captured[0]
+        self.assertTrue(prompt.startswith("THE USER'S FOUNDING SENTENCE"))
+        self.assertIn(sentence, prompt)
+        self.assertEqual(prompt, server.build_found_prompt(proj, session_id=None))
+
+    def test_found_refuses_an_already_founded_desk_without_spawning(self):
+        proj = self.register()
+        server.save_session(proj, status="founded")
+        with mock.patch.object(cli.runtime, "Runtime",
+                               side_effect=AssertionError("must not spawn")):
+            code, out, _ = self.run_cli(["found", proj["id"]])
+        self.assertEqual(code, 0)
+        self.assertIn("already founded", out)
 
     def test_chat_hands_context_and_tool_tier_to_runtime(self):
         proj = self.register()

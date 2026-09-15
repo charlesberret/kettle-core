@@ -56,6 +56,15 @@ and Desk schema have their own integer contract versions.
 - `comments.log` stays append-only but comments are retired once consumed: a completed
   sweep or an archive appends `[kettle:closed through N]` markers, and clearing a note
   retracts its history. A file returning to the queue no longer replays settled direction.
+- Founding has one prompt builder (`build_found_prompt`) for `POST /api/found`,
+  `POST /api/bootstrap` and `kettle found`: the founding sentence, queue schema, kit context
+  and scope note reach every entry point. `kettle found` refuses an already-founded desk,
+  resumes only its own provider's session, and exits 1 when the desk did not found.
+- Found Desk no longer strands a desk: the sitting announces "desk founded" only when
+  `GET /api/interview` reports `founded: true` (new field, with `has_charter`); otherwise the
+  proposal stays open, and a missing proposal entry is re-filed. A propose turn cannot found
+  the desk. A chat session opened before the interview is not resumed as the interview.
+- Founding prompts refer to the founding-sentence block as *above* (it leads the prompt).
 - `kettle-watch` exits 1 and keeps `status: error` in `watch-health.json` when any project
   failed (the final beacon used to overwrite errors with `ok`). The admin report exposes
   that beacon as `watch_health`.

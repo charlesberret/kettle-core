@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <!-- Bump this when sitting UI changes; title shows it so we can confirm the shell loaded. -->
-<meta name="kettle-ui" content="2026-09-15a">
-<title>kettle · ui-2026-09-15a</title>
+<meta name="kettle-ui" content="2026-09-15b">
+<title>kettle · ui-2026-09-15b</title>
 <style>
   /*
    * Type & chrome roles — single source of sitting hierarchy.
@@ -4660,12 +4660,16 @@ async function approve(){
   maybeAutoSweep();
 }
 async function foundFromProposal(){
-  if(busy) return;
+  if(busy){
+    addMsg('sys', 'the curator is still working — Found Desk again when this turn finishes.');
+    return;
+  }
   const pid = PROJECT;
   document.body.classList.remove('proposing', 'founding');
   clearProposalGuideChrome();
   addMsg('sys', '— proposal approved · the curator is founding the desk from your text —');
-  busy = true; showSpin(); $('sweepbtn').disabled = true;
+  busy = true; showSpin(); $('sweepbtn').disabled = true; $('approve').disabled = true;
+  let founded = false;
   try {
     const r = await fetch('/api/found', {method:'POST',
       headers: apiHeaders({'Content-Type':'application/json'}),
@@ -4673,10 +4677,21 @@ async function foundFromProposal(){
     if(!r.ok){ const j = await r.json(); throw j.error; }
     await pipeStream(r, null, {trackCtx:true, model: agentModel('setup')});
     PROJECT_SESSION = true;
-    addMsg('sys', '— desk founded —');
   } catch(err){ addMsg('err', String(err)); }
-  busy = false; hideSpin(); $('sweepbtn').disabled = false;
+  // Ask the core, never assume: a stream that ended does not mean a founded desk.
+  try {
+    const st = await jget('/api/interview?project=' + encodeURIComponent(pid));
+    founded = st.founded === true;
+  } catch(e){}
+  busy = false; hideSpin(); $('sweepbtn').disabled = false; $('approve').disabled = false;
   if(PROJECT !== pid) return;
+  if(!founded){
+    addMsg('sys', 'the desk is not founded yet — the proposal is still open. '
+      + 'Revise it or talk to the curator here, then Found Desk again.');
+    await enterProposing(pid);
+    return;
+  }
+  addMsg('sys', '— desk founded —');
   await revealQueue(pid, {selectFirst: true});
   await autoCompact(true);
 }
@@ -6551,7 +6566,10 @@ async function enterProposing(pid){
   try {
     Q = await jget('/api/queue?project=' + encodeURIComponent(pid));
     renderQueue();
-    const prop = (Q.entries || []).find(e => isProposalEntry(e) && e.status !== 'approved');
+    // Prefer a pending proposal; an approved one whose Found Desk never finished is
+    // still the document of record until the core says founded.
+    const props = (Q.entries || []).filter(isProposalEntry);
+    const prop = props.find(e => e.status !== 'approved') || props[0];
     if(prop){
       await select(prop.id);
       // select() clears founding chrome; restore proposing after load
@@ -7135,10 +7153,15 @@ async function loadProject(pid, opts){
   const contentEnts = (Q.entries || []).filter(e => !isProposalEntry(e));
   const hasContent = contentEnts.length > 0;
   const hasProposal = !!(ivst.has_proposal || (Q.entries || []).some(isProposalEntry));
-  const proposing = !hasContent && (
-    ivst.status === 'proposing' || (hasProposal && ivst.status !== 'founded')
+  // Founded is the core's predicate (charter AND content entries), not "has entries":
+  // a found run that filed entries but never wrote PROJECT.md is still founding.
+  const founded = (typeof ivst.founded === 'boolean')
+    ? ivst.founded
+    : (ivst.status === 'founded' || hasContent);   // interview status unavailable
+  const proposing = !founded && (
+    ivst.status === 'proposing' || hasProposal
   ) && !SKIPPED_FOUNDING.has(pid);
-  const unfounded = !hasContent && !proposing && (
+  const unfounded = !founded && !proposing && (
     ivst.status === 'interviewing' ||
     (ivst.status !== 'founded' && /awaiting founding/i.test(Q.curated || ''))
   ) && !SKIPPED_FOUNDING.has(pid);

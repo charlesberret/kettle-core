@@ -192,19 +192,28 @@ When desktop falls back to an ephemeral port, the plugin finds it via `server.js
 | `none` | No session / not started |
 | `interviewing` | Founding interview in progress (tool-less chat over core survey) |
 | `proposing` | `DESK-PROPOSAL.md` drafted; user edits/approves |
-| `founded` | Curator filed ≥1 *content* queue entry (proposal alone does not count) |
+| `founded` | `PROJECT.md` (the charter) exists **and** the queue holds ≥1 *content* entry (the proposal alone does not count) |
 
 `GET /api/interview` also returns:
 
+- `founded` — the founded predicate above, as a boolean. **Viewports use this.**
+- `has_charter` — `PROJECT.md` exists
 - `has_session` — project session id present
-- `has_entries` / `entry_count` — **content** queue items only (**available under `mutate=0`**)
+- `has_entries` / `entry_count` — **content** queue items only (**available under `mutate=0`**).
+  Entries alone do not mean founded: a found run can file entries and fail to write the charter.
 - `has_proposal` / `proposal_path` — desk proposal on disk or queued
 
-Rule: **content entries on disk ⇒ desk is founded**. A sole `desk-proposal` entry keeps status
-`proposing`. Prefer `has_entries || status === "founded"` in viewports.
+A sole `desk-proposal` entry keeps status `proposing`. While proposing, only a founding step
+(`POST /api/found`, `POST /api/bootstrap`, `kettle found`) may promote the desk to `founded` —
+a propose turn or a queue read never does. When `DESK-PROPOSAL.md` exists on an unfounded desk
+but its queue entry is missing (a failed Found Desk, or a propose turn that wrote no entry), the
+mutating `GET /api/interview` re-files it.
 
 Flow: `POST /api/interview` → `POST /api/propose` (finish) → user edits → `POST /api/approve`
-on the proposal (`founding: true`) → `POST /api/found` (digest proposal + first batch).
+on the proposal (`founding: true`) → `POST /api/found` (digest proposal + first batch) → check
+`GET /api/interview` `founded` before announcing success. `/api/interview` starts a fresh
+session (with the founding role, survey and sentence) unless the stored session is already an
+interview.
 
 Idempotency: `POST /api/interview`, `/api/propose`, `/api/found`, and `/api/bootstrap` short-circuit
 with an NDJSON notice when the desk is already `founded`, or when `/api/found`/`/api/bootstrap` can

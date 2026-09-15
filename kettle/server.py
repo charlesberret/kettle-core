@@ -1349,7 +1349,7 @@ def clear_proposal_entry(proj: dict) -> None:
     mutate_queue(proj, strip)
 
 
-def mark_founded_if_filed(proj: dict) -> bool:
+def mark_founded_if_filed(proj: dict, *, founding_step: bool = False) -> bool:
     """A desk is founded once it has a charter (`PROJECT.md`) on disk AND the curator
     has filed at least one *content* queue entry (not the desk-proposal placeholder).
     Heals both directions: promotes to founded once charter and content both land
@@ -1357,12 +1357,20 @@ def mark_founded_if_filed(proj: dict) -> bool:
     'founded' with no charter — a stale mark from before this predicate existed, or a
     charter that has since gone missing — back to interviewing. Never demotes for an
     empty *queue* alone: a genuinely founded desk's queue legitimately empties between
-    a sweep and its restock. Shared by founding handlers and the CLI."""
+    a sweep and its restock. Shared by founding handlers and the CLI.
+
+    While a Desk Proposal awaits approval (status proposing) only a founding step —
+    Found Desk, bootstrap, `kettle found` — may promote. A propose turn that ignores its
+    prompt and writes a charter plus entries must not found the desk behind the user's
+    approval, and neither may the next queue read."""
     try:
         has_charter = (desk_dir(proj) / "PROJECT.md").is_file()
         q = load_queue(proj)
         founded_now = has_charter and bool(content_entries(q))
-        was_founded = load_session(proj).get("status") == "founded"
+        status = load_session(proj).get("status")
+        was_founded = status == "founded"
+        if founded_now and not was_founded and not founding_step and status == "proposing":
+            return False
         if founded_now:
             if not was_founded:
                 save_session(proj, status="founded")
@@ -1374,6 +1382,86 @@ def mark_founded_if_filed(proj: dict) -> bool:
     except Exception:  # noqa: BLE001
         pass
     return False
+
+
+def ensure_proposal_entry(proj: dict) -> bool:
+    """Re-file the desk-proposal queue entry when DESK-PROPOSAL.md exists on an unfounded
+    desk but the queue lost it (a propose turn that wrote the file and no entry, or an
+    approve whose Found Desk never finished). Without it the sitting has nothing to open
+    and the desk is stuck until refound. Returns True when an entry was added."""
+    if not proposal_on_disk(proj) or desk_is_founded(proj):
+        return False
+    added = []
+
+    def add(q):
+        entries = q.get("entries") or []
+        if content_entries(q) or any(is_proposal_entry(e) for e in entries):
+            return
+        entries.append({
+            "id": PROPOSAL_ENTRY_ID,
+            "title": "Desk Proposal",
+            "path": str(proposal_path(proj)),
+            "project": proj.get("name"),
+            "project_root": str(project_root(proj)),
+            "ask_type": "judgment",
+            "ask": "Edit this proposal until it matches your intent, then approve to found the desk",
+            "urgency": "high",
+            "status": "pending",
+            "founding_phase": "proposal",
+            "brief": "This is the Kettle Desk Proposal. Approving it founds the desk from this text.",
+        })
+        q["entries"] = entries
+        added.append(True)
+
+    mutate_queue(proj, add)
+    return bool(added)
+
+
+def build_found_prompt(proj: dict, *, session_id: str | None, bootstrap: bool = False) -> str:
+    """The one founding prompt, shared by POST /api/found, POST /api/bootstrap and
+    `kettle found` so no entry point drops the user's founding sentence, the queue
+    schema, the kit context or the scope note.
+
+    Digests DESK-PROPOSAL.md when present; otherwise resumes the interview session
+    (legacy found) or, with no session or when `bootstrap` is set, founds one-shot from
+    the files. The founding-sentence block leads the prompt (P3: the user's words come
+    before any instructions or inference); the prompts refer to it as 'above'."""
+    fields = dict(
+        name=proj["name"], root=str(project_root(proj)),
+        desk_dir=str(desk_dir(proj)), queue_path=str(queue_path(proj)),
+        proposal_path=str(proposal_path(proj)),
+    )
+    has_proposal = not bootstrap and proposal_on_disk(proj)
+    if has_proposal:
+        prompt = FOUND_PROMPT.format(**fields)
+    elif session_id and not bootstrap:
+        prompt = FOUND_LEGACY_PROMPT.format(**fields)
+    else:
+        prompt = BOOTSTRAP_PROMPT.format(
+            name=fields["name"], root=fields["root"],
+            desk_dir=fields["desk_dir"], queue_path=fields["queue_path"],
+        )
+    fs = founding_sentence_block(
+        proj, instruction="PROJECT.md must open with it under a 'Your Words' heading")
+    if fs:
+        prompt = fs + "\n\n" + prompt
+    # Single-source schema + cold-re-entry brief standard (kits/prompts/queue-schema.md).
+    if QUEUE_SCHEMA:
+        prompt += "\n\n" + QUEUE_SCHEMA
+    kit_ctx = kits.as_context(
+        kits.for_project(proj, APPDIR / "kits", load_settings()), "found")
+    if kit_ctx:
+        prompt += "\n\n" + kit_ctx
+    if has_proposal:
+        prompt += (
+            "\n\nCRITICAL: Re-read the proposal file on disk immediately before writing "
+            "desk files — the user may have edited it in the center pane after you "
+            "drafted it. Their on-disk text is authoritative."
+        )
+    sc = scope_note(proj)
+    if sc:
+        prompt += "\n\n" + sc
+    return prompt
 
 
 def desk_is_founded(proj: dict) -> bool:
@@ -1800,6 +1888,8 @@ class Handler(BaseHTTPRequestHandler):
                         st = load_session(proj).get("status")
                         if st not in ("founded", "proposing"):
                             save_session(proj, status="proposing")
+                    ensure_proposal_entry(proj)
+                    entries = load_queue(proj).get("entries") or []
                 iv = load_interview(proj)
                 # has_entries = content work (viewport founded signal); proposal alone is not.
                 self.send_json({
@@ -1810,6 +1900,10 @@ class Handler(BaseHTTPRequestHandler):
                     "has_proposal": proposal_on_disk(proj) or any(
                         is_proposal_entry(e) for e in entries),
                     "proposal_path": str(proposal_path(proj)),
+                    # The founded predicate (charter AND content entries) — viewports
+                    # use this, not has_entries, to decide founded.
+                    "founded": iv.get("status") == "founded",
+                    "has_charter": (desk_dir(proj) / "PROJECT.md").is_file(),
                 })
             elif url.path == "/api/file":
                 proj = get_project(qs.get("project", [None])[0])
@@ -2491,20 +2585,15 @@ class Handler(BaseHTTPRequestHandler):
         if desk_is_founded(proj):
             self.stream_idle("Desk already founded. Use refound to start over.")
             return
-        if mark_founded_if_filed(proj):
+        if mark_founded_if_filed(proj, founding_step=True):
             self.stream_idle("Queue already has content entries — marked founded.")
             return
-        prompt = BOOTSTRAP_PROMPT.format(
-            name=proj["name"], root=str(project_root(proj)),
-            desk_dir=str(desk_dir(proj)), queue_path=str(queue_path(proj)),
-        )
-        if QUEUE_SCHEMA:
-            prompt += "\n\n" + QUEUE_SCHEMA
+        prompt = build_found_prompt(proj, session_id=None, bootstrap=True)
         cmd = build_turn_cmd(
             prompt, task="setup", request_model=d.get("model"), tools_tier="sweep",
         )
         self.run_curator(cmd, str(project_root(proj)))
-        mark_founded_if_filed(proj)
+        mark_founded_if_filed(proj, founding_step=True)
 
     # ---- the founding interview: core survey + tool-less conversation ----
     def interview(self, d):
@@ -2521,6 +2610,11 @@ class Handler(BaseHTTPRequestHandler):
         sid = session_id_for_curator(
             proj=proj, model=current_curator().model_for("chat", d.get("model")),
         )
+        if sid and load_session(proj).get("status") != "interviewing":
+            # A chat (or `kettle chat`) before the interview opened this session without
+            # the founding role, survey or founding sentence. Resuming it would leave the
+            # kickoff pointing at a survey the curator never received: start fresh.
+            sid = None
         message = str(d.get("message") or "").strip() or INTERVIEW_KICKOFF
         role = None
         if not sid:  # first turn: build survey, open named project session (no tools)
@@ -2607,12 +2701,12 @@ class Handler(BaseHTTPRequestHandler):
 
         self.run_curator(cmd, str(project_root(proj)), prior_sid=sid, persist=persist,
                          role="founding-curator")
-        # Ensure proposing even if the agent forgot to set status mid-stream
-        if not mark_founded_if_filed(proj):
-            if proposal_on_disk(proj) or desk_is_proposing(proj):
-                save_session(proj, status="proposing")
-            elif any(is_proposal_entry(e) for e in (load_queue(proj).get("entries") or [])):
-                save_session(proj, status="proposing")
+        # Ensure proposing even if the agent forgot to set status mid-stream. Propose
+        # never founds the desk: that is Found Desk's job, after the user approves.
+        if proposal_on_disk(proj) or desk_is_proposing(proj) or any(
+                is_proposal_entry(e) for e in (load_queue(proj).get("entries") or [])):
+            save_session(proj, status="proposing")
+            ensure_proposal_entry(proj)
 
     # ---- approve proposal (or legacy): digest proposal / found desk + first content batch ----
     def found(self, d):
@@ -2620,7 +2714,7 @@ class Handler(BaseHTTPRequestHandler):
         if desk_is_founded(proj):
             self.stream_idle("Desk already founded. Use refound to start over.")
             return
-        if mark_founded_if_filed(proj):
+        if mark_founded_if_filed(proj, founding_step=True):
             self.stream_idle("Queue already has content entries — marked founded.")
             return
         turn_model = current_curator().model_for("setup", d.get("model"))
@@ -2628,43 +2722,8 @@ class Handler(BaseHTTPRequestHandler):
         if not sid:
             sid = session_id_for_curator(
                 proj=proj, model=current_curator().model_for("chat", d.get("model")))
-        fields = dict(
-            name=proj["name"], root=str(project_root(proj)),
-            desk_dir=str(desk_dir(proj)), queue_path=str(queue_path(proj)),
-            proposal_path=str(proposal_path(proj)),
-        )
         has_proposal = proposal_on_disk(proj)
-        if has_proposal:
-            base_prompt = FOUND_PROMPT.format(**fields)
-        elif sid:
-            base_prompt = FOUND_LEGACY_PROMPT.format(**fields)
-        else:
-            base_prompt = BOOTSTRAP_PROMPT.format(
-                name=proj["name"], root=str(project_root(proj)),
-                desk_dir=str(desk_dir(proj)), queue_path=str(queue_path(proj)),
-            )
-        fs = founding_sentence_block(
-            proj, instruction="PROJECT.md must open with it under a 'Your Words' heading")
-        prompt = (fs + "\n\n" if fs else "") + base_prompt
-        # Single-source schema + cold-re-entry brief standard (kits/prompts/queue-schema.md).
-        if QUEUE_SCHEMA:
-            prompt += "\n\n" + QUEUE_SCHEMA
-        kit_ctx = kits.as_context(
-            kits.for_project(proj, APPDIR / "kits", load_settings()), "found")
-        if kit_ctx:
-            prompt += "\n\n" + kit_ctx
-        if has_proposal:
-            prompt += (
-                "\n\nCRITICAL: Re-read the proposal file on disk immediately before writing "
-                "desk files — the user may have edited it in the center pane after you "
-                "drafted it. Their on-disk text is authoritative."
-            )
-        # No confirmation card any more (P4) — the founding sentence and this same
-        # kit's "found" context (lens/first-queue, injected above) are what
-        # founding-answers.md / SWEEP-ACTIONS.md draw on for the no-proposal path.
-        sc = scope_note(proj)
-        if sc:
-            prompt += "\n\n" + sc
+        prompt = build_found_prompt(proj, session_id=sid)
         cmd = build_turn_cmd(
             prompt, task="setup", request_model=d.get("model"),
             session_id=sid, name=session_name(proj), tools_tier="sweep",
@@ -2682,7 +2741,8 @@ class Handler(BaseHTTPRequestHandler):
 
         self.run_curator(cmd, str(project_root(proj)), prior_sid=sid, persist=persist,
                          role="founding-curator")
-        mark_founded_if_filed(proj)
+        if not mark_founded_if_filed(proj, founding_step=True):
+            ensure_proposal_entry(proj)  # keep the proposal openable after a failed Found
 
     def run_curator(self, cmd, cwd, prior_sid=None, persist=None, record_user_message=None,
                     role="agent", notice=None, on_finish=None):

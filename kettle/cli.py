@@ -794,7 +794,7 @@ def cmd_add(args) -> int:
     print(f"registered [{proj['id']}] {proj['name']}")
     print(f"  root: {server.project_root(proj)}")
     print(f"  desk: {server.desk_dir(proj)}  (queue seeded — awaiting founding)")
-    print(f"\nnext:  kettle chat  {proj['id']}     # talk to the curator, found the desk")
+    print(f"\nnext:  kettle found {proj['id']}     # the curator founds the desk from your files")
     print(f"       kettle queue {proj['id']}     # see what's been filed")
     return 0
 
@@ -851,23 +851,19 @@ def cmd_bind(args) -> int:
 
 def cmd_found(args) -> int:
     """Found the desk: digests DESK-PROPOSAL.md when present, else one-shot from files /
-    interview session. Mirrors the server's found()."""
+    interview session. Same prompt, guard and founded predicate as the server's found()."""
     proj = server.get_project(args.project)
-    sid = server.load_session(proj).get("session_id")
-    fields = dict(
-        name=proj["name"], root=str(server.project_root(proj)),
-        desk_dir=str(server.desk_dir(proj)), queue_path=str(server.queue_path(proj)),
-        proposal_path=str(server.proposal_path(proj)),
-    )
-    if server.proposal_on_disk(proj):
-        prompt = server.FOUND_PROMPT.format(**fields)
-    elif sid:
-        prompt = server.FOUND_LEGACY_PROMPT.format(**fields)
-    else:
-        prompt = server.BOOTSTRAP_PROMPT.format(
-            name=proj["name"], root=str(server.project_root(proj)),
-            desk_dir=str(server.desk_dir(proj)), queue_path=str(server.queue_path(proj)),
-        )
+    if server.desk_is_founded(proj):
+        print(f"{proj['id']} is already founded — use Refound in the sitting to start over.")
+        return 0
+    if server.mark_founded_if_filed(proj, founding_step=True):
+        print(f"{proj['id']}: charter and content entries already on disk — marked founded.")
+        return 0
+    cfg0 = server.current_curator()
+    sid = server.session_id_for_curator(proj=proj, model=cfg0.model_for("setup", args.model))
+    if not sid:
+        sid = server.session_id_for_curator(proj=proj, model=cfg0.model_for("chat", args.model))
+    prompt = server.build_found_prompt(proj, session_id=sid)
     # Resolve the provider from settings exactly as the HTTP routes do, and let
     # build_turn_cmd → runtime.build_argv single-source the sweep tier (write powers,
     # confined by cwd + acceptEdits) and the dialect flags — no Claude hardcoding.
@@ -899,16 +895,21 @@ def cmd_found(args) -> int:
                 print(f"  [agent error: {ev['error']}]")
         elif t == "error":
             print(f"\n  [error: {ev['s']}]")
-    founded = server.mark_founded_if_filed(proj)
+    founded = server.mark_founded_if_filed(proj, founding_step=True)
+    if not founded:
+        server.ensure_proposal_entry(proj)
     n = len(server.load_queue(proj).get("entries", []))
     print(f"\n{'✓ founded' if founded else '✗ not yet founded'} — "
           f"{n} entr{'y' if n == 1 else 'ies'} in the queue.")
     if founded:
         print(f"next:  kettle queue {proj['id']}   ·   "
               f"kettle chat {proj['id']} <entry-id>")
-    else:
-        print("(no entries filed — run `kettle found` again, or read the survey above.)")
-    return 0
+        return 0
+    has_charter = (server.desk_dir(proj) / "PROJECT.md").is_file()
+    print("(a desk is founded when PROJECT.md exists and the queue has a content entry; "
+          + ("no content entries were filed" if has_charter else "PROJECT.md was not written")
+          + " — run `kettle found` again, or read the report above.)")
+    return 1
 
 
 def cmd_queue(args) -> int:

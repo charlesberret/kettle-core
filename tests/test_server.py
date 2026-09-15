@@ -1835,6 +1835,58 @@ class EndpointTests(Base):
         self.assertIn("Your Words", prompt)
         self.assertLess(prompt.index(sentence), prompt.index("THE CHARTER"))
 
+    def test_bootstrap_route_quotes_the_founding_sentence_first(self):
+        """Every founding entry point shares build_found_prompt: /api/bootstrap used
+        to drop the sentence the charter must open with."""
+        sentence = "Field notes — keep my spelling of place names."
+        server.save_session(self.proj(), founding_note=sentence)
+        cmds = self._capture_cmds()
+        self._post_stream("/api/bootstrap", {"project": "t"})
+        prompt = cmds[-1][cmds[-1].index("-p") + 1]
+        self.assertTrue(prompt.startswith("THE USER'S FOUNDING SENTENCE"))
+        self.assertIn(sentence, prompt)
+        self.assertIn("Your Words", prompt)
+        self.assertIn("block above", prompt)
+
+    def test_interview_does_not_resume_a_chat_session(self):
+        """A chat before the interview opened a session with no founding role, survey
+        or sentence; the interview must start fresh and carry all three."""
+        server.save_session(self.proj(), session_id="sid-chat", founding_note="Why this.")
+        cmds = self._capture_cmds()
+        self._post_stream("/api/interview", {"project": "t", "message": "begin"})
+        c = cmds[-1]
+        self.assertNotIn("--resume", c)
+        role = c[c.index("--append-system-prompt") + 1]
+        self.assertIn("Why this.", role)
+
+    def test_interview_resumes_its_own_session(self):
+        server.save_session(self.proj(), session_id="sid-iv", status="interviewing")
+        cmds = self._capture_cmds()
+        self._post_stream("/api/interview", {"project": "t", "message": "more"})
+        c = cmds[-1]
+        self.assertEqual(c[c.index("--resume") + 1], "sid-iv")
+
+    def test_propose_never_founds_the_desk(self):
+        """Propose holds write tools; a curator that writes a charter and content
+        entries anyway must not found the desk before the user approves."""
+        server.save_session(self.proj(), status="proposing")
+        (server.desk_dir(self.proj()) / "PROJECT.md").write_text("# charter\n")
+        self.assertFalse(server.mark_founded_if_filed(self.proj()))
+        self.assertTrue(server.mark_founded_if_filed(self.proj(), founding_step=True))
+
+    def test_failed_found_keeps_the_proposal_openable(self):
+        desk = server.desk_dir(self.proj())
+        server.mutate_queue(self.proj(), lambda q: q.__setitem__("entries", []))
+        (desk / "DESK-PROPOSAL.md").write_text("# Desk Proposal\n")
+        server.save_session(self.proj(), status="proposing")
+        self._stub_claude(self._init(), self._say("oops"), exit_code=1)
+        self._post_stream("/api/found", {"project": "t"})
+        entries = server.load_queue(self.proj())["entries"]
+        self.assertEqual([e["id"] for e in entries], ["desk-proposal"])
+        _, j = _http("GET", f"{self.base}/api/interview?project=t")
+        self.assertFalse(j["founded"])
+        self.assertTrue(j["has_proposal"])
+
     def test_chat_uses_one_project_session_named_for_project(self):
         # first chat turn on a project CREATES the named project session (no --resume),
         # injects the file's context block, and names it kettle-test
