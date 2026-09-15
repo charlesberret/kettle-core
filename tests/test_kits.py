@@ -57,6 +57,85 @@ class KitsTest(unittest.TestCase):
             except (IndexError, KeyError, ValueError) as exc:
                 self.fail(f"{path.name} does not format cleanly: {exc}")
 
+    def test_formatted_prompts_render_with_the_fields_server_actually_passes(self):
+        """`test_every_product_prompt_formats` proves each file formats with a field set
+        harvested from its own text — it would not catch a stray `{desk_dir}` (or similar)
+        landing in a file server.py never calls .format() on for that field, which would
+        reach the curator as a literal, unexpanded brace. Pin the exact field sets each
+        kettle/server.py call site actually supplies (see `_load_prompt` call sites and
+        their `.format(...)` calls), and confirm formatting with exactly those fields
+        raises no KeyError. A file gaining a field name outside this set is also flagged,
+        so this test must be updated when server.py's call sites change."""
+        prompt_dir = self.shipped / "prompts"
+        # name -> the exact kwargs server.py's .format() call supplies for that file.
+        field_sets = {
+            "accrue.md": {"name", "root", "desk_dir", "runtime_dir", "stamp",
+                          "queue_path", "session_log"},
+            "refresh-briefs.md": {"name", "root", "desk_dir", "queue_path"},
+            "sweep.md": {"name", "root", "ledger", "desk_dir", "runtime_dir", "today",
+                        "stamp", "queue_path", "comments_log_path"},
+            "bootstrap.md": {"name", "root", "desk_dir", "queue_path"},
+            "interview-role.md": {"name", "root"},
+            "propose.md": {"name", "root", "desk_dir", "queue_path", "proposal_path"},
+            "found.md": {"name", "root", "desk_dir", "queue_path", "proposal_path"},
+            "found-legacy.md": {"name", "root", "desk_dir", "queue_path", "proposal_path"},
+            "default-role.md": {"path", "project", "brief", "ask"},
+            "context-block.md": {"path", "brief", "ask"},
+        }
+        # Files server.py appends raw (never .format()'d) — a literal '{' in these would
+        # reach the curator unexpanded, so they must contain no format-style fields at all.
+        never_formatted = {
+            "interview-kickoff.md", "queue-schema.md", "founding-live-reporting.md",
+            "sweep-verbosity-quiet.md", "sweep-verbosity-normal.md",
+            "sweep-verbosity-verbose.md",
+        }
+        self.assertEqual(
+            set(field_sets) | never_formatted,
+            {p.name for p in prompt_dir.glob("*.md")},
+            "every prompts/*.md must be classified as formatted (with its exact field "
+            "set) or never-formatted (raw-appended) above",
+        )
+        formatter = string.Formatter()
+        for name, fields in field_sets.items():
+            text = (prompt_dir / name).read_text(encoding="utf-8")
+            used = {
+                field_name
+                for _, field_name, _, _ in formatter.parse(text)
+                if field_name is not None
+            }
+            self.assertTrue(
+                used <= fields,
+                f"{name} references field(s) {used - fields} that server.py's .format() "
+                f"call does not supply — they would raise KeyError or leak literally",
+            )
+            try:
+                text.format(**{f: f"<{f}>" for f in fields})
+            except (IndexError, KeyError, ValueError) as exc:
+                self.fail(f"{name} does not format cleanly with {sorted(fields)}: {exc}")
+        for name in never_formatted:
+            text = (prompt_dir / name).read_text(encoding="utf-8")
+            self.assertNotIn("{", text,
+                              f"{name} is never passed through .format() — a literal "
+                              f"'{{...}}' placeholder would reach the curator unexpanded")
+
+    def test_no_kit_file_hardcodes_kettle_outbound(self):
+        """A curator following a literal '.kettle/outbound' path on a legacy `.setsweep`
+        desk creates `.kettle/`, which flips `desk_dir()` and splits the desk (Medium 13,
+        2026-09-15 review). Every reference must instead route through the desk directory
+        named in the prompt (a templated `{desk_dir}` field where the file is formatted
+        with one, or descriptive text where the file is appended raw)."""
+        offenders = []
+        for path in sorted(self.shipped.rglob("*")):
+            if not path.is_file():
+                continue
+            try:
+                text = path.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                continue
+            if ".kettle/outbound" in text:
+                offenders.append(str(path.relative_to(self.shipped)))
+        self.assertEqual(offenders, [])
+
     def test_brief_standard_is_cold_reentry(self):
         """Briefs must orient a cold or returning user — not insider memo voice."""
         schema = (self.shipped / "prompts" / "queue-schema.md").read_text(encoding="utf-8")

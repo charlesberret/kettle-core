@@ -57,7 +57,7 @@ CI). Kettle is often the **user gate**: work waits in the queue until approve + 
    agents must not proceed on, treat that as a hard gate in briefs and session log. Do not
    imply in egress that peers may proceed while the entry is still pending.
 3. **Approve + sweep publishes** — approve alone is a desk bookmark. When the sitting is
-   swept, **stage a `kind: approval` egress memo** under `.kettle/outbound/` listing
+   swept, **stage a `kind: approval` egress memo** under the desk's `outbound/` folder listing
    (a) paths the user approved this sitting and (b) remaining pending items that still
    block peers. Fleet pickup and other agents read staged egress — they will not re-read
    `approvals.log` unless told to. Prefer `kettle egress … --kind approval` or the close
@@ -79,7 +79,9 @@ Approvals never auto-mutate canonical documents; only a sweep, on request, appli
 
 ## Egress discipline
 
-`.kettle/outbound/` is the desk's staging queue for signals meant for other agents or systems
+The desk's `outbound/` folder (the `outbound/` directory inside the desk directory named
+elsewhere in this prompt — do not assume it is `.kettle/`; an unmigrated desk keeps its
+legacy directory) is the staging queue for signals meant for other agents or systems
 (handoffs, escalations, launch directives, domain memos). Stage with `kettle egress` (or write
 the same header shape by hand). Leave `Status: staged` — external pickup drains and routes.
 Never transmit from the curator sandbox.
