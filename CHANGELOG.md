@@ -64,6 +64,14 @@ and Desk schema have their own integer contract versions.
   survey, and staged egress remain release invariants.
 - Localhost HTTP hardening: per-boot `X-Kettle-Token` (discovery file mode 0600),
   Host/Origin rejection, and normalized `{error, code}` envelopes (`str(e)` only).
+- Rendered markdown (reading view, agent chat) is sanitized as a string before it
+  reaches the DOM. Previously raw `marked` output was assigned to `innerHTML` and
+  cleaned afterwards, which let `<img onerror>` in a project file or agent reply run
+  script holding the page token. `id` attributes are no longer allowed (DOM
+  clobbering of the sitting's own elements).
+- The sitting is served with a Content-Security-Policy (script-src `'self'` plus
+  per-response sha256 pins of the shipped inline blocks; `frame-ancestors 'none'`,
+  `object-src 'none'`), `X-Frame-Options: DENY` and `nosniff`.
 
 ## 0.2.0
 

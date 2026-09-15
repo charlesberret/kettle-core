@@ -211,14 +211,42 @@ class ViewportRitualRegressionBar(unittest.TestCase):
         html = INDEX.read_text(encoding="utf-8")
         fill = function_source(html, "fillAgentMarkdown")
         self.assertIn("_mdHtml", fill)
-        self.assertIn("sanitizeRender", fill)
+        self.assertIn("purifyHtml", fill)
         self.assertIn("marked.parse", function_source(html, "_mdHtml"))
         add = function_source(html, "addMsg")
         self.assertIn("fillAgentMarkdown", add)
         stream = function_source(html, "pipeStream")
         self.assertIn("fillAgentMarkdown", stream)
         self.assertRegex(html, r"\.msg\.agent\.md\s*\{")
-        self.assertIn("ui-2026-09-11a", html)
+        self.assertIn("ui-2026-09-15a", html)
+
+    def test_markdown_is_sanitized_as_a_string_before_it_reaches_the_dom(self):
+        """Assigning marked output to innerHTML and cleaning the node afterwards is
+        too late: parsing already queued <img onerror> handlers. Every markdown
+        sink must assign a purifyHtml() result, and DOMPurify must never be fed a
+        live node's innerHTML."""
+        html = self.html
+        self.assertNotRegex(html, r"innerHTML\s*=\s*(?:marked\.parse|_mdHtml)\(")
+        self.assertNotRegex(html, r"DOMPurify\.sanitize\(\s*\w+\.innerHTML")
+        self.assertNotIn("sanitizeRender", html)
+        purify = self.function("purifyHtml")
+        self.assertIn("DOMPurify.sanitize(", purify)
+        self.assertIn("return null", purify)  # no blocklist fallback
+        for name in ("fillAgentMarkdown", "renderMd"):
+            src = self.function(name)
+            with self.subTest(sink=name):
+                self.assertIn("purifyHtml(_mdHtml(", src)
+                for m in re.finditer(r"(\w+)\.innerHTML\s*=\s*([^;]+);", src):
+                    self.assertNotIn("marked", m.group(2))
+                    self.assertNotIn("_mdHtml", m.group(2))
+
+    def test_markdown_sanitizer_drops_id_attributes(self):
+        """$() is getElementById; a file's <div id="chat"> must not capture the sitting."""
+        m = re.search(r"const MD_PURIFY = \{(.*?)\n\};", self.html, re.DOTALL)
+        self.assertIsNotNone(m)
+        attrs = re.search(r"ALLOWED_ATTR:\s*\[(.*?)\]", m.group(1), re.DOTALL).group(1)
+        self.assertNotIn("'id'", attrs)
+        self.assertIn("SANITIZE_NAMED_PROPS: true", m.group(1))
 
     def test_confirmation_card_is_blank_for_the_user(self):
         parse = self.function("parseConfirmCard")

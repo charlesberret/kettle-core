@@ -15,7 +15,9 @@ Run standalone (web mode):  python3 server.py [--port 4242] [--no-open]
 Bundled (Electron .app):     PyInstaller sidecar; set DESK_PROJECTS for the registry path.
 """
 
+import base64
 import difflib
+import hashlib
 import json
 import math
 import os
@@ -129,6 +131,35 @@ DEFAULT_PORT = 4242  # one port for native app and web mode alike — a bookmark
                      # tab always reaches the live server, never a stale orphan
 RUNTIME_PATH = HOME / ".cache/kettle/server.json"  # discovery: port + token (mode 0600)
 TOKEN_HEADER = "X-Kettle-Token"
+_INLINE_SCRIPT_RE = re.compile(rb"<script(?![^>]*\bsrc=)[^>]*>(.*?)</script>", re.DOTALL | re.IGNORECASE)
+
+
+def sitting_csp(body: bytes) -> str:
+    """Content-Security-Policy for the served sitting.
+
+    Scripts run only from this origin or as the exact inline blocks shipped in
+    index.html (sha256-pinned per response, so editing the file needs no manual
+    hash bump). Anything a rendered file or agent reply manages to inject — an
+    <img onerror>, a <script>, a javascript: link — is refused by the browser even
+    if the sanitizer misses it. Styles stay 'unsafe-inline' (the sitting uses style
+    attributes); style injection cannot run code or read the token.
+    """
+    hashes = " ".join(
+        "'sha256-" + base64.b64encode(hashlib.sha256(m.group(1)).digest()).decode() + "'"
+        for m in _INLINE_SCRIPT_RE.finditer(body)
+    )
+    return "; ".join([
+        "default-src 'self'",
+        f"script-src 'self' {hashes}".rstrip(),
+        "style-src 'self' 'unsafe-inline'",
+        "img-src 'self' data: https: http:",
+        "font-src 'self'",
+        "connect-src 'self'",
+        "object-src 'none'",
+        "base-uri 'none'",
+        "form-action 'none'",
+        "frame-ancestors 'none'",
+    ])
 QUEUE_LOCK = threading.Lock()
 SETTINGS_LOCK = threading.Lock()
 PROJECTS_LOCK = threading.Lock()
@@ -1556,6 +1587,10 @@ class Handler(BaseHTTPRequestHandler):
                         body = body.replace(b"<head>", b"<head>\n" + meta, 1)
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Security-Policy", sitting_csp(body))
+                self.send_header("X-Frame-Options", "DENY")
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.send_header("Referrer-Policy", "no-referrer")
                 # Sitting UI iterates quickly — never let Electron/browser keep a stale shell.
                 self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
                 self.send_header("Pragma", "no-cache")

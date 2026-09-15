@@ -14,6 +14,7 @@ import http.client
 import io
 import json
 import os
+import re
 import signal
 import socket
 import shutil
@@ -2264,6 +2265,34 @@ class LocalhostAuthTests(EndpointTests):
         self.assertEqual(s, 200)
         meta = f'meta name="kettle-token" content="{server.SERVER_TOKEN}"'.encode()
         self.assertIn(meta, body)
+
+    def test_index_sends_a_script_pinning_csp(self):
+        """Injected markup must not run even if the sanitizer misses it: script-src
+        admits only this origin plus the exact inline blocks shipped in index.html."""
+        import base64
+        import hashlib
+        conn = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
+        try:
+            conn.request("GET", "/")
+            res = conn.getresponse()
+            headers, body = dict(res.getheaders()), res.read()
+        finally:
+            conn.close()
+        csp = headers.get("Content-Security-Policy", "")
+        directives = {d.split()[0]: d.split()[1:] for d in csp.split("; ") if d}
+        script_src = directives.get("script-src", [])
+        self.assertIn("'self'", script_src)
+        self.assertNotIn("'unsafe-inline'", script_src)
+        self.assertNotIn("'unsafe-eval'", script_src)
+        inline = re.findall(rb"<script(?![^>]*\bsrc=)[^>]*>(.*?)</script>", body, re.DOTALL)
+        self.assertGreaterEqual(len(inline), 2)
+        for block in inline:
+            h = "'sha256-" + base64.b64encode(hashlib.sha256(block).digest()).decode() + "'"
+            self.assertIn(h, script_src)
+        self.assertEqual(directives.get("frame-ancestors"), ["'none'"])
+        self.assertEqual(directives.get("object-src"), ["'none'"])
+        self.assertEqual(headers.get("X-Frame-Options"), "DENY")
+        self.assertEqual(headers.get("X-Content-Type-Options"), "nosniff")
 
     def test_same_origin_origin_allowed(self):
         s, j = self._raw(

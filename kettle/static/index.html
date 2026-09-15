@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <!-- Bump this when sitting UI changes; title shows it so we can confirm the shell loaded. -->
-<meta name="kettle-ui" content="2026-09-11a">
-<title>kettle · ui-2026-09-11a</title>
+<meta name="kettle-ui" content="2026-09-15a">
+<title>kettle · ui-2026-09-15a</title>
 <style>
   /*
    * Type & chrome roles — single source of sitting hierarchy.
@@ -4207,7 +4207,9 @@ function setMode(m){
 
 /* Allowlist sanitizer for rendered markdown (brief 09). DOMPurify is vendored at
    /purify.min.js — no CDN. Task-list checkboxes stay allowed so reading view can
-   toggle them; scripts, forms, SVG event surfaces, and javascript:/data: URIs go. */
+   toggle them; scripts, forms, SVG event surfaces, and javascript:/data: URIs go.
+   No `id`: $() is getElementById, so a file's <div id="chat"> would capture the
+   sitting's own elements (DOM clobbering). */
 const MD_PURIFY = {
   ALLOWED_TAGS: [
     'a','abbr','b','blockquote','br','code','del','em','h1','h2','h3','h4','h5','h6',
@@ -4215,29 +4217,23 @@ const MD_PURIFY = {
     'th','thead','tr','ul','span','div','input','section','details','summary',
   ],
   ALLOWED_ATTR: [
-    'href','title','alt','src','class','id','type','checked','disabled','colspan',
+    'href','title','alt','src','class','type','checked','disabled','colspan',
     'rowspan','start','align','aria-label','aria-hidden','role','open',
   ],
   ALLOW_DATA_ATTR: false,
+  SANITIZE_NAMED_PROPS: true,
   // http(s), mailto, relative paths, anchors — not javascript: or data:
   ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i,
 };
 
-function sanitizeRender(el){
-  if(!el) return;
-  if(typeof DOMPurify !== 'undefined' && DOMPurify.sanitize){
-    el.innerHTML = DOMPurify.sanitize(el.innerHTML, MD_PURIFY);
-    return;
-  }
-  // Fallback if purify failed to load — still strip the worst blocklist holes.
-  el.querySelectorAll('script,iframe,object,embed,link,style,form,svg').forEach(n => n.remove());
-  el.querySelectorAll('*').forEach(n => {
-    [...n.attributes].forEach(a => {
-      if(/^on/i.test(a.name) || a.name === 'formaction' || a.name === 'srcdoc') n.removeAttribute(a.name);
-      if((a.name === 'href' || a.name === 'src' || a.name === 'xlink:href') &&
-         /^(javascript|data):/i.test(n.getAttribute(a.name) || '')) n.removeAttribute(a.name);
-    });
-  });
+/** Sanitize an HTML *string* before it touches the DOM. Never assign unsanitized
+    markup to innerHTML and clean it afterwards: parsing already queued its
+    <img onerror> handlers. Returns null when DOMPurify is unavailable — callers
+    then show the source as plain text instead of trusting a blocklist. */
+function purifyHtml(html){
+  if(html == null) return null;
+  if(typeof DOMPurify === 'undefined' || !DOMPurify.sanitize) return null;
+  return DOMPurify.sanitize(String(html), MD_PURIFY);
 }
 
 function _mdHtml(src){
@@ -4270,14 +4266,13 @@ function appendApplyBlock(host, block){
   bar.append(cp, ap); wrap.append(pre, bar); host.appendChild(wrap);
 }
 /** Paint an agent bubble as GFM (headings, lists, task ticks). Fenced code keeps
-    the copy / → editor bar. Task-list checkboxes are display-only — founding
-    confirm-card upgrade still replaces this node with the interactive card. */
+    the copy / → editor bar. Task-list checkboxes are display-only. */
 function fillAgentMarkdown(el, text){
   if(!el) return;
   el._kettleRaw = String(text || '');
   const src = el._kettleRaw;
   if(!src){ el.textContent = ''; return; }
-  const html = _mdHtml(src.includes('```') ? '' : src);
+  const html = purifyHtml(_mdHtml(src.includes('```') ? '' : src));
   if(src.includes('```')){
     el.classList.add('md');
     el.textContent = '';
@@ -4285,12 +4280,11 @@ function fillAgentMarkdown(el, text){
     for(let i = 0; i < parts.length; i++){
       if(i % 2 === 0){
         if(!parts[i].trim()) continue;
-        const chunk = _mdHtml(parts[i]);
+        const chunk = purifyHtml(_mdHtml(parts[i]));
         if(chunk){
           const wrap = document.createElement('div');
           wrap.className = 'md-prose';
           wrap.innerHTML = chunk;
-          sanitizeRender(wrap);
           _freezeChatTaskboxes(wrap);
           el.appendChild(wrap);
         } else {
@@ -4305,7 +4299,6 @@ function fillAgentMarkdown(el, text){
   if(html){
     el.classList.add('md');
     el.innerHTML = html;
-    sanitizeRender(el);
     _freezeChatTaskboxes(el);
     return;
   }
@@ -4371,8 +4364,14 @@ function unwrapParagraphs(text){
 
 function renderMd(){
   const r = $('render');
-  r.innerHTML = marked.parse($('editor').value, {gfm: true});
-  sanitizeRender(r);
+  const src = $('editor').value;
+  const html = purifyHtml(_mdHtml(src));
+  if(html == null){
+    // marked or DOMPurify missing — show the source rather than unsanitized HTML
+    r.textContent = src;
+    return;
+  }
+  r.innerHTML = html;
   linkifyWikilinks(r);
   const offsets = taskBoxOffsets($('editor').value);
   const boxes = r.querySelectorAll('input[type=checkbox]');
