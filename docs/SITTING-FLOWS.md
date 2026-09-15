@@ -28,7 +28,10 @@ Route shapes, the error envelope and the NDJSON event table are in
 1. **MUST** read `~/.cache/kettle/server.json` for `port` + `token` (the graphical sitting is
    served the token in a meta tag instead; that path is for browsers only).
 2. **MUST** `GET /api/ping` → `app: "kettle"`, `version`, `api_version`, `desk_schema_version`,
-   plus the active curator. Refuse to drive a core whose `api_version` you do not support.
+   plus the active curator, and keep `api_version` where a bug report can see it. `API_VERSION`
+   is still `0` (deliberately pre-stable), so **SHOULD NOT** refuse an unknown value yet: warn
+   and proceed. Once core reaches `1`, refuse a core whose `api_version` is above the highest
+   you support (decision D4).
 3. **MUST** `GET /api/projects` → `{projects, home}`.
 4. **MUST** `GET /api/queue?project=<id>` for the opened desk. Pass **`?mutate=0`** when
    polling: the mutating read heals founding status, re-files a lost proposal entry and takes
@@ -147,11 +150,19 @@ queue entry (`desk-proposal`). Status becomes `proposing`.
 
 ### 3.4 The user edits the proposal
 Ordinary §1/§2.1 file editing, plus §5 chat to revise. **MUST** keep the proposal openable
-while `founded` is false; if its queue entry is missing, the mutating
-`GET /api/interview` re-files it.
+while `founded` is false.
+
+Core re-files a lost `desk-proposal` entry at the end of `/api/propose` and after a failed
+`/api/found`, so a poll-pure viewport does not have to trigger it. The mutating
+`GET /api/interview` performs the same heal as a safety net (an entry lost some other way — a
+hand-edited queue, an older core). A viewport that only ever polls with `mutate=0`
+**SHOULD** issue one mutating read when the user explicitly refreshes an unfounded desk
+(decision D1).
 
 ### 3.5 Found Desk
-1. **MUST** `POST /api/approve` on the proposal entry (response: `founding: true`).
+1. **MUST** `POST /api/approve` on the proposal entry. Its response carries `founding: true`;
+   that flag is core's own answer and is preferred over a locally cached phase, which can be
+   stale after another viewport acted on the same desk (decision D3).
 2. **MUST** `POST /api/found {project, model?}` → NDJSON, and keep the user informed while it
    streams.
 3. **MUST** re-read `GET /api/interview` when the stream ends and announce a founded desk
@@ -188,8 +199,10 @@ optional steer for this pass.
 
 1. **SHOULD** confirm first (the reference sitting shows a dialog with the steer field, or an
    armed undo when confirmation is off).
-2. **MUST** treat sweep as closing the sitting: clear the selected entry and the file surface,
-   and do not let the user edit a file mid-sweep.
+2. **MUST** stop the user editing a file while the sweep streams: the sweep rewrites the queue
+   and may archive the entry under the cursor.
+   **SHOULD** also clear the selected entry and the file surface, as the reference sitting does
+   — an entry left on screen through a restock may no longer exist when the stream ends.
 3. **MUST NOT** start a second sweep on a desk that is already sweeping. Core also refuses:
    the stream then carries one `text` notice ("A sweep is already running for this desk") and a
    `done`.
@@ -215,8 +228,10 @@ read `sweep-health.json`). 7 absent.
 
 `POST /api/chat {project, id|null, message, model?}` → NDJSON.
 
-- `id` is the selected entry or `null` for a project-level turn (for example, answering a
-  question the sweep raised with no file open). **MUST** support the `null` form.
+- `id` is the selected entry, or **absent / `null`** for a project-level turn (for example,
+  answering a question the sweep raised with no file open). Core treats a missing key and an
+  explicit `null` identically (`if eid:`), so either is correct (decision D2). **MUST** support
+  that project-level form.
 - Core injects the active-file context block on the first turn of a session and whenever the
   selected entry changed; a viewport **MUST NOT** paste its own copy of the brief into the
   message.
@@ -271,7 +286,24 @@ copy. `not_found` for a moved project folder is not a project-list refresh (same
 
 ---
 
-## 7. What this file does not decide
+## 7. Decisions
+
+Settled by kettle-core and kettle-tui on 2026-09-15, from the TUI's marking pass. Each is
+written into the section above; they are collected here so a third viewport does not re-argue
+them.
+
+| # | Question | Decision |
+|---|---|---|
+| D1 | Must a viewport use the mutating `GET /api/interview` to heal a lost proposal entry? | No. Core heals at the end of propose and after a failed found. Polling stays `mutate=0`; one mutating read on an explicit refresh of an unfounded desk. |
+| D2 | Omit `id` or send `id: null` on a project-level chat turn? | Either. Core treats them the same; the spec no longer implies `null` is required. |
+| D3 | Local `phase == "proposing"` or the approve response's `founding: true`? | Prefer the response — it is core's answer and survives another viewport acting on the same desk. A refreshed local phase is acceptable, not preferred. |
+| D4 | Refuse an unknown `api_version`? | Not while it is `0` (pre-stable): read it, show it, proceed. Refuse above your supported maximum once core reaches `1`. |
+
+Open, deliberate divergences (recorded, not faults): the TUI's dirty-buffer modal instead of
+autosave, its plain-text agent stream instead of display markdown (the P4 rule it must keep is
+*never interactive*), and no chatlog, interjection queue or auto-compact.
+
+## 8. What this file does not decide
 
 Layout, region jobs, keybindings and ritual copy: [`UI-STRUCTURE.md`](./UI-STRUCTURE.md) and
 [`UI.md`](./UI.md). Capability levels and what a viewport must ship:
