@@ -70,8 +70,14 @@ def build_survey(
     max_top: int = _MAX_TOP,
     max_samples: int = _MAX_SAMPLES,
     sample_chars: int = _SAMPLE_CHARS,
+    max_depth: int | None = None,
 ) -> dict[str, Any]:
-    """Walk *root* and return a JSON-serializable founding survey snapshot."""
+    """Walk *root* and return a JSON-serializable founding survey snapshot.
+
+    `max_depth` (the project's scope bound; None or < 1 = unbounded) limits the recency
+    signals to files within that many directory levels, so the interview's dated
+    observations never cite paths the desk's scope note puts out of bounds."""
+    depth = max_depth if isinstance(max_depth, int) and max_depth >= 1 else None
     root_p = Path(root).expanduser().resolve()
     top: list[dict[str, str]] = []
     empty = True
@@ -150,6 +156,7 @@ def build_survey(
                     samples[f"{sub}/README.md"] = text
                 break
 
+    git_activity = _git_activity(root_p, max_depth=depth) if has_git else None
     signals = {
         "git": has_git,
         "kettle_desk": has_kettle_charter,
@@ -171,8 +178,9 @@ def build_survey(
         "top_level": top,
         "signals": signals,
         "samples": samples,
-        "git_activity": _git_activity(root_p) if has_git else None,
-        "mtime_buckets": _mtime_buckets(root_p),
+        "git_activity": git_activity,
+        # the filesystem walk is only the fallback when git has no usable history
+        "mtime_buckets": None if git_activity else _mtime_buckets(root_p, max_depth=depth),
         "suggested_prechecks": suggest_prechecks(empty=empty or not top, signals=signals,
                                                   samples=samples),
         "generated_at": _now(),
@@ -271,11 +279,15 @@ def as_prompt_block(survey: dict[str, Any]) -> str:
     else:
         buckets = survey.get("mtime_buckets")
         if buckets:
+            # buckets are exclusive (each file counted once); the prose reads cumulatively
+            day = buckets["last_24h"]
+            week = day + buckets["last_7d"]
+            month = week + buckets["last_30d"]
             lines.append(
                 "Recent activity (filesystem, no usable git history): "
-                f"{buckets['last_24h']} file(s) touched in the last 24h, "
-                f"{buckets['last_7d']} in the last 7 days, "
-                f"{buckets['last_30d']} in the last 30 days."
+                f"{day} file(s) touched in the last 24h, "
+                f"{week} in the last 7 days, "
+                f"{month} in the last 30 days."
             )
 
     samples = survey.get("samples") or {}
@@ -340,7 +352,12 @@ def _git_run(root: Path, args: list[str], *, timeout: float) -> str | None:
     return proc.stdout
 
 
-def _git_activity(root: Path) -> dict[str, Any] | None:
+def _within_depth(rel_path: str, max_depth: int | None) -> bool:
+    """True when a root-relative path is at most `max_depth` levels deep (1 = root files)."""
+    return max_depth is None or len(Path(rel_path).parts) <= max_depth
+
+
+def _git_activity(root: Path, *, max_depth: int | None = None) -> dict[str, Any] | None:
     """Deterministic git enrichment for the survey: last commit date, commit volume
     over the last 30 days, the most-changed paths in recent history, and a rough
     author count. Local ``git log`` only — no network, no curator CLI. Returns None
@@ -364,7 +381,7 @@ def _git_activity(root: Path) -> dict[str, Any] | None:
     counts: dict[str, int] = {}
     for line in (changed or "").splitlines():
         path = line.strip()
-        if path:
+        if path and _within_depth(path, max_depth):
             counts[path] = counts.get(path, 0) + 1
     top_paths = [
         {"path": p, "commits": n}
@@ -382,7 +399,8 @@ def _git_activity(root: Path) -> dict[str, Any] | None:
     }
 
 
-def _mtime_buckets(root: Path, *, max_files: int = _MTIME_MAX_FILES) -> dict[str, int] | None:
+def _mtime_buckets(root: Path, *, max_files: int = _MTIME_MAX_FILES,
+                   max_depth: int | None = None) -> dict[str, int] | None:
     """Filesystem-mtime recency buckets (last 24h / 7d / 30d / older), skipping the
     same noise directories as the top-level listing. Works for git and non-git roots
     alike — the fallback signal when there is no repo, and a useful cross-check when
@@ -392,6 +410,9 @@ def _mtime_buckets(root: Path, *, max_files: int = _MTIME_MAX_FILES) -> dict[str
     scanned = 0
     try:
         for dirpath, dirnames, filenames in os.walk(root):
+            level = len(Path(dirpath).relative_to(root).parts)  # 0 at the root
+            if max_depth is not None and level + 1 >= max_depth:
+                dirnames[:] = []            # files one level down would exceed the bound
             dirnames[:] = [d for d in dirnames if d not in _SKIP_DIR_NAMES]
             for fname in filenames:
                 if scanned >= max_files:

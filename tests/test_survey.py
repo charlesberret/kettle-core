@@ -172,5 +172,37 @@ class TestBuildSurvey(unittest.TestCase):
         )
 
 
+    def test_max_depth_bounds_the_dated_observations(self):
+        """The scope note forbids deeper paths, so the survey must not cite them."""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            _init_git_repo(root)
+            (root / "top.md").write_text("top\n")
+            (root / "a" / "b").mkdir(parents=True)
+            (root / "a" / "b" / "deep.md").write_text("deep\n")
+            _git(root, "add", ".")
+            _git(root, "commit", "-q", "-m", "files")
+            snap = survey.build_survey(root, max_depth=1)
+            paths = [p["path"] for p in snap["git_activity"]["top_changed_paths"]]
+            self.assertEqual(paths, ["top.md"])
+            self.assertIsNone(snap["mtime_buckets"])  # git history answers recency
+
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / "top.md").write_text("top\n")
+            (root / "a" / "b").mkdir(parents=True)
+            (root / "a" / "mid.md").write_text("mid\n")
+            (root / "a" / "b" / "deep.md").write_text("deep\n")
+            self.assertEqual(sum(survey.build_survey(root, max_depth=1)["mtime_buckets"].values()), 1)
+            self.assertEqual(sum(survey.build_survey(root, max_depth=2)["mtime_buckets"].values()), 2)
+            self.assertEqual(sum(survey.build_survey(root)["mtime_buckets"].values()), 3)
+
+    def test_recent_activity_counts_read_cumulatively(self):
+        snap = {"top_level": [], "signals": {}, "samples": {}, "git_activity": None,
+                "mtime_buckets": {"last_24h": 3, "last_7d": 2, "last_30d": 5, "older": 9}}
+        block = survey.as_prompt_block(snap)
+        self.assertIn("3 file(s) touched in the last 24h, 5 in the last 7 days, "
+                      "10 in the last 30 days", block)
+
 if __name__ == "__main__":
     unittest.main()

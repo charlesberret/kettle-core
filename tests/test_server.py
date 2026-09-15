@@ -450,10 +450,11 @@ class HelperTests(Base):
 
     def test_project_orientation_reads_and_truncates(self):
         self.assertEqual(server.project_orientation(self.proj()), "")  # missing → ""
-        (self.root / ".kettle" / "PROJECT.md").write_text("X" * 4000)
+        (self.root / ".kettle" / "PROJECT.md").write_text("X" * 9000)
         out = server.project_orientation(self.proj())
         self.assertIn("PROJECT.md", out)                       # labeled
-        self.assertEqual(out.count("X"), 2500)                 # body truncated
+        self.assertEqual(out.count("X"), 6000)                 # body truncated
+        self.assertIn("truncated at 6000 of 9000 characters", out)  # visibly
         self.assertNotIn("MEMORY.md", out)                     # absent file → section omitted
 
     def test_project_orientation_includes_curator_memory(self):
@@ -503,6 +504,15 @@ class HelperTests(Base):
         self.assertIn("memo", prompt)
         self.assertIn("D10", prompt)  # old brief still listed for rewrite
         self.assertIn(str(server.queue_path(proj)), prompt)
+
+    def test_project_orientation_marks_truncated_memory(self):
+        proj = self.proj()
+        rulings = "\n".join(f"- 2026-09-{i % 28 + 1:02d} ruling number {i}" for i in range(80))
+        (server.desk_dir(proj) / "MEMORY.md").write_text(rulings)
+        orientation = server.project_orientation(proj)
+        self.assertIn("ruling number 79", orientation)  # an ~80-line memory fits whole
+        (server.desk_dir(proj) / "MEMORY.md").write_text("x" * 20000)
+        self.assertIn("truncated at 6000 of 20000 characters", server.project_orientation(proj))
 
     def test_project_orientation_carries_the_projects_claude_md_text(self):
         """Claude curator turns ignore project settings (and with them CLAUDE.md), so
@@ -926,6 +936,36 @@ class EndpointTests(Base):
         sess = server.load_session(self.proj())
         self.assertEqual(sess, {"founding_note": "keep this steer"})
         self.assertFalse((desk / "PROJECT.md").exists())
+
+    def test_refound_keeps_append_only_records(self):
+        desk = server.desk_dir(self.proj())
+        (desk / "PROJECT.md").write_text("old charter")
+        (desk / "DESK-PROPOSAL.md").write_text("old proposal")
+        (desk / "working-record.jsonl").write_text('{"actor": "user"}\n')
+        (desk / "archive").mkdir(exist_ok=True)
+        (desk / "archive" / "2026-01-01-000000-batch.json").write_text("{}")
+        (desk / "outbound").mkdir(exist_ok=True)
+        (desk / "outbound" / "memo.md").write_text("staged")
+        server.comments_log_path(self.proj()).write_text("2026-01-01\talpha\tnote\n")
+        s, j = _http("POST", f"{self.base}/api/projects/refound", {"id": "t"})
+        self.assertEqual(s, 200)
+        self.assertFalse((desk / "PROJECT.md").exists())
+        self.assertFalse((desk / "DESK-PROPOSAL.md").exists())
+        self.assertEqual((desk / "working-record.jsonl").read_text(), '{"actor": "user"}\n')
+        self.assertTrue((desk / "archive" / "2026-01-01-000000-batch.json").exists())
+        self.assertTrue((desk / "outbound" / "memo.md").exists())
+        self.assertIn("note", server.comments_log_path(self.proj()).read_text())
+        self.assertEqual(server.load_queue(self.proj())["entries"], [])
+        self.assertIn("working-record.jsonl", j["kept"])
+
+    def test_refound_is_refused_while_a_curator_turn_runs(self):
+        key = server._stream_key(server.project_root(self.proj()))
+        with server.SWEEPS_LOCK:
+            server.CURATOR_STREAMS[key] = 1
+        self.addCleanup(lambda: server.CURATOR_STREAMS.pop(key, None))
+        s, j = _http("POST", f"{self.base}/api/projects/refound", {"id": "t"})
+        self.assertEqual(s, 409)
+        self.assertEqual(j["code"], "busy")
 
     def test_static_shell_scripts_fonts_and_font_traversal(self):
         def raw(path):
@@ -2444,6 +2484,26 @@ class LocalhostAuthTests(EndpointTests):
         desk.symlink_to(elsewhere)
         with self.assertRaises(ValueError):
             server.runtime_dir(proj)
+
+    def test_corrupt_queue_is_reported_and_never_overwritten(self):
+        qp = server.queue_path(self.proj())
+        qp.write_text("{not json")
+        s, j = _http("GET", f"{self.base}/api/queue?project=t")
+        self.assertEqual((s, j["code"]), (409, "queue_corrupt"))
+        s2, j2 = _http("POST", f"{self.base}/api/approve", {"project": "t", "id": "alpha"})
+        self.assertEqual(s2, 409)
+        self.assertEqual(qp.read_text(), "{not json")
+
+    def test_moved_project_folder_is_not_recreated(self):
+        proj = self.proj()
+        root = server.project_root(proj)
+        moved = root.with_name(root.name + "-moved")
+        root.rename(moved)
+        self.addCleanup(lambda: moved.exists() and moved.rename(root))
+        s, j = _http("GET", f"{self.base}/api/queue?project=t")
+        self.assertEqual(s, 404)
+        self.assertIn("project folder is missing", j["error"])
+        self.assertFalse(root.exists())
 
     def test_save_missing_file_is_404(self):
         missing = self.root / "no-such-dir" / "missing.md"

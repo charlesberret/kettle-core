@@ -171,6 +171,7 @@ def sitting_csp(body: bytes) -> str:
     ])
 QUEUE_LOCK = threading.Lock()
 SWEEPS_LOCK = threading.Lock()
+CURATOR_STREAMS: dict[str, int] = {}  # resolved project root → live curator streams
 SWEEPS_IN_FLIGHT: set[str] = set()  # project ids with a sweep stream open in this process
 SETTINGS_LOCK = threading.Lock()
 PROJECTS_LOCK = threading.Lock()
@@ -577,9 +578,13 @@ def runtime_dir(proj: dict) -> Path:
     doesn't race these rapid rewrites. The durable desk files stay in desk_dir() and sync
     normally. (A sync idiosyncrasy is fixed at the sync layer, not by moving state outside
     the sandbox.)"""
+    root = project_root(proj).resolve()
+    if not root.is_dir():
+        # never mkdir(parents=True) a moved or deleted project back into existence
+        raise FileNotFoundError(f"project folder is missing: {project_root(proj)} — was it "
+                                "moved or deleted? Edit the project's folder in the sitting.")
     desk = desk_dir(proj)
     d = desk / "runtime"
-    root = project_root(proj).resolve()
     for candidate in (desk, d):
         if candidate.is_symlink() and not candidate.resolve().is_relative_to(root):
             # A registered folder that ships `.kettle -> ~/elsewhere` would move every
@@ -716,6 +721,10 @@ def safe_path(p: str, base: Path | None = None) -> Path:
 
 # ---------- queue io ----------
 
+class QueueCorrupt(ValueError):
+    """queue.json exists but does not parse — surfaced, never silently replaced."""
+
+
 def load_queue(proj: dict) -> dict:
     """Read queue.json. Retries once on FileNotFoundError — the curator Write tool
     may briefly unlink/truncate the file while restocking after a sweep, and a
@@ -727,7 +736,12 @@ def load_queue(proj: dict) -> dict:
                 if not qp.exists():
                     qp.parent.mkdir(parents=True, exist_ok=True)
                     qp.write_text(json.dumps(EMPTY_QUEUE, indent=2))
-                return json.loads(qp.read_text())
+                try:
+                    return json.loads(qp.read_text())
+                except json.JSONDecodeError as e:
+                    raise QueueCorrupt(
+                        f"{qp} is not valid JSON ({e.msg}, line {e.lineno}) — fix it by hand "
+                        "or move it aside; Kettle will not overwrite it") from None
             except FileNotFoundError:
                 if attempt == 0:
                     continue
@@ -745,9 +759,20 @@ def mutate_queue(proj: dict, fn) -> dict:
         except FileNotFoundError:
             qp.parent.mkdir(parents=True, exist_ok=True)
             q = dict(EMPTY_QUEUE)
+        except json.JSONDecodeError as e:
+            raise QueueCorrupt(
+                f"{qp} is not valid JSON ({e.msg}, line {e.lineno}) — fix it by hand "
+                "or move it aside; Kettle will not overwrite it") from None
         fn(q)
         atomic_write(qp, json.dumps(q, indent=2, ensure_ascii=False))
         return q
+
+
+def _capped(text: str, cap: int, path: Path) -> str:
+    if len(text) <= cap:
+        return text
+    return (text[:cap].rstrip() + f"\n[… truncated at {cap} of {len(text)} characters — "
+            f"read {path} for the rest]")
 
 
 def project_orientation(proj: dict) -> str:
@@ -757,14 +782,17 @@ def project_orientation(proj: dict) -> str:
     Identity lives in these files, not in any one session: any fresh agent that reads
     them IS the curator."""
     desk = desk_dir(proj)
+    # Caps sized to the files' own line budgets (PROJECT/MEMORY ~80 lines, FAMILIARITY
+    # ~120) so the newest rulings at the tail are not silently cut; anything longer is
+    # truncated with a visible marker pointing at the file.
     sections = (
-        ("PROJECT.md", 2500, "Project orientation (PROJECT.md, curator-maintained)"),
-        ("MEMORY.md", 2000, "Curator memory (MEMORY.md — rulings already made and user "
+        ("PROJECT.md", 6000, "Project orientation (PROJECT.md, curator-maintained)"),
+        ("MEMORY.md", 6000, "Curator memory (MEMORY.md — rulings already made and user "
                             "preferences already learned; honor these without re-asking)"),
-        ("FAMILIARITY.md", 3000, "Project familiarity (FAMILIARITY.md — accrued map of this "
+        ("FAMILIARITY.md", 9000, "Project familiarity (FAMILIARITY.md — accrued map of this "
                                  "corpus: families, roles, paths, relationships, pitfalls; "
                                  "use it to write better briefs and deepen it when restocking)"),
-        ("SWEEP-ACTIONS.md", 1500, "Sweep actions (SWEEP-ACTIONS.md — extra work after "
+        ("SWEEP-ACTIONS.md", 3000, "Sweep actions (SWEEP-ACTIONS.md — extra work after "
                                    "archive/restock: outbound stage, egress for dispatch, "
                                    "plaintext sitting logs, sheets, reporting. Never transmit "
                                    "mail/Slack/webhooks from the desk; stage or egress only)"),
@@ -776,7 +804,7 @@ def project_orientation(proj: dict) -> str:
         except OSError:
             continue
         if text:
-            parts.append(f"{label}:\n{text[:cap]}")
+            parts.append(f"{label}:\n{_capped(text, cap, desk / fname)}")
     # Claude curator turns load settings from the user scope only (runtime.
     # CLAUDE_PROJECT_ISOLATION), which also stops the CLI reading the project's own
     # CLAUDE.md. Its conventions still matter to review, so carry the text — never its
@@ -788,7 +816,8 @@ def project_orientation(proj: dict) -> str:
         conventions = ""
     if conventions:
         parts.append("Project instructions (the project's own CLAUDE.md — conventions for "
-                     "agents working in this tree; text only):\n" + conventions[:4000])
+                     "agents working in this tree; text only):\n"
+                     + _capped(conventions, 4000, project_root(proj) / "CLAUDE.md"))
     return "\n\n".join(parts)
 
 
@@ -1022,7 +1051,7 @@ def survey_path(proj: dict) -> Path:
 
 def ensure_founding_survey(proj: dict) -> dict:
     """Build and persist a deterministic survey for the founding interview."""
-    snap = survey_mod.build_survey(project_root(proj))
+    snap = survey_mod.build_survey(project_root(proj), max_depth=proj.get("max_depth"))
     sp = survey_path(proj)
     sp.parent.mkdir(parents=True, exist_ok=True)
     atomic_write(sp, survey_mod.dump(snap))
@@ -1322,11 +1351,26 @@ def register_project(name: str, root: str, kit: str | None = None,
     return proj
 
 
+# What refound keeps. Append-only records are never auto-mutated (ARCHITECTURE.md), so
+# starting founding over resets the charter and the live queue, not the history: who
+# edited what, past sittings, archived batches, staged egress not yet picked up, and the
+# user's own comments and approvals.
+REFOUND_KEEP = frozenset({
+    "working-record.jsonl", "lineage-baseline.json", "lineage.git", "EDITING.md",
+    "sessions", "archive", "outbound",
+})
+REFOUND_KEEP_RUNTIME = frozenset({"comments.log", "approvals.log", "sessions"})
+
+
 def refound_desk(proj: dict) -> dict:
-    """Reset a project's desk to the pristine UNFOUNDED seed so its founding interview runs
-    again on next selection. The whole old desk (charter, memory, runtime, queue, transcript)
-    is copied to a machine-local backup first; the user's founding note is carried into the
-    fresh seed so the rerun keeps their steer."""
+    """Reset a project's desk to the UNFOUNDED seed so its founding interview runs again on
+    next selection. The whole old desk is copied to a machine-local backup first. The
+    charter, memory, familiarity, proposal, queue, session and snapshots are cleared;
+    append-only records (REFOUND_KEEP) stay in place. The user's founding note is carried
+    into the fresh seed so the rerun keeps their steer."""
+    if curator_stream_active(proj):
+        raise RuntimeError("a curator turn is still running on this desk — wait for it to "
+                           "finish (or stop it) before refounding")
     desk = desk_dir(proj)
     note = ""
     sj = desk / "runtime" / "session.json"
@@ -1337,16 +1381,45 @@ def refound_desk(proj: dict) -> dict:
         pass
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     bk = HOME / ".cache" / "kettle-refound-backups" / f"{proj['id']}-{stamp}"
+    kept: list[str] = []
     if desk.exists():
         bk.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copytree(desk, bk)
-        shutil.rmtree(desk)
+        shutil.copytree(desk, bk, symlinks=True)
+        for child in desk.iterdir():
+            if child.name in REFOUND_KEEP:
+                kept.append(child.name)
+                continue
+            if child.name == "runtime" and child.is_dir() and not child.is_symlink():
+                for rchild in child.iterdir():
+                    if rchild.name in REFOUND_KEEP_RUNTIME:
+                        kept.append(f"runtime/{rchild.name}")
+                    elif rchild.is_dir() and not rchild.is_symlink():
+                        shutil.rmtree(rchild)
+                    else:
+                        rchild.unlink()
+                continue
+            if child.is_dir() and not child.is_symlink():
+                shutil.rmtree(child)
+            else:
+                child.unlink()
     rt = desk / "runtime"
     rt.mkdir(parents=True, exist_ok=True)
     atomic_write(rt / "queue.json",
                  json.dumps(dict(EMPTY_QUEUE, curated="awaiting founding curation"), indent=2))
     atomic_write(rt / "session.json", json.dumps({"founding_note": note}, indent=2))
-    return {"ok": True, "backup": str(bk), "note_preserved": bool(note)}
+    return {"ok": True, "backup": str(bk), "note_preserved": bool(note), "kept": sorted(kept)}
+
+
+def _stream_key(root) -> str:
+    try:
+        return str(Path(root).resolve())
+    except OSError:
+        return str(root)
+
+
+def curator_stream_active(proj: dict) -> bool:
+    with SWEEPS_LOCK:
+        return CURATOR_STREAMS.get(_stream_key(project_root(proj)), 0) > 0
 
 
 def project_for_path(p: Path) -> dict | None:
@@ -1964,6 +2037,8 @@ class Handler(BaseHTTPRequestHandler):
                                 "content": p.read_text(encoding="utf-8", errors="replace")})
             else:
                 self.send_json({"error": "not found"}, 404)
+        except QueueCorrupt as e:
+            self.send_err(409, str(e), "queue_corrupt")
         except PermissionError as e:
             self.send_err(403, str(e), "forbidden")
         except FileNotFoundError as e:
@@ -2137,6 +2212,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.open_link(d)
             else:
                 self.send_json({"error": "not found"}, 404)
+        except QueueCorrupt as e:
+            self.send_err(409, str(e), "queue_corrupt")
         except json.JSONDecodeError as e:
             self.send_err(400, str(e), "bad_json")
         except PermissionError as e:
@@ -2546,7 +2623,10 @@ class Handler(BaseHTTPRequestHandler):
         except KeyError:
             self.send_json({"error": f"no such project: {d.get('id')}"}, 400)
             return
-        self.send_json(refound_desk(proj))
+        try:
+            self.send_json(refound_desk(proj))
+        except RuntimeError as e:
+            self.send_err(409, str(e), "busy")
 
     # ---- curator kits: save (fork-on-edit / create) and delete a user kit ----
     def save_kit(self, d):
@@ -2843,6 +2923,9 @@ class Handler(BaseHTTPRequestHandler):
         # From this point the response belongs to the NDJSON stream. Any later failure is
         # represented as stream events; never attempt a second HTTP response.
         has_streamed = True
+        stream_key = _stream_key(cwd)
+        with SWEEPS_LOCK:
+            CURATOR_STREAMS[stream_key] = CURATOR_STREAMS.get(stream_key, 0) + 1
         self.send_response(200)
         self.send_header("Content-Type", "application/x-ndjson; charset=utf-8")
         self.send_header("Cache-Control", "no-cache")
@@ -2990,6 +3073,12 @@ class Handler(BaseHTTPRequestHandler):
                 stop_process()
             if has_streamed and not done_sent:
                 emit({"t": "done"})
+            with SWEEPS_LOCK:
+                left = CURATOR_STREAMS.get(stream_key, 1) - 1
+                if left > 0:
+                    CURATOR_STREAMS[stream_key] = left
+                else:
+                    CURATOR_STREAMS.pop(stream_key, None)
             finish(not failure, failure[0] if failure else None)
 
     # Back-compat alias for tests / older call sites

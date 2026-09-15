@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <!-- Bump this when sitting UI changes; title shows it so we can confirm the shell loaded. -->
-<meta name="kettle-ui" content="2026-09-15c">
-<title>kettle · ui-2026-09-15c</title>
+<meta name="kettle-ui" content="2026-09-15d">
+<title>kettle · ui-2026-09-15d</title>
 <style>
   /*
    * Type & chrome roles — single source of sitting hierarchy.
@@ -7153,7 +7153,19 @@ async function loadProject(pid, opts){
     addMsg(m.cls, m.text);
   }
   restoring = false;
-  const qData = await jget('/api/queue?project=' + encodeURIComponent(pid));
+  let qData;
+  try {
+    qData = await jget('/api/queue?project=' + encodeURIComponent(pid));
+  } catch(err){
+    // One broken desk (unparseable queue.json, a moved folder) must not take down the
+    // whole sitting: say what is wrong here and leave the other projects usable.
+    if(PROJECT !== pid) return;
+    Q = {curated: '', entries: []};
+    renderQueue();
+    renderInfo(null);
+    addMsg('err', 'this desk could not load: ' + err);
+    return;
+  }
   // an unfounded desk opens the founding interview in the agent chat
   let ivst = {status: 'none'};
   try { ivst = await jget('/api/interview?project=' + encodeURIComponent(pid)); } catch(e){}

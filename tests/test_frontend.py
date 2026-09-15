@@ -218,7 +218,7 @@ class ViewportRitualRegressionBar(unittest.TestCase):
         stream = function_source(html, "pipeStream")
         self.assertIn("fillAgentMarkdown", stream)
         self.assertRegex(html, r"\.msg\.agent\.md\s*\{")
-        self.assertIn("ui-2026-09-15c", html)
+        self.assertIn("ui-2026-09-15d", html)
 
     def test_markdown_is_sanitized_as_a_string_before_it_reaches_the_dom(self):
         """Assigning marked output to innerHTML and cleaning the node afterwards is
@@ -274,6 +274,12 @@ class ViewportRitualRegressionBar(unittest.TestCase):
         self.assertIn("reload", err)
         for name in ("jget", "jpost"):
             self.assertIn("apiErrorText(r)", self.function(name))
+
+    def test_one_broken_desk_does_not_fail_the_sitting_boot(self):
+        load = self.function("loadProject")
+        i = load.index("jget('/api/queue?project='")
+        self.assertIn("try {", load[max(0, i - 80):i])
+        self.assertIn("this desk could not load", load)
 
     def test_confirmation_card_is_blank_for_the_user(self):
         parse = self.function("parseConfirmCard")

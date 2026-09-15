@@ -65,6 +65,18 @@ and Desk schema have their own integer contract versions.
   proposal stays open, and a missing proposal entry is re-filed. A propose turn cannot found
   the desk. A chat session opened before the interview is not resumed as the interview.
 - Founding prompts refer to the founding-sentence block as *above* (it leads the prompt).
+- Refound keeps append-only records (`working-record.jsonl`, lineage baseline, `sessions/`,
+  `archive/`, `outbound/`, `runtime/comments.log`, `runtime/approvals.log`) and clears only
+  the charter, memory, proposal, queue, session and snapshots; it is refused (409 `busy`)
+  while a curator turn is streaming on that desk.
+- The founding survey honors the project's `max_depth` for git's most-changed paths and the
+  filesystem recency walk, skips that walk when git history answers recency, and reports
+  its recency counts cumulatively ("N in the last 7 days" now includes the last 24h).
+- Curator orientation caps fit the files' line budgets (PROJECT/MEMORY 6000 characters,
+  FAMILIARITY 9000) and mark any truncation, so the newest rulings are not silently cut.
+- A desk whose `queue.json` does not parse is reported (409 `queue_corrupt`) and never
+  overwritten; a project folder that was moved or deleted is reported (404) instead of being
+  recreated by `mkdir -p`; one broken desk no longer fails the sitting's boot.
 - A missing or non-executable curator CLI is reported by name with a fix
   (`curator_unavailable`, 500, before any stream) instead of a traceback from `kettle chat` /
   `kettle found` or a made-up `~/.local/bin/claude` path; the CLI is resolved per turn, so
