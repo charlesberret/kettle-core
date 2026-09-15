@@ -182,6 +182,34 @@ class CloseTests(SweepkitBase):
 
 
 class ArchiveTests(SweepkitBase):
+    def test_each_archive_pass_writes_its_own_file(self):
+        """Sweeps run several times a day: a pass never merges into (or overwrites)
+        an earlier archive, even one that no longer parses."""
+        arch = server.desk_dir(self.proj()) / "archive"
+        arch.mkdir(parents=True, exist_ok=True)
+        corrupt = arch / "2026-01-01-000000-batch.json"
+        corrupt.write_text("{not json")
+        self.write_queue([{"id": "a", "path": "doc.md", "status": "approved"}])
+        first = sweepkit.archive_queue(self.proj())
+        self.write_queue([{"id": "b", "path": "doc.md", "status": "approved"}])
+        second = sweepkit.archive_queue(self.proj())
+        self.assertNotEqual(first["archive_path"], second["archive_path"])
+        self.assertEqual(corrupt.read_text(), "{not json")
+        a = json.loads(Path(first["archive_path"]).read_text())
+        b = json.loads(Path(second["archive_path"]).read_text())
+        self.assertEqual([e["id"] for e in a["entries"]], ["a"])
+        self.assertEqual([e["id"] for e in b["entries"]], ["b"])
+
+    def test_archiving_retires_the_entries_comments(self):
+        log = server.comments_log_path(self.proj())
+        log.write_text("2026-06-29\ta\trename Foo\n2026-06-29\tb\tkeep me\n")
+        self.write_queue([{"id": "a", "path": "doc.md", "status": "approved"},
+                          {"id": "b", "path": "doc.md", "status": "pending"}])
+        sweepkit.archive_queue(self.proj(), only_approved=True)
+        left = server.parse_comments_log(log)
+        self.assertNotIn("a", left)
+        self.assertIn("b", left)
+
     def test_archive_by_ids(self):
         self.write_queue([
             {"id": "a", "path": "doc.md", "status": "approved"},

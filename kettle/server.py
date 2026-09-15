@@ -142,17 +142,23 @@ def sitting_csp(body: bytes) -> str:
     hash bump). Anything a rendered file or agent reply manages to inject — an
     <img onerror>, a <script>, a javascript: link — is refused by the browser even
     if the sanitizer misses it. Styles stay 'unsafe-inline' (the sitting uses style
-    attributes); style injection cannot run code or read the token.
+    attributes); style injection cannot run code or read the token. Remote images are
+    refused, so a document cannot beacon out when it is opened.
     """
+    # Browsers normalize CRLF / lone CR to LF before hashing an inline script, so a
+    # checkout with CRLF line endings must hash the normalized text or the sitting blanks.
+    text = body.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
     hashes = " ".join(
         "'sha256-" + base64.b64encode(hashlib.sha256(m.group(1)).digest()).decode() + "'"
-        for m in _INLINE_SCRIPT_RE.finditer(body)
+        for m in _INLINE_SCRIPT_RE.finditer(text)
     )
     return "; ".join([
         "default-src 'self'",
         f"script-src 'self' {hashes}".rstrip(),
         "style-src 'self' 'unsafe-inline'",
-        "img-src 'self' data: https: http:",
+        # No remote images: an <img> in a registered document would report the reader's
+        # IP and the moment they opened it (a canary). Kettle never transmits.
+        "img-src 'self' data:",
         "font-src 'self'",
         "connect-src 'self'",
         "object-src 'none'",
@@ -161,6 +167,8 @@ def sitting_csp(body: bytes) -> str:
         "frame-ancestors 'none'",
     ])
 QUEUE_LOCK = threading.Lock()
+SWEEPS_LOCK = threading.Lock()
+SWEEPS_IN_FLIGHT: set[str] = set()  # project ids with a sweep stream open in this process
 SETTINGS_LOCK = threading.Lock()
 PROJECTS_LOCK = threading.Lock()
 DEFAULT_CURATOR_IDLE_TIMEOUT_S = 300.0
@@ -577,12 +585,21 @@ def comments_log_path(proj: dict) -> Path:
     return runtime_dir(proj) / "comments.log"
 
 
+# A comments.log line whose text is `[kettle:closed through N]` retires that entry's
+# comments on physical lines < N. The log stays append-only; a sweep that consumed the
+# comments (or a user clearing a note) appends the marker instead of editing lines, so a
+# file that returns to the queue later does not replay settled direction.
+_COMMENTS_CLOSED_RE = re.compile(r"^\[kettle:closed through (\d+)\]$")
+
+
 def parse_comments_log(path: Path) -> dict[str, list[dict[str, str]]]:
-    """Parse runtime/comments.log → entry-id → [{date, text}, …] (append order preserved)."""
-    out: dict[str, list[dict[str, str]]] = {}
+    """Parse runtime/comments.log → entry-id → [{date, text}, …] (append order preserved).
+
+    Comments retired by a close marker are omitted."""
+    out: dict[str, list[dict]] = {}
     if not path.is_file():
         return out
-    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+    for idx, line in enumerate(path.read_text(encoding="utf-8", errors="replace").splitlines()):
         line = line.strip()
         if not line or line.startswith("#"):
             continue
@@ -590,9 +607,41 @@ def parse_comments_log(path: Path) -> dict[str, list[dict[str, str]]]:
         if len(parts) < 3:
             continue
         entry_id, text = parts[1].strip(), parts[2].strip()
-        if entry_id and text:
-            out.setdefault(entry_id, []).append({"date": parts[0].strip(), "text": text})
-    return out
+        if not (entry_id and text):
+            continue
+        m = _COMMENTS_CLOSED_RE.match(text)
+        if m:
+            through = int(m.group(1))
+            kept = [r for r in out.get(entry_id, []) if r["_line"] >= through]
+            if kept:
+                out[entry_id] = kept
+            else:
+                out.pop(entry_id, None)
+            continue
+        out.setdefault(entry_id, []).append({"date": parts[0].strip(), "text": text, "_line": idx})
+    return {eid: [{"date": r["date"], "text": r["text"]} for r in rows]
+            for eid, rows in out.items()}
+
+
+def comments_log_line_count(proj: dict) -> int:
+    """Physical line count of comments.log — the `through` bound for a close marker."""
+    path = comments_log_path(proj)
+    try:
+        return len(path.read_text(encoding="utf-8", errors="replace").splitlines())
+    except FileNotFoundError:
+        return 0
+
+
+def close_comments(proj: dict, entry_ids, through: int | None = None) -> None:
+    """Retire comments for entry_ids written before line `through` (default: all so far)."""
+    ids = [str(i) for i in entry_ids if str(i or "").strip()]
+    if not ids:
+        return
+    bound = comments_log_line_count(proj) if through is None else int(through)
+    ts = date.today().isoformat()
+    with comments_log_path(proj).open("a", encoding="utf-8") as f:
+        for eid in ids:
+            f.write(f"{ts}\t{eid}\t[kettle:closed through {bound}]\n")
 
 
 def enrich_queue_comments(proj: dict, q: dict) -> None:
@@ -716,6 +765,18 @@ def project_orientation(proj: dict) -> str:
             continue
         if text:
             parts.append(f"{label}:\n{text[:cap]}")
+    # Claude curator turns load settings from the user scope only (runtime.
+    # CLAUDE_PROJECT_ISOLATION), which also stops the CLI reading the project's own
+    # CLAUDE.md. Its conventions still matter to review, so carry the text — never its
+    # hooks or settings — for every provider.
+    try:
+        conventions = (project_root(proj) / "CLAUDE.md").read_text(
+            encoding="utf-8", errors="replace").strip()
+    except OSError:
+        conventions = ""
+    if conventions:
+        parts.append("Project instructions (the project's own CLAUDE.md — conventions for "
+                     "agents working in this tree; text only):\n" + conventions[:4000])
     return "\n\n".join(parts)
 
 
@@ -1475,6 +1536,8 @@ def admin_report(active_pid: str | None) -> dict:
         "sentinel": None,
         "events": None,
         "watcher": None,
+        # Kettle's own folder-watcher beacon (kettle_watch.py) — always reported.
+        "watch_health": _read_json(HOME / ".cache" / "kettle" / "watch-health.json") or None,
     }
     if fleet:
         health = _read_json(CACHE / "inventory-health.json")
@@ -1869,6 +1932,8 @@ class Handler(BaseHTTPRequestHandler):
                 if text:
                     with (runtime_dir(proj) / "comments.log").open("a") as f:
                         f.write(f"{ts}\t{d['id']}\t{text.replace(chr(10), ' / ')}\n")
+                else:
+                    close_comments(proj, [d["id"]])  # a cleared note is retracted, not replayed
                 self.send_json({"ok": True, "comment": text})
             elif url.path == "/api/clear-session":
                 proj = get_project(d.get("project"))
@@ -2127,10 +2192,24 @@ class Handler(BaseHTTPRequestHandler):
 
     def sweep(self, d):
         proj = get_project(d.get("project"))
+        with SWEEPS_LOCK:
+            if proj["id"] in SWEEPS_IN_FLIGHT:
+                self.stream_idle("A sweep is already running for this desk — wait for it to finish.")
+                return
+            SWEEPS_IN_FLIGHT.add(proj["id"])
+        try:
+            self._sweep(proj, d)
+        finally:
+            with SWEEPS_LOCK:
+                SWEEPS_IN_FLIGHT.discard(proj["id"])
+
+    def _sweep(self, proj, d):
         ledger = proj.get("ledger") or "(no ledger configured — queue/approvals only)"
         rd = runtime_dir(proj)
         cl_path = comments_log_path(proj)
         stamp = datetime.now().strftime("%Y-%m-%d-%H%M%S")
+        last = sweepkit.read_sweep_health(proj)
+        interrupted = last.get("state") in ("running", "failed")
         status = sweepkit.assess_close(proj)
         close: dict = {"ok": False, "action": "skipped", "status": status}
         if status.get("can_mechanical_close"):
@@ -2139,10 +2218,25 @@ class Handler(BaseHTTPRequestHandler):
         # Fully idle, or quiet inbox close with nothing left to accrue → no curator spawn
         st = close.get("status") or status
         if st.get("fully_idle"):
-            self.stream_idle("Nothing to sweep — queue empty and quiet.")
-            return
+            if interrupted and st.get("needs_accrue"):
+                # The previous sweep closed the queue and then died before restocking.
+                # An empty quiet queue is its wreckage, not an idle desk: restock now.
+                close = {
+                    "ok": True, "action": "resume_interrupted_sweep",
+                    "needs_accrue": True, "interrupted_sweep": last,
+                    "session_log": last.get("session_log") or "",
+                }
+            else:
+                note = ""
+                if interrupted:
+                    note = (f" (last sweep did not finish: {last.get('error') or last.get('state')}"
+                            f" at {last.get('updated', '?')})")
+                self.stream_idle("Nothing to sweep — queue empty and quiet." + note)
+                return
         if close.get("ok") and close.get("action") == "mechanical_close" and not close.get("needs_accrue"):
             n = len((close.get("archived") or {}).get("archived") or [])
+            sweepkit.write_sweep_health(proj, state="done", phase="close", stamp=stamp,
+                                        session_log=close.get("session_log") or "")
             self.stream_idle(
                 f"Quiet close complete ({n} entr{'y' if n == 1 else 'ies'} archived"
                 + ("; inbox drafts staged" if (close.get("staged") or {}).get("staged") else "")
@@ -2162,7 +2256,8 @@ class Handler(BaseHTTPRequestHandler):
                 session_log=close.get("session_log") or "",
             )
             prompt += "\n\n---\nCLOSE KIT RESULT:\n" + json.dumps(
-                {k: close[k] for k in ("action", "archived", "staged", "session_log", "needs_accrue")
+                {k: close[k] for k in ("action", "archived", "staged", "session_log", "needs_accrue",
+                                       "interrupted_sweep")
                  if k in close}, indent=2)
             prompt += "\n---\n"
         else:
@@ -2254,8 +2349,26 @@ class Handler(BaseHTTPRequestHandler):
                 kw["model"] = m
             save_session(proj, **kw)
 
+        # The comments this prompt carried are consumed only if the curator finishes.
+        shown_ids = [e.get("id") for e in queue_entries if e.get("id")]
+        comments_through = comments_log_line_count(proj)
+        phase = "accrue" if accrue_only else "sweep"
+        started = sweepkit.write_sweep_health(
+            proj, state="running", phase=phase, stamp=stamp, pid=os.getpid(),
+            session_log=close.get("session_log") or "",
+        )
+
+        def on_finish(outcome):
+            sweepkit.write_sweep_health(
+                proj, state="done" if outcome["ok"] else "failed", phase=phase,
+                stamp=stamp, started=started["updated"], exit=outcome.get("exit"),
+                error=outcome.get("error"), session_log=close.get("session_log") or "",
+            )
+            if outcome["ok"] and shown_ids:
+                close_comments(proj, shown_ids, through=comments_through)
+
         self.run_curator(cmd, str(project_root(proj)), prior_sid=sid, persist=persist,
-                         role="sweep")
+                         role="sweep", on_finish=on_finish)
 
     # ---- add project: registry append + desk seed ----
     def add_project(self, d):
@@ -2572,7 +2685,7 @@ class Handler(BaseHTTPRequestHandler):
         mark_founded_if_filed(proj)
 
     def run_curator(self, cmd, cwd, prior_sid=None, persist=None, record_user_message=None,
-                    role="agent", notice=None):
+                    role="agent", notice=None, on_finish=None):
         """Spawn the active curator CLI; forward normalized events as ndjson to the client.
 
         Stream parsing, usage accounting, and transcript capture live in `runtime.py` —
@@ -2582,9 +2695,23 @@ class Handler(BaseHTTPRequestHandler):
         append the turn to the desk's own ledger at `<root>/.kettle/sessions/<id>.jsonl`
         — so continuity is the desk's, not the agent process's. Event shapes are unchanged
         (model/text/tool/done/error); `usage` is additive and ignored by older frontends;
-        `done.ctx` is now true single-call occupancy, not the turn's summed aggregate."""
+        `done.ctx` is now true single-call occupancy, not the turn's summed aggregate.
+
+        `on_finish(outcome)` (optional) is called exactly once with
+        `{"ok": bool, "exit": int | None, "error": str | None}` — ok only when the CLI
+        exited cleanly, reported no error event, and the client stayed to the end."""
         proc = None
         has_streamed = False
+
+        def finish(ok: bool, error: str | None) -> None:
+            if on_finish is None:
+                return
+            try:
+                on_finish({"ok": ok, "error": error,
+                           "exit": proc.returncode if proc is not None else None})
+            except Exception:  # noqa: BLE001 — bookkeeping must not break the stream
+                pass
+
         try:
             # stderr merged into stdout: a second unread pipe can deadlock the CLI mid-stream
             proc = subprocess.Popen(
@@ -2592,6 +2719,7 @@ class Handler(BaseHTTPRequestHandler):
                 env=runtime.curator_env(),
             )
         except Exception as exc:  # noqa: BLE001 — executable missing / spawn refused
+            finish(False, f"curator failed to start: {exc}")
             self.send_err(500, f"curator failed to start: {exc}", "internal")
             return
 
@@ -2611,6 +2739,7 @@ class Handler(BaseHTTPRequestHandler):
         cap = {"sid": prior_sid, "text": [], "tools": [], "edits": []}
         noise: list[str] = []  # non-JSON CLI chatter (e.g. Grok resume 404)
         saw_error_evt = False
+        failure: list[str] = []  # first reason this turn did not complete cleanly
         done_sent = False
         pending_done = None
         client_gone = False
@@ -2686,11 +2815,13 @@ class Handler(BaseHTTPRequestHandler):
                         cap["edits"].append(evt["path"])
                 elif evt["t"] == "error":
                     saw_error_evt = True
+                    failure.append(str(evt.get("s") or "curator reported an error"))
                 if evt["t"] == "done":
                     pending_done = evt
                     break
                 if not emit(evt):  # client gone
                     client_gone = True
+                    failure.append("client disconnected; curator stopped")
                     stop_process()
                     break
             if not client_gone:
@@ -2703,14 +2834,19 @@ class Handler(BaseHTTPRequestHandler):
                 )
                 msg = (f"{detail} (exit {proc.returncode})" if detail
                        else f"curator exited {proc.returncode}")
+                failure.append(msg)
                 emit({"t": "error", "s": msg})
+            elif proc.returncode not in (0, None):
+                failure.append(f"curator exited {proc.returncode}")
             emit(pending_done or {"t": "done"})
         except TimeoutError as exc:
+            failure.append(str(exc))
             stop_process()
             if has_streamed:
                 emit({"t": "error", "s": str(exc)})
                 emit({"t": "done"})
         except Exception as e:  # noqa: BLE001
+            failure.append(str(e) or type(e).__name__)
             stop_process()
             if has_streamed:
                 emit({"t": "error", "s": str(e)})
@@ -2733,9 +2869,11 @@ class Handler(BaseHTTPRequestHandler):
                 except OSError:
                     pass
             if proc.poll() is None:
+                failure.append("curator still running at stream end; stopped")
                 stop_process()
             if has_streamed and not done_sent:
                 emit({"t": "done"})
+            finish(not failure, failure[0] if failure else None)
 
     # Back-compat alias for tests / older call sites
     run_claude = run_curator

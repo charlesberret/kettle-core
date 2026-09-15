@@ -1,0 +1,2 @@
+# The sitting's CSP pins inline scripts by hash; keep line endings stable.
+kettle/static/*.html text eol=lf

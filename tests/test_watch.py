@@ -150,6 +150,10 @@ class IntakePassTest(unittest.TestCase):
         self.assertEqual(cmd[0], w.CLAUDE)
         self.assertIn("--add-dir", cmd)
         self.assertIn(str(self.source.resolve()), cmd[cmd.index("-p") + 1])
+        self.assertEqual(cmd[cmd.index("--setting-sources") + 1], "user")
+        self.assertIn("--strict-mcp-config", cmd)
+        self.assertFalse(any(str(a).startswith(("Bash(rg", "Bash(fd", "Bash(find")) for a in cmd))
+        self.assertNotIn("GEMINI_CLI_TRUST_WORKSPACE", kwargs["env"])
         self.assertEqual(kwargs["cwd"], str(self.root))
         self.assertEqual(kwargs["timeout"], 900)
 
@@ -210,6 +214,21 @@ class MainTest(unittest.TestCase):
         self.assertEqual(set(json.loads(w.STATE.read_text())), {"one", "two"})
         health = json.loads(w.HEALTH.read_text())
         self.assertEqual((health["status"], health["curated"]), ("ok", 3))
+
+    def test_main_final_beacon_keeps_a_project_failure(self):
+        """A per-project error must survive the end-of-run beacon (it used to be
+        overwritten with status ok)."""
+        w.PROJECTS.write_text(json.dumps({"projects": [
+            {"id": "one", "name": "One", "root": str(self.tmp)},
+            {"id": "two", "name": "Two", "root": str(self.tmp)},
+        ]}))
+        with mock.patch.object(w, "intake_pass", side_effect=[RuntimeError("disk gone"), 1]):
+            code = w.main()
+        self.assertEqual(code, 1)
+        health = json.loads(w.HEALTH.read_text())
+        self.assertEqual(health["status"], "error")
+        self.assertIn("one: disk gone", health["error"])
+        self.assertEqual(health["curated"], 1)
 
     def test_main_missing_curator_fails_with_healthbeacon(self):
         w.CLAUDE = str(self.tmp / "missing-curator")

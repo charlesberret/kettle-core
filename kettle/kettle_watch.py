@@ -12,10 +12,12 @@ Self-contained — standard library, the sibling core modules, and the `claude` 
                    legacy user path, then a source-checkout registry).
   - State + health: ~/.cache/kettle/ (watch-state.json, watch-health.json).
 
-Cron example (with an editable install of kettle):
-  */15 * * * *  /path/to/venv/bin/python /path/to/kettle/kettle_watch.py
-or, since it installs a console script:
-  */15 * * * *  kettle-watch
+Cron example (the installed console script, or the module; running this file directly
+fails on its package-relative imports):
+  */15 * * * *  /path/to/venv/bin/kettle-watch
+  */15 * * * *  /path/to/venv/bin/python -m kettle.kettle_watch
+
+Exit status is 1 when any project failed this run; watch-health.json keeps the error.
 """
 
 import json
@@ -33,6 +35,7 @@ try:
 except ImportError:
     kits = None
 from .server import resolve_projects_path
+from .runtime import CLAUDE_FOREIGN_AGENT_CONFIG_DENY, CLAUDE_PROJECT_ISOLATION, curator_env
 
 HOME = Path.home()
 PROJECTS = resolve_projects_path()
@@ -76,9 +79,14 @@ Do exactly this, in order:
 Do nothing else. Finish with a one-line summary naming the item and the urgency you assigned."""
 
 
+_RUN_ERRORS: list[str] = []   # every error logged during this run; main() reports them last
+
+
 def log_health(curated: int, status: str = "ok", error_msg: str | None = None) -> None:
     """Self-contained healthbeacon — a one-object JSON the operator (or a dashboard) can read to
     see the watcher is alive and what it did. No external logging library."""
+    if status == "error" and error_msg and error_msg not in _RUN_ERRORS:
+        _RUN_ERRORS.append(error_msg)
     CACHE.mkdir(parents=True, exist_ok=True)
     rec = {"last_run": datetime.now().isoformat(timespec="seconds"),
            "curated": curated, "status": status}
@@ -214,11 +222,15 @@ def intake_pass(proj: dict, st: dict, settings: dict) -> int:
         cmd = [CLAUDE, "-p", prompt, "--output-format", "json",
                "--permission-mode", "acceptEdits",
                "--add-dir", str(watch),           # the source item may sit outside the project fence
+               "--tools", "Bash,Edit,Glob,Grep,Read,Write",
                "--allowedTools", "Read", "Glob", "Grep", "Edit", "Write",
-               "Bash(ls:*)", "Bash(cat:*)", "Bash(rg:*)", "Bash(fd:*)",
-               "--disallowedTools", "NotebookEdit"]
+               "Bash(ls:*)", "Bash(cat:*)",
+               "--disallowedTools", "NotebookEdit", *CLAUDE_FOREIGN_AGENT_CONFIG_DENY,
+               # the project's own .claude hooks / .mcp.json must not run (runtime.py)
+               *CLAUDE_PROJECT_ISOLATION]
         try:
-            r = subprocess.run(cmd, cwd=str(root), capture_output=True, text=True, timeout=900)
+            r = subprocess.run(cmd, cwd=str(root), capture_output=True, text=True, timeout=900,
+                               env=curator_env())
         except subprocess.TimeoutExpired:
             log_health(curated, status="error", error_msg=f"{proj['id']}: curate timed out on {src.name}")
             break
@@ -247,6 +259,7 @@ def main() -> int:
 
     settings = _load_settings()
     state = json.loads(STATE.read_text()) if STATE.exists() else {}
+    _RUN_ERRORS.clear()
     curated = 0
     for proj in projects:
         st = state.setdefault(proj["id"], {})
@@ -257,6 +270,12 @@ def main() -> int:
 
     CACHE.mkdir(parents=True, exist_ok=True)
     STATE.write_text(json.dumps(state, indent=2))
+    if _RUN_ERRORS:
+        # the final beacon must not overwrite a project's failure with "ok"
+        log_health(curated, status="error", error_msg="; ".join(_RUN_ERRORS))
+        sys.stderr.write(f"kettle-watch: curated {curated} new item(s); errors: "
+                         + "; ".join(_RUN_ERRORS) + "\n")
+        return 1
     log_health(curated)
     sys.stderr.write(f"kettle-watch: curated {curated} new item(s)\n")
     return 0

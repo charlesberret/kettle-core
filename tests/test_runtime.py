@@ -10,6 +10,7 @@ cache re-reads into the context bar so it sails past the window) so it can't ret
 """
 import io
 import os
+import re
 import json
 import tempfile
 import unittest
@@ -571,6 +572,19 @@ class TestProviderCapabilities(unittest.TestCase):
                 for rule in ("Write(.gemini/**)", "Edit(.gemini/**)",
                              "Write(.codex/**)", "Edit(.codex/**)"):
                     self.assertIn(rule, deny)
+
+    def test_no_tier_allows_a_shell_command_that_runs_other_programs(self):
+        """A prefix allowlist is only as strong as its weakest binary: `rg --pre`,
+        `fd -x`, `find -exec`, `awk system()`, `sed e`, `sort --compress-program`
+        each run arbitrary code (rg --pre verified under the chat tier)."""
+        exec_capable = {"rg", "fd", "find", "awk", "sed", "sort", "xargs", "env",
+                        "python", "python3", "node", "perl", "ruby", "sh", "bash", "zsh"}
+        for tier, (_mode, allow, _deny) in runtime.TOOL_TIERS.items():
+            for rule in allow:
+                m = re.match(r"Bash\((\S+?)[: ]", str(rule))
+                if m:
+                    with self.subTest(tier=tier, rule=rule):
+                        self.assertNotIn(m.group(1), exec_capable)
 
     def test_custom_cli_provider_does_not_get_claude_only_flags(self):
         for tier in ("interview", "chat", "sweep"):

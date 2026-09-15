@@ -437,33 +437,35 @@ class SessionLedger:
 
 # Shell parts allowed under each tier. Claude needs each Bash(…) atomically;
 # Grok receives the same rule strings via --allow.
+#
+# No command that can run another program: `rg --pre`, `fd -x`, `find -exec`,
+# `awk 'BEGIN{system()}'`, `sed e` and `sort --compress-program` each turn a prefix
+# allowlist into arbitrary execution (verified 2026-09-15: `rg --pre ./x.sh` ran under
+# the chat tier with no denial). Search and listing go through the built-in Grep and
+# Glob tools; text changes go through Edit.
 SHELL_KIT = [
     "Bash(ls:*)", "Bash(cat:*)", "Bash(head:*)", "Bash(tail:*)", "Bash(echo:*)",
-    "Bash(rg:*)", "Bash(grep:*)", "Bash(fd:*)", "Bash(find:*)", "Bash(wc:*)",
-    # sed/awk are text transformers, but `sed -i` and awk's `print > file` write
-    # arbitrary paths — same trusted-not-fenced caveat as SHELL_SWEEP below.
-    "Bash(sed:*)", "Bash(awk:*)", "Bash(sort:*)", "Bash(uniq:*)", "Bash(diff:*)",
+    "Bash(grep:*)", "Bash(wc:*)", "Bash(uniq:*)", "Bash(diff:*)",
     "Bash(date:*)", "Bash(basename:*)", "Bash(dirname:*)", "Bash(mkdir:*)",
 ]
 
 SHELL_CHAT = [
-    "Bash(ls:*)", "Bash(cat:*)", "Bash(head:*)", "Bash(tail:*)",
-    "Bash(rg:*)", "Bash(fd:*)", "Bash(find:*)", "Bash(wc:*)",
+    "Bash(ls:*)", "Bash(cat:*)", "Bash(head:*)", "Bash(tail:*)", "Bash(wc:*)",
 ]
 
 SHELL_SWEEP = [
-    "Bash(ls:*)", "Bash(cat:*)", "Bash(rg:*)", "Bash(fd:*)", "Bash(find:*)",
-    "Bash(diff:*)",
+    "Bash(ls:*)", "Bash(cat:*)", "Bash(diff:*)",
     # Restock/archive often shells through when Write is sticky — keep these tight.
     "Bash(mkdir:*)", "Bash(mv:*)", "Bash(cp:*)", "Bash(rm:*)", "Bash(tee:*)",
     # python/python3 removed 2026-07-20 (user ruling). Evidence: no prompt under
     # kits/ ever referenced them, and an interpreter is the widest possible escape —
     # one line writes anywhere the user can.
     #
-    # HONEST RESIDUAL: what remains still takes arbitrary paths (rm/mv/cp/tee), as do
-    # sed/awk in SHELL_KIT. A tool allowlist constrains WHICH binaries run, never WHERE
-    # they write, so every shell-bearing tier is TRUSTED, NOT FENCED. Real enforcement
-    # needs an OS sandbox around the curator process — docs/briefs/19-enforce-the-fence.md.
+    # HONEST RESIDUAL: what remains still takes arbitrary paths (rm/mv/cp/tee), and
+    # Claude's acceptEdits auto-approves filesystem commands even outside this list. A
+    # tool allowlist constrains WHICH binaries run, never WHERE they write, so every
+    # shell-bearing tier is TRUSTED, NOT FENCED. Real enforcement needs an OS sandbox
+    # around the curator process — docs/briefs/19-enforce-the-fence.md.
 ]
 
 # Interview is tool-less: core precomputes a survey snapshot (survey.py) and injects it.

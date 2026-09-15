@@ -46,6 +46,20 @@ and Desk schema have their own integer contract versions.
   packs via Appearance or `POST /api/themes/install`.
 - Sitting source view uses shared syntax role classes aligned with the CLI.
 
+- Sweep crash-safety: every sweep that spawns a curator writes
+  `runtime/sweep-health.json` (`running` → `done`/`failed`). An empty, quiet queue left
+  by a sweep that closed and then died now restocks instead of reporting "Nothing to
+  sweep" forever. A second sweep on the same desk is refused while one is streaming.
+- Batch archives are one file per pass (`archive/<YYYY-MM-DD-HHMMSS>-batch.json`,
+  suffixed on collision) and are never merged into or overwritten; entries are selected
+  under the queue lock so a concurrent approve or intake entry is not dropped.
+- `comments.log` stays append-only but comments are retired once consumed: a completed
+  sweep or an archive appends `[kettle:closed through N]` markers, and clearing a note
+  retracts its history. A file returning to the queue no longer replays settled direction.
+- `kettle-watch` exits 1 and keeps `status: error` in `watch-health.json` when any project
+  failed (the final beacon used to overwrite errors with `ok`). The admin report exposes
+  that beacon as `watch_health`.
+
 ### Compatibility
 
 - Existing `.setsweep/` Desks are used in place when no `.kettle/` Desk exists.
@@ -78,8 +92,17 @@ and Desk schema have their own integer contract versions.
   tier now passes `--setting-sources user --strict-mcp-config`; the interview also
   passes `--tools ""` (plan mode alone left 34 built-in tools and all user MCP
   connectors); write tiers name their built-ins with `--tools` (no WebFetch, WebSearch
-  or Task) and deny writes to `.gemini/**` and `.codex/**`. Curator children never
-  inherit `GEMINI_CLI_TRUST_WORKSPACE`. Custom `cli` providers are unchanged.
+  or Task) and deny the Write/Edit tools on `.gemini/**` and `.codex/**`. The folder
+  watcher's curate turn gets the same isolation. Curator children never inherit
+  `GEMINI_CLI_TRUST_WORKSPACE`. Custom `cli` providers are unchanged. The project's
+  `CLAUDE.md` now reaches curators as prompt text in the orientation block.
+- Shell allowlists no longer include commands that can run other programs (`rg`, `fd`,
+  `find`, `awk`, `sed`, `sort`): `rg --pre ./script` executed under the chat tier. Use
+  the built-in Grep/Glob/Edit tools. Shell-bearing tiers remain trusted, not fenced —
+  Claude's `acceptEdits` also auto-approves ordinary filesystem commands.
+- The sitting refuses remote images (`img-src 'self' data:`), so a registered
+  document cannot report when it is opened. CSP hashes are computed on
+  LF-normalized HTML, and `.gitattributes` pins `kettle/static/*.html` to LF.
 
 ## 0.2.0
 

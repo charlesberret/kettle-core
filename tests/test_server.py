@@ -29,6 +29,7 @@ from pathlib import Path
 
 import kettle.server as server
 import kettle.kettle_contract as kettle_contract
+import kettle.sweepkit as sweepkit
 
 
 def _auth_headers(extra=None):
@@ -502,6 +503,15 @@ class HelperTests(Base):
         self.assertIn("D10", prompt)  # old brief still listed for rewrite
         self.assertIn(str(server.queue_path(proj)), prompt)
 
+    def test_project_orientation_carries_the_projects_claude_md_text(self):
+        """Claude curator turns ignore project settings (and with them CLAUDE.md), so
+        the conventions reach the curator as prompt text instead."""
+        proj = self.proj()
+        (server.project_root(proj) / "CLAUDE.md").write_text("Use Oxford commas.\n")
+        orientation = server.project_orientation(proj)
+        self.assertIn("Use Oxford commas.", orientation)
+        self.assertIn("text only", orientation)
+
     def test_sweep_precomputed_context_includes_diffs(self):
         (self.root / "alpha.md").write_text("alpha body\n")
         (self.root / "beta.md").write_text("beta body\n")
@@ -972,6 +982,18 @@ class EndpointTests(Base):
         self.assertEqual(m["alpha"], [{"date": "2026-06-29", "text": "note one"},
                                        {"date": "2026-06-29", "text": "note two"}])
         self.assertEqual(m["beta"], [{"date": "2026-06-28", "text": "other note"}])
+
+    def test_comments_close_marker_retires_only_earlier_lines(self):
+        p = self.tmp / "comments.log"
+        p.write_text(
+            "2026-06-29\talpha\told note\n"
+            "2026-06-29\tbeta\tbeta note\n"
+            "2026-06-30\talpha\tlate note\n"
+            "2026-06-30\talpha\t[kettle:closed through 2]\n"
+        )
+        m = server.parse_comments_log(p)
+        self.assertEqual(m["alpha"], [{"date": "2026-06-30", "text": "late note"}])
+        self.assertEqual(m["beta"], [{"date": "2026-06-29", "text": "beta note"}])
 
     def test_comment_appends_to_comments_log(self):
         _http("POST", f"{self.base}/api/comment", {"project": "t", "id": "alpha", "text": "fix TKs"})
@@ -1899,6 +1921,70 @@ class EndpointTests(Base):
         self.assertEqual(s, 200)
         self.assertIn("swept", body)
 
+    def test_failed_sweep_leaves_a_failed_beacon_and_keeps_comments_binding(self):
+        server.comments_log_path(self.proj()).write_text("2026-06-29\talpha\trename Foo\n")
+        self._stub_claude(self._init(), self._say("half done"), exit_code=1)
+        s, body = self._post_stream("/api/sweep", {"project": "t"})
+        self.assertEqual(s, 200)
+        beacon = sweepkit.read_sweep_health(self.proj())
+        self.assertEqual(beacon["state"], "failed")
+        self.assertEqual(beacon["exit"], 1)
+        self.assertTrue(beacon["error"])
+        # the curator never finished, so the user's direction still stands
+        self.assertIn("alpha", server.parse_comments_log(server.comments_log_path(self.proj())))
+
+    def test_successful_sweep_retires_the_comments_it_carried(self):
+        server.comments_log_path(self.proj()).write_text("2026-06-29\talpha\trename Foo\n")
+        self._stub_claude(self._init(), self._say("swept"), self._result())
+        self._post_stream("/api/sweep", {"project": "t"})
+        self.assertEqual(sweepkit.read_sweep_health(self.proj())["state"], "done")
+        log = server.comments_log_path(self.proj())
+        self.assertNotIn("alpha", server.parse_comments_log(log))
+        self.assertIn("rename Foo", log.read_text())  # append-only: the line is still there
+
+    def test_empty_queue_after_a_failed_sweep_restocks_instead_of_idling(self):
+        """A mechanical close archives before the accrue curator runs; if that curator
+        dies, the empty quiet queue must not read as 'nothing to sweep' forever."""
+        server.mutate_queue(self.proj(), lambda q: q.__setitem__("entries", []))
+        sweepkit.write_sweep_health(self.proj(), state="failed", phase="accrue",
+                                    error="client disconnected; curator stopped")
+        cmds = self._capture_cmds()
+        s, body = self._post_stream("/api/sweep", {"project": "t"})
+        self.assertEqual(s, 200)
+        self.assertNotIn("Nothing to sweep", body)
+        self.assertTrue(cmds, "expected a restock curator turn")
+        prompt = cmds[-1][cmds[-1].index("-p") + 1]
+        self.assertIn("ACCRUE + RESTOCK only", prompt)
+        self.assertIn("resume_interrupted_sweep", prompt)
+        self.assertEqual(sweepkit.read_sweep_health(self.proj())["state"], "done")
+
+    def test_empty_queue_after_a_clean_sweep_is_idle(self):
+        server.mutate_queue(self.proj(), lambda q: q.__setitem__("entries", []))
+        sweepkit.write_sweep_health(self.proj(), state="done", phase="accrue")
+        cmds = self._capture_cmds()
+        s, body = self._post_stream("/api/sweep", {"project": "t"})
+        self.assertIn("Nothing to sweep", body)
+        self.assertEqual(cmds, [])
+
+    def test_second_sweep_on_the_same_desk_is_refused_while_one_runs(self):
+        cmds = self._capture_cmds()
+        with server.SWEEPS_LOCK:
+            server.SWEEPS_IN_FLIGHT.add("t")
+        self.addCleanup(lambda: server.SWEEPS_IN_FLIGHT.discard("t"))
+        s, body = self._post_stream("/api/sweep", {"project": "t"})
+        self.assertIn("already running", body)
+        self.assertEqual(cmds, [])
+
+    def test_clearing_a_comment_retracts_its_history(self):
+        _http("POST", f"{self.base}/api/comment", {"project": "t", "id": "alpha", "text": "rename Foo"})
+        _http("POST", f"{self.base}/api/comment", {"project": "t", "id": "alpha", "text": ""})
+        log = server.comments_log_path(self.proj())
+        self.assertNotIn("alpha", server.parse_comments_log(log))
+        cmds = self._capture_cmds()
+        self._post_stream("/api/sweep", {"project": "t"})
+        prompt = cmds[-1][cmds[-1].index("-p") + 1]
+        self.assertNotIn("rename Foo", prompt)
+
     def test_sweep_injects_intake_outbound_for_inbox_project(self):
         # an inbox project (intake block) gets the outbound-staging instruction with its path
         server.PROJECTS_PATH.write_text(json.dumps({"projects": [{
@@ -2293,6 +2379,18 @@ class LocalhostAuthTests(EndpointTests):
         self.assertEqual(directives.get("object-src"), ["'none'"])
         self.assertEqual(headers.get("X-Frame-Options"), "DENY")
         self.assertEqual(headers.get("X-Content-Type-Options"), "nosniff")
+
+    def test_csp_hashes_survive_crlf_line_endings(self):
+        """Browsers hash inline scripts after normalizing CRLF; a CRLF checkout must
+        not blank the sitting."""
+        lf = b"<html><head><script>\nboot();\n</script></head><script>main()\n</script></html>"
+        crlf = lf.replace(b"\n", b"\r\n")
+        self.assertEqual(server.sitting_csp(lf), server.sitting_csp(crlf))
+
+    def test_csp_refuses_remote_images(self):
+        csp = server.sitting_csp(b"<script>x()</script>")
+        img = next(d for d in csp.split("; ") if d.startswith("img-src"))
+        self.assertNotIn("http", img)
 
     def test_same_origin_origin_allowed(self):
         s, j = self._raw(
