@@ -261,6 +261,7 @@ Handler failures use `{ "error": "<str(e)>", "code": "<slug>" }`:
 | Missing / unknown project or field | 400 | `bad_request` |
 | Auth / Host / Origin | 403 | `auth` / `bad_host` / `bad_origin` |
 | Missing file (incl. POST `/api/save`) | 404 | `not_found` |
+| Curator CLI missing or not executable (streaming routes, before the stream starts) | 500 | `curator_unavailable` |
 | Unhandled exception | 500 | `internal` |
 
 Never `repr(e)` in response bodies.

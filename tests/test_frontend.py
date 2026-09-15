@@ -218,7 +218,7 @@ class ViewportRitualRegressionBar(unittest.TestCase):
         stream = function_source(html, "pipeStream")
         self.assertIn("fillAgentMarkdown", stream)
         self.assertRegex(html, r"\.msg\.agent\.md\s*\{")
-        self.assertIn("ui-2026-09-15b", html)
+        self.assertIn("ui-2026-09-15c", html)
 
     def test_markdown_is_sanitized_as_a_string_before_it_reaches_the_dom(self):
         """Assigning marked output to innerHTML and cleaning the node afterwards is
@@ -262,6 +262,18 @@ class ViewportRitualRegressionBar(unittest.TestCase):
         self.assertIn("ivst.founded", load)
         self.assertNotIn("const proposing = !hasContent", load)
         self.assertNotIn("const unfounded = !hasContent", load)
+
+    def test_refused_api_calls_surface_instead_of_streaming_nothing(self):
+        """After a core restart every call 403s with code auth; chat used to show an
+        empty turn and sweep printed started/finished having done nothing."""
+        stream = self.function("pipeStream")
+        self.assertLess(stream.index("if(!r.ok) throw await apiErrorText(r)"),
+                        stream.index("r.body.getReader()"))
+        err = self.function("apiErrorText")
+        self.assertIn("j.code === 'auth'", err)
+        self.assertIn("reload", err)
+        for name in ("jget", "jpost"):
+            self.assertIn("apiErrorText(r)", self.function(name))
 
     def test_confirmation_card_is_blank_for_the_user(self):
         parse = self.function("parseConfirmCard")

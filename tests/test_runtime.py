@@ -738,6 +738,14 @@ class TestRuntimeSpawn(unittest.TestCase):
             self.assertEqual(len(rt.ledger.turns("pre")), 1)
 
 
+    def test_spawn_reports_a_missing_curator_cli_instead_of_raising(self):
+        with tempfile.TemporaryDirectory() as d:
+            rt = Runtime(str(Path(d) / "no-such-claude"), Path(d))
+            evs = list(rt.spawn("hi", cwd=d))
+        self.assertEqual([e["t"] for e in evs], ["error", "done"])
+        self.assertIn("curator CLI not found", evs[0]["s"])
+        self.assertIn("no-such-claude", evs[0]["s"])
+
     def test_spawn_child_env_drops_workspace_trust_overrides(self):
         class FakeProc:
             def __init__(self):

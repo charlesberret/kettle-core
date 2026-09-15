@@ -123,7 +123,8 @@ def resolve_projects_path() -> Path:
 PROJECTS_PATH = resolve_projects_path()
 SETTINGS_PATH = PROJECTS_PATH.parent / "settings.json"
 # Legacy constant — prefer current_curator().resolved_command() for new code.
-CLAUDE = shutil.which("claude") or str(HOME / ".local/bin/claude")
+CLAUDE = shutil.which("claude") or "claude"
+_CLAUDE_AT_IMPORT = CLAUDE  # tests replace CLAUDE with a stub; agent_bin honors that
 SERVER_PORT = None  # bound port, recorded at startup for the admin report
 SERVER_STARTED = None  # ISO timestamp, set at bind
 SERVER_TOKEN = None  # per-boot auth token; required on every /api/ request
@@ -207,8 +208,11 @@ def agent_bin() -> str:
     cfg = current_curator()
     fallback = curator_mod.DEFAULT_COMMAND.get(cfg.provider, "claude")
     cmd = (cfg.command or fallback).strip() or fallback
-    if cmd == "claude":
+    if cmd == "claude" and CLAUDE != _CLAUDE_AT_IMPORT:
         return CLAUDE
+    # Resolve on every turn, like /api/ping and `kettle doctor`: installing the CLI
+    # after launch works without a restart, and a missing CLI is reported by its own
+    # name rather than an invented ~/.local/bin path.
     return cfg.resolved_command()
 
 
@@ -2325,6 +2329,9 @@ class Handler(BaseHTTPRequestHandler):
                 if interrupted:
                     note = (f" (last sweep did not finish: {last.get('error') or last.get('state')}"
                             f" at {last.get('updated', '?')})")
+                    # Reported once; a quiet desk with nothing to restock is not still failing.
+                    sweepkit.write_sweep_health(proj, state="idle", phase="close", stamp=stamp,
+                                                previous=last)
                 self.stream_idle("Nothing to sweep — queue empty and quiet." + note)
                 return
         if close.get("ok") and close.get("action") == "mechanical_close" and not close.get("needs_accrue"):
@@ -2340,6 +2347,9 @@ class Handler(BaseHTTPRequestHandler):
 
         accrue_only = bool(close.get("ok") and close.get("needs_accrue"))
         queue_entries = load_queue(proj).get("entries", [])
+        # Bound the comments this prompt shows in the same breath as reading them: a note
+        # typed while the rest of the prompt is assembled must not be retired unread.
+        comments_through = comments_log_line_count(proj)
         user_comments = sweep_user_comments_block(parse_comments_log(cl_path), queue_entries)
 
         if accrue_only:
@@ -2445,7 +2455,6 @@ class Handler(BaseHTTPRequestHandler):
 
         # The comments this prompt carried are consumed only if the curator finishes.
         shown_ids = [e.get("id") for e in queue_entries if e.get("id")]
-        comments_through = comments_log_line_count(proj)
         phase = "accrue" if accrue_only else "sweep"
         started = sweepkit.write_sweep_health(
             proj, state="running", phase=phase, stamp=stamp, pid=os.getpid(),
@@ -2779,8 +2788,9 @@ class Handler(BaseHTTPRequestHandler):
                 env=runtime.curator_env(),
             )
         except Exception as exc:  # noqa: BLE001 — executable missing / spawn refused
-            finish(False, f"curator failed to start: {exc}")
-            self.send_err(500, f"curator failed to start: {exc}", "internal")
+            msg = runtime.spawn_error_text(cmd, exc, current_curator().provider)
+            finish(False, msg)
+            self.send_err(500, msg, "curator_unavailable")
             return
 
         # From this point the response belongs to the NDJSON stream. Any later failure is

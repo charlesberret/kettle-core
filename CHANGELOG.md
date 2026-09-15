@@ -65,6 +65,12 @@ and Desk schema have their own integer contract versions.
   proposal stays open, and a missing proposal entry is re-filed. A propose turn cannot found
   the desk. A chat session opened before the interview is not resumed as the interview.
 - Founding prompts refer to the founding-sentence block as *above* (it leads the prompt).
+- A missing or non-executable curator CLI is reported by name with a fix
+  (`curator_unavailable`, 500, before any stream) instead of a traceback from `kettle chat` /
+  `kettle found` or a made-up `~/.local/bin/claude` path; the CLI is resolved per turn, so
+  installing it after launch works without a restart.
+- The sitting surfaces refused API calls: a stale token after a core restart says to reload
+  the window, instead of chat showing an empty turn and sweep printing "finished".
 - `kettle-watch` exits 1 and keeps `status: error` in `watch-health.json` when any project
   failed (the final beacon used to overwrite errors with `ok`). The admin report exposes
   that beacon as `watch_health`.

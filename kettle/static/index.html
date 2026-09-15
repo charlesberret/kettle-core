@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <!-- Bump this when sitting UI changes; title shows it so we can confirm the shell loaded. -->
-<meta name="kettle-ui" content="2026-09-15b">
-<title>kettle · ui-2026-09-15b</title>
+<meta name="kettle-ui" content="2026-09-15c">
+<title>kettle · ui-2026-09-15c</title>
 <style>
   /*
    * Type & chrome roles — single source of sitting hierarchy.
@@ -3687,8 +3687,17 @@ function apiHeaders(extra){
   if(KETTLE_TOKEN) h['X-Kettle-Token'] = KETTLE_TOKEN;
   return h;
 }
-async function jget(u){ const r = await fetch(u,{headers:apiHeaders()}); const j = await r.json(); if(!r.ok) throw j.error; return j; }
-async function jpost(u,b){ const r = await fetch(u,{method:'POST',headers:apiHeaders({'Content-Type':'application/json'}),body:JSON.stringify(b)}); const j = await r.json(); if(!r.ok) throw j.error; return j; }
+/** Human-readable error for a failed /api/ response. A 403 `auth` means the core
+    restarted and minted a new token — this page's copy is stale until a reload. */
+async function apiErrorText(r){
+  let j = {};
+  try { j = await r.json(); } catch(e){}
+  if(r.status === 403 && j.code === 'auth')
+    return 'Kettle restarted, so this window lost its connection — reload the window to reconnect.';
+  return j.error || ('HTTP ' + r.status);
+}
+async function jget(u){ const r = await fetch(u,{headers:apiHeaders()}); if(!r.ok) throw await apiErrorText(r); return r.json(); }
+async function jpost(u,b){ const r = await fetch(u,{method:'POST',headers:apiHeaders({'Content-Type':'application/json'}),body:JSON.stringify(b)}); if(!r.ok) throw await apiErrorText(r); return r.json(); }
 
 const esc = s => String(s==null?'':s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 function shortName(p){ if(!p) return ''; const parts = p.split('/'); return parts.slice(-2).join('/'); }
@@ -5047,12 +5056,15 @@ function maybeUpgradeConfirmCard(node, text){
    use addMsg('sys', …) instead. */
 
 async function pipeStream(r, out, opts){
+  // A refused request (stale token after a restart, 500 curator-not-found) has a JSON
+  // body, not a stream: surface it instead of reading nothing and "finishing".
+  if(!r.ok) throw await apiErrorText(r);
   const say = out || addMsg;  // default sink: the right chat pane
   const trackCtx = !!(opts && opts.trackCtx);  // only genuine chat turns drive the context bar
   // Prime the window from the model we *asked* for — stream "model" events often
   // arrive after the first usage, which used to paint 100% red against the 200k default.
   if(trackCtx && opts && opts.model) applyCtxModel(opts.model);
-  const coalesceAgent = !out;  // default chat: one bubble per turn (needed for confirm-card upgrade)
+  const coalesceAgent = !out;  // default chat: one bubble per turn, rendered as GFM at the end
   const reader = r.body.getReader();
   const dec = new TextDecoder();
   let buf = '';

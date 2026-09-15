@@ -30,6 +30,7 @@ from pathlib import Path
 import kettle.server as server
 import kettle.kettle_contract as kettle_contract
 import kettle.sweepkit as sweepkit
+from unittest import mock
 
 
 def _auth_headers(extra=None):
@@ -2018,6 +2019,35 @@ class EndpointTests(Base):
         self.assertIn("Nothing to sweep", body)
         self.assertEqual(cmds, [])
 
+    def test_stale_failure_on_an_idle_inbox_desk_is_reported_once(self):
+        proj = self.proj()
+        server.mutate_queue(proj, lambda q: q.__setitem__("entries", []))
+        sweepkit.write_sweep_health(proj, state="failed", error="boom")
+        with mock.patch.object(sweepkit, "assess_close", return_value={
+                "fully_idle": True, "needs_accrue": False, "can_mechanical_close": False}):
+            _, first = self._post_stream("/api/sweep", {"project": "t"})
+            _, second = self._post_stream("/api/sweep", {"project": "t"})
+        self.assertIn("last sweep did not finish: boom", first)
+        self.assertNotIn("did not finish", second)
+        self.assertEqual(sweepkit.read_sweep_health(proj)["state"], "idle")
+
+    def test_comment_typed_while_the_sweep_prompt_builds_is_not_retired(self):
+        proj = self.proj()
+        log = server.comments_log_path(proj)
+        log.write_text("2026-06-29\talpha\tseen note\n")
+        real_orientation = server.project_orientation
+
+        def orientation_with_late_comment(p):
+            with log.open("a") as f:
+                f.write("2026-06-29\talpha\tlate note\n")
+            return real_orientation(p)
+
+        self._stub_claude(self._init(), self._say("swept"), self._result())
+        with mock.patch.object(server, "project_orientation", orientation_with_late_comment):
+            self._post_stream("/api/sweep", {"project": "t"})
+        left = server.parse_comments_log(log)
+        self.assertEqual([r["text"] for r in left.get("alpha", [])], ["late note"])
+
     def test_second_sweep_on_the_same_desk_is_refused_while_one_runs(self):
         cmds = self._capture_cmds()
         with server.SWEEPS_LOCK:
@@ -2196,8 +2226,10 @@ class EndpointTests(Base):
         self.assertEqual(s0, 500)
         self.assertEqual(failed.get("error"), failed["error"])  # present
         self.assertIn("error", failed)
-        self.assertIn("code", failed)
-        self.assertIn("curator failed to start", failed["error"])
+        self.assertEqual(failed["code"], "curator_unavailable")
+        self.assertIn("curator CLI not found", failed["error"])
+        self.assertIn("definitely-not-here", failed["error"])
+        self.assertIn("kettle doctor", failed["error"])
         self.assertNotIn("repr(", json.dumps(failed))
         s, _ = _http("GET", f"{self.base}/api/projects")
         self.assertEqual(s, 200)

@@ -838,6 +838,17 @@ def build_argv(cfg, prompt: str, *,
     return build_cmd(command, prompt, session_id, bits, provider=provider)
 
 
+def spawn_error_text(cmd: list, exc: BaseException, provider: str = "claude") -> str:
+    """One plain sentence for a curator CLI that could not start."""
+    exe = str(cmd[0]) if cmd else "(no command)"
+    if isinstance(exc, FileNotFoundError):
+        return (f"curator CLI not found: {exe} (provider {provider}) — install it or choose "
+                "another curator in Settings; `kettle doctor` shows what is on PATH")
+    if isinstance(exc, PermissionError):
+        return f"curator CLI is not executable: {exe} — check its permissions (chmod +x)"
+    return f"curator failed to start: {exe}: {exc}"
+
+
 class Runtime:
     """spawn(role, message, session?) → normalized event stream, with the turn persisted
     to the desk ledger on completion. The one piece that touches the process world; kept
@@ -861,8 +872,13 @@ class Runtime:
         # ledger + capture regardless.
         if cmd is None:
             cmd = build_cmd(self.claude, prompt, session_id, extra, provider=self.provider)
-        proc = subprocess.Popen(cmd, cwd=str(cwd), stdout=subprocess.PIPE,
-                                stderr=subprocess.STDOUT, text=True, env=curator_env())
+        try:
+            proc = subprocess.Popen(cmd, cwd=str(cwd), stdout=subprocess.PIPE,
+                                    stderr=subprocess.STDOUT, text=True, env=curator_env())
+        except OSError as exc:  # missing / non-executable CLI: report it, don't traceback
+            yield {"t": "error", "s": spawn_error_text(cmd, exc, self.provider)}
+            yield {"t": "done", "usage": {}, "cost": 0}
+            return
         assert proc.stdout is not None
         try:
             for evt in normalize(proc.stdout, meter, lambda s: cap.__setitem__("sid", s)):
