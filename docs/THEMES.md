@@ -47,7 +47,7 @@ Drop a pack JSON in the user themes directory:
 | override | `$KETTLE_THEMES_DIR` |
 
 Filename stem = theme id (`my-desk.json` → `my-desk`). Schema:
-[`static/themes/README.md`](../static/themes/README.md).
+[`static/themes/README.md`](../kettle/static/themes/README.md).
 
 List packs:
 

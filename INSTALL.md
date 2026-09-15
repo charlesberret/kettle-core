@@ -108,11 +108,13 @@ This repo ships the browser/server and CLI viewports.
 kettle                          browser / server mode   (default; stdlib only)
 kettle --web [--port N]         same as bare launch
 kettle projects                 list registered desks
+kettle themes                   list bundled and user color themes
 kettle add     <folder>         register a folder as a desk
 kettle init                      register the current folder
 kettle found   <project>        curator founds the desk
 kettle queue   <project>        show a desk's queue
-kettle open    <project> <id>   open the file in $EDITOR
+kettle open    <project> <id>   edit the file in the built-in TUI (--external for $EDITOR)
+kettle edit    <project> <id>   same as `open` (built-in syntax-colored TUI)
 kettle chat    <project> [id]   talk to the curator
 kettle lineage <project>        who edited what
 kettle bind    <project>        add lineage directive to CLAUDE.md
@@ -121,11 +123,14 @@ kettle migrate [--apply]        migrate .setsweep/ → .kettle/ (dry-run by defa
 kettle sweep-status <project>   CLOSE readiness
 kettle sweep-close  <project>   quiet mechanical CLOSE
 kettle sweep-archive <project>  archive queue entries
+kettle refresh-briefs <project> rewrite briefs on the current queue (no restock)
 kettle egress <project> …       stage a desk egress memo
 kettle egress-status <project>  list staged egress memos
 ```
 
-Full help: `kettle --help` / `kettle <cmd> --help` (help prints `kettle.__version__`).
+Full help: `kettle --help` prints this list plus `kettle.__version__`. `kettle <cmd>
+--help` prints that subcommand's own argparse help (usage/arguments) — it does not
+print the version.
 
 ## Auth — Kettle stores no key
 

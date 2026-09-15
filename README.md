@@ -79,7 +79,7 @@ Every viewport attaches to the same desk and API:
 
 Adapters never own desk migrations or product semantics. The versioned contract
 is published by `GET /api/ping`; current API and desk-schema versions live in
-[kettle_contract.py](./kettle_contract.py).
+[kettle_contract.py](./kettle/kettle_contract.py).
 
 ## Setsweep migration
 
@@ -94,8 +94,9 @@ non-destructive:
   on port 4242.
 - Branding alone does not change the API or desk-schema contract integers.
 
-Kettle never creates two live desks for the same project. A future explicit
-migration command will handle the final on-disk rename.
+Kettle never creates two live desks for the same project. `kettle migrate` (dry-run by
+default; `--apply` to write) handles the final on-disk rename — see
+[INSTALL.md § Migrating from Setsweep](./INSTALL.md#migrating-from-setsweep).
 
 ## Development
 
@@ -133,7 +134,7 @@ Please report vulnerabilities privately as described in
 - [Install guide](./INSTALL.md)
 - [Repository ownership and compatibility](./docs/REPOSITORIES.md)
 - [Viewport capability matrix](./docs/PLATFORMS.md)
-- [Curator kits](./kits/README.md)
+- [Curator kits](./kettle/kits/README.md)
 - [Roadmap](./ROADMAP.md)
 - [Changelog](./CHANGELOG.md)
 - [Contributing](./CONTRIBUTING.md)

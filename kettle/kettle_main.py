@@ -6,18 +6,25 @@ One command, two viewports onto the same desk:
   kettle                          browser / server mode       (default; stdlib only)
   kettle --web [--port N]         same as bare launch
   kettle projects                 list registered desks       ┐
+  kettle themes                   list color themes            │
   kettle add     <folder>         register a folder as a desk │
   kettle init                     register the current folder │  the CLI viewport
+  kettle found   <project>        curator founds the desk      │
   kettle queue   <project>        show a desk's queue         │  (stdlib only)
-  kettle open    <project> <id>   open the file in $EDITOR    │
+  kettle open|edit <project> <id> built-in TUI (--external for $EDITOR)
   kettle chat    <project> [id]   talk to the resident curator│
+  kettle lineage <project>        who edited what              │
+  kettle bind    <project>        add lineage directive to CLAUDE.md
+  kettle migrate [--apply]        migrate .setsweep/ → .kettle/ (dry-run by default)
   kettle sweep-status|close|archive   mechanical CLOSE helpers│
+  kettle refresh-briefs <project> rewrite briefs on the current queue
   kettle egress|egress-status         desk → ecosystem staging┘
   kettle doctor                   install health (PATH + package modules)
-  kettle --help                   this message
+  kettle --help                   this message (plus kettle.__version__)
 
 The native macOS window lives in the separate kettle-desktop Electron shell.
 Routing keeps web/server as the default; the CLI subcommands go through `cli.py`.
+`kettle <cmd> --help` prints that subcommand's own argparse help, not this message.
 """
 import sys
 

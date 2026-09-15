@@ -10,7 +10,7 @@ This checklist covers the core artifact.
 - [ ] `python3 tools/check_family.py --require-clean` passes with supported
   adapter checkouts.
 - [ ] `git diff --check` is clean.
-- [ ] `kettle_contract.py` matches the documented API and Desk behavior.
+- [ ] `kettle/kettle_contract.py` matches the documented API and Desk behavior.
 - [ ] The changelog names compatibility, migration, and security changes.
 - [ ] Public documentation contains no private topology or maintainer-only
   operational state.

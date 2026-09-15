@@ -36,7 +36,7 @@ release path. The CLI remains part of `kettle-core`.
 | Public product story and family map | `kettle` |
 | Architecture and product semantics | `kettle-core/ARCHITECTURE.md` |
 | HTTP and NDJSON behavior | `kettle-core/API.md` plus contract tests |
-| Core, API, and desk-schema versions | `kettle-core/kettle_contract.py` |
+| Core, API, and desk-schema versions | `kettle-core/kettle/kettle_contract.py` |
 | Supported core contracts | Each adapter's `kettle-compatibility.json` |
 | Host implementation and release notes | The relevant adapter repository |
 
