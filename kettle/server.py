@@ -134,6 +134,79 @@ DEFAULT_PORT = 4242  # one port for native app and web mode alike — a bookmark
                      # tab always reaches the live server, never a stale orphan
 RUNTIME_PATH = HOME / ".cache/kettle/server.json"  # discovery: port + token (mode 0600)
 TOKEN_HEADER = "X-Kettle-Token"
+# ---------- who is asking for the page? (the token is handed only to our own user) ----------
+#
+# GET / needs no token (it is how a viewport gets one), so anything that can reach
+# loopback used to read the token from the page — including another Unix user's process,
+# which the 0600 discovery file is meant to keep out. The page now carries the token only
+# when the connecting socket belongs to this server's own uid. Set
+# KETTLE_SKIP_PEER_CHECK=1 on a platform where the owner cannot be determined.
+
+
+def _lsof_peer_uid(client_host: str, client_port: int) -> int | None:
+    """macOS / BSD: uid of the process whose socket's LOCAL end is client_host:client_port.
+    lsof run as this user lists only processes it may inspect, so another user's client is
+    simply absent (None)."""
+    lsof = shutil.which("lsof") or "/usr/sbin/lsof"
+    try:
+        out = subprocess.run(
+            [lsof, "-nP", "-a", f"-iTCP@{client_host}:{client_port}", "-Fpun"],
+            capture_output=True, text=True, timeout=2,
+        ).stdout
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return parse_lsof_peer_uid(out, client_host, client_port)
+
+
+def parse_lsof_peer_uid(out: str, client_host: str, client_port: int) -> int | None:
+    uid = None
+    want = f"{client_host}:{client_port}->"
+    for line in out.splitlines():
+        if line.startswith("p"):
+            uid = None
+        elif line.startswith("u"):
+            try:
+                uid = int(line[1:])
+            except ValueError:
+                uid = None
+        elif line.startswith("n") and line[1:].startswith(want):
+            return uid
+    return None
+
+
+def parse_proc_net_tcp_uid(text: str, client_host: str, client_port: int) -> int | None:
+    """Linux /proc/net/tcp: the row whose local address is the client's socket."""
+    try:
+        want_ip = "".join(f"{int(b):02X}" for b in reversed(client_host.split(".")))
+    except ValueError:
+        return None
+    for row in text.splitlines()[1:]:
+        f = row.split()
+        if len(f) < 8 or ":" not in f[1]:
+            continue
+        ip, port = f[1].split(":")
+        if ip == want_ip and int(port, 16) == client_port:
+            try:
+                return int(f[7])
+            except ValueError:
+                return None
+    return None
+
+
+def peer_is_own_user(client_host: str, client_port: int) -> bool:
+    if os.environ.get("KETTLE_SKIP_PEER_CHECK") == "1":
+        return True
+    if sys.platform.startswith("linux"):
+        try:
+            uid = parse_proc_net_tcp_uid(Path("/proc/net/tcp").read_text(),
+                                         client_host, client_port)
+        except OSError:
+            uid = None
+    else:
+        uid = _lsof_peer_uid(client_host, client_port)
+    return uid is not None and uid == os.getuid()
+
+
 _INLINE_SCRIPT_RE = re.compile(rb"<script(?![^>]*\bsrc=)[^>]*>(.*?)</script>", re.DOTALL | re.IGNORECASE)
 
 
@@ -1930,8 +2003,9 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if url.path in ("/", "/index.html"):
                 body = (STATIC / "index.html").read_bytes()
-                # Inject per-boot token so same-origin UI can authorize /api/ calls.
-                if SERVER_TOKEN:
+                # Inject the per-boot token so the same-origin UI can authorize /api/ calls —
+                # only for a page requested by this server's own user.
+                if SERVER_TOKEN and peer_is_own_user(*self.client_address[:2]):
                     meta = (
                         f'<meta name="kettle-token" content="{SERVER_TOKEN}">'
                     ).encode()

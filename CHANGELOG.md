@@ -136,6 +136,10 @@ and Desk schema have their own integer contract versions.
   survey, and staged egress remain release invariants.
 - Localhost HTTP hardening: per-boot `X-Kettle-Token` (discovery file mode 0600),
   Host/Origin rejection, and normalized `{error, code}` envelopes (`str(e)` only).
+- The served page carries the per-boot token only when the connecting socket belongs to
+  the server's own Unix user (`lsof` on macOS, `/proc/net/tcp` on Linux). Any process on
+  loopback — including another user's — could previously read the token from `GET /`.
+  `KETTLE_SKIP_PEER_CHECK=1` disables the check where the owner cannot be determined.
 - Rendered markdown (reading view, agent chat) is sanitized as a string before it
   reaches the DOM. Previously raw `marked` output was assigned to `innerHTML` and
   cleaned afterwards, which let `<img onerror>` in a project file or agent reply run

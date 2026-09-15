@@ -42,7 +42,7 @@ token.
 
 | Surface | Mechanism |
 |---|---|
-| Web UI (`static/index.html`) | Server injects `<meta name="kettle-token">` into the served HTML; the page reads it and sends `X-Kettle-Token` on every `/api/` fetch. |
+| Web UI (`static/index.html`) | Server injects `<meta name="kettle-token">` into the served HTML **only when the connecting socket belongs to the server's own Unix user** (see *Who gets the page's token*); the page reads it and sends `X-Kettle-Token` on every `/api/` fetch. |
 | CLI / TUI (`kettle-tui`) | Reads `token` from `~/.cache/kettle/server.json` and sends `X-Kettle-Token`. |
 | Editor viewports (`kettle-vscode`, `kettle-desktop`) | `kettle-vscode` reads `token` from the discovery record itself and sends it. `kettle-desktop`'s live sitting is the served `static/index.html` (same-origin), so it inherits the meta-tag path above; the shell also exposes an IPC bridge for the token, currently unused by the live renderer. **See Conformance.** |
 | Core circuit-breaker | `_discovery_token()` reads the record so a new boot can authenticate its ping to a live predecessor before deferring/replacing. |
@@ -59,6 +59,24 @@ The dispatcher sets `require_token = url.path.startswith("/api/")`, so **every
 static assets do not (they only clear Host/Origin), which is what lets the web UI
 bootstrap and read the injected meta tag.
 
+**Who gets the page's token.** Because `GET /` needs no token, anything that can reach
+loopback could once read the token out of the page — including another Unix user's
+process, which defeats the 0600 record. The server now looks up the owner of the
+*client* socket before injecting the meta tag (`server.peer_is_own_user`):
+
+- **macOS / BSD:** `lsof -nP -a -iTCP@<client-host>:<client-port> -Fpun`, taking the
+  process whose socket has that address as its *local* end. `lsof` run as the user
+  cannot list other users' processes, so another user's client is simply not found.
+- **Linux:** the matching row of `/proc/net/tcp` and its `uid` column.
+
+The token goes into the page only when that uid equals the server's. Otherwise the page
+loads without it: every `/api/` call returns `403 auth`, and the sitting says it could not
+confirm the browser runs as the user. The lookup costs one `lsof` call per page load on
+macOS (~0.1 s). On a platform where the owner cannot be determined, set
+`KETTLE_SKIP_PEER_CHECK=1` to restore the old behaviour knowingly. The Electron shell and
+any browser the user opens run as the user, so nothing changes for them; `kettle-vscode`
+never loads `/`.
+
 **Rotation.** New token every boot. A restart (`--replace`, crash + relaunch,
 new session) mints a fresh token and overwrites the discovery record; the old
 token is dead the moment the old process exits. There is no in-session rotation
@@ -68,8 +86,9 @@ and no expiry — lifetime is exactly the process lifetime.
 
 In scope — the token (with Host/Origin) defends against:
 
-- **Other local users** on a shared machine: they cannot read the 0600 record,
-  so they cannot mint valid `/api/` requests.
+- **Other local users** on a shared machine: they cannot read the 0600 record, and the
+  served page withholds the token from a socket they own, so they cannot mint valid
+  `/api/` requests.
 - **Malicious web origins**: a page the user visits cannot read the token (it is
   not in the DOM of *their* origin, and CORS/Origin rules block cross-origin
   reads), so DNS-rebinding / CSRF against the localhost port is refused at the

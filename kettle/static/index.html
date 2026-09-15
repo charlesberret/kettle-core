@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <!-- Bump this when sitting UI changes; title shows it so we can confirm the shell loaded. -->
-<meta name="kettle-ui" content="2026-09-15f">
-<title>kettle · ui-2026-09-15f</title>
+<meta name="kettle-ui" content="2026-09-15g">
+<title>kettle · ui-2026-09-15g</title>
 <style>
   /*
    * Type & chrome roles — single source of sitting hierarchy.
@@ -3643,8 +3643,12 @@ function apiHeaders(extra){
 async function apiErrorText(r){
   let j = {};
   try { j = await r.json(); } catch(e){}
-  if(r.status === 403 && j.code === 'auth')
+  if(r.status === 403 && j.code === 'auth'){
+    if(!KETTLE_TOKEN)
+      return 'Kettle did not give this page its access key: it could not confirm the browser runs '
+        + 'as your own user account. Open Kettle from the app or with `kettle` (see docs/AUTH-TOKEN.md).';
     return 'Kettle restarted, so this window lost its connection — reload the window to reconnect.';
+  }
   return j.error || ('HTTP ' + r.status);
 }
 async function jget(u){ const r = await fetch(u,{headers:apiHeaders()}); if(!r.ok) throw await apiErrorText(r); return r.json(); }

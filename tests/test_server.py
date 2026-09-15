@@ -2588,6 +2588,37 @@ class LocalhostAuthTests(EndpointTests):
         meta = f'meta name="kettle-token" content="{server.SERVER_TOKEN}"'.encode()
         self.assertIn(meta, body)
 
+    def test_index_withholds_the_token_from_another_users_connection(self):
+        """Anything on loopback can GET /; only this server's own user gets the token."""
+        with mock.patch.object(server, "peer_is_own_user", return_value=False) as check:
+            conn = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
+            try:
+                conn.request("GET", "/")
+                body = conn.getresponse().read()
+            finally:
+                conn.close()
+        self.assertTrue(check.called)
+        self.assertNotIn(b'<meta name="kettle-token"', body)
+        self.assertNotIn(server.SERVER_TOKEN.encode(), body)
+
+    def test_peer_owner_parsers(self):
+        lsof = ("p70500\nu501\nf4\nn127.0.0.1:50563->127.0.0.1:4242\n"
+                "p999\nu0\nf5\nn127.0.0.1:4242->127.0.0.1:50563\n")
+        self.assertEqual(server.parse_lsof_peer_uid(lsof, "127.0.0.1", 50563), 501)
+        self.assertIsNone(server.parse_lsof_peer_uid(lsof, "127.0.0.1", 50999))
+        # the server's own accepted socket (local = server port) must never answer
+        self.assertIsNone(server.parse_lsof_peer_uid("p1\nu0\nf5\nn127.0.0.1:4242->127.0.0.1:50563\n",
+                                                     "127.0.0.1", 50563))
+        proc = ("  sl  local_address                         rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode\n"
+                "   0: 0100007F:C583 0100007F:1092 01 00000000:00000000 00:00000000 00000000  1000        0 1\n"
+                "   1: 0100007F:1092 0100007F:C583 01 00000000:00000000 00:00000000 00000000     0        0 2\n")
+        self.assertEqual(server.parse_proc_net_tcp_uid(proc, "127.0.0.1", 0xC583), 1000)
+        self.assertIsNone(server.parse_proc_net_tcp_uid(proc, "127.0.0.1", 1))
+
+    def test_peer_check_can_be_skipped_explicitly(self):
+        with mock.patch.dict(os.environ, {"KETTLE_SKIP_PEER_CHECK": "1"}):
+            self.assertTrue(server.peer_is_own_user("127.0.0.1", 1))
+
     def test_index_sends_a_script_pinning_csp(self):
         """Injected markup must not run even if the sanitizer misses it: script-src
         admits only this origin plus the exact inline blocks shipped in index.html."""
