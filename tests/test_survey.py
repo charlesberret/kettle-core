@@ -29,6 +29,54 @@ class TestBuildSurvey(unittest.TestCase):
         self.assertEqual(snap["suggested_prechecks"].get("status"),
                          ["Brand new — starting from scratch"])
 
+    def test_register_project_seed_alone_still_reads_empty(self):
+        """register_project() creates `.kettle/` (+ queue.json) before the first survey
+        ever runs. That seed alone must not defeat empty/greenfield detection, nor show
+        up as user content in top_level (regression: was reading 'Top level: .kettle/'
+        and 'Empty / greenfield: no' for a folder nobody had put anything in yet)."""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / ".kettle" / "runtime").mkdir(parents=True)
+            (root / ".kettle" / "runtime" / "queue.json").write_text(
+                json.dumps({"entries": [], "curated": "awaiting founding curation"}),
+            )
+            snap = survey.build_survey(root)
+        self.assertTrue(snap["ok"])
+        self.assertTrue(snap["empty"])
+        self.assertEqual(snap["top_level"], [])
+        self.assertFalse(snap["signals"]["kettle_desk"])
+        block = survey.as_prompt_block(snap)
+        self.assertIn("Empty / greenfield: yes", block)
+        self.assertNotIn(".kettle", block)
+        self.assertNotIn("existing .kettle desk", block)
+
+    def test_kettle_dir_plus_bare_git_init_still_reads_empty(self):
+        """`.kettle/` (register seed) alongside a freshly `git init`'d, commit-less repo
+        (also common right after register_project) is still greenfield — git metadata
+        with no tracked content is not user content either. `has_git` stays True."""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / ".kettle").mkdir()
+            _init_git_repo(root)
+            snap = survey.build_survey(root)
+        self.assertTrue(snap["ok"])
+        self.assertTrue(snap["empty"])
+        self.assertTrue(snap["signals"]["git"])
+        self.assertNotIn(".kettle", [e["name"] for e in snap["top_level"]])
+
+    def test_kettle_desk_signal_requires_founded_charter(self):
+        """The 'existing .kettle desk' signal should fire only for a founded charter
+        (.kettle/PROJECT.md), not for the bare register-seeded dir."""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / ".kettle").mkdir()
+            (root / ".kettle" / "PROJECT.md").write_text("# Some Project\n")
+            (root / "README.md").write_text("# Some Project\n")
+            snap = survey.build_survey(root)
+        self.assertFalse(snap["empty"])
+        self.assertTrue(snap["signals"]["kettle_desk"])
+        self.assertIn("existing .kettle desk", survey.as_prompt_block(snap))
+
     def test_samples_readme_and_markers(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)

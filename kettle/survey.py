@@ -32,6 +32,19 @@ _SKIP_DIR_NAMES = frozenset({
     ".turbo", "target", "vendor", ".kettle", ".setsweep", ".cache",
 })
 
+# Kettle's own desk dirs — register_project() creates `.kettle/` (and a legacy `.setsweep/`
+# may already exist) before the founding survey ever runs. Their bare presence is not user
+# content: it must not defeat empty/greenfield detection, and it clutters top_level with
+# something the user never made.
+_DESK_DIR_NAMES = frozenset({".kettle", ".setsweep"})
+# OS-generated noise that carries no project signal and shouldn't appear in top_level either.
+_OS_NOISE_NAMES = frozenset({".DS_Store"})
+# Hidden from the top-level listing entirely (Kettle-owned or OS noise, not user content).
+_HIDDEN_TOP_LEVEL_NAMES = _DESK_DIR_NAMES | _OS_NOISE_NAMES
+# Entries that never, by themselves, defeat "empty" detection: Kettle's own desk dirs, OS
+# noise, and a bare `git init` with no commits/tracked files is just metadata, not content.
+_NON_SUBSTANTIVE_NAMES = _DESK_DIR_NAMES | _OS_NOISE_NAMES | frozenset({".git"})
+
 _MAX_TOP = 48
 _MAX_SAMPLES = 8
 _SAMPLE_CHARS = 2400
@@ -63,7 +76,7 @@ def build_survey(
     top: list[dict[str, str]] = []
     empty = True
     has_git = False
-    has_kettle = False
+    has_kettle_dir = False
     has_legacy_desk = False
     has_cursor = False
     has_claude_dir = False
@@ -86,23 +99,19 @@ def build_survey(
 
     for ent in entries:
         name = ent.name
-        if name in _SKIP_DIR_NAMES and name not in (
-            ".kettle", ".setsweep", ".git", ".cursor"
-        ):
-            # Still record presence of key markers even if we skip listing their guts.
-            pass
         try:
             is_dir = ent.is_dir()
         except OSError:
             continue
-        empty = False
+        if name not in _NON_SUBSTANTIVE_NAMES:
+            empty = False
         kind = "dir" if is_dir else "file"
-        if len(top) < max_top:
+        if name not in _HIDDEN_TOP_LEVEL_NAMES and len(top) < max_top:
             top.append({"name": name, "kind": kind})
         if name == ".git" and is_dir:
             has_git = True
         elif name == ".kettle" and is_dir:
-            has_kettle = True
+            has_kettle_dir = True
         elif name == ".setsweep" and is_dir:
             has_legacy_desk = True
         elif name == ".cursor" and is_dir:
@@ -111,6 +120,10 @@ def build_survey(
         elif name == ".claude" and is_dir:
             has_claude_dir = True
             agent_markers.append(".claude/")
+
+    # A `.kettle/` dir alone is just register_project()'s seed (queue.json etc). The
+    # "existing desk" signal should mean a founded charter is actually there.
+    has_kettle_charter = has_kettle_dir and (root_p / ".kettle" / "PROJECT.md").is_file()
 
     samples: dict[str, str] = {}
     for fname in _SAMPLE_NAMES:
@@ -139,7 +152,7 @@ def build_survey(
 
     signals = {
         "git": has_git,
-        "kettle_desk": has_kettle,
+        "kettle_desk": has_kettle_charter,
         "legacy_setsweep_desk": has_legacy_desk,
         "cursor": has_cursor,
         "claude_dir": has_claude_dir,
