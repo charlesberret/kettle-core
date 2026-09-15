@@ -281,6 +281,8 @@ Handler failures use `{ "error": "<str(e)>", "code": "<slug>" }`:
 | Auth / Host / Origin | 403 | `auth` / `bad_host` / `bad_origin` |
 | Missing file (incl. POST `/api/save`) | 404 | `not_found` |
 | Curator CLI missing or not executable (streaming routes, before the stream starts) | 500 | `curator_unavailable` |
+| `queue.json` exists but is not valid JSON (never overwritten) | 409 | `queue_corrupt` |
+| `POST /api/projects/refound` while a curator turn is streaming on that desk | 409 | `busy` |
 | Unhandled exception | 500 | `internal` |
 
 Never `repr(e)` in response bodies.
