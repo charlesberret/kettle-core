@@ -873,7 +873,8 @@ def cmd_found(args) -> int:
         session_id=sid, name=server.session_name(proj), tools_tier="sweep",
     )
     rt = runtime.Runtime(server.agent_bin(), server.desk_dir(proj) / "sessions",
-                         provider=cfg.provider)
+                         provider=cfg.provider,
+                         idle_timeout=server.curator_idle_timeout_s())
     print(f"· founding {proj['id']} — the curator surveys {server.project_root(proj)} …\n")
     for ev in rt.spawn(prompt, cwd=str(server.project_root(proj)), session_id=sid,
                        role="found", cmd=cmd):
@@ -947,7 +948,8 @@ def cmd_refresh_briefs(args) -> int:
         session_id=sid, name=server.session_name(proj), tools_tier="sweep",
     )
     rt = runtime.Runtime(server.agent_bin(), server.desk_dir(proj) / "sessions",
-                         provider=cfg.provider)
+                         provider=cfg.provider,
+                         idle_timeout=server.curator_idle_timeout_s())
     print(f"· refreshing briefs on {proj['id']} — {n} entr"
           f"{'y' if n == 1 else 'ies'} …\n")
     for ev in rt.spawn(prompt, cwd=str(server.project_root(proj)), session_id=sid,
@@ -1055,7 +1057,8 @@ def cmd_chat(args) -> int:
     entry = server.find_entry(server.load_queue(proj), args.id) if args.id else None
     cfg = server.current_curator()
     rt = runtime.Runtime(server.agent_bin(), server.desk_dir(proj) / "sessions",
-                         provider=cfg.provider)
+                         provider=cfg.provider,
+                         idle_timeout=server.curator_idle_timeout_s())
     root = str(server.project_root(proj))
 
     where = f"file [{entry['id']}]" if entry else "project-level"

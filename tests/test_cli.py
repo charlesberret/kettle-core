@@ -205,7 +205,7 @@ class CliTests(unittest.TestCase):
         captured = []
 
         class FakeRuntime:
-            def __init__(self, command, sessions_dir, provider="claude"):
+            def __init__(self, command, sessions_dir, provider="claude", **_kwargs):
                 captured.append({"command": command, "sessions_dir": Path(sessions_dir),
                                  "provider": provider})
 
@@ -283,7 +283,7 @@ class CliTests(unittest.TestCase):
         captured = []
 
         class FakeRuntime:
-            def __init__(self, command, sessions_dir, provider="claude"):
+            def __init__(self, command, sessions_dir, provider="claude", **_kwargs):
                 captured.append({"command": command, "sessions_dir": Path(sessions_dir),
                                  "provider": provider})
 
@@ -331,7 +331,7 @@ class CliTests(unittest.TestCase):
         captured = []
 
         class FakeRuntime:
-            def __init__(self, command, sessions_dir, provider="claude"):
+            def __init__(self, command, sessions_dir, provider="claude", **_kwargs):
                 captured.append({"command": command, "sessions_dir": Path(sessions_dir),
                                  "provider": provider})
 

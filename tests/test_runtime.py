@@ -738,6 +738,44 @@ class TestRuntimeSpawn(unittest.TestCase):
             self.assertEqual(len(rt.ledger.turns("pre")), 1)
 
 
+    def test_spawn_stops_a_curator_that_goes_silent(self):
+        import threading
+
+        class HangingStdout:
+            def __init__(self):
+                self.release = threading.Event()
+
+            def __iter__(self):
+                yield json.dumps({"type": "system", "subtype": "init",
+                                  "session_id": "sid-h", "model": "m"}) + "\n"
+                self.release.wait(5)
+
+        out = HangingStdout()
+
+        class FakeProc:
+            stdout = out
+            returncode = None
+            killed = False
+
+            def kill(self):
+                FakeProc.killed = True
+                FakeProc.returncode = -9
+                out.release.set()
+
+            def wait(self, timeout=None):
+                return self.returncode
+
+            def poll(self):
+                return self.returncode
+
+        with tempfile.TemporaryDirectory() as d:
+            rt = Runtime("claude", Path(d), idle_timeout=0.2)
+            with mock.patch("kettle.runtime.subprocess.Popen", return_value=FakeProc()):
+                evs = list(rt.spawn("hi", cwd=d))
+        self.assertTrue(FakeProc.killed)
+        self.assertTrue(any(e["t"] == "error" and "idle timeout" in e["s"] for e in evs))
+        self.assertEqual(evs[-1]["t"], "done")
+
     def test_spawn_reports_a_missing_curator_cli_instead_of_raising(self):
         with tempfile.TemporaryDirectory() as d:
             rt = Runtime(str(Path(d) / "no-such-claude"), Path(d))

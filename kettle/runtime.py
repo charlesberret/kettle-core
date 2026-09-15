@@ -838,6 +838,40 @@ def build_argv(cfg, prompt: str, *,
     return build_cmd(command, prompt, session_id, bits, provider=provider)
 
 
+DEFAULT_IDLE_TIMEOUT_S = 300.0  # same default as the server's curator.idle_timeout_s
+
+
+def _lines_with_idle_timeout(stream, idle_timeout: float) -> Iterator[str]:
+    """Yield lines from `stream`, raising TimeoutError after `idle_timeout` seconds with
+    no new line. A daemon thread does the blocking reads."""
+    import queue as _queue
+    import threading as _threading
+    q: _queue.Queue = _queue.Queue()
+    eof = object()
+
+    def pump():
+        try:
+            for line in stream:
+                q.put(line)
+        except Exception as exc:  # noqa: BLE001 — surface reader failures to the consumer
+            q.put(exc)
+        finally:
+            q.put(eof)
+
+    _threading.Thread(target=pump, daemon=True, name="kettle-runtime-stdout").start()
+    while True:
+        try:
+            item = q.get(timeout=idle_timeout)
+        except _queue.Empty:
+            raise TimeoutError(
+                f"curator idle timeout after {idle_timeout:g}s without output") from None
+        if item is eof:
+            return
+        if isinstance(item, Exception):
+            raise item
+        yield item
+
+
 def spawn_error_text(cmd: list, exc: BaseException, provider: str = "claude") -> str:
     """One plain sentence for a curator CLI that could not start."""
     exe = str(cmd[0]) if cmd else "(no command)"
@@ -855,11 +889,12 @@ class Runtime:
     thin so the testable logic (above) stays pure."""
 
     def __init__(self, claude: str, sessions_dir: Path | str, window: int = DEFAULT_WINDOW,
-                 provider: str = "claude"):
+                 provider: str = "claude", idle_timeout: float = DEFAULT_IDLE_TIMEOUT_S):
         self.claude = claude
         self.provider = provider
         self.ledger = SessionLedger(sessions_dir)
         self.window = window
+        self.idle_timeout = idle_timeout
 
     def spawn(self, prompt: str, cwd: Path | str, session_id: Optional[str] = None,
               role: str = "chat", extra: Optional[list] = None,
@@ -881,14 +916,22 @@ class Runtime:
             return
         assert proc.stdout is not None
         try:
-            for evt in normalize(proc.stdout, meter, lambda s: cap.__setitem__("sid", s)):
-                if evt["t"] == "text":
-                    cap["text"].append(evt["s"])
-                elif evt["t"] == "tool":
-                    cap["tools"].append(evt["s"])
-                    if evt.get("tool") in lineage.WRITE_TOOLS and evt.get("path"):
-                        cap["edits"].append(evt["path"])
-                yield evt
+            try:
+                lines = _lines_with_idle_timeout(proc.stdout, self.idle_timeout)
+                for evt in normalize(lines, meter, lambda s: cap.__setitem__("sid", s)):
+                    if evt["t"] == "text":
+                        cap["text"].append(evt["s"])
+                    elif evt["t"] == "tool":
+                        cap["tools"].append(evt["s"])
+                        if evt.get("tool") in lineage.WRITE_TOOLS and evt.get("path"):
+                            cap["edits"].append(evt["path"])
+                    yield evt
+            except TimeoutError as exc:
+                # a stalled CLI must not hang `kettle chat` / `kettle found` forever
+                proc.kill()
+                yield {"t": "error", "s": str(exc)}
+                yield {"t": "done", "usage": meter.snapshot(), "cost": 0}
+                return
             proc.wait(timeout=10)
             if proc.returncode not in (0, None, -9):
                 yield {"t": "error", "s": f"curator exited {proc.returncode}"}

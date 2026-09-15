@@ -218,7 +218,7 @@ class ViewportRitualRegressionBar(unittest.TestCase):
         stream = function_source(html, "pipeStream")
         self.assertIn("fillAgentMarkdown", stream)
         self.assertRegex(html, r"\.msg\.agent\.md\s*\{")
-        self.assertIn("ui-2026-09-15d", html)
+        self.assertIn("ui-2026-09-15e", html)
 
     def test_markdown_is_sanitized_as_a_string_before_it_reaches_the_dom(self):
         """Assigning marked output to innerHTML and cleaning the node afterwards is
@@ -281,16 +281,15 @@ class ViewportRitualRegressionBar(unittest.TestCase):
         self.assertIn("try {", load[max(0, i - 80):i])
         self.assertIn("this desk could not load", load)
 
-    def test_confirmation_card_is_blank_for_the_user(self):
-        parse = self.function("parseConfirmCard")
-        self.assertIn("checked: false", parse)
-        self.assertNotRegex(parse, r"checked:\s*/x/i")
-
     def test_founding_does_not_upgrade_gfm_into_a_card(self):
-        """P4: interview is a conversation. Leftover parser must not paint a form."""
-        src = self.function("maybeUpgradeConfirmCard")
-        self.assertIn("return false", src)
-        self.assertNotIn("renderConfirmCard(node", src)
+        """P4: interview is a conversation. The confirmation-card machinery is gone,
+        not merely disconnected, and agent turns always paint display-only GFM."""
+        for name in ("parseConfirmCard", "renderConfirmCard", "serializeConfirmCard",
+                     "maybeUpgradeConfirmCard", "looksLikeConfirmCard", "growElaborate",
+                     "ensureInterviewStartAnchor", "confirm-card", "cc-elab", "finish ✓"):
+            with self.subTest(identifier=name):
+                self.assertNotIn(name, self.html)
+        self.assertIn("fillAgentMarkdown(agentNode, agentAcc)", self.function("pipeStream"))
 
     def test_activity_updates_chrome_and_compact_stays_connected(self):
         stream = self.function("pipeStream")

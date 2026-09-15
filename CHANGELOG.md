@@ -77,6 +77,11 @@ and Desk schema have their own integer contract versions.
 - A desk whose `queue.json` does not parse is reported (409 `queue_corrupt`) and never
   overwritten; a project folder that was moved or deleted is reported (404) instead of being
   recreated by `mkdir -p`; one broken desk no longer fails the sitting's boot.
+- `kettle chat` / `kettle found` / `kettle refresh-briefs` stop a curator that goes silent for
+  `curator.idle_timeout_s` (default 300 s), as the server already did.
+- The retired confirmation-card parser, renderer, CSS and tests are removed from the sitting
+  (P4: founding is a conversation); the re-found offer keeps its own `refound-offer` styling.
+  Founding copy in the sitting says "Draft Proposal ✓" instead of "finish ✓".
 - A missing or non-executable curator CLI is reported by name with a fix
   (`curator_unavailable`, 500, before any stream) instead of a traceback from `kettle chat` /
   `kettle found` or a made-up `~/.local/bin/claude` path; the CLI is resolved per turn, so
