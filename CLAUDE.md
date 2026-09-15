@@ -39,9 +39,10 @@ Sitting visual/copy/palette changes land here; desktop inherits the sitting. VS 
 `sync-ui-copy` / `sync-palette` when those sources change. HTTP changes: [`API.md`](./API.md).
 Viewports: [`docs/PLATFORMS.md`](./docs/PLATFORMS.md).
 
-**Chat write tools (interim):** `/api/chat` grants Edit/Write under `--permission-mode acceptEdits`,
-fenced to the project root — same write tier as sweep for always-on implementation when the
-user asks. Founding interview is tool-less (core survey) until Finish/Found.
+**Chat write tools (interim):** `/api/chat` grants Edit/Write under `--permission-mode acceptEdits`
+with the project root as cwd — same write tier as sweep for always-on implementation when the
+user asks. Write tiers are trusted, not fenced (see ARCHITECTURE.md § Tool tiers). Founding
+interview is tool-less (core survey) until Finish/Found.
 
 Server listens on `http://127.0.0.1:4242/` (`DEFAULT_PORT = 4242` in `server.py`). A second launch
 defers if the current instance is healthy; pass `--replace` or use `Kettle.app` to force a

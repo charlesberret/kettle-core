@@ -56,9 +56,15 @@ Wire contract: [`API.md`](./API.md).
 
 | Tier | Used for | Grant |
 |------|----------|--------|
-| interview (tool-less) | founding interview (until Finish) | no tools — core survey snapshot only (`survey.py`) |
-| project-write | review chat, sweep, found/finish | Edit / Write under `acceptEdits`, fenced to the project root |
-| never | anyone | network beyond localhost; auto-mutation of append-only records; paths outside the fence |
+| interview (tool-less) | founding interview (until Finish) | no tools — core survey snapshot only (`survey.py`); Claude: `--tools ""` |
+| project-write | review chat, sweep, found/finish | Edit / Write under `acceptEdits`, run with the project as cwd, plus a short shell allowlist with no program-running commands |
+| never | anyone | a registered folder's own agent config (hooks, MCP servers: Claude runs with `--setting-sources user --strict-mcp-config`); auto-mutation of append-only records by core |
+
+**Honest fence:** the HTTP file API is fenced (`safe_path`, registered roots). Curator write
+tiers are **trusted, not fenced**: `rm`/`mv`/`cp`/`tee` take arbitrary paths, Claude's
+`acceptEdits` auto-approves ordinary filesystem commands, and Grok's write tier is
+`bypassPermissions` with open Bash (`fenced_writes: False`). Only an OS sandbox around the
+curator process would enforce the project root (`docs/briefs/19-enforce-the-fence.md`).
 
 Provider quirks for *write* tiers are single-sourced in `runtime.PROVIDER_CAPABILITIES`.
 Founding no longer depends on per-provider read-only shell modes.

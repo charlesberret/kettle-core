@@ -115,6 +115,11 @@ and Desk schema have their own integer contract versions.
   `find`, `awk`, `sed`, `sort`): `rg --pre ./script` executed under the chat tier. Use
   the built-in Grep/Glob/Edit tools. Shell-bearing tiers remain trusted, not fenced —
   Claude's `acceptEdits` also auto-approves ordinary filesystem commands.
+- Writes no longer follow a symlink planted at a predictable temp name: `atomic_write`
+  creates its temp file with O_EXCL under a random name (used by save, queue, snapshots
+  and the watcher). A desk directory that is a symlink leading outside its project is
+  refused. A project root may not be the whole home folder, overlap credential or agent
+  config folders (`~/.ssh`, `~/.claude`, `~/.config`, …), or contain Kettle's settings.
 - The sitting refuses remote images (`img-src 'self' data:`), so a registered
   document cannot report when it is opened. CSP hashes are computed on
   LF-normalized HTML, and `.gitattributes` pins `kettle/static/*.html` to LF.

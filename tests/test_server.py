@@ -2407,6 +2407,44 @@ class LocalhostAuthTests(EndpointTests):
         finally:
             conn.close()
 
+    def test_save_does_not_follow_a_planted_temp_symlink(self):
+        """A folder that ships `draft.md.desk-tmp -> ~/.zshrc` (or any predictable
+        temp name) must not redirect the user's save outside the fence."""
+        target = self.root / "draft.md"
+        target.write_text("old")
+        outside = self.tmp / "outside-victim.txt"
+        outside.write_text("untouched")
+        for name in ("draft.md.desk-tmp", "draft.md.tmp"):
+            (self.root / name).symlink_to(outside)
+        s, _ = _http("POST", f"{self.base}/api/save",
+                     {"project": "t", "path": str(target), "content": "new text"})
+        self.assertEqual(s, 200)
+        self.assertEqual(target.read_text(), "new text")
+        self.assertEqual(outside.read_text(), "untouched")
+
+    def test_save_creates_a_new_file_in_an_existing_folder(self):
+        target = self.root / "fresh.md"
+        s, _ = _http("POST", f"{self.base}/api/save",
+                     {"project": "t", "path": str(target), "content": "hello"})
+        self.assertEqual(s, 200)
+        self.assertEqual(target.read_text(), "hello")
+
+    def test_home_and_credential_folders_cannot_be_project_roots(self):
+        home = server.HOME.resolve()
+        self.assertIn("whole home folder", server.project_root_problem(home))
+        self.assertIn("overlaps", server.project_root_problem(home / ".ssh"))
+        self.assertIsNone(server.project_root_problem(self.root.resolve()))
+
+    def test_symlinked_desk_leading_outside_the_project_is_refused(self):
+        proj = self.proj()
+        desk = server.project_root(proj) / ".kettle"
+        elsewhere = self.tmp / "elsewhere-desk"
+        shutil.copytree(desk, elsewhere)
+        shutil.rmtree(desk)
+        desk.symlink_to(elsewhere)
+        with self.assertRaises(ValueError):
+            server.runtime_dir(proj)
+
     def test_save_missing_file_is_404(self):
         missing = self.root / "no-such-dir" / "missing.md"
         s, j = _http("POST", f"{self.base}/api/save",

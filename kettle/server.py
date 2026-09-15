@@ -27,8 +27,10 @@ import re
 import secrets
 import shutil
 import signal
+import stat
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import urllib.request
@@ -575,7 +577,15 @@ def runtime_dir(proj: dict) -> Path:
     doesn't race these rapid rewrites. The durable desk files stay in desk_dir() and sync
     normally. (A sync idiosyncrasy is fixed at the sync layer, not by moving state outside
     the sandbox.)"""
-    d = desk_dir(proj) / "runtime"
+    desk = desk_dir(proj)
+    d = desk / "runtime"
+    root = project_root(proj).resolve()
+    for candidate in (desk, d):
+        if candidate.is_symlink() and not candidate.resolve().is_relative_to(root):
+            # A registered folder that ships `.kettle -> ~/elsewhere` would move every
+            # desk write (and the curator's) outside the project fence.
+            raise ValueError(f"desk directory {candidate} is a symlink leading outside "
+                             f"the project ({candidate.resolve()}) — refusing to use it")
     d.mkdir(parents=True, exist_ok=True)
     return d
 
@@ -736,9 +746,7 @@ def mutate_queue(proj: dict, fn) -> dict:
             qp.parent.mkdir(parents=True, exist_ok=True)
             q = dict(EMPTY_QUEUE)
         fn(q)
-        tmp = qp.with_suffix(".json.tmp")
-        tmp.write_text(json.dumps(q, indent=2, ensure_ascii=False))
-        tmp.replace(qp)
+        atomic_write(qp, json.dumps(q, indent=2, ensure_ascii=False))
         return q
 
 
@@ -1066,9 +1074,7 @@ def ensure_snapshots(proj: dict, q: dict):
         except (PermissionError, KeyError, OSError, RuntimeError):
             continue  # source missing or outside safe roots: skip cleanly
         snap_dir.mkdir(parents=True, exist_ok=True)
-        tmp = dest.with_name(dest.name + ".tmp")
-        tmp.write_bytes(data)
-        tmp.replace(dest)
+        atomic_write(dest, data)
 
 
 def _snapshot_path(proj: dict, entry_id) -> Path:
@@ -1202,14 +1208,55 @@ def save_settings(patch: dict) -> dict:
         return cur
 
 
-def atomic_write(path: Path, text: str):
-    tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(text, encoding="utf-8")
-    tmp.replace(path)
+def atomic_write(path: Path, data: str | bytes) -> None:
+    """Write via a fresh temp file in the same directory, then rename over `path`.
+
+    The temp file is created with O_EXCL under a random name, so a symlink planted at a
+    predictable `<name>.tmp` cannot redirect the write outside the fence. An existing
+    file keeps its permission bits; a new one gets 0644."""
+    path = Path(path)
+    try:
+        mode = stat.S_IMODE(path.stat().st_mode)
+    except OSError:
+        mode = 0o644
+    fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix="." + path.name + ".", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(data.encode("utf-8") if isinstance(data, str) else data)
+        os.chmod(tmp, mode)
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
 
 
 def slug(s: str) -> str:
     return re.sub(r"[^A-Za-z0-9._-]+", "_", s).strip("_") or "x"
+
+
+def project_root_problem(rp: Path) -> str | None:
+    """Why a resolved folder cannot be a project root, or None. Roots extend the file
+    fence: every file under one becomes readable, writable and visible to curators."""
+    home = HOME.resolve()
+    if not rp.is_relative_to(home):
+        return f"folder must be under {HOME}"
+    if rp == home:
+        return f"folder cannot be your whole home folder ({HOME}) — choose the project's own folder"
+    for sp in (home / n for n in (".ssh", ".gnupg", ".aws", ".claude", ".config", ".cache",
+                                  ".kube", ".docker")):
+        if rp.is_relative_to(sp) or sp.is_relative_to(rp):
+            return (f"folder {rp} overlaps {sp}, which holds credentials or agent "
+                    "configuration — choose the project's own folder")
+    registry_dir = PROJECTS_PATH.parent.resolve()
+    if registry_dir.is_relative_to(rp):
+        # a curator with write tools in this root could rewrite settings.json
+        # (curator.command) or the project registry
+        return (f"folder {rp} contains Kettle's own settings ({registry_dir}) — "
+                "choose the project's own folder")
+    return None
 
 
 def register_project(name: str, root: str, kit: str | None = None,
@@ -1237,8 +1284,9 @@ def register_project(name: str, root: str, kit: str | None = None,
         raise ValueError(f"cannot resolve folder: {root_raw}")
     if not rp.is_dir():
         raise ValueError(f"folder does not exist (or is not a directory): {rp}")
-    if not rp.is_relative_to(HOME.resolve()):
-        raise ValueError(f"folder must be under {HOME}")
+    problem = project_root_problem(rp)
+    if problem:
+        raise ValueError(problem)
     pid = slug(name).lower()
     proj = {
         "id": pid,
@@ -1934,9 +1982,7 @@ class Handler(BaseHTTPRequestHandler):
             if url.path == "/api/save":
                 sp = get_project(d.get("project")) if d.get("project") else None
                 p = safe_path(d["path"], project_root(sp) if sp else None)
-                tmp = p.with_name(p.name + ".desk-tmp")
-                tmp.write_text(d["content"], encoding="utf-8")
-                tmp.replace(p)  # atomic write; rely on your VCS/sync layer for version history
+                atomic_write(p, d["content"])  # rely on your VCS/sync layer for version history
                 proj = project_for_path(p)            # the user's own edit → user lineage
                 if proj:
                     try:
@@ -2556,8 +2602,9 @@ class Handler(BaseHTTPRequestHandler):
         if not rp.is_dir():
             self.send_json({"error": f"folder does not exist (or is not a directory): {rp}"}, 400)
             return
-        if not rp.is_relative_to(HOME.resolve()):
-            self.send_json({"error": f"folder must be under {HOME}"}, 400)
+        problem = project_root_problem(rp)
+        if problem:
+            self.send_json({"error": problem}, 400)
             return
         root_clean = root_raw.rstrip("/") or root_raw
         with PROJECTS_LOCK:

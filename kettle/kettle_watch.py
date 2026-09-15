@@ -34,7 +34,7 @@ try:
     from . import kits  # the per-kind curator playbook (lens · urgency · first-queue heuristic)
 except ImportError:
     kits = None
-from .server import resolve_projects_path
+from .server import atomic_write, resolve_projects_path
 from .runtime import CLAUDE_FOREIGN_AGENT_CONFIG_DENY, CLAUDE_PROJECT_ISOLATION, curator_env
 
 HOME = Path.home()
@@ -184,9 +184,7 @@ def normalize_queue(queue_file: Path, proj: dict) -> None:
         if not e.get("project_root"):
             e["project_root"] = root; changed = True
     if changed:
-        tmp = queue_file.with_name(queue_file.name + ".intake-tmp")
-        tmp.write_text(json.dumps(q, indent=2))
-        tmp.replace(queue_file)
+        atomic_write(queue_file, json.dumps(q, indent=2))
 
 
 def intake_pass(proj: dict, st: dict, settings: dict) -> int:
