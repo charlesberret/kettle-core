@@ -189,15 +189,25 @@ def _read_discovery(path: Path | None = None) -> tuple[dict | None, str | None]:
     return data, None
 
 
-def _ping_localhost(port: int, timeout: float = _DOCTOR_PING_TIMEOUT_S) -> dict | None:
-    """GET /api/ping on loopback only. Never binds; never probes port 4242."""
+def _ping_localhost(
+    port: int, token: str | None = None, timeout: float = _DOCTOR_PING_TIMEOUT_S,
+) -> dict | None:
+    """GET /api/ping on loopback only. Never binds; never probes port 4242.
+
+    /api/ping is under /api/ and so requires the per-boot ``X-Kettle-Token``
+    (server.py's ``check_request_guards``) — without it every live server answers 403
+    and doctor misreports a healthy server as "stale discovery?". *token* should come
+    straight from the already-parsed discovery record (``~/.cache/kettle/server.json``),
+    the same file that carries the port.
+    """
     if not isinstance(port, int) or port <= 0 or port == server.DEFAULT_PORT:
         # Refuse the conventional live port so tools never disturb a bookmarked desk.
         return None
+    req = urllib.request.Request(f"http://127.0.0.1:{port}/api/ping")
+    if token:
+        req.add_header(server.TOKEN_HEADER, token)
     try:
-        with urllib.request.urlopen(
-            f"http://127.0.0.1:{port}/api/ping", timeout=timeout,
-        ) as resp:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
             payload = json.loads(resp.read())
     except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError, ValueError):
         return None
@@ -274,9 +284,30 @@ def install_doctor_checks(
         except OSError:
             resolved = first
             is_canon = False
+
+        # A single `kettle` on PATH that resolves cleanly is fine even outside the
+        # canonical venv — README.md / CONTRIBUTING.md both walk contributors through a
+        # plain `.venv`. Only fail this row when PATH holds *multiple* installs that
+        # resolve to genuinely different targets (a real "which one runs?" hazard).
+        extras = hits[1:]
+        distinct_extra = False
+        if extras:
+            try:
+                first_key = str(resolved)
+            except OSError:
+                first_key = str(first)
+            for extra in extras:
+                try:
+                    extra_key = str(extra.resolve())
+                except OSError:
+                    extra_key = str(extra)
+                if extra_key != first_key:
+                    distinct_extra = True
+                    break
+
         rows.append({
             "name": "kettle-on-path",
-            "ok": is_canon,
+            "ok": not distinct_extra,
             "detail": (
                 f"resolves to {first}"
                 + (f" → {resolved}" if resolved != first else "")
@@ -284,14 +315,20 @@ def install_doctor_checks(
             ),
             "docs": "INSTALL.md § Canonical install",
         })
-        extras = hits[1:]
-        if extras:
+        if distinct_extra:
             rows.append({
                 "name": "kettle-path-extras",
                 "ok": False,
-                "detail": f"{len(extras)} extra on PATH: "
+                "detail": f"{len(extras)} extra on PATH resolving elsewhere: "
                           + ", ".join(str(p) for p in extras),
                 "docs": "INSTALL.md § PATH hygiene",
+            })
+        elif extras:
+            rows.append({
+                "name": "kettle-path-extras",
+                "ok": True,
+                "detail": f"{len(extras)} extra on PATH but resolve(s) to the same install",
+                "docs": "INSTALL.md § Canonical install",
             })
         else:
             rows.append({
@@ -628,7 +665,8 @@ def runtime_doctor_checks(
         return rows
 
     if ping is ...:
-        ping = _ping_localhost(port)
+        token = discovery.get("token") if isinstance(discovery, dict) else None
+        ping = _ping_localhost(port, token)
 
     if ping is None:
         rows.append({

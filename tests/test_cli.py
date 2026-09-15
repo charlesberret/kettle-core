@@ -7,11 +7,13 @@ into a tempdir and must run serially.
 
 from __future__ import annotations
 
+import http.server
 import io
 import json
 import os
 import shutil
 import tempfile
+import threading
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
@@ -355,6 +357,41 @@ class CliTests(unittest.TestCase):
         self.assertIn("caller", by_name["py-modules-list"]["detail"])
         self.assertTrue(by_name["install-mapping"]["ok"])
 
+    def test_install_doctor_single_noncanonical_kettle_is_ok(self):
+        """README.md / CONTRIBUTING.md both walk a contributor through a plain `.venv`,
+        not ~/.kettle-venv. A single, cleanly-resolving `kettle` on PATH must not FAIL
+        doctor just for living outside the canonical venv — only genuinely conflicting
+        installs (multiple distinct targets on PATH) should."""
+        rows = cli.install_doctor_checks(
+            path_hits=[Path("/Users/me/project/.venv/bin/kettle")],
+            package_modules=["kettle", "kettle.cli", "kettle.server"],
+            top_level=["kettle"],
+            canonical=cli.CANONICAL_KETTLE,
+        )
+        by_name = {r["name"]: r for r in rows}
+        self.assertTrue(by_name["kettle-on-path"]["ok"])
+        self.assertIn("canonical is", by_name["kettle-on-path"]["detail"])
+        self.assertTrue(by_name["kettle-path-extras"]["ok"])
+
+    def test_install_doctor_extras_resolving_to_same_install_are_ok(self):
+        """Two PATH entries that both resolve to the same real binary (e.g. a symlink
+        alias) are not a conflict — only *different* resolved targets are."""
+        with tempfile.TemporaryDirectory() as td:
+            real = Path(td) / "kettle"
+            real.write_text("#!/bin/sh\n")
+            real.chmod(0o755)
+            alias = Path(td) / "kettle-alias"
+            alias.symlink_to(real)
+            rows = cli.install_doctor_checks(
+                path_hits=[real, alias],
+                package_modules=["kettle", "kettle.cli", "kettle.server"],
+                top_level=["kettle"],
+                canonical=cli.CANONICAL_KETTLE,
+            )
+        by_name = {r["name"]: r for r in rows}
+        self.assertTrue(by_name["kettle-on-path"]["ok"])
+        self.assertTrue(by_name["kettle-path-extras"]["ok"])
+
     def test_install_doctor_green_when_canonical_and_mapped(self):
         modules = cli._package_modules()
         self.assertIn("kettle.egress", modules)
@@ -523,6 +560,106 @@ class CliTests(unittest.TestCase):
         self.assertIn("FAIL", out)
         self.assertIn("provider-cli", out)
         self.assertIn("→", out)
+
+
+class _TokenGatedPingHandler(http.server.BaseHTTPRequestHandler):
+    """Stands in for server.py's /api/ping: 403 without X-Kettle-Token, 200 with it —
+    the same shape check_request_guards() enforces for every /api/ route."""
+
+    TOKEN = "doctor-test-token"
+
+    def log_message(self, *_a, **_k):  # noqa: D401 — quiet the test run
+        pass
+
+    def do_GET(self):
+        if self.path != "/api/ping":
+            self.send_response(404)
+            self.end_headers()
+            return
+        if self.headers.get("X-Kettle-Token") != self.TOKEN:
+            self.send_response(403)
+            self.end_headers()
+            self.wfile.write(b'{"error":"missing or invalid X-Kettle-Token"}')
+            return
+        body = json.dumps({"app": "kettle", "version": "9.9.9"}).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+
+class PingTokenTests(unittest.TestCase):
+    """Fix: doctor's server-reachable ping must send the discovery token — server.py
+    requires X-Kettle-Token on every /api/ route, so an unauthenticated ping against a
+    perfectly live server used to read as 'stale discovery?'."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.httpd = http.server.HTTPServer(("127.0.0.1", 0), _TokenGatedPingHandler)
+        cls.port = cls.httpd.server_address[1]
+        assert cls.port != server.DEFAULT_PORT  # never the conventional live port
+        cls.thread = threading.Thread(target=cls.httpd.serve_forever, daemon=True)
+        cls.thread.start()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.httpd.shutdown()
+        cls.httpd.server_close()
+        cls.thread.join(timeout=5)
+
+    def test_ping_localhost_without_token_is_refused(self):
+        self.assertIsNone(cli._ping_localhost(self.port))
+        self.assertIsNone(cli._ping_localhost(self.port, token="wrong-token"))
+
+    def test_ping_localhost_with_correct_token_succeeds(self):
+        payload = cli._ping_localhost(self.port, token=_TokenGatedPingHandler.TOKEN)
+        self.assertIsNotNone(payload)
+        self.assertEqual(payload["app"], "kettle")
+        self.assertEqual(payload["version"], "9.9.9")
+
+    def test_runtime_doctor_checks_authenticates_from_discovery_token(self):
+        """runtime_doctor_checks must pull the token out of the already-parsed
+        discovery record (the same file that carries the port) rather than probe
+        unauthenticated."""
+        discovery = {
+            "port": self.port,
+            "pid": 12345,
+            "token": _TokenGatedPingHandler.TOKEN,
+            "url": f"http://127.0.0.1:{self.port}/",
+        }
+        rows = cli.runtime_doctor_checks(
+            settings={"curator": {"provider": "claude", "command": "claude"}},
+            provider_ready={
+                "id": "claude", "label": "Claude Code", "command": "claude",
+                "command_resolved": "/bin/claude", "command_exists": True,
+            },
+            discovery=discovery,
+            discovery_error=None,
+            ping=...,  # exercise the real _ping_localhost call, not an injected stub
+        )
+        by_name = {r["name"]: r for r in rows}
+        self.assertTrue(by_name["server-reachable"]["ok"], by_name["server-reachable"])
+        self.assertIn("ok on", by_name["server-reachable"]["detail"])
+        self.assertNotIn("stale discovery", by_name["server-reachable"]["detail"])
+
+    def test_runtime_doctor_checks_without_token_reads_stale(self):
+        """Regression guard: a discovery record missing/blank token must not silently
+        pass — it should read exactly like the old unauthenticated-ping failure."""
+        discovery = {"port": self.port, "pid": 12345, "token": ""}
+        rows = cli.runtime_doctor_checks(
+            settings={"curator": {"provider": "claude", "command": "claude"}},
+            provider_ready={
+                "id": "claude", "label": "Claude Code", "command": "claude",
+                "command_resolved": "/bin/claude", "command_exists": True,
+            },
+            discovery=discovery,
+            discovery_error=None,
+            ping=...,
+        )
+        by_name = {r["name"]: r for r in rows}
+        self.assertFalse(by_name["server-reachable"]["ok"])
+        self.assertIn("stale discovery", by_name["server-reachable"]["detail"])
 
 
 if __name__ == "__main__":
