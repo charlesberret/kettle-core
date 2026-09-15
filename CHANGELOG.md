@@ -26,8 +26,8 @@ and Desk schema have their own integer contract versions.
 ### Changed
 
 - Founding interview no longer passes a bare `--allowedTools` to Claude Code
-  CLI (current CLIs require a value and exit 1). Interview uses
-  `--permission-mode plan`, same tool-less posture as Grok.
+  CLI (current CLIs require a value and exit 1). Claude's interview uses
+  `--permission-mode plan --tools ""` (see Security); Grok uses plan mode.
 - Founding interview is a conversation (one mission question), not a
   confirmation-card form. Agent chat renders GFM. See `docs/REVIEW.md`.
 
@@ -72,6 +72,14 @@ and Desk schema have their own integer contract versions.
 - The sitting is served with a Content-Security-Policy (script-src `'self'` plus
   per-response sha256 pins of the shipped inline blocks; `frame-ancestors 'none'`,
   `object-src 'none'`), `X-Frame-Options: DENY` and `nosniff`.
+- A registered folder's own agent config no longer runs. Headless `claude -p` skips
+  workspace trust, so a folder's `.claude/settings*.json` hooks and `.mcp.json` servers
+  executed on the first curator turn, including the founding interview. Every Claude
+  tier now passes `--setting-sources user --strict-mcp-config`; the interview also
+  passes `--tools ""` (plan mode alone left 34 built-in tools and all user MCP
+  connectors); write tiers name their built-ins with `--tools` (no WebFetch, WebSearch
+  or Task) and deny writes to `.gemini/**` and `.codex/**`. Curator children never
+  inherit `GEMINI_CLI_TRUST_WORKSPACE`. Custom `cli` providers are unchanged.
 
 ## 0.2.0
 

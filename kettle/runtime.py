@@ -27,6 +27,7 @@ borrowed from a process — the same cure applied to the conversation).
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 from datetime import datetime
@@ -495,6 +496,37 @@ TOOL_TIERS: dict[str, tuple[Optional[str], list[str], list[str]]] = {
     ),
 }
 
+# A registered folder is not trusted code. Headless `claude -p` skips the workspace-
+# trust dialog, so the folder's `.claude/settings*.json` hooks and its `.mcp.json`
+# servers ran on the first curator turn — the plan-mode interview included
+# (verified against claude 2.1.272, 2026-09-15). Load settings from the user scope
+# only and ignore every MCP config Kettle did not pass. Claude-only: custom `cli`
+# binaries are not assumed to accept these flags.
+CLAUDE_PROJECT_ISOLATION = ["--setting-sources", "user", "--strict-mcp-config"]
+
+# Claude's own protected paths already refuse writes to .claude/, .mcp.json and
+# .git/config, but a Claude write turn could still plant another agent's config for
+# a later Gemini/Codex turn in the same folder.
+CLAUDE_FOREIGN_AGENT_CONFIG_DENY = [
+    "Write(.gemini/**)", "Edit(.gemini/**)",
+    "Write(.codex/**)", "Edit(.codex/**)",
+]
+
+# Environment variables that would make a curator CLI trust the registered folder's
+# own agent config. Gemini's `--skip-trust` currently applies *after* workspace
+# settings load, so project hooks stay off; this variable loads them (verified with
+# gemini 0.54.4). Never let it reach a curator child.
+CURATOR_ENV_DENY = frozenset({"GEMINI_CLI_TRUST_WORKSPACE"})
+
+
+def curator_env(base: Optional[dict] = None) -> dict:
+    """Environment for a curator child process: the caller's, minus trust overrides."""
+    env = dict(os.environ if base is None else base)
+    for key in CURATOR_ENV_DENY:
+        env.pop(key, None)
+    return env
+
+
 # ---------- per-provider capabilities (honest, derived from tools_argv above) ----------
 #
 # A tier is only as real as the provider's CLI makes it. Each boolean states what the
@@ -575,8 +607,13 @@ def tools_argv(tier: str, provider: str = "claude") -> list[str]:
             # plan = no project writes; no --allow Bash / --always-approve
             return ["--permission-mode", "plan"]
         # Claude / cli: current CLIs require a value after --allowedTools.
-        # A bare `--allowedTools` exits 1 ("argument missing"). plan mode is
-        # the same tool-less interview posture Grok uses (no writes, no shell).
+        # A bare `--allowedTools` exits 1 ("argument missing").
+        if provider == "claude":
+            # plan mode alone is read-only, not tool-less: it kept 34 built-in tools
+            # and every user MCP connector. `--tools ""` removes the built-ins; the
+            # project-isolation flags keep the registered folder's own agent config
+            # from running (see CLAUDE_PROJECT_ISOLATION).
+            return ["--permission-mode", "plan", "--tools", "", *CLAUDE_PROJECT_ISOLATION]
         return ["--permission-mode", "plan"]
 
     if provider == "chatgpt":
@@ -651,10 +688,19 @@ def tools_argv(tier: str, provider: str = "claude") -> list[str]:
     out = []
     if mode:
         out += ["--permission-mode", mode]
+    if provider == "claude":
+        # Name the built-ins this tier may use at all (WebFetch, WebSearch, Task and
+        # connectors are simply absent), then pre-approve the fine-grained rules.
+        builtins = sorted({str(r).split("(", 1)[0] for r in allow})
+        out += ["--tools", ",".join(builtins)]
     if allow:
         out += ["--allowedTools", *allow]
+    if provider == "claude" and write:
+        deny = [*deny, *CLAUDE_FOREIGN_AGENT_CONFIG_DENY]
     if deny:
         out += ["--disallowedTools", *deny]
+    if provider == "claude":
+        out += CLAUDE_PROJECT_ISOLATION
     return out
 
 
@@ -814,7 +860,7 @@ class Runtime:
         if cmd is None:
             cmd = build_cmd(self.claude, prompt, session_id, extra, provider=self.provider)
         proc = subprocess.Popen(cmd, cwd=str(cwd), stdout=subprocess.PIPE,
-                                stderr=subprocess.STDOUT, text=True)
+                                stderr=subprocess.STDOUT, text=True, env=curator_env())
         assert proc.stdout is not None
         try:
             for evt in normalize(proc.stdout, meter, lambda s: cap.__setitem__("sid", s)):

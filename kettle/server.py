@@ -2589,6 +2589,7 @@ class Handler(BaseHTTPRequestHandler):
             # stderr merged into stdout: a second unread pipe can deadlock the CLI mid-stream
             proc = subprocess.Popen(
                 cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                env=runtime.curator_env(),
             )
         except Exception as exc:  # noqa: BLE001 — executable missing / spawn refused
             self.send_err(500, f"curator failed to start: {exc}", "internal")
