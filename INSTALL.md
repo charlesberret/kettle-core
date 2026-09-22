@@ -5,87 +5,91 @@ server and the CLI viewport are pure stdlib — no pip runtime dependencies.
 
 Source: [github.com/charlesberret/kettle-core](https://github.com/charlesberret/kettle-core)
 
-## Canonical install (editable)
+## Install
 
-**One install, one name on PATH.** Contributors and day-to-day use still prefer an
-editable checkout so docs and kits edit in place.
+Three ways in. Pick by what you are: a user, a stranger with no Python, or a contributor.
 
-| Piece | Location |
-|---|---|
-| Venv (canonical) | `~/.kettle-venv` |
-| Editable source | clone of this repo |
-| Console script | `~/.kettle-venv/bin/kettle` |
-| PATH shim (exactly one) | e.g. `~/.local/bin/kettle` → `~/.kettle-venv/bin/kettle` |
+| You want | Do this | You get |
+|---|---|---|
+| To use Kettle | `uv tool install kettle` (or `pipx install kettle`) | `kettle` on PATH, its own isolated environment, upgrades with one command |
+| No Python at all | Download the `kettle` binary from a release, `chmod +x`, put it on PATH | One 9 MB file; sitting, kits and interpreter are inside it |
+| To work on Kettle | Clone, then `python3 -m venv .venv && .venv/bin/pip install -e .` | Editable checkout: docs, kits and prompts edit in place |
 
-`kettle doctor` reports which `kettle` wins on `PATH`, whether it resolves to the
-canonical venv, whether every package module is importable, registry/desk integrity,
-active curator CLI resolve, runtime discovery, and a localhost ping when discovery lists
-a non-conventional port. It never repairs, never deletes PATH entries, and never binds
-or probes port `4242`.
+All three answer the same way:
 
-### Quick start — CLI + browser
+```sh
+kettle --version          # kettle X.Y.Z (api 0, desk schema 0)
+kettle doctor             # install health, read-only
+kettle projects           # the CLI viewport
+kettle --web              # the sitting in a browser
+```
+
+`kettle doctor` never repairs, never deletes PATH entries, and never binds or probes port
+`4242` — that is the live window's port.
+
+### The rule that matters: one `kettle` on PATH
+
+Two installs answering to the same name is the only install problem that actually bites.
+`kettle doctor` fails when `which -a kettle` finds installs that resolve to genuinely
+different targets; a single install anywhere is fine, canonical venv or not.
+
+```sh
+which -a kettle    # expect one path (or several symlinks to the same file)
+hash -r            # after any change, clear the shell's command cache
+kettle doctor
+```
+
+### Standalone binary
+
+Build it yourself from a checkout — no Python needed on the machine that runs the result:
+
+```sh
+tools/build-binary.sh            # writes dist/kettle, then smoke-tests it
+./dist/kettle --version
+```
+
+The script builds in a throwaway venv (PyInstaller is a build-time dependency only; the
+shipped package stays stdlib-only), bundles `static/` and `kits/` inside the executable,
+and then proves the bundle: `doctor`, an ephemeral-port server boot, `GET /api/ping` with
+the discovery token, and `GET /` returning the real sitting. It never uses port 4242.
+
+Use the binary for a machine without Python, a stranger trying Kettle once, or a hook
+script that must not depend on which interpreter is on PATH.
+
+### Contributor checkout
 
 ```sh
 git clone https://github.com/charlesberret/kettle-core.git
 cd kettle-core
-python3 -m venv ~/.kettle-venv
-~/.kettle-venv/bin/pip install -e .
-~/.kettle-venv/bin/kettle projects        # the CLI viewport
-~/.kettle-venv/bin/kettle --web           # browser mode
-python3 -c "import kettle; print(kettle.__version__)"
+python3 -m venv .venv
+.venv/bin/pip install -e .
+.venv/bin/kettle doctor
+python3 -m pytest -q
 ```
 
-Put **one** shim on your PATH pointing at the venv (not a second copy of the script):
+**Reinstall rule.** The installable unit is the `kettle/` package. If `kettle doctor`
+reports `package-import` red — the package does not import, or its bundled `static/` and
+`kits/` are missing — reinstall editable:
 
 ```sh
-ln -sf ~/.kettle-venv/bin/kettle ~/.local/bin/kettle   # dir must be on PATH
-hash -r                                                    # clear shell command cache
-which -a kettle                                          # expect one path
-kettle doctor                                            # install health
+.venv/bin/pip install -e .
 ```
 
-### Reinstall rule (editable)
+`~/.kettle-venv` is still a perfectly good home for that venv, and the desktop build
+script looks for it, but nothing requires it any more.
 
-The installable unit is the `kettle/` package. New `.py` files under `kettle/` are
-picked up by package discovery after reinstall when metadata is stale. If doctor
-reports modules not importable, reinstall editable:
+### Wheel
 
 ```sh
-~/.kettle-venv/bin/pip install -e .
+python3 -m build --wheel
+python3 -m pip install dist/kettle-*.whl
 ```
 
-`kettle doctor` checks that the installed `top_level` includes `kettle` and that every
-name in `kettle.PACKAGE_MODULES` is importable. It also prints Python/package version,
-install mode (editable vs wheel), provider CLI readiness, registry/desk integrity
-(including legacy `.setsweep/` hints), and server discovery status. Failing rows point
-at this file or `ARCHITECTURE.md`. Exit status is nonzero when any check fails.
-
-### PATH hygiene (you run these; agents never delete PATH entries)
-
-If `which -a kettle` shows more than one winner, retire strays so a single shim points
-at `~/.kettle-venv/bin/kettle`. Common extras: a Homebrew or pip-user console script,
-and leftover shell shims from older installs. Keep only the symlink under a dir on PATH
-(e.g. `~/.local/bin/kettle`), then `hash -r` and re-run `kettle doctor`.
-
-## Wheel / pipx installs
-
-The wheel ships the `kettle` package **plus** bundled `static/` (web UI) and `kits/`
-(prompts and kind playbooks), so a non-editable install can serve the browser UI.
-
-```sh
-python3 -m pip install path/to/kettle-*.whl
-# or, once published:  pipx install kettle
-kettle --web --port 0          # use an ephemeral port in automation; never probe 4242
-kettle doctor
-python3 -c "import kettle; print(kettle.__version__)"
-```
-
-CI builds the wheel, audits package data, installs into a clean venv, and smokes
-`kettle --help`, imports, doctor, and a short server boot (`GET /`, `/api/ping`,
-`/api/kits`) on an ephemeral port.
-
-Editable install remains the supported contributor path; wheel/pipx is for users who
-want a self-contained install without a checkout.
+The wheel ships the `kettle` package **plus** bundled `static/` (the sitting) and `kits/`
+(prompts and kind playbooks), so a non-editable install serves the browser UI. CI builds
+the wheel, audits that package data, installs into a clean venv, and smokes `kettle
+--help`, imports, doctor, and a short server boot (`GET /`, `/api/ping`, `/api/kits`) on
+an ephemeral port.
 
 ## Other ways to open Kettle
 
@@ -189,7 +193,7 @@ do not race. Durable charter/memory files under `.kettle/` may sync normally. Se
 
 ## Notes for the maintainer
 
-- **Canonical install is `~/.kettle-venv` with one PATH shim** — see above.
+- **One `kettle` on PATH** is the rule; `~/.kettle-venv` is conventional, not required — see above.
 - **Layout is the `kettle/` package** with `static/` and `kits/` as package data.
   `APPDIR` resolves via `importlib.resources.files()` (PyInstaller still uses `_MEIPASS`).
 - **Version** is single-sourced in `pyproject.toml`, exposed as `kettle.__version__`,

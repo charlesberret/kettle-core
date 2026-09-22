@@ -245,3 +245,24 @@ jobs:
           assert out.startswith("/tmp/kettle-pipx-style/"), out
           print("pipx-style kettle:", out)
           PY
+
+  standalone-binary:
+    # The one recipe that turns the package into something a stranger can run. It
+    # rots silently otherwise: kettle-desktop's sidecar spec still points at the
+    # pre-package layout and fails its own gate.
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: Build and smoke the standalone binary
+        run: tools/build-binary.sh
+      - name: Record artifact size
+        run: |
+          ls -lh dist/kettle
+          ./dist/kettle --version

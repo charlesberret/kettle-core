@@ -39,6 +39,15 @@ def main(argv=None) -> int:
         print((__doc__ or "").strip())
         print(f"\nversion {__version__}")
         return 0
+    if cmd in ("-V", "--version"):
+        # A standalone binary must be able to name itself; the console script
+        # answers the same way.
+        from kettle import __version__
+        from kettle import kettle_contract
+
+        print(f"kettle {__version__} (api {kettle_contract.API_VERSION}, "
+              f"desk schema {kettle_contract.DESK_SCHEMA_VERSION})")
+        return 0
     if cmd in (None, "--web", "--app", "--replace"):
         from . import server          # server.main() reads sys.argv (--port/--no-open)
         return server.main() or 0
