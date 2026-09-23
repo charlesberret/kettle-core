@@ -56,6 +56,11 @@ the discovery token, and `GET /` returning the real sitting. It never uses port 
 Use the binary for a machine without Python, a stranger trying Kettle once, or a hook
 script that must not depend on which interpreter is on PATH.
 
+The same spec builds a **directory** bundle for hosts that launch the core as a sidecar
+(kettle-desktop): `KETTLE_BUNDLE=onedir KETTLE_BUNDLE_NAME=kettle-sidecar python -m
+PyInstaller packaging/kettle.spec`. A sidecar starts on every app launch, and a one-file
+bundle re-extracts itself to a temp directory each time.
+
 ### Contributor checkout
 
 ```sh

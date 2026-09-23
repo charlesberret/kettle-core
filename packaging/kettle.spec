@@ -8,6 +8,7 @@
 # (server), `kettle doctor`. server._app_dir() already resolves package data to
 # sys._MEIPASS when frozen, so nothing in the runtime needs a packaging branch.
 
+import os
 from pathlib import Path
 
 from PyInstaller.utils.hooks import collect_data_files, copy_metadata
@@ -65,13 +66,21 @@ a = Analysis(
 
 pyz = PYZ(a.pure)
 
+# Two shapes, one spec. Default is a single file for `tools/build-binary.sh` (a
+# stranger downloads one thing). kettle-desktop sets KETTLE_BUNDLE=onedir and
+# bundles the directory as its sidecar: a sidecar launches on every app start, and
+# onefile re-extracts itself to a temp dir each time.
+ONEDIR = os.environ.get("KETTLE_BUNDLE", "onefile") == "onedir"
+NAME = os.environ.get("KETTLE_BUNDLE_NAME", "kettle")
+
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.datas,
+    [] if ONEDIR else a.binaries,
+    [] if ONEDIR else a.datas,
     [],
-    name="kettle",
+    exclude_binaries=ONEDIR,
+    name=NAME,
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -84,3 +93,13 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
 )
+
+if ONEDIR:
+    coll = COLLECT(
+        exe,
+        a.binaries,
+        a.datas,
+        strip=False,
+        upx=False,
+        name=NAME,
+    )

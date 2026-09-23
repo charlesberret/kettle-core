@@ -12,7 +12,9 @@ and Desk schema have their own integer contract versions.
   the target machine. The script builds in a throwaway venv (PyInstaller stays a build-time
   dependency; the package remains stdlib-only) and then proves the bundle — `doctor`, an
   ephemeral-port boot, `/api/ping` with the discovery token, and `GET /` returning the real
-  sitting. A `standalone-binary` CI job runs it on Ubuntu and macOS.
+  sitting. A `standalone-binary` CI job runs it on Ubuntu and macOS. The same spec
+  builds a directory bundle (`KETTLE_BUNDLE=onedir`) for hosts that launch the core as
+  a sidecar, replacing kettle-desktop's own stale copy of the recipe.
 - `kettle --version` / `-V` prints the version plus the API and desk-schema contract
   integers. The binary could not previously name itself.
 
