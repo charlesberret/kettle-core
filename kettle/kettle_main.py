@@ -48,7 +48,10 @@ def main(argv=None) -> int:
         print(f"kettle {__version__} (api {kettle_contract.API_VERSION}, "
               f"desk schema {kettle_contract.DESK_SCHEMA_VERSION})")
         return 0
-    if cmd in (None, "--web", "--app", "--replace"):
+    # A leading flag is always the server's: it owns --web/--app/--replace and the
+    # --port / --no-open pair. A sidecar host launches `kettle --port <n> --no-open`
+    # with no subcommand, and the standalone binary should answer the same way.
+    if cmd is None or (cmd.startswith("-") and cmd not in ("-h", "--help", "-V", "--version")):
         from . import server          # server.main() reads sys.argv (--port/--no-open)
         return server.main() or 0
     # Routing table is derived from cli.py's own subcommand table (cli.command_names())
