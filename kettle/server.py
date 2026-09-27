@@ -60,7 +60,12 @@ def _app_dir() -> Path:
     same package tree. Callers still receive a concrete Path for read/glob APIs.
     """
     if getattr(sys, "frozen", False):
-        return Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
+        bundle = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
+        # A bundler may keep the package prefix (…/kettle/static) or flatten it
+        # (…/static). Accept either so the binary cannot ship data it cannot find.
+        if not (bundle / "static").is_dir() and (bundle / "kettle" / "static").is_dir():
+            return bundle / "kettle"
+        return bundle
     package_dir = Path(__file__).resolve().parent
     try:
         from importlib.resources import files
