@@ -14,10 +14,13 @@ CLI viewport are stdlib-only. Single-file frontend at `kettle/static/index.html`
 `marked.min.js`, `purify.min.js`, `themes.js`, fonts). Three-pane layout: agent-curated queue ·
 user's editor · project-aware review agent.
 
-**Sitting UI conventions:** [`docs/UI.md`](./docs/UI.md) — type hierarchy (`--text-heading` /
-`--text-label` / `--text-secondary` / `--text-primary`), buttons, urgency, meta pane. **Read
-before editing `static/index.html`.** New panels must use those roles; do not ship body-white
-copy next to gray chrome. Desktop loads the same file (no style fork).
+**Sitting UI conventions:** [`docs/UI-STRUCTURE.md`](./docs/UI-STRUCTURE.md) (regions) and
+[`docs/UI.md`](./docs/UI.md) (type hierarchy `--text-heading` / `--text-label` /
+`--text-secondary` / `--text-primary`, buttons, urgency, meta pane). **Read both
+before editing `static/index.html`.** New panels must use those roles; do not ship
+body-white copy next to gray chrome. Desktop loads the same file (no style fork).
+Founding is a conversation (one mission question), not a confirmation card — see
+[`docs/REVIEW.md`](./docs/REVIEW.md).
 
 **Viewport vs curator:** Desktop and VS Code are *viewports* onto the desk. A future
 MCP bridge would be a narrow tool adapter, not a replacement for a sitting. Agentic
@@ -32,12 +35,15 @@ Claude Code CLI. `/api/ping` exposes the active curator so viewports can label i
 | `kettle-desktop` | Electron macOS shell — bundles this server as a sidecar |
 | `kettle-vscode` | VS Code and Cursor adapter (one VSIX) |
 
-Changes to the Python layer do not require touching desktop or VS Code unless the HTTP API surface
-changes. Wire contract: [`API.md`](./API.md).
+Sitting visual/copy/palette changes land here; desktop inherits the sitting. VS Code must
+`sync-ui-copy` / `sync-palette` when those sources change. HTTP changes: [`API.md`](./API.md).
+Viewports: [`docs/PLATFORMS.md`](./docs/PLATFORMS.md). Flow sequences every viewport
+follows: [`docs/SITTING-FLOWS.md`](./docs/SITTING-FLOWS.md).
 
-**Chat write tools (interim):** `/api/chat` grants Edit/Write under `--permission-mode acceptEdits`,
-fenced to the project root — same write tier as sweep for always-on implementation when the
-user asks. Founding interview is tool-less (core survey) until Finish/Found.
+**Chat write tools (interim):** `/api/chat` grants Edit/Write under `--permission-mode acceptEdits`
+with the project root as cwd — same write tier as sweep for always-on implementation when the
+user asks. Write tiers are trusted, not fenced (see ARCHITECTURE.md § Tool tiers). Founding
+interview is tool-less (core survey) until Finish/Found.
 
 Server listens on `http://127.0.0.1:4242/` (`DEFAULT_PORT = 4242` in `server.py`). A second launch
 defers if the current instance is healthy; pass `--replace` or use `Kettle.app` to force a
@@ -67,8 +73,9 @@ tests, and recovery steps.
 Safe to edit directly: `README.md`, `ARCHITECTURE.md`, `INSTALL.md`, `tests/`, kits, prompts,
 `pyproject.toml`, `ROADMAP.md`, `docs/`, this file.
 
-Planning: `ROADMAP.md` is current. `docs/briefs/` is historical design evidence
-and must be checked against the live tree before reuse.
+Planning: `ROADMAP.md` is current. `docs/REVIEW.md` is the briefing for a full-tree
+review of **this** form. `docs/briefs/` is historical design evidence and must be
+checked against the live tree before reuse.
 
 ## Conventions
 

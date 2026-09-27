@@ -206,10 +206,90 @@ class ViewportRitualRegressionBar(unittest.TestCase):
         self.assertNotIn("pointerEvents = 'none'", proposing)
         self.assertIn("ab.textContent = 'Found Desk'", self.function("showProposalGuide"))
 
-    def test_confirmation_card_is_blank_for_the_user(self):
-        parse = self.function("parseConfirmCard")
-        self.assertIn("checked: false", parse)
-        self.assertNotRegex(parse, r"checked:\s*/x/i")
+    def test_agent_chat_renders_gfm(self):
+        """Agent bubbles must paint GFM (headings, lists, task ticks), not raw markdown."""
+        html = INDEX.read_text(encoding="utf-8")
+        fill = function_source(html, "fillAgentMarkdown")
+        self.assertIn("_mdHtml", fill)
+        self.assertIn("purifyHtml", fill)
+        self.assertIn("marked.parse", function_source(html, "_mdHtml"))
+        add = function_source(html, "addMsg")
+        self.assertIn("fillAgentMarkdown", add)
+        stream = function_source(html, "pipeStream")
+        self.assertIn("fillAgentMarkdown", stream)
+        self.assertRegex(html, r"\.msg\.agent\.md\s*\{")
+        self.assertIn("ui-2026-09-15g", html)
+
+    def test_markdown_is_sanitized_as_a_string_before_it_reaches_the_dom(self):
+        """Assigning marked output to innerHTML and cleaning the node afterwards is
+        too late: parsing already queued <img onerror> handlers. Every markdown
+        sink must assign a purifyHtml() result, and DOMPurify must never be fed a
+        live node's innerHTML."""
+        html = self.html
+        self.assertNotRegex(html, r"innerHTML\s*=\s*(?:marked\.parse|_mdHtml)\(")
+        self.assertNotRegex(html, r"DOMPurify\.sanitize\(\s*\w+\.innerHTML")
+        self.assertNotIn("sanitizeRender", html)
+        purify = self.function("purifyHtml")
+        self.assertIn("DOMPurify.sanitize(", purify)
+        self.assertIn("return null", purify)  # no blocklist fallback
+        for name in ("fillAgentMarkdown", "renderMd"):
+            src = self.function(name)
+            with self.subTest(sink=name):
+                self.assertIn("purifyHtml(_mdHtml(", src)
+                for m in re.finditer(r"(\w+)\.innerHTML\s*=\s*([^;]+);", src):
+                    self.assertNotIn("marked", m.group(2))
+                    self.assertNotIn("_mdHtml", m.group(2))
+
+    def test_markdown_sanitizer_drops_id_attributes(self):
+        """$() is getElementById; a file's <div id="chat"> must not capture the sitting."""
+        m = re.search(r"const MD_PURIFY = \{(.*?)\n\};", self.html, re.DOTALL)
+        self.assertIsNotNone(m)
+        attrs = re.search(r"ALLOWED_ATTR:\s*\[(.*?)\]", m.group(1), re.DOTALL).group(1)
+        self.assertNotIn("'id'", attrs)
+        self.assertIn("SANITIZE_NAMED_PROPS: true", m.group(1))
+
+    def test_found_desk_announces_founded_only_when_the_core_says_so(self):
+        found = self.function("foundFromProposal")
+        self.assertIn("st.founded === true", found)
+        self.assertLess(found.index("st.founded === true"), found.index("'— desk founded —'"))
+        self.assertIn("enterProposing(pid)", found)          # failure keeps the proposal open
+        self.assertIn("$('approve').disabled = true", found)  # no double Found Desk
+        proposing = self.function("enterProposing")
+        self.assertNotIn("isProposalEntry(e) && e.status !== 'approved')", proposing)
+
+    def test_sitting_uses_the_cores_founded_predicate(self):
+        load = self.function("loadProject")
+        self.assertIn("ivst.founded", load)
+        self.assertNotIn("const proposing = !hasContent", load)
+        self.assertNotIn("const unfounded = !hasContent", load)
+
+    def test_refused_api_calls_surface_instead_of_streaming_nothing(self):
+        """After a core restart every call 403s with code auth; chat used to show an
+        empty turn and sweep printed started/finished having done nothing."""
+        stream = self.function("pipeStream")
+        self.assertLess(stream.index("if(!r.ok) throw await apiErrorText(r)"),
+                        stream.index("r.body.getReader()"))
+        err = self.function("apiErrorText")
+        self.assertIn("j.code === 'auth'", err)
+        self.assertIn("reload", err)
+        for name in ("jget", "jpost"):
+            self.assertIn("apiErrorText(r)", self.function(name))
+
+    def test_one_broken_desk_does_not_fail_the_sitting_boot(self):
+        load = self.function("loadProject")
+        i = load.index("jget('/api/queue?project='")
+        self.assertIn("try {", load[max(0, i - 80):i])
+        self.assertIn("this desk could not load", load)
+
+    def test_founding_does_not_upgrade_gfm_into_a_card(self):
+        """P4: interview is a conversation. The confirmation-card machinery is gone,
+        not merely disconnected, and agent turns always paint display-only GFM."""
+        for name in ("parseConfirmCard", "renderConfirmCard", "serializeConfirmCard",
+                     "maybeUpgradeConfirmCard", "looksLikeConfirmCard", "growElaborate",
+                     "ensureInterviewStartAnchor", "confirm-card", "cc-elab", "finish ✓"):
+            with self.subTest(identifier=name):
+                self.assertNotIn(name, self.html)
+        self.assertIn("fillAgentMarkdown(agentNode, agentAcc)", self.function("pipeStream"))
 
     def test_activity_updates_chrome_and_compact_stays_connected(self):
         stream = self.function("pipeStream")

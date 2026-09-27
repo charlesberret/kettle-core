@@ -14,6 +14,7 @@ import http.client
 import io
 import json
 import os
+import re
 import signal
 import socket
 import shutil
@@ -28,6 +29,8 @@ from pathlib import Path
 
 import kettle.server as server
 import kettle.kettle_contract as kettle_contract
+import kettle.sweepkit as sweepkit
+from unittest import mock
 
 
 def _auth_headers(extra=None):
@@ -447,10 +450,11 @@ class HelperTests(Base):
 
     def test_project_orientation_reads_and_truncates(self):
         self.assertEqual(server.project_orientation(self.proj()), "")  # missing → ""
-        (self.root / ".kettle" / "PROJECT.md").write_text("X" * 4000)
+        (self.root / ".kettle" / "PROJECT.md").write_text("X" * 9000)
         out = server.project_orientation(self.proj())
         self.assertIn("PROJECT.md", out)                       # labeled
-        self.assertEqual(out.count("X"), 2500)                 # body truncated
+        self.assertEqual(out.count("X"), 6000)                 # body truncated
+        self.assertIn("truncated at 6000 of 9000 characters", out)  # visibly
         self.assertNotIn("MEMORY.md", out)                     # absent file → section omitted
 
     def test_project_orientation_includes_curator_memory(self):
@@ -500,6 +504,24 @@ class HelperTests(Base):
         self.assertIn("memo", prompt)
         self.assertIn("D10", prompt)  # old brief still listed for rewrite
         self.assertIn(str(server.queue_path(proj)), prompt)
+
+    def test_project_orientation_marks_truncated_memory(self):
+        proj = self.proj()
+        rulings = "\n".join(f"- 2026-09-{i % 28 + 1:02d} ruling number {i}" for i in range(80))
+        (server.desk_dir(proj) / "MEMORY.md").write_text(rulings)
+        orientation = server.project_orientation(proj)
+        self.assertIn("ruling number 79", orientation)  # an ~80-line memory fits whole
+        (server.desk_dir(proj) / "MEMORY.md").write_text("x" * 20000)
+        self.assertIn("truncated at 6000 of 20000 characters", server.project_orientation(proj))
+
+    def test_project_orientation_carries_the_projects_claude_md_text(self):
+        """Claude curator turns ignore project settings (and with them CLAUDE.md), so
+        the conventions reach the curator as prompt text instead."""
+        proj = self.proj()
+        (server.project_root(proj) / "CLAUDE.md").write_text("Use Oxford commas.\n")
+        orientation = server.project_orientation(proj)
+        self.assertIn("Use Oxford commas.", orientation)
+        self.assertIn("text only", orientation)
 
     def test_sweep_precomputed_context_includes_diffs(self):
         (self.root / "alpha.md").write_text("alpha body\n")
@@ -915,6 +937,36 @@ class EndpointTests(Base):
         self.assertEqual(sess, {"founding_note": "keep this steer"})
         self.assertFalse((desk / "PROJECT.md").exists())
 
+    def test_refound_keeps_append_only_records(self):
+        desk = server.desk_dir(self.proj())
+        (desk / "PROJECT.md").write_text("old charter")
+        (desk / "DESK-PROPOSAL.md").write_text("old proposal")
+        (desk / "working-record.jsonl").write_text('{"actor": "user"}\n')
+        (desk / "archive").mkdir(exist_ok=True)
+        (desk / "archive" / "2026-01-01-000000-batch.json").write_text("{}")
+        (desk / "outbound").mkdir(exist_ok=True)
+        (desk / "outbound" / "memo.md").write_text("staged")
+        server.comments_log_path(self.proj()).write_text("2026-01-01\talpha\tnote\n")
+        s, j = _http("POST", f"{self.base}/api/projects/refound", {"id": "t"})
+        self.assertEqual(s, 200)
+        self.assertFalse((desk / "PROJECT.md").exists())
+        self.assertFalse((desk / "DESK-PROPOSAL.md").exists())
+        self.assertEqual((desk / "working-record.jsonl").read_text(), '{"actor": "user"}\n')
+        self.assertTrue((desk / "archive" / "2026-01-01-000000-batch.json").exists())
+        self.assertTrue((desk / "outbound" / "memo.md").exists())
+        self.assertIn("note", server.comments_log_path(self.proj()).read_text())
+        self.assertEqual(server.load_queue(self.proj())["entries"], [])
+        self.assertIn("working-record.jsonl", j["kept"])
+
+    def test_refound_is_refused_while_a_curator_turn_runs(self):
+        key = server._stream_key(server.project_root(self.proj()))
+        with server.SWEEPS_LOCK:
+            server.CURATOR_STREAMS[key] = 1
+        self.addCleanup(lambda: server.CURATOR_STREAMS.pop(key, None))
+        s, j = _http("POST", f"{self.base}/api/projects/refound", {"id": "t"})
+        self.assertEqual(s, 409)
+        self.assertEqual(j["code"], "busy")
+
     def test_static_shell_scripts_fonts_and_font_traversal(self):
         def raw(path):
             conn = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
@@ -972,6 +1024,18 @@ class EndpointTests(Base):
                                        {"date": "2026-06-29", "text": "note two"}])
         self.assertEqual(m["beta"], [{"date": "2026-06-28", "text": "other note"}])
 
+    def test_comments_close_marker_retires_only_earlier_lines(self):
+        p = self.tmp / "comments.log"
+        p.write_text(
+            "2026-06-29\talpha\told note\n"
+            "2026-06-29\tbeta\tbeta note\n"
+            "2026-06-30\talpha\tlate note\n"
+            "2026-06-30\talpha\t[kettle:closed through 2]\n"
+        )
+        m = server.parse_comments_log(p)
+        self.assertEqual(m["alpha"], [{"date": "2026-06-30", "text": "late note"}])
+        self.assertEqual(m["beta"], [{"date": "2026-06-29", "text": "beta note"}])
+
     def test_comment_appends_to_comments_log(self):
         _http("POST", f"{self.base}/api/comment", {"project": "t", "id": "alpha", "text": "fix TKs"})
         log = server.comments_log_path(self.proj())
@@ -1009,6 +1073,21 @@ class EndpointTests(Base):
         self.assertEqual(self._entry("beta")["status"], "approved")
         self.assertTrue((server.runtime_dir(self.proj()) / "approvals.log").exists())
 
+    def test_reapprove_keeps_the_first_date_and_logs_once(self):
+        _http("POST", f"{self.base}/api/approve", {"project": "t", "id": "beta"})
+        server.mutate_queue(self.proj(), lambda q: server.find_entry(q, "beta").__setitem__(
+            "approved", "2026-01-01"))
+        _http("POST", f"{self.base}/api/approve", {"project": "t", "id": "beta"})
+        self.assertEqual(self._entry("beta")["approved"], "2026-01-01")
+        log = (server.runtime_dir(self.proj()) / "approvals.log").read_text()
+        self.assertEqual(log.count("\tbeta\t"), 1)
+
+    def test_non_latin_project_names_get_distinct_ids(self):
+        a, b = server.project_id_for("書簡"), server.project_id_for("Письма")
+        self.assertNotEqual(a, b)
+        self.assertTrue(a.startswith("p-"))
+        self.assertEqual(server.project_id_for("My Notes"), "my_notes")
+
     def test_clear_session(self):
         # the project session is the unit: clear-session drops its id and active-file marker
         server.save_session(self.proj(), session_id="abc", last_entry="alpha")
@@ -1020,25 +1099,48 @@ class EndpointTests(Base):
     def test_add_project_valid_invalid_dup(self):
         good = self.tmp / "newproj"
         good.mkdir()
-        s, j = _http("POST", f"{self.base}/api/projects/add", {"name": "New One", "root": str(good)})
+        note = "A notes folder for the reading group — flag anything half-finished."
+        s, j = _http("POST", f"{self.base}/api/projects/add",
+                     {"name": "New One", "root": str(good), "note": note})
         self.assertEqual(s, 200)
         self.assertEqual(j["id"], "new_one")
         self.assertTrue(j.get("ok"))
         self.assertEqual(j["project"]["id"], "new_one")
         self.assertTrue((good / ".kettle" / "runtime" / "queue.json").exists())
+        self.assertEqual(server.load_session(j["project"])["founding_note"], note)
         # duplicate id
-        s2, _ = _http("POST", f"{self.base}/api/projects/add", {"name": "New One", "root": str(good)})
+        s2, _ = _http("POST", f"{self.base}/api/projects/add",
+                      {"name": "New One", "root": str(good), "note": note})
         self.assertEqual(s2, 400)
         # nonexistent dir
         s3, _ = _http("POST", f"{self.base}/api/projects/add",
-                      {"name": "Ghost", "root": str(self.tmp / "nope")})
+                      {"name": "Ghost", "root": str(self.tmp / "nope"), "note": note})
         self.assertEqual(s3, 400)
         # outside HOME fence
-        s4, _ = _http("POST", f"{self.base}/api/projects/add", {"name": "Evil", "root": "/etc"})
+        s4, _ = _http("POST", f"{self.base}/api/projects/add",
+                      {"name": "Evil", "root": "/etc", "note": note})
         self.assertEqual(s4, 400)
 
+    def test_add_project_requires_founding_sentence(self):
+        # P3: the founding sentence is the one required field at add — a stranger
+        # cannot skip past it into an empty-charter desk.
+        good = self.tmp / "noteless"
+        good.mkdir()
+        s, j = _http("POST", f"{self.base}/api/projects/add",
+                     {"name": "Noteless", "root": str(good)})
+        self.assertEqual(s, 400)
+        self.assertIn("founding sentence", j["error"])
+        self.assertFalse((good / ".kettle").exists())  # nothing registered on rejection
+
+        s2, blank = _http("POST", f"{self.base}/api/projects/add",
+                          {"name": "Noteless", "root": str(good), "note": "   "})
+        self.assertEqual(s2, 400)
+        self.assertIn("founding sentence", blank["error"])
+
     def test_interview_status_lifecycle(self):
-        # a desk with queue entries is founded on read even if session was never written
+        # a desk with queue entries AND a charter is founded on read even if session
+        # was never written; queue entries alone are not enough (P1).
+        (server.desk_dir(self.proj()) / "PROJECT.md").write_text("# T\ncharter\n")
         s, j = _http("GET", f"{self.base}/api/interview?project=t")
         self.assertEqual((s, j["status"]), (200, "founded"))
         server.save_interview(self.proj(), {"session_id": "abc", "status": "interviewing"})
@@ -1047,13 +1149,62 @@ class EndpointTests(Base):
         self.assertTrue(j_pure["has_entries"])
         self.assertGreaterEqual(j_pure["entry_count"], 1)
         _, j2 = _http("GET", f"{self.base}/api/interview?project=t")
-        # queue entries on disk ⇒ founded (heals stale interviewing on read)
+        # queue entries + charter on disk ⇒ founded (heals stale interviewing on read)
         self.assertEqual(j2["status"], "founded")
         iv = server.load_interview(self.proj())
         self.assertEqual(iv["session_id"], "abc")                    # roundtrip
         server.save_interview(self.proj(), {**iv, "status": "founded"})
         _, j3 = _http("GET", f"{self.base}/api/interview?project=t")
         self.assertEqual(j3["status"], "founded")
+
+    def test_charterless_queue_reports_awaiting_founding(self):
+        # P1 regression: content entries alone must not read as founded, and a desk
+        # that was incorrectly marked founded before this predicate existed (or whose
+        # charter has since gone missing) heals back to interviewing on the next read
+        # — the real-world shape of proteus/retinue/reuse-reasoner/incanter-core.
+        self.assertFalse((server.desk_dir(self.proj()) / "PROJECT.md").exists())
+        self.assertFalse(server.mark_founded_if_filed(self.proj()))
+        _, j = _http("GET", f"{self.base}/api/interview?project=t")
+        self.assertNotEqual(j["status"], "founded")
+        self.assertTrue(j["has_entries"])  # entries are real; the desk still isn't founded
+
+        # stale prior mark (the bug this predicate closes) demotes back to interviewing
+        server.save_session(self.proj(), status="founded")
+        self.assertFalse(server.mark_founded_if_filed(self.proj()))
+        self.assertEqual(server.load_session(self.proj())["status"], "interviewing")
+
+        # writing the charter (real founding) flips it for good
+        (server.desk_dir(self.proj()) / "PROJECT.md").write_text("# T\ncharter\n")
+        self.assertTrue(server.mark_founded_if_filed(self.proj()))
+        self.assertEqual(server.load_session(self.proj())["status"], "founded")
+
+    def test_founded_demotion_ignores_empty_queue(self):
+        # a genuinely founded desk (charter on disk) must not be demoted just because
+        # its queue is briefly empty between a sweep and its restock.
+        (server.desk_dir(self.proj()) / "PROJECT.md").write_text("# T\ncharter\n")
+        server.save_session(self.proj(), status="founded")
+        self.write_queue([])
+        self.assertFalse(server.mark_founded_if_filed(self.proj()))  # no content ⇒ not (re)confirmed
+        self.assertEqual(server.load_session(self.proj())["status"], "founded")  # but not demoted
+
+    def test_found_clears_orphan_proposal_entry_once_founded(self):
+        # kits/prompts/found.md lets the curator leave the desk-proposal entry behind;
+        # a real desk (reuse-reasoner) carries one pointing at a proposal file that no
+        # longer exists. mark_founded_if_filed must clear it once the desk is truly
+        # founded, regardless of whether the proposal file is still on disk.
+        (server.desk_dir(self.proj()) / "PROJECT.md").write_text("# T\ncharter\n")
+        entries = server.load_queue(self.proj())["entries"]
+        self.write_queue(entries + [{
+            "id": server.PROPOSAL_ENTRY_ID,
+            "status": "pending",
+            "path": str(self.tmp / "long-gone" / server.PROPOSAL_FILENAME),
+            "founding_phase": "proposal",
+            "title": "Desk Proposal",
+        }])
+        self.assertTrue(server.mark_founded_if_filed(self.proj()))
+        ids = [e["id"] for e in server.load_queue(self.proj())["entries"]]
+        self.assertNotIn(server.PROPOSAL_ENTRY_ID, ids)
+        self.assertIn("alpha", ids)  # real content survives the strip
 
     def test_interviewing_persists_while_queue_empty(self):
         server.save_interview(self.proj(), {"session_id": "abc", "status": "interviewing"})
@@ -1090,7 +1241,10 @@ class EndpointTests(Base):
             self.assertIn("hello", body)
             iv = server.load_interview(self.proj())
             self.assertEqual((iv["session_id"], iv["status"]), ("sid-1", "interviewing"))
-            # found: queue already has content entries (setUp), so it must mark 'founded'
+            # found: queue already has content entries (setUp) and the charter is on
+            # disk (stubbed here — a real found turn would write it), so it must mark
+            # 'founded'
+            (server.desk_dir(self.proj()) / "PROJECT.md").write_text("# T\ncharter\n")
             req2 = urllib.request.Request(f"{self.base}/api/found",
                                           data=json.dumps({"project": "t"}).encode(),
                                           method="POST")
@@ -1192,10 +1346,13 @@ class EndpointTests(Base):
             'echo \'{"type":"result","usage":{"input_tokens":1}}\'\n')
         stub.chmod(0o755)
         server.save_session(self.proj(), session_id="old-iv", status="interviewing")
+        # queue already has entries (setUp); stand in for the charter a real bootstrap
+        # turn would write, so mark_founded_if_filed's predicate can be satisfied
+        (server.desk_dir(self.proj()) / "PROJECT.md").write_text("# T\ncharter\n")
         saved = server.CLAUDE
         server.CLAUDE = str(stub)
         try:
-            # queue already has entries (setUp), so bootstrap's mark_founded_if_filed must flip it
+            # queue + charter on disk, so bootstrap's mark_founded_if_filed must flip it
             req = urllib.request.Request(f"{self.base}/api/bootstrap",
                                          data=json.dumps({"project": "t"}).encode(), method="POST")
             for k, v in _auth_headers({"Content-Type": "application/json"}).items():
@@ -1278,6 +1435,7 @@ class EndpointTests(Base):
         life_root.mkdir()
         s, added = _http("POST", f"{self.base}/api/projects/add", {
             "name": "Lifecycle", "root": str(life_root), "kit": "code",
+            "note": "A lifecycle fixture — review drafts as they land.",
         })
         self.assertEqual((s, added["id"]), (200, "lifecycle"))
         proj = server.get_project("lifecycle")
@@ -1698,7 +1856,92 @@ class EndpointTests(Base):
         self._post_stream("/api/interview", {"project": "t", "message": "begin"})
         cmd = cmds[-1]
         role = cmd[cmd.index("--append-system-prompt") + 1]
-        self.assertIn("FOUNDING INTERVIEW", role)
+        self.assertIn("a standing second reader, arriving for the first time", role)
+
+    def test_founding_sentence_quoted_first_in_interview(self):
+        # P3: the user's required founding sentence comes before the deterministic
+        # survey dump, not tacked on at the end.
+        sentence = "A batch of scanned letters — flag anything illegible or undated."
+        server.save_session(self.proj(), founding_note=sentence)
+        cmds = self._capture_cmds()
+        self._post_stream("/api/interview", {"project": "t", "message": "begin"})
+        role = cmds[-1][cmds[-1].index("--append-system-prompt") + 1]
+        self.assertIn(sentence, role)
+        # "CORE SURVEY" also appears in the role template's own opening line — anchor on
+        # the survey block's actual heading (from survey.as_prompt_block), not that phrase.
+        self.assertLess(role.index(sentence), role.index("CORE SURVEY (authoritative"))
+
+    def test_founding_sentence_quoted_first_in_propose(self):
+        sentence = "Slides for the fall course — check every claim against the syllabus."
+        server.save_session(self.proj(), founding_note=sentence)
+        cmds = self._capture_cmds()
+        self._post_stream("/api/propose", {"project": "t"})
+        prompt = cmds[-1][cmds[-1].index("-p") + 1]
+        self.assertIn(sentence, prompt)
+        self.assertIn("What This Project Is", prompt)
+        self.assertLess(prompt.index(sentence), prompt.index("Write ONE file"))
+
+    def test_founding_sentence_quoted_first_in_found(self):
+        sentence = "Household finances — nothing leaves the desk without my say."
+        server.save_session(self.proj(), founding_note=sentence)
+        cmds = self._capture_cmds()
+        self._post_stream("/api/found", {"project": "t"})
+        prompt = cmds[-1][cmds[-1].index("-p") + 1]
+        self.assertIn(sentence, prompt)
+        self.assertIn("Your Words", prompt)
+        self.assertLess(prompt.index(sentence), prompt.index("THE CHARTER"))
+
+    def test_bootstrap_route_quotes_the_founding_sentence_first(self):
+        """Every founding entry point shares build_found_prompt: /api/bootstrap used
+        to drop the sentence the charter must open with."""
+        sentence = "Field notes — keep my spelling of place names."
+        server.save_session(self.proj(), founding_note=sentence)
+        cmds = self._capture_cmds()
+        self._post_stream("/api/bootstrap", {"project": "t"})
+        prompt = cmds[-1][cmds[-1].index("-p") + 1]
+        self.assertTrue(prompt.startswith("THE USER'S FOUNDING SENTENCE"))
+        self.assertIn(sentence, prompt)
+        self.assertIn("Your Words", prompt)
+        self.assertIn("block above", prompt)
+
+    def test_interview_does_not_resume_a_chat_session(self):
+        """A chat before the interview opened a session with no founding role, survey
+        or sentence; the interview must start fresh and carry all three."""
+        server.save_session(self.proj(), session_id="sid-chat", founding_note="Why this.")
+        cmds = self._capture_cmds()
+        self._post_stream("/api/interview", {"project": "t", "message": "begin"})
+        c = cmds[-1]
+        self.assertNotIn("--resume", c)
+        role = c[c.index("--append-system-prompt") + 1]
+        self.assertIn("Why this.", role)
+
+    def test_interview_resumes_its_own_session(self):
+        server.save_session(self.proj(), session_id="sid-iv", status="interviewing")
+        cmds = self._capture_cmds()
+        self._post_stream("/api/interview", {"project": "t", "message": "more"})
+        c = cmds[-1]
+        self.assertEqual(c[c.index("--resume") + 1], "sid-iv")
+
+    def test_propose_never_founds_the_desk(self):
+        """Propose holds write tools; a curator that writes a charter and content
+        entries anyway must not found the desk before the user approves."""
+        server.save_session(self.proj(), status="proposing")
+        (server.desk_dir(self.proj()) / "PROJECT.md").write_text("# charter\n")
+        self.assertFalse(server.mark_founded_if_filed(self.proj()))
+        self.assertTrue(server.mark_founded_if_filed(self.proj(), founding_step=True))
+
+    def test_failed_found_keeps_the_proposal_openable(self):
+        desk = server.desk_dir(self.proj())
+        server.mutate_queue(self.proj(), lambda q: q.__setitem__("entries", []))
+        (desk / "DESK-PROPOSAL.md").write_text("# Desk Proposal\n")
+        server.save_session(self.proj(), status="proposing")
+        self._stub_claude(self._init(), self._say("oops"), exit_code=1)
+        self._post_stream("/api/found", {"project": "t"})
+        entries = server.load_queue(self.proj())["entries"]
+        self.assertEqual([e["id"] for e in entries], ["desk-proposal"])
+        _, j = _http("GET", f"{self.base}/api/interview?project=t")
+        self.assertFalse(j["founded"])
+        self.assertTrue(j["has_proposal"])
 
     def test_chat_uses_one_project_session_named_for_project(self):
         # first chat turn on a project CREATES the named project session (no --resume),
@@ -1785,6 +2028,99 @@ class EndpointTests(Base):
         s, body = self._post_stream("/api/sweep", {"project": "t"})
         self.assertEqual(s, 200)
         self.assertIn("swept", body)
+
+    def test_failed_sweep_leaves_a_failed_beacon_and_keeps_comments_binding(self):
+        server.comments_log_path(self.proj()).write_text("2026-06-29\talpha\trename Foo\n")
+        self._stub_claude(self._init(), self._say("half done"), exit_code=1)
+        s, body = self._post_stream("/api/sweep", {"project": "t"})
+        self.assertEqual(s, 200)
+        beacon = sweepkit.read_sweep_health(self.proj())
+        self.assertEqual(beacon["state"], "failed")
+        self.assertEqual(beacon["exit"], 1)
+        self.assertTrue(beacon["error"])
+        # the curator never finished, so the user's direction still stands
+        self.assertIn("alpha", server.parse_comments_log(server.comments_log_path(self.proj())))
+
+    def test_successful_sweep_retires_the_comments_it_carried(self):
+        server.comments_log_path(self.proj()).write_text("2026-06-29\talpha\trename Foo\n")
+        self._stub_claude(self._init(), self._say("swept"), self._result())
+        self._post_stream("/api/sweep", {"project": "t"})
+        self.assertEqual(sweepkit.read_sweep_health(self.proj())["state"], "done")
+        log = server.comments_log_path(self.proj())
+        self.assertNotIn("alpha", server.parse_comments_log(log))
+        self.assertIn("rename Foo", log.read_text())  # append-only: the line is still there
+
+    def test_empty_queue_after_a_failed_sweep_restocks_instead_of_idling(self):
+        """A mechanical close archives before the accrue curator runs; if that curator
+        dies, the empty quiet queue must not read as 'nothing to sweep' forever."""
+        server.mutate_queue(self.proj(), lambda q: q.__setitem__("entries", []))
+        sweepkit.write_sweep_health(self.proj(), state="failed", phase="accrue",
+                                    error="client disconnected; curator stopped")
+        cmds = self._capture_cmds()
+        s, body = self._post_stream("/api/sweep", {"project": "t"})
+        self.assertEqual(s, 200)
+        self.assertNotIn("Nothing to sweep", body)
+        self.assertTrue(cmds, "expected a restock curator turn")
+        prompt = cmds[-1][cmds[-1].index("-p") + 1]
+        self.assertIn("ACCRUE + RESTOCK only", prompt)
+        self.assertIn("resume_interrupted_sweep", prompt)
+        self.assertEqual(sweepkit.read_sweep_health(self.proj())["state"], "done")
+
+    def test_empty_queue_after_a_clean_sweep_is_idle(self):
+        server.mutate_queue(self.proj(), lambda q: q.__setitem__("entries", []))
+        sweepkit.write_sweep_health(self.proj(), state="done", phase="accrue")
+        cmds = self._capture_cmds()
+        s, body = self._post_stream("/api/sweep", {"project": "t"})
+        self.assertIn("Nothing to sweep", body)
+        self.assertEqual(cmds, [])
+
+    def test_stale_failure_on_an_idle_inbox_desk_is_reported_once(self):
+        proj = self.proj()
+        server.mutate_queue(proj, lambda q: q.__setitem__("entries", []))
+        sweepkit.write_sweep_health(proj, state="failed", error="boom")
+        with mock.patch.object(sweepkit, "assess_close", return_value={
+                "fully_idle": True, "needs_accrue": False, "can_mechanical_close": False}):
+            _, first = self._post_stream("/api/sweep", {"project": "t"})
+            _, second = self._post_stream("/api/sweep", {"project": "t"})
+        self.assertIn("last sweep did not finish: boom", first)
+        self.assertNotIn("did not finish", second)
+        self.assertEqual(sweepkit.read_sweep_health(proj)["state"], "idle")
+
+    def test_comment_typed_while_the_sweep_prompt_builds_is_not_retired(self):
+        proj = self.proj()
+        log = server.comments_log_path(proj)
+        log.write_text("2026-06-29\talpha\tseen note\n")
+        real_orientation = server.project_orientation
+
+        def orientation_with_late_comment(p):
+            with log.open("a") as f:
+                f.write("2026-06-29\talpha\tlate note\n")
+            return real_orientation(p)
+
+        self._stub_claude(self._init(), self._say("swept"), self._result())
+        with mock.patch.object(server, "project_orientation", orientation_with_late_comment):
+            self._post_stream("/api/sweep", {"project": "t"})
+        left = server.parse_comments_log(log)
+        self.assertEqual([r["text"] for r in left.get("alpha", [])], ["late note"])
+
+    def test_second_sweep_on_the_same_desk_is_refused_while_one_runs(self):
+        cmds = self._capture_cmds()
+        with server.SWEEPS_LOCK:
+            server.SWEEPS_IN_FLIGHT.add("t")
+        self.addCleanup(lambda: server.SWEEPS_IN_FLIGHT.discard("t"))
+        s, body = self._post_stream("/api/sweep", {"project": "t"})
+        self.assertIn("already running", body)
+        self.assertEqual(cmds, [])
+
+    def test_clearing_a_comment_retracts_its_history(self):
+        _http("POST", f"{self.base}/api/comment", {"project": "t", "id": "alpha", "text": "rename Foo"})
+        _http("POST", f"{self.base}/api/comment", {"project": "t", "id": "alpha", "text": ""})
+        log = server.comments_log_path(self.proj())
+        self.assertNotIn("alpha", server.parse_comments_log(log))
+        cmds = self._capture_cmds()
+        self._post_stream("/api/sweep", {"project": "t"})
+        prompt = cmds[-1][cmds[-1].index("-p") + 1]
+        self.assertNotIn("rename Foo", prompt)
 
     def test_sweep_injects_intake_outbound_for_inbox_project(self):
         # an inbox project (intake block) gets the outbound-staging instruction with its path
@@ -1945,8 +2281,10 @@ class EndpointTests(Base):
         self.assertEqual(s0, 500)
         self.assertEqual(failed.get("error"), failed["error"])  # present
         self.assertIn("error", failed)
-        self.assertIn("code", failed)
-        self.assertIn("curator failed to start", failed["error"])
+        self.assertEqual(failed["code"], "curator_unavailable")
+        self.assertIn("curator CLI not found", failed["error"])
+        self.assertIn("definitely-not-here", failed["error"])
+        self.assertIn("kettle doctor", failed["error"])
         self.assertNotIn("repr(", json.dumps(failed))
         s, _ = _http("GET", f"{self.base}/api/projects")
         self.assertEqual(s, 200)
@@ -2124,6 +2462,103 @@ class LocalhostAuthTests(EndpointTests):
         finally:
             conn.close()
 
+    def test_save_does_not_follow_a_planted_temp_symlink(self):
+        """A folder that ships `draft.md.desk-tmp -> ~/.zshrc` (or any predictable
+        temp name) must not redirect the user's save outside the fence."""
+        target = self.root / "draft.md"
+        target.write_text("old")
+        outside = self.tmp / "outside-victim.txt"
+        outside.write_text("untouched")
+        for name in ("draft.md.desk-tmp", "draft.md.tmp"):
+            (self.root / name).symlink_to(outside)
+        s, _ = _http("POST", f"{self.base}/api/save",
+                     {"project": "t", "path": str(target), "content": "new text"})
+        self.assertEqual(s, 200)
+        self.assertEqual(target.read_text(), "new text")
+        self.assertEqual(outside.read_text(), "untouched")
+
+    def test_save_creates_a_new_file_in_an_existing_folder(self):
+        target = self.root / "fresh.md"
+        s, _ = _http("POST", f"{self.base}/api/save",
+                     {"project": "t", "path": str(target), "content": "hello"})
+        self.assertEqual(s, 200)
+        self.assertEqual(target.read_text(), "hello")
+
+    def test_desk_logs_and_snapshots_do_not_follow_planted_symlinks(self):
+        proj = self.proj()
+        outside = self.tmp / "outside"
+        outside.mkdir()
+        victim = outside / "victim.txt"
+        victim.write_text("untouched")
+        log = server.runtime_dir(proj) / "approvals.log"
+        log.unlink(missing_ok=True)
+        log.symlink_to(victim)
+        s, j = _http("POST", f"{self.base}/api/approve", {"project": "t", "id": "beta"})
+        self.assertEqual((s, j["code"]), (403, "unsafe_path"))
+        self.assertEqual(victim.read_text(), "untouched")
+        snaps = server.runtime_dir(proj) / "snapshots"
+        shutil.rmtree(snaps, ignore_errors=True)
+        snaps.symlink_to(outside)
+        with self.assertRaises(server.lineage.UnsafeDeskPath):
+            server.atomic_write(snaps / "alpha.orig", b"x")
+        self.assertFalse((outside / "alpha.orig").exists())
+
+    def test_refound_refuses_a_desk_that_leads_outside_the_project(self):
+        proj = self.proj()
+        desk = server.project_root(proj) / ".kettle"
+        elsewhere = self.tmp / "victim-desk"
+        shutil.copytree(desk, elsewhere)
+        (elsewhere / "note.md").write_text("keep me")
+        shutil.rmtree(desk)
+        desk.symlink_to(elsewhere)
+        s, _ = _http("POST", f"{self.base}/api/projects/refound", {"id": "t"})
+        self.assertEqual(s, 403)
+        self.assertEqual((elsewhere / "note.md").read_text(), "keep me")
+
+    def test_root_gate_is_case_insensitive_on_macos_and_covers_library(self):
+        home = server.HOME.resolve()
+        if sys.platform == "darwin":
+            self.assertIn("overlaps", server.project_root_problem(home / ".SSH"))
+        self.assertIn("Library", server.project_root_problem(home / "Library" / "Keychains"))
+        self.assertIsNone(server.project_root_problem(
+            home / "Library" / "Mobile Documents" / "com~apple~CloudDocs" / "proj"))
+
+    def test_home_and_credential_folders_cannot_be_project_roots(self):
+        home = server.HOME.resolve()
+        self.assertIn("whole home folder", server.project_root_problem(home))
+        self.assertIn("overlaps", server.project_root_problem(home / ".ssh"))
+        self.assertIsNone(server.project_root_problem(self.root.resolve()))
+
+    def test_symlinked_desk_leading_outside_the_project_is_refused(self):
+        proj = self.proj()
+        desk = server.project_root(proj) / ".kettle"
+        elsewhere = self.tmp / "elsewhere-desk"
+        shutil.copytree(desk, elsewhere)
+        shutil.rmtree(desk)
+        desk.symlink_to(elsewhere)
+        with self.assertRaises(ValueError):
+            server.runtime_dir(proj)
+
+    def test_corrupt_queue_is_reported_and_never_overwritten(self):
+        qp = server.queue_path(self.proj())
+        qp.write_text("{not json")
+        s, j = _http("GET", f"{self.base}/api/queue?project=t")
+        self.assertEqual((s, j["code"]), (409, "queue_corrupt"))
+        s2, j2 = _http("POST", f"{self.base}/api/approve", {"project": "t", "id": "alpha"})
+        self.assertEqual(s2, 409)
+        self.assertEqual(qp.read_text(), "{not json")
+
+    def test_moved_project_folder_is_not_recreated(self):
+        proj = self.proj()
+        root = server.project_root(proj)
+        moved = root.with_name(root.name + "-moved")
+        root.rename(moved)
+        self.addCleanup(lambda: moved.exists() and moved.rename(root))
+        s, j = _http("GET", f"{self.base}/api/queue?project=t")
+        self.assertEqual(s, 404)
+        self.assertIn("project folder is missing", j["error"])
+        self.assertFalse(root.exists())
+
     def test_save_missing_file_is_404(self):
         missing = self.root / "no-such-dir" / "missing.md"
         s, j = _http("POST", f"{self.base}/api/save",
@@ -2152,6 +2587,77 @@ class LocalhostAuthTests(EndpointTests):
         self.assertEqual(s, 200)
         meta = f'meta name="kettle-token" content="{server.SERVER_TOKEN}"'.encode()
         self.assertIn(meta, body)
+
+    def test_index_withholds_the_token_from_another_users_connection(self):
+        """Anything on loopback can GET /; only this server's own user gets the token."""
+        with mock.patch.object(server, "peer_is_own_user", return_value=False) as check:
+            conn = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
+            try:
+                conn.request("GET", "/")
+                body = conn.getresponse().read()
+            finally:
+                conn.close()
+        self.assertTrue(check.called)
+        self.assertNotIn(b'<meta name="kettle-token"', body)
+        self.assertNotIn(server.SERVER_TOKEN.encode(), body)
+
+    def test_peer_owner_parsers(self):
+        lsof = ("p70500\nu501\nf4\nn127.0.0.1:50563->127.0.0.1:4242\n"
+                "p999\nu0\nf5\nn127.0.0.1:4242->127.0.0.1:50563\n")
+        self.assertEqual(server.parse_lsof_peer_uid(lsof, "127.0.0.1", 50563), 501)
+        self.assertIsNone(server.parse_lsof_peer_uid(lsof, "127.0.0.1", 50999))
+        # the server's own accepted socket (local = server port) must never answer
+        self.assertIsNone(server.parse_lsof_peer_uid("p1\nu0\nf5\nn127.0.0.1:4242->127.0.0.1:50563\n",
+                                                     "127.0.0.1", 50563))
+        proc = ("  sl  local_address                         rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode\n"
+                "   0: 0100007F:C583 0100007F:1092 01 00000000:00000000 00:00000000 00000000  1000        0 1\n"
+                "   1: 0100007F:1092 0100007F:C583 01 00000000:00000000 00:00000000 00000000     0        0 2\n")
+        self.assertEqual(server.parse_proc_net_tcp_uid(proc, "127.0.0.1", 0xC583), 1000)
+        self.assertIsNone(server.parse_proc_net_tcp_uid(proc, "127.0.0.1", 1))
+
+    def test_peer_check_can_be_skipped_explicitly(self):
+        with mock.patch.dict(os.environ, {"KETTLE_SKIP_PEER_CHECK": "1"}):
+            self.assertTrue(server.peer_is_own_user("127.0.0.1", 1))
+
+    def test_index_sends_a_script_pinning_csp(self):
+        """Injected markup must not run even if the sanitizer misses it: script-src
+        admits only this origin plus the exact inline blocks shipped in index.html."""
+        import base64
+        import hashlib
+        conn = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
+        try:
+            conn.request("GET", "/")
+            res = conn.getresponse()
+            headers, body = dict(res.getheaders()), res.read()
+        finally:
+            conn.close()
+        csp = headers.get("Content-Security-Policy", "")
+        directives = {d.split()[0]: d.split()[1:] for d in csp.split("; ") if d}
+        script_src = directives.get("script-src", [])
+        self.assertIn("'self'", script_src)
+        self.assertNotIn("'unsafe-inline'", script_src)
+        self.assertNotIn("'unsafe-eval'", script_src)
+        inline = re.findall(rb"<script(?![^>]*\bsrc=)[^>]*>(.*?)</script>", body, re.DOTALL)
+        self.assertGreaterEqual(len(inline), 2)
+        for block in inline:
+            h = "'sha256-" + base64.b64encode(hashlib.sha256(block).digest()).decode() + "'"
+            self.assertIn(h, script_src)
+        self.assertEqual(directives.get("frame-ancestors"), ["'none'"])
+        self.assertEqual(directives.get("object-src"), ["'none'"])
+        self.assertEqual(headers.get("X-Frame-Options"), "DENY")
+        self.assertEqual(headers.get("X-Content-Type-Options"), "nosniff")
+
+    def test_csp_hashes_survive_crlf_line_endings(self):
+        """Browsers hash inline scripts after normalizing CRLF; a CRLF checkout must
+        not blank the sitting."""
+        lf = b"<html><head><script>\nboot();\n</script></head><script>main()\n</script></html>"
+        crlf = lf.replace(b"\n", b"\r\n")
+        self.assertEqual(server.sitting_csp(lf), server.sitting_csp(crlf))
+
+    def test_csp_refuses_remote_images(self):
+        csp = server.sitting_csp(b"<script>x()</script>")
+        img = next(d for d in csp.split("; ") if d.startswith("img-src"))
+        self.assertNotIn("http", img)
 
     def test_same_origin_origin_allowed(self):
         s, j = self._raw(

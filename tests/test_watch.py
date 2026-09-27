@@ -92,6 +92,20 @@ class NormalizeQueueTest(unittest.TestCase):
         self.assertEqual(q["entries"][0]["project_root"], str(self.tmp.resolve()))
         self.assertEqual(q["entries"][1]["status"], "approved")   # not clobbered
 
+    def test_intake_outside_the_project_in_a_credential_folder_is_refused(self):
+        import kettle.server as srv
+        saved = srv.HOME
+        home = Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: setattr(srv, "HOME", saved))
+        srv.HOME = home
+        (home / "proj").mkdir()
+        (home / ".ssh").mkdir()
+        proj = {"id": "p", "root": str(home / "proj"), "intake": {"watch": str(home / ".ssh")}}
+        self.assertIsNone(w.resolve_intake(proj))
+        (home / "drop").mkdir()
+        proj["intake"]["watch"] = str(home / "drop")
+        self.assertIsNotNone(w.resolve_intake(proj))
+
     def test_malformed_is_silent(self):
         self.qf.write_text("{not json")
         w.normalize_queue(self.qf, {"id": "p", "root": str(self.tmp)})   # must not raise
@@ -150,6 +164,10 @@ class IntakePassTest(unittest.TestCase):
         self.assertEqual(cmd[0], w.CLAUDE)
         self.assertIn("--add-dir", cmd)
         self.assertIn(str(self.source.resolve()), cmd[cmd.index("-p") + 1])
+        self.assertEqual(cmd[cmd.index("--setting-sources") + 1], "user")
+        self.assertIn("--strict-mcp-config", cmd)
+        self.assertFalse(any(str(a).startswith(("Bash(rg", "Bash(fd", "Bash(find")) for a in cmd))
+        self.assertNotIn("GEMINI_CLI_TRUST_WORKSPACE", kwargs["env"])
         self.assertEqual(kwargs["cwd"], str(self.root))
         self.assertEqual(kwargs["timeout"], 900)
 
@@ -210,6 +228,21 @@ class MainTest(unittest.TestCase):
         self.assertEqual(set(json.loads(w.STATE.read_text())), {"one", "two"})
         health = json.loads(w.HEALTH.read_text())
         self.assertEqual((health["status"], health["curated"]), ("ok", 3))
+
+    def test_main_final_beacon_keeps_a_project_failure(self):
+        """A per-project error must survive the end-of-run beacon (it used to be
+        overwritten with status ok)."""
+        w.PROJECTS.write_text(json.dumps({"projects": [
+            {"id": "one", "name": "One", "root": str(self.tmp)},
+            {"id": "two", "name": "Two", "root": str(self.tmp)},
+        ]}))
+        with mock.patch.object(w, "intake_pass", side_effect=[RuntimeError("disk gone"), 1]):
+            code = w.main()
+        self.assertEqual(code, 1)
+        health = json.loads(w.HEALTH.read_text())
+        self.assertEqual(health["status"], "error")
+        self.assertIn("one: disk gone", health["error"])
+        self.assertEqual(health["curated"], 1)
 
     def test_main_missing_curator_fails_with_healthbeacon(self):
         w.CLAUDE = str(self.tmp / "missing-curator")

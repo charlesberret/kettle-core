@@ -27,6 +27,7 @@ borrowed from a process — the same cure applied to the conversation).
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 from datetime import datetime
@@ -436,33 +437,35 @@ class SessionLedger:
 
 # Shell parts allowed under each tier. Claude needs each Bash(…) atomically;
 # Grok receives the same rule strings via --allow.
+#
+# No command that can run another program: `rg --pre`, `fd -x`, `find -exec`,
+# `awk 'BEGIN{system()}'`, `sed e` and `sort --compress-program` each turn a prefix
+# allowlist into arbitrary execution (verified 2026-09-15: `rg --pre ./x.sh` ran under
+# the chat tier with no denial). Search and listing go through the built-in Grep and
+# Glob tools; text changes go through Edit.
 SHELL_KIT = [
     "Bash(ls:*)", "Bash(cat:*)", "Bash(head:*)", "Bash(tail:*)", "Bash(echo:*)",
-    "Bash(rg:*)", "Bash(grep:*)", "Bash(fd:*)", "Bash(find:*)", "Bash(wc:*)",
-    # sed/awk are text transformers, but `sed -i` and awk's `print > file` write
-    # arbitrary paths — same trusted-not-fenced caveat as SHELL_SWEEP below.
-    "Bash(sed:*)", "Bash(awk:*)", "Bash(sort:*)", "Bash(uniq:*)", "Bash(diff:*)",
+    "Bash(grep:*)", "Bash(wc:*)", "Bash(uniq:*)", "Bash(diff:*)",
     "Bash(date:*)", "Bash(basename:*)", "Bash(dirname:*)", "Bash(mkdir:*)",
 ]
 
 SHELL_CHAT = [
-    "Bash(ls:*)", "Bash(cat:*)", "Bash(head:*)", "Bash(tail:*)",
-    "Bash(rg:*)", "Bash(fd:*)", "Bash(find:*)", "Bash(wc:*)",
+    "Bash(ls:*)", "Bash(cat:*)", "Bash(head:*)", "Bash(tail:*)", "Bash(wc:*)",
 ]
 
 SHELL_SWEEP = [
-    "Bash(ls:*)", "Bash(cat:*)", "Bash(rg:*)", "Bash(fd:*)", "Bash(find:*)",
-    "Bash(diff:*)",
+    "Bash(ls:*)", "Bash(cat:*)", "Bash(diff:*)",
     # Restock/archive often shells through when Write is sticky — keep these tight.
     "Bash(mkdir:*)", "Bash(mv:*)", "Bash(cp:*)", "Bash(rm:*)", "Bash(tee:*)",
     # python/python3 removed 2026-07-20 (user ruling). Evidence: no prompt under
     # kits/ ever referenced them, and an interpreter is the widest possible escape —
     # one line writes anywhere the user can.
     #
-    # HONEST RESIDUAL: what remains still takes arbitrary paths (rm/mv/cp/tee), as do
-    # sed/awk in SHELL_KIT. A tool allowlist constrains WHICH binaries run, never WHERE
-    # they write, so every shell-bearing tier is TRUSTED, NOT FENCED. Real enforcement
-    # needs an OS sandbox around the curator process — docs/briefs/19-enforce-the-fence.md.
+    # HONEST RESIDUAL: what remains still takes arbitrary paths (rm/mv/cp/tee), and
+    # Claude's acceptEdits auto-approves filesystem commands even outside this list. A
+    # tool allowlist constrains WHICH binaries run, never WHERE they write, so every
+    # shell-bearing tier is TRUSTED, NOT FENCED. Real enforcement needs an OS sandbox
+    # around the curator process — docs/briefs/19-enforce-the-fence.md.
 ]
 
 # Interview is tool-less: core precomputes a survey snapshot (survey.py) and injects it.
@@ -494,6 +497,37 @@ TOOL_TIERS: dict[str, tuple[Optional[str], list[str], list[str]]] = {
         [],
     ),
 }
+
+# A registered folder is not trusted code. Headless `claude -p` skips the workspace-
+# trust dialog, so the folder's `.claude/settings*.json` hooks and its `.mcp.json`
+# servers ran on the first curator turn — the plan-mode interview included
+# (verified against claude 2.1.272, 2026-09-15). Load settings from the user scope
+# only and ignore every MCP config Kettle did not pass. Claude-only: custom `cli`
+# binaries are not assumed to accept these flags.
+CLAUDE_PROJECT_ISOLATION = ["--setting-sources", "user", "--strict-mcp-config"]
+
+# Claude's own protected paths already refuse writes to .claude/, .mcp.json and
+# .git/config, but a Claude write turn could still plant another agent's config for
+# a later Gemini/Codex turn in the same folder.
+CLAUDE_FOREIGN_AGENT_CONFIG_DENY = [
+    "Write(.gemini/**)", "Edit(.gemini/**)",
+    "Write(.codex/**)", "Edit(.codex/**)",
+]
+
+# Environment variables that would make a curator CLI trust the registered folder's
+# own agent config. Gemini's `--skip-trust` currently applies *after* workspace
+# settings load, so project hooks stay off; this variable loads them (verified with
+# gemini 0.54.4). Never let it reach a curator child.
+CURATOR_ENV_DENY = frozenset({"GEMINI_CLI_TRUST_WORKSPACE"})
+
+
+def curator_env(base: Optional[dict] = None) -> dict:
+    """Environment for a curator child process: the caller's, minus trust overrides."""
+    env = dict(os.environ if base is None else base)
+    for key in CURATOR_ENV_DENY:
+        env.pop(key, None)
+    return env
+
 
 # ---------- per-provider capabilities (honest, derived from tools_argv above) ----------
 #
@@ -574,8 +608,15 @@ def tools_argv(tier: str, provider: str = "claude") -> list[str]:
         if provider == "grok":
             # plan = no project writes; no --allow Bash / --always-approve
             return ["--permission-mode", "plan"]
-        # Claude / cli: empty allowlist (no tools registered for the turn)
-        return ["--allowedTools"]
+        # Claude / cli: current CLIs require a value after --allowedTools.
+        # A bare `--allowedTools` exits 1 ("argument missing").
+        if provider == "claude":
+            # plan mode alone is read-only, not tool-less: it kept 34 built-in tools
+            # and every user MCP connector. `--tools ""` removes the built-ins; the
+            # project-isolation flags keep the registered folder's own agent config
+            # from running (see CLAUDE_PROJECT_ISOLATION).
+            return ["--permission-mode", "plan", "--tools", "", *CLAUDE_PROJECT_ISOLATION]
+        return ["--permission-mode", "plan"]
 
     if provider == "chatgpt":
         # Codex: sandbox policy stands in for tool allowlists
@@ -649,10 +690,19 @@ def tools_argv(tier: str, provider: str = "claude") -> list[str]:
     out = []
     if mode:
         out += ["--permission-mode", mode]
+    if provider == "claude":
+        # Name the built-ins this tier may use at all (WebFetch, WebSearch, Task and
+        # connectors are simply absent), then pre-approve the fine-grained rules.
+        builtins = sorted({str(r).split("(", 1)[0] for r in allow})
+        out += ["--tools", ",".join(builtins)]
     if allow:
         out += ["--allowedTools", *allow]
+    if provider == "claude" and write:
+        deny = [*deny, *CLAUDE_FOREIGN_AGENT_CONFIG_DENY]
     if deny:
         out += ["--disallowedTools", *deny]
+    if provider == "claude":
+        out += CLAUDE_PROJECT_ISOLATION
     return out
 
 
@@ -788,17 +838,63 @@ def build_argv(cfg, prompt: str, *,
     return build_cmd(command, prompt, session_id, bits, provider=provider)
 
 
+DEFAULT_IDLE_TIMEOUT_S = 300.0  # same default as the server's curator.idle_timeout_s
+
+
+def _lines_with_idle_timeout(stream, idle_timeout: float) -> Iterator[str]:
+    """Yield lines from `stream`, raising TimeoutError after `idle_timeout` seconds with
+    no new line. A daemon thread does the blocking reads."""
+    import queue as _queue
+    import threading as _threading
+    q: _queue.Queue = _queue.Queue()
+    eof = object()
+
+    def pump():
+        try:
+            for line in stream:
+                q.put(line)
+        except Exception as exc:  # noqa: BLE001 — surface reader failures to the consumer
+            q.put(exc)
+        finally:
+            q.put(eof)
+
+    _threading.Thread(target=pump, daemon=True, name="kettle-runtime-stdout").start()
+    while True:
+        try:
+            item = q.get(timeout=idle_timeout)
+        except _queue.Empty:
+            raise TimeoutError(
+                f"curator idle timeout after {idle_timeout:g}s without output") from None
+        if item is eof:
+            return
+        if isinstance(item, Exception):
+            raise item
+        yield item
+
+
+def spawn_error_text(cmd: list, exc: BaseException, provider: str = "claude") -> str:
+    """One plain sentence for a curator CLI that could not start."""
+    exe = str(cmd[0]) if cmd else "(no command)"
+    if isinstance(exc, FileNotFoundError):
+        return (f"curator CLI not found: {exe} (provider {provider}) — install it or choose "
+                "another curator in Settings; `kettle doctor` shows what is on PATH")
+    if isinstance(exc, PermissionError):
+        return f"curator CLI is not executable: {exe} — check its permissions (chmod +x)"
+    return f"curator failed to start: {exe}: {exc}"
+
+
 class Runtime:
     """spawn(role, message, session?) → normalized event stream, with the turn persisted
     to the desk ledger on completion. The one piece that touches the process world; kept
     thin so the testable logic (above) stays pure."""
 
     def __init__(self, claude: str, sessions_dir: Path | str, window: int = DEFAULT_WINDOW,
-                 provider: str = "claude"):
+                 provider: str = "claude", idle_timeout: float = DEFAULT_IDLE_TIMEOUT_S):
         self.claude = claude
         self.provider = provider
         self.ledger = SessionLedger(sessions_dir)
         self.window = window
+        self.idle_timeout = idle_timeout
 
     def spawn(self, prompt: str, cwd: Path | str, session_id: Optional[str] = None,
               role: str = "chat", extra: Optional[list] = None,
@@ -811,18 +907,31 @@ class Runtime:
         # ledger + capture regardless.
         if cmd is None:
             cmd = build_cmd(self.claude, prompt, session_id, extra, provider=self.provider)
-        proc = subprocess.Popen(cmd, cwd=str(cwd), stdout=subprocess.PIPE,
-                                stderr=subprocess.STDOUT, text=True)
+        try:
+            proc = subprocess.Popen(cmd, cwd=str(cwd), stdout=subprocess.PIPE,
+                                    stderr=subprocess.STDOUT, text=True, env=curator_env())
+        except OSError as exc:  # missing / non-executable CLI: report it, don't traceback
+            yield {"t": "error", "s": spawn_error_text(cmd, exc, self.provider)}
+            yield {"t": "done", "usage": {}, "cost": 0}
+            return
         assert proc.stdout is not None
         try:
-            for evt in normalize(proc.stdout, meter, lambda s: cap.__setitem__("sid", s)):
-                if evt["t"] == "text":
-                    cap["text"].append(evt["s"])
-                elif evt["t"] == "tool":
-                    cap["tools"].append(evt["s"])
-                    if evt.get("tool") in lineage.WRITE_TOOLS and evt.get("path"):
-                        cap["edits"].append(evt["path"])
-                yield evt
+            try:
+                lines = _lines_with_idle_timeout(proc.stdout, self.idle_timeout)
+                for evt in normalize(lines, meter, lambda s: cap.__setitem__("sid", s)):
+                    if evt["t"] == "text":
+                        cap["text"].append(evt["s"])
+                    elif evt["t"] == "tool":
+                        cap["tools"].append(evt["s"])
+                        if evt.get("tool") in lineage.WRITE_TOOLS and evt.get("path"):
+                            cap["edits"].append(evt["path"])
+                    yield evt
+            except TimeoutError as exc:
+                # a stalled CLI must not hang `kettle chat` / `kettle found` forever
+                proc.kill()
+                yield {"t": "error", "s": str(exc)}
+                yield {"t": "done", "usage": meter.snapshot(), "cost": 0}
+                return
             proc.wait(timeout=10)
             if proc.returncode not in (0, None, -9):
                 yield {"t": "error", "s": f"curator exited {proc.returncode}"}

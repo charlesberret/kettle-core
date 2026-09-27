@@ -25,6 +25,12 @@ and Desk schema have their own integer contract versions.
 
 ### Changed
 
+- Founding interview no longer passes a bare `--allowedTools` to Claude Code
+  CLI (current CLIs require a value and exit 1). Claude's interview uses
+  `--permission-mode plan --tools ""` (see Security); Grok uses plan mode.
+- Founding interview is a conversation (one mission question), not a
+  confirmation-card form. Agent chat renders GFM. See `docs/REVIEW.md`.
+
 - Restructured the flat modules into the `kettle/` package; `static/`, `kits/`, and
   `projects.example.json` ship as package data so a wheel can serve the web UI.
   `APPDIR` resolves through `importlib.resources.files()` (PyInstaller `_MEIPASS` kept).
@@ -39,6 +45,78 @@ and Desk schema have their own integer contract versions.
 - Web/desktop load theme packs from `GET /api/themes` and can install custom
   packs via Appearance or `POST /api/themes/install`.
 - Sitting source view uses shared syntax role classes aligned with the CLI.
+
+- Sweep crash-safety: every sweep that spawns a curator writes
+  `runtime/sweep-health.json` (`running` → `done`/`failed`). An empty, quiet queue left
+  by a sweep that closed and then died now restocks instead of reporting "Nothing to
+  sweep" forever. A second sweep on the same desk is refused while one is streaming.
+- Batch archives are one file per pass (`archive/<YYYY-MM-DD-HHMMSS>-batch.json`,
+  suffixed on collision) and are never merged into or overwritten; entries are selected
+  under the queue lock so a concurrent approve or intake entry is not dropped.
+- `comments.log` stays append-only but comments are retired once consumed: a completed
+  sweep or an archive appends `[kettle:closed through N]` markers, and clearing a note
+  retracts its history. A file returning to the queue no longer replays settled direction.
+- Founding has one prompt builder (`build_found_prompt`) for `POST /api/found`,
+  `POST /api/bootstrap` and `kettle found`: the founding sentence, queue schema, kit context
+  and scope note reach every entry point. `kettle found` refuses an already-founded desk,
+  resumes only its own provider's session, and exits 1 when the desk did not found.
+- Found Desk no longer strands a desk: the sitting announces "desk founded" only when
+  `GET /api/interview` reports `founded: true` (new field, with `has_charter`); otherwise the
+  proposal stays open, and a missing proposal entry is re-filed. A propose turn cannot found
+  the desk. A chat session opened before the interview is not resumed as the interview.
+- Founding prompts refer to the founding-sentence block as *above* (it leads the prompt).
+- Refound keeps append-only records (`working-record.jsonl`, lineage baseline, `sessions/`,
+  `archive/`, `outbound/`, `runtime/comments.log`, `runtime/approvals.log`) and clears only
+  the charter, memory, proposal, queue, session and snapshots; it is refused (409 `busy`)
+  while a curator turn is streaming on that desk.
+- The founding survey honors the project's `max_depth` for git's most-changed paths and the
+  filesystem recency walk, skips that walk when git history answers recency, and reports
+  its recency counts cumulatively ("N in the last 7 days" now includes the last 24h).
+- Curator orientation caps fit the files' line budgets (PROJECT/MEMORY 6000 characters,
+  FAMILIARITY 9000) and mark any truncation, so the newest rulings are not silently cut.
+- A desk whose `queue.json` does not parse is reported (409 `queue_corrupt`) and never
+  overwritten; a project folder that was moved or deleted is reported (404) instead of being
+  recreated by `mkdir -p`; one broken desk no longer fails the sitting's boot.
+- `kettle chat` / `kettle found` / `kettle refresh-briefs` stop a curator that goes silent for
+  `curator.idle_timeout_s` (default 300 s), as the server already did.
+- The retired confirmation-card parser, renderer, CSS and tests are removed from the sitting
+  (P4: founding is a conversation); the re-found offer keeps its own `refound-offer` styling.
+  Founding copy in the sitting says "Draft Proposal ✓" instead of "finish ✓".
+- Smaller fixes from the review: re-approving an entry keeps its first date and logs once;
+  a project name with no ASCII letters gets a stable hashed id instead of `x`; two sweep
+  session logs in the same second no longer overwrite each other; precomputed sweep diffs
+  find snapshots for ids that need slugging; an intake folder outside the project that
+  overlaps credential folders is ignored; `KETTLE_ALLOWED_ROOTS` entries pass the same
+  gate as project roots; agent-chat task lists lose their stray bullets.
+- `lineage_git` trusts only a `lineage.git` Kettle created, recorded outside every project
+  in `~/.cache/kettle/lineage-trust.json`; any other one (including one from an older Kettle)
+  is set aside untouched as `lineage.git.untrusted-<stamp>` and a fresh history starts. Its
+  config is rewritten from a fixed template before each run, repo attributes are removed,
+  and git runs with hooks, fsmonitor, pager, external diff and attributes files disabled.
+- Desk writes never follow a planted symlink: every write or append under a registered
+  project (queue, session, snapshots, archives, session logs, comments/approvals logs,
+  working record, lineage baseline, EDITING.md, the CLAUDE.md directive, inbox staging)
+  refuses a symlinked final component or a parent that leads outside the project
+  (403 `unsafe_path`). Refound refuses a desk that leads outside its project. The root gate
+  is case-insensitive on macOS and refuses `~/Library` apart from iCloud/CloudStorage.
+- `kettle migrate --apply` also rewrites `<root>/.setsweep/` path prefixes in the desk's
+  `runtime/queue.json` entries and the registry `ledger` field (listed in the dry run).
+- Prompts and skills no longer hard-code `.kettle/outbound/` (a curator following it on a
+  legacy `.setsweep` desk split the desk); the founding skill describes the P4
+  conversation instead of the retired confirmation card; the interview role names the
+  "Draft Proposal ✓" button.
+- Docs match the tree: API.md routes and tool tiers, broken links, INSTALL/CLI command
+  lists, the AUTH-TOKEN conformance table, and `kettle-design-tokens.md` against
+  `kettle-palette.json`.
+- A missing or non-executable curator CLI is reported by name with a fix
+  (`curator_unavailable`, 500, before any stream) instead of a traceback from `kettle chat` /
+  `kettle found` or a made-up `~/.local/bin/claude` path; the CLI is resolved per turn, so
+  installing it after launch works without a restart.
+- The sitting surfaces refused API calls: a stale token after a core restart says to reload
+  the window, instead of chat showing an empty turn and sweep printing "finished".
+- `kettle-watch` exits 1 and keeps `status: error` in `watch-health.json` when any project
+  failed (the final beacon used to overwrite errors with `ok`). The admin report exposes
+  that beacon as `watch_health`.
 
 ### Compatibility
 
@@ -58,6 +136,40 @@ and Desk schema have their own integer contract versions.
   survey, and staged egress remain release invariants.
 - Localhost HTTP hardening: per-boot `X-Kettle-Token` (discovery file mode 0600),
   Host/Origin rejection, and normalized `{error, code}` envelopes (`str(e)` only).
+- The served page carries the per-boot token only when the connecting socket belongs to
+  the server's own Unix user (`lsof` on macOS, `/proc/net/tcp` on Linux). Any process on
+  loopback — including another user's — could previously read the token from `GET /`.
+  `KETTLE_SKIP_PEER_CHECK=1` disables the check where the owner cannot be determined.
+- Rendered markdown (reading view, agent chat) is sanitized as a string before it
+  reaches the DOM. Previously raw `marked` output was assigned to `innerHTML` and
+  cleaned afterwards, which let `<img onerror>` in a project file or agent reply run
+  script holding the page token. `id` attributes are no longer allowed (DOM
+  clobbering of the sitting's own elements).
+- The sitting is served with a Content-Security-Policy (script-src `'self'` plus
+  per-response sha256 pins of the shipped inline blocks; `frame-ancestors 'none'`,
+  `object-src 'none'`), `X-Frame-Options: DENY` and `nosniff`.
+- A registered folder's own agent config no longer runs. Headless `claude -p` skips
+  workspace trust, so a folder's `.claude/settings*.json` hooks and `.mcp.json` servers
+  executed on the first curator turn, including the founding interview. Every Claude
+  tier now passes `--setting-sources user --strict-mcp-config`; the interview also
+  passes `--tools ""` (plan mode alone left 34 built-in tools and all user MCP
+  connectors); write tiers name their built-ins with `--tools` (no WebFetch, WebSearch
+  or Task) and deny the Write/Edit tools on `.gemini/**` and `.codex/**`. The folder
+  watcher's curate turn gets the same isolation. Curator children never inherit
+  `GEMINI_CLI_TRUST_WORKSPACE`. Custom `cli` providers are unchanged. The project's
+  `CLAUDE.md` now reaches curators as prompt text in the orientation block.
+- Shell allowlists no longer include commands that can run other programs (`rg`, `fd`,
+  `find`, `awk`, `sed`, `sort`): `rg --pre ./script` executed under the chat tier. Use
+  the built-in Grep/Glob/Edit tools. Shell-bearing tiers remain trusted, not fenced —
+  Claude's `acceptEdits` also auto-approves ordinary filesystem commands.
+- Writes no longer follow a symlink planted at a predictable temp name: `atomic_write`
+  creates its temp file with O_EXCL under a random name (used by save, queue, snapshots
+  and the watcher). A desk directory that is a symlink leading outside its project is
+  refused. A project root may not be the whole home folder, overlap credential or agent
+  config folders (`~/.ssh`, `~/.claude`, `~/.config`, …), or contain Kettle's settings.
+- The sitting refuses remote images (`img-src 'self' data:`), so a registered
+  document cannot report when it is opened. CSP hashes are computed on
+  LF-normalized HTML, and `.gitattributes` pins `kettle/static/*.html` to LF.
 
 ## 0.2.0
 

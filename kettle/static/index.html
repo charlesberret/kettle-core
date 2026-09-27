@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <!-- Bump this when sitting UI changes; title shows it so we can confirm the shell loaded. -->
-<meta name="kettle-ui" content="2026-08-02z">
-<title>kettle · ui-2026-07-28z</title>
+<meta name="kettle-ui" content="2026-09-15g">
+<title>kettle · ui-2026-09-15g</title>
 <style>
   /*
    * Type & chrome roles — single source of sitting hierarchy.
@@ -897,62 +897,13 @@
   #chat.interview-loading > .iv-pre-hide { display: none !important; }
   .msg { margin:10px 0; white-space:pre-wrap; word-break:break-word; color:var(--muted); }
   .msg.agent strong { color:var(--fg); font-weight:600; }
-  .msg.confirm-card { white-space:normal; border:1px solid var(--line); border-radius:8px;
-                      padding:12px 14px; background:color-mix(in srgb, var(--panel2) 70%, var(--bg)); }
-  .msg.confirm-card .cc-preamble { white-space:pre-wrap; color:var(--dim); margin:0 0 10px; }
-  .msg.confirm-card h2.cc-title { margin:0 0 8px; font-size:14px; color:var(--acc); letter-spacing:.04em; }
-  .msg.confirm-card .cc-section { margin:0 0 12px; padding:0 0 10px; border-bottom:1px solid var(--line); }
-  .msg.confirm-card .cc-section:last-of-type { border-bottom:0; padding-bottom:0; }
-  .msg.confirm-card .cc-stem { font-weight:600; color:var(--fg); margin:0 0 6px; line-height:1.35; }
-  .msg.confirm-card label.cc-opt { display:flex; gap:8px; align-items:flex-start; margin:4px 0; cursor:pointer; color:var(--fg); }
-  .msg.confirm-card label.cc-opt input { margin-top:3px; flex:none; accent-color:var(--acc); transform:scale(1.1); }
-  /* Keep option text ~one line in a typical side panel (~36–40ch); wrap only if needed */
-  .msg.confirm-card label.cc-opt span {
-    flex:1; min-width:0; line-height:1.35; font-size:13px;
-    overflow-wrap:anywhere; word-break:break-word;
-  }
-  /* Auto-grow with text (growTextarea); manual resize handle not needed. */
-  .msg.confirm-card .cc-elab {
-    display:block; width:100%; box-sizing:border-box; margin-top:8px;
-    min-height:44px; max-height:min(40vh, 320px);
-    background:var(--bg); color:var(--fg); border:1px solid var(--line); border-radius:5px;
-    padding:6px 8px; font:13px/1.35 var(--ui-font);
-    resize:none; overflow-y:hidden; field-sizing:content; /* modern browsers; JS backfills */
-  }
-  /* Placeholder smaller than option text (13px); gray, not body-white --dim */
-  .msg.confirm-card .cc-elab::placeholder {
-    font-size:11px; color:var(--text-secondary); opacity:1;
-  }
-  .msg.confirm-card .cc-elab::-webkit-input-placeholder {
-    font-size:11px; color:var(--text-secondary); opacity:1;
-  }
-  .msg.confirm-card .cc-elab::-moz-placeholder {
-    font-size:11px; color:var(--text-secondary); opacity:1;
-  }
-  .msg.confirm-card .cc-actions { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:10px; }
-  .msg.confirm-card .cc-hint { font-size:12px; color:var(--dim); }
-  /* Confirm CTA: primary ink on a firm link-tint — readable, no pale glow */
-  .msg.confirm-card .cc-confirm {
-    background: color-mix(in srgb, var(--link) 28%, var(--panel2));
-    border-color: color-mix(in srgb, var(--link) 65%, var(--line));
-    color: var(--fg);
-    font-weight: 600;
-    box-shadow: none;
-  }
-  .msg.confirm-card .cc-confirm:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--link) 40%, var(--panel2));
-    border-color: var(--link);
-    color: var(--fg);
-  }
-  .msg.confirm-card .cc-confirm:disabled {
-    opacity: .55;
-  }
-  /* Post re-found offer — same card surface, two clear choices */
+  /* Post re-found offer — a bordered surface with two clear choices */
+  .msg.refound-offer { white-space:normal; border:1px solid var(--line); border-radius:8px;
+                       padding:12px 14px; background:color-mix(in srgb, var(--panel2) 70%, var(--bg)); }
   .msg.refound-offer .rf-q {
     color:var(--text-primary); font-size:13.5px; font-weight:600; line-height:1.4; margin:0 0 12px;
   }
-  .msg.refound-offer .cc-actions { margin-top:0; }
-  .msg.agent.cc-pending { color:var(--dim); font-style:italic; }
+  .msg.refound-offer .rf-actions { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
   .msg.tool { color:var(--acc); font-size:12.5px; margin:5px 0; padding:3px 0 3px 10px;
               border-left:2px solid color-mix(in srgb, var(--acc) 55%, var(--line));
               font-family:var(--mono, ui-monospace, monospace); opacity:.92; }
@@ -1684,6 +1635,48 @@
   .msg.ctx .ctxhead .fpath { color:var(--text-link); }
   .msg.agent { color:var(--slot-agent, var(--text-muted)); }
   .msg.user { color:var(--slot-user, var(--text-link)); }
+  /* Agent markdown (GFM) — same ladder as #render, denser for the chat column. */
+  .msg.agent.md { white-space:normal; font-family:var(--body-font); font-size:14px; line-height:1.5; }
+  .msg.agent.md > :first-child { margin-top:0; }
+  .msg.agent.md h1, .msg.agent.md h2, .msg.agent.md h3,
+  .msg.agent.md h4, .msg.agent.md h5, .msg.agent.md h6 {
+    font-family:var(--body-font); font-weight:600; line-height:1.3;
+    letter-spacing:-0.01em; margin:0.9em 0 0.35em; color:var(--text-heading);
+  }
+  .msg.agent.md h1 { font-size:1.22em; }
+  .msg.agent.md h2 { font-size:1.12em; }
+  .msg.agent.md h3 { font-size:1.04em; }
+  .msg.agent.md h4, .msg.agent.md h5, .msg.agent.md h6 {
+    font-size:1em; color:var(--text-secondary);
+  }
+  .msg.agent.md p { margin:0.5em 0; }
+  .msg.agent.md ul, .msg.agent.md ol { margin:0.4em 0; padding-left:1.35em; }
+  .msg.agent.md li { margin:0.22em 0; }
+  .msg.agent.md li > p { margin:0.12em 0; }
+  /* marked 12 emits no task-list classes: match list items that start with a checkbox */
+  .msg.agent.md li:has(> input[type=checkbox]:first-child) { list-style:none; }
+  .msg.agent.md input[type=checkbox] {
+    accent-color:var(--acc); transform:scale(1.12); margin:0 7px 0 0; vertical-align:middle;
+  }
+  .msg.agent.md code {
+    background:color-mix(in srgb, var(--fg) 8%, var(--panel2)); padding:1px 5px;
+    border-radius:4px; font:12.5px/1.4 var(--ui-font);
+  }
+  .msg.agent.md pre {
+    background:color-mix(in srgb, var(--fg) 6%, var(--panel2)); padding:10px 12px;
+    border-radius:6px; overflow-x:auto; border:1px solid var(--line); margin:0.7em 0;
+    white-space:pre-wrap; font:12.5px/1.45 var(--ui-font);
+  }
+  .msg.agent.md pre code { background:none; padding:0; }
+  .msg.agent.md blockquote {
+    margin:0.6em 0; padding:0.1em 0 0.1em 0.85em;
+    border-left:3px solid var(--line); color:var(--text-secondary);
+  }
+  .msg.agent.md a { color:var(--text-link); }
+  .msg.agent.md hr { border:0; border-top:1px solid var(--line); margin:0.9em 0; }
+  .msg.agent.md table { border-collapse:collapse; margin:8px 0; font-size:13px; }
+  .msg.agent.md th, .msg.agent.md td { border:1px solid var(--line); padding:3px 8px; text-align:left; }
+  .msg.agent.md th { background:var(--panel); color:var(--text-label); }
 </style>
 </head>
 <body>
@@ -1825,13 +1818,15 @@
 <div id="addbg">
   <div id="addmodal" role="dialog" aria-modal="true" aria-labelledby="addmodal-h">
     <h2 id="addmodal-h">Add Project</h2>
-    <p class="mnote" style="margin:0 0 12px">Name a folder under your home. The interview starts in the agent pane — finish ✓ drafts a proposal you edit, then use Found Desk.</p>
+    <p class="mnote" style="margin:0 0 12px">Name a folder under your home. The interview starts in the agent pane — Draft Proposal ✓ drafts a proposal you edit, then use Found Desk.</p>
     <div class="add-hot">
       <input id="addname" placeholder="name" spellcheck="false" aria-label="project name">
       <div class="add-pathrow">
         <input id="addroot" placeholder="folder (absolute or ~/ path)" spellcheck="false" aria-label="project folder">
         <button id="addbrowse" class="btn btn-sm btn-ghost browse" type="button" title="choose folder">browse…</button>
       </div>
+      <label for="addnote" class="mnote" style="margin:8px 0 4px">In a sentence or two: what is this, and what do you want from a second reader here?</label>
+      <textarea id="addnote" class="kitnote" required spellcheck="false" placeholder="e.g. a research folder that grows fast — flag anything that looks stale or contradicts what's already written" aria-label="founding sentence — what this is and what you want from a second reader here"></textarea>
     </div>
     <details class="add-advanced">
       <summary>more options</summary>
@@ -1845,7 +1840,6 @@
           <option value="writing">writing</option>
         </select>
         <input id="adddepth" class="kitsel" type="number" min="0" step="1" placeholder="max depth (blank = whole tree)" title="directory levels under the root to review" aria-label="max depth">
-        <textarea id="addnote" class="kitnote" spellcheck="false" placeholder="optional notes for the curator — fences, conventions, what you want a second reader for" aria-label="founding notes"></textarea>
       </div>
     </details>
     <div class="mrow">
@@ -3644,8 +3638,21 @@ function apiHeaders(extra){
   if(KETTLE_TOKEN) h['X-Kettle-Token'] = KETTLE_TOKEN;
   return h;
 }
-async function jget(u){ const r = await fetch(u,{headers:apiHeaders()}); const j = await r.json(); if(!r.ok) throw j.error; return j; }
-async function jpost(u,b){ const r = await fetch(u,{method:'POST',headers:apiHeaders({'Content-Type':'application/json'}),body:JSON.stringify(b)}); const j = await r.json(); if(!r.ok) throw j.error; return j; }
+/** Human-readable error for a failed /api/ response. A 403 `auth` means the core
+    restarted and minted a new token — this page's copy is stale until a reload. */
+async function apiErrorText(r){
+  let j = {};
+  try { j = await r.json(); } catch(e){}
+  if(r.status === 403 && j.code === 'auth'){
+    if(!KETTLE_TOKEN)
+      return 'Kettle did not give this page its access key: it could not confirm the browser runs '
+        + 'as your own user account. Open Kettle from the app or with `kettle` (see docs/AUTH-TOKEN.md).';
+    return 'Kettle restarted, so this window lost its connection — reload the window to reconnect.';
+  }
+  return j.error || ('HTTP ' + r.status);
+}
+async function jget(u){ const r = await fetch(u,{headers:apiHeaders()}); if(!r.ok) throw await apiErrorText(r); return r.json(); }
+async function jpost(u,b){ const r = await fetch(u,{method:'POST',headers:apiHeaders({'Content-Type':'application/json'}),body:JSON.stringify(b)}); if(!r.ok) throw await apiErrorText(r); return r.json(); }
 
 const esc = s => String(s==null?'':s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 function shortName(p){ if(!p) return ''; const parts = p.split('/'); return parts.slice(-2).join('/'); }
@@ -4164,7 +4171,9 @@ function setMode(m){
 
 /* Allowlist sanitizer for rendered markdown (brief 09). DOMPurify is vendored at
    /purify.min.js — no CDN. Task-list checkboxes stay allowed so reading view can
-   toggle them; scripts, forms, SVG event surfaces, and javascript:/data: URIs go. */
+   toggle them; scripts, forms, SVG event surfaces, and javascript:/data: URIs go.
+   No `id`: $() is getElementById, so a file's <div id="chat"> would capture the
+   sitting's own elements (DOM clobbering). */
 const MD_PURIFY = {
   ALLOWED_TAGS: [
     'a','abbr','b','blockquote','br','code','del','em','h1','h2','h3','h4','h5','h6',
@@ -4172,29 +4181,97 @@ const MD_PURIFY = {
     'th','thead','tr','ul','span','div','input','section','details','summary',
   ],
   ALLOWED_ATTR: [
-    'href','title','alt','src','class','id','type','checked','disabled','colspan',
+    'href','title','alt','src','class','type','checked','disabled','colspan',
     'rowspan','start','align','aria-label','aria-hidden','role','open',
   ],
   ALLOW_DATA_ATTR: false,
+  SANITIZE_NAMED_PROPS: true,
   // http(s), mailto, relative paths, anchors — not javascript: or data:
   ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i,
 };
 
-function sanitizeRender(el){
+/** Sanitize an HTML *string* before it touches the DOM. Never assign unsanitized
+    markup to innerHTML and clean it afterwards: parsing already queued its
+    <img onerror> handlers. Returns null when DOMPurify is unavailable — callers
+    then show the source as plain text instead of trusting a blocklist. */
+function purifyHtml(html){
+  if(html == null) return null;
+  if(typeof DOMPurify === 'undefined' || !DOMPurify.sanitize) return null;
+  return DOMPurify.sanitize(String(html), MD_PURIFY);
+}
+
+function _mdHtml(src){
+  if(typeof marked === 'undefined' || !marked.parse) return null;
+  try { return marked.parse(String(src || ''), {gfm: true}); }
+  catch(e){ return null; }
+}
+function _freezeChatTaskboxes(el){
   if(!el) return;
-  if(typeof DOMPurify !== 'undefined' && DOMPurify.sanitize){
-    el.innerHTML = DOMPurify.sanitize(el.innerHTML, MD_PURIFY);
+  el.querySelectorAll('input[type=checkbox]').forEach(cb => {
+    cb.disabled = true;
+    cb.tabIndex = -1;
+  });
+}
+function appendApplyBlock(host, block){
+  const wrap = document.createElement('div'); wrap.className = 'applyblock';
+  const pre = document.createElement('pre'); pre.textContent = block;
+  const bar = document.createElement('div'); bar.className = 'abar';
+  const cp = document.createElement('button'); cp.className = 'btn btn-sm btn-ghost'; cp.textContent = 'copy';
+  cp.onclick = () => navigator.clipboard.writeText(block);
+  const ap = document.createElement('button'); ap.className = 'btn btn-sm btn-default'; ap.textContent = '→ editor';
+  ap.title = 'jump to this passage in the file (highlights the line); if the text is not in the file, inserts it at the cursor';
+  ap.onclick = () => {
+    if(locateInEditor(block)) return;
+    if(mode !== 'source') setMode('source');
+    const ed = $('editor');
+    ed.setRangeText(block, ed.selectionStart, ed.selectionEnd, 'end');
+    setDirty(true); scheduleGutter(); ed.focus();
+  };
+  bar.append(cp, ap); wrap.append(pre, bar); host.appendChild(wrap);
+}
+/** Paint an agent bubble as GFM (headings, lists, task ticks). Fenced code keeps
+    the copy / → editor bar. Task-list checkboxes are display-only. */
+function fillAgentMarkdown(el, text){
+  if(!el) return;
+  el._kettleRaw = String(text || '');
+  const src = el._kettleRaw;
+  if(!src){ el.textContent = ''; return; }
+  const html = purifyHtml(_mdHtml(src.includes('```') ? '' : src));
+  if(src.includes('```')){
+    el.classList.add('md');
+    el.textContent = '';
+    const parts = src.split(/```[^\n]*\n?/);
+    for(let i = 0; i < parts.length; i++){
+      if(i % 2 === 0){
+        if(!parts[i].trim()) continue;
+        const chunk = purifyHtml(_mdHtml(parts[i]));
+        if(chunk){
+          const wrap = document.createElement('div');
+          wrap.className = 'md-prose';
+          wrap.innerHTML = chunk;
+          _freezeChatTaskboxes(wrap);
+          el.appendChild(wrap);
+        } else {
+          const s = document.createElement('span'); s.textContent = parts[i]; el.appendChild(s);
+        }
+      } else {
+        appendApplyBlock(el, parts[i].replace(/\n$/, ''));
+      }
+    }
     return;
   }
-  // Fallback if purify failed to load — still strip the worst blocklist holes.
-  el.querySelectorAll('script,iframe,object,embed,link,style,form,svg').forEach(n => n.remove());
-  el.querySelectorAll('*').forEach(n => {
-    [...n.attributes].forEach(a => {
-      if(/^on/i.test(a.name) || a.name === 'formaction' || a.name === 'srcdoc') n.removeAttribute(a.name);
-      if((a.name === 'href' || a.name === 'src' || a.name === 'xlink:href') &&
-         /^(javascript|data):/i.test(n.getAttribute(a.name) || '')) n.removeAttribute(a.name);
-    });
-  });
+  if(html){
+    el.classList.add('md');
+    el.innerHTML = html;
+    _freezeChatTaskboxes(el);
+    return;
+  }
+  el.classList.remove('md');
+  if(src.includes('**')){
+    el.innerHTML = esc(src).replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
+  } else {
+    el.textContent = src;
+  }
 }
 
 /** Screen-reader announce for completed chat turns (not per token). */
@@ -4251,8 +4328,14 @@ function unwrapParagraphs(text){
 
 function renderMd(){
   const r = $('render');
-  r.innerHTML = marked.parse($('editor').value, {gfm: true});
-  sanitizeRender(r);
+  const src = $('editor').value;
+  const html = purifyHtml(_mdHtml(src));
+  if(html == null){
+    // marked or DOMPurify missing — show the source rather than unsanitized HTML
+    r.textContent = src;
+    return;
+  }
+  r.innerHTML = html;
   linkifyWikilinks(r);
   const offsets = taskBoxOffsets($('editor').value);
   const boxes = r.querySelectorAll('input[type=checkbox]');
@@ -4541,12 +4624,16 @@ async function approve(){
   maybeAutoSweep();
 }
 async function foundFromProposal(){
-  if(busy) return;
+  if(busy){
+    addMsg('sys', 'the curator is still working — Found Desk again when this turn finishes.');
+    return;
+  }
   const pid = PROJECT;
   document.body.classList.remove('proposing', 'founding');
   clearProposalGuideChrome();
   addMsg('sys', '— proposal approved · the curator is founding the desk from your text —');
-  busy = true; showSpin(); $('sweepbtn').disabled = true;
+  busy = true; showSpin(); $('sweepbtn').disabled = true; $('approve').disabled = true;
+  let founded = false;
   try {
     const r = await fetch('/api/found', {method:'POST',
       headers: apiHeaders({'Content-Type':'application/json'}),
@@ -4554,10 +4641,21 @@ async function foundFromProposal(){
     if(!r.ok){ const j = await r.json(); throw j.error; }
     await pipeStream(r, null, {trackCtx:true, model: agentModel('setup')});
     PROJECT_SESSION = true;
-    addMsg('sys', '— desk founded —');
   } catch(err){ addMsg('err', String(err)); }
-  busy = false; hideSpin(); $('sweepbtn').disabled = false;
+  // Ask the core, never assume: a stream that ended does not mean a founded desk.
+  try {
+    const st = await jget('/api/interview?project=' + encodeURIComponent(pid));
+    founded = st.founded === true;
+  } catch(e){}
+  busy = false; hideSpin(); $('sweepbtn').disabled = false; $('approve').disabled = false;
   if(PROJECT !== pid) return;
+  if(!founded){
+    addMsg('sys', 'the desk is not founded yet — the proposal is still open. '
+      + 'Revise it or talk to the curator here, then Found Desk again.');
+    await enterProposing(pid);
+    return;
+  }
+  addMsg('sys', '— desk founded —');
   await revealQueue(pid, {selectFirst: true});
   await autoCompact(true);
 }
@@ -4601,33 +4699,8 @@ function addMsg(cls, text){
   logChat(cls, text);
   const d = document.createElement('div');
   d.className = 'msg ' + cls;
-  if(cls === 'agent' && text.includes('```')){
-    // render fenced blocks with an apply-to-editor affordance
-    const parts = text.split(/```[^\n]*\n?/);
-    for(let i = 0; i < parts.length; i++){
-      if(i % 2 === 0){
-        if(parts[i].trim()){ const s = document.createElement('span'); s.textContent = parts[i]; d.appendChild(s); }
-      } else {
-        const block = parts[i].replace(/\n$/, '');
-        const wrap = document.createElement('div'); wrap.className = 'applyblock';
-        const pre = document.createElement('pre'); pre.textContent = block;
-        const bar = document.createElement('div'); bar.className = 'abar';
-        const cp = document.createElement('button'); cp.className = 'btn btn-sm btn-ghost'; cp.textContent = 'copy';
-        cp.onclick = () => navigator.clipboard.writeText(block);
-        const ap = document.createElement('button'); ap.className = 'btn btn-sm btn-default'; ap.textContent = '→ editor';
-        ap.title = 'jump to this passage in the file (highlights the line); if the text is not in the file, inserts it at the cursor';
-        ap.onclick = () => {
-          if(locateInEditor(block)) return;
-          if(mode !== 'source') setMode('source');
-          const ed = $('editor');
-          ed.setRangeText(block, ed.selectionStart, ed.selectionEnd, 'end');
-          setDirty(true); scheduleGutter(); ed.focus();
-        };
-        bar.append(cp, ap); wrap.append(pre, bar); d.appendChild(wrap);
-      }
-    }
-  } else if(cls === 'agent' && text.includes('**')){
-    d.innerHTML = esc(text).replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
+  if(cls === 'agent'){
+    fillAgentMarkdown(d, text);
   } else {
     d.textContent = text;
   }
@@ -4639,7 +4712,7 @@ function addMsg(cls, text){
   return d;
 }
 
-/* ---- founding confirmation card (interactive ticks from curator GFM) ---- */
+/* ---- founding interview: freeze the chat at the kickoff banner while it loads ---- */
 /**
  * Interview kickoff: FREEZE the viewport (do not chase the stream tail).
  *
@@ -4716,236 +4789,20 @@ function scheduleHoldInterviewAtTop(){
   if(chat) chat.scrollTop = 0;
 }
 
-function looksLikeConfirmCard(text){
-  const t = String(text || '');
-  if(!/- \[[ xX]\] /.test(t)) return false;
-  return /confirmation\s+card|###\s*\d+\.\s*\[/i.test(t);
-}
-function isOtherOptionLabel(label){
-  // Match legacy freeform "Other (elaborate…)" rows only — not "Other coding agents…".
-  const s = String(label || '').trim().toLowerCase();
-  if(!s.startsWith('other')) return false;
-  if(s === 'other' || s.startsWith('other (')) return true;
-  return s.includes('elaborate');
-}
-function parseConfirmCard(text){
-  const lines = String(text || '').replace(/\r\n/g, '\n').split('\n');
-  const SECTION_RE = /^###\s*(\d+)\.\s*\[([^\]]+)\]\s*(.+?)\s*$/;
-  const OPT_RE = /^- \[([ xX])\]\s+(.+?)\s*$/;
-  const ELAB_RE = /^Elaborate(?:\s*\(optional\))?:\s*(.*)$/i;
-  const CARD_HEAD_RE = /^##\s+.*confirmation\s+card/i;
-  let start = lines.findIndex(l => CARD_HEAD_RE.test(l.trim()));
-  if(start < 0) start = lines.findIndex(l => SECTION_RE.test(l.trim()));
-  if(start < 0) return { preamble: String(text || '').trim(), sections: [], epilogue: '' };
-  let preamble = lines.slice(0, start).join('\n').trim();
-  let i = start;
-  if(CARD_HEAD_RE.test((lines[i] || '').trim())){
-    i += 1;
-    const intro = [];
-    while(i < lines.length && !SECTION_RE.test(lines[i].trim())){ intro.push(lines[i]); i++; }
-    const introText = intro.join('\n').trim();
-    if(introText) preamble = preamble ? preamble + '\n\n' + introText : introText;
-  }
-  const sections = [];
-  while(i < lines.length){
-    const m = lines[i].trim().match(SECTION_RE);
-    if(!m) break;
-    const num = m[1], id = m[2].trim();
-    const rawStem = m[3].trim();
-    // Single-choice comes from the "(choose one)" tag; known single ids are the fallback
-    // for cards the agent rendered without it (incl. legacy "(single choice)" chrome).
-    const single = /\((?:choose one|single choice)\)\s*$/i.test(rawStem)
-      || id === 'status' || id === 'horizon';
-    let stem = rawStem.replace(/\s*\((?:multi-select|single choice|choose one)\)\s*$/i, '').trim();
-    i++;
-    const options = [];
-    let elaborate = '';
-    while(i < lines.length){
-      const t = lines[i].trim();
-      if(SECTION_RE.test(t)) break;
-      const om = t.match(OPT_RE);
-      if(om){
-        const label = om[2].trim();
-        // Drop legacy "Other (elaborate)" checkboxes — free response is the Elaborate field.
-        // Always blank for the user — agent/survey pre-ticks read as "already answered."
-        if(!isOtherOptionLabel(label))
-          options.push({ checked: false, label });
-        i++; continue;
-      }
-      const em = t.match(ELAB_RE);
-      if(em){
-        elaborate = em[1].trim(); i++;
-        while(i < lines.length){
-          const nt = lines[i].trim();
-          if(!nt){
-            i++;
-            if(i < lines.length && (SECTION_RE.test(lines[i].trim()) || OPT_RE.test(lines[i].trim()) || /^Reply with/i.test(lines[i].trim()))) break;
-            if(elaborate) elaborate += '\n';
-            continue;
-          }
-          if(SECTION_RE.test(nt) || OPT_RE.test(nt) || ELAB_RE.test(nt) || /^---+$/.test(nt) || /^Reply with/i.test(nt) || /^##\s/.test(nt)) break;
-          elaborate = elaborate ? elaborate + '\n' + nt : nt; i++;
-        }
-        continue;
-      }
-      if(/^---+$/.test(t) || /^Reply with/i.test(t) || /^##\s/.test(t)) break;
-      i++;
-    }
-    if(options.length){
-      // Agent-prefilled elaborate is always noise; user fills free response empty.
-      sections.push({ num, id, stem, multi: !single, options, elaborate: '' });
-    }
-  }
-  return { preamble, sections, epilogue: lines.slice(i).join('\n').trim() };
-}
-function serializeConfirmCard(card){
-  const parts = ['## Desk Confirmation (User Answers)', ''];
-  for(const s of card.sections || []){
-    parts.push(`### ${s.num}. [${s.id}] ${s.stem}`);
-    for(const o of s.options || []) parts.push(`- [${o.checked ? 'x' : ' '}] ${o.label}`);
-    const elab = (s.elaborate || '').trim();
-    parts.push(elab ? `Elaborate: ${elab}` : 'Elaborate: (none)');
-    parts.push('');
-  }
-  parts.push('Card returned — proceed from these ticks (finish ✓ when ready).');
-  return parts.join('\n').trim();
-}
-/** Ensure a stable anchor node immediately above the interview card. */
-function ensureInterviewStartAnchor(beforeNode){
-  const chat = $('chat');
-  if(!chat) return null;
-  let anchor = chat.querySelector('#interview-start');
-  // Reuse an existing sys line if present (even without id yet)
-  if(!anchor){
-    for(const m of chat.querySelectorAll('.msg.sys')){
-      if(/beginning interview/i.test(m.textContent || '')){
-        m.id = 'interview-start';
-        anchor = m;
-        break;
-      }
-    }
-  }
-  if(!anchor){
-    anchor = document.createElement('div');
-    anchor.id = 'interview-start';
-    anchor.className = 'msg sys';
-    anchor.textContent = 'Beginning interview…';
-    // Keep transcript honest when we synthesize the banner for restored cards
-    if(!restoring) logChat('sys', 'Beginning interview…');
-  } else {
-    anchor.id = 'interview-start';
-    if(!/beginning interview/i.test(anchor.textContent || ''))
-      anchor.textContent = 'Beginning interview…';
-  }
-  // Always sit the banner immediately above the card so tool spam / survey
-  // preamble is not stuck between the title line and the pretty questions.
-  if(beforeNode && beforeNode.parentNode === chat){
-    if(anchor.nextSibling !== beforeNode) chat.insertBefore(anchor, beforeNode);
-  } else if(!anchor.parentNode){
-    chat.appendChild(anchor);
-  }
-  return anchor;
-}
-
-function renderConfirmCard(host, card){
-  if(!host || !card || !card.sections || !card.sections.length) return false;
-  // Anchor first so the banner is always immediately above the card.
-  ensureInterviewStartAnchor(host);
-  host.className = 'msg confirm-card';
-  host.textContent = '';
-  // No card title — questions start immediately under the kickoff banner.
-  card.sections.forEach((sec, si) => {
-    const wrap = document.createElement('div'); wrap.className = 'cc-section';
-    wrap.dataset.num = sec.num || String(si + 1);
-    wrap.dataset.id = sec.id || '';
-    wrap.dataset.stem = sec.stem || '';
-    wrap.dataset.multi = sec.multi ? '1' : '0';
-    const stem = document.createElement('div'); stem.className = 'cc-stem';
-    // Stem only — no [id] · multi chrome (ids remain in the serialized GFM for the agent).
-    stem.textContent = sec.stem || '';
-    wrap.appendChild(stem);
-    const group = 'cc-' + (sec.id || si) + '-' + Date.now();
-    (sec.options || []).forEach(opt => {
-      if(isOtherOptionLabel(opt.label)) return;
-      const lab = document.createElement('label'); lab.className = 'cc-opt';
-      const inp = document.createElement('input');
-      inp.type = sec.multi ? 'checkbox' : 'radio';
-      inp.name = group; inp.checked = !!opt.checked; inp.dataset.label = opt.label || '';
-      lab.appendChild(inp);
-      const span = document.createElement('span'); span.textContent = opt.label || '';
-      lab.appendChild(span); wrap.appendChild(lab);
-    });
-    const elab = document.createElement('textarea'); elab.className = 'cc-elab'; elab.rows = 2;
-    elab.value = '';  // always empty for user free response
-    elab.placeholder = 'Elaborate (optional)';  // label lives in the field
-    elab.setAttribute('aria-label', 'Elaborate (optional)');
-    // Grow with typed text (same helper as chat / comment composers)
-    elab.addEventListener('input', () => growElaborate(elab));
-    wrap.appendChild(elab);
-    host.appendChild(wrap);
-    // After layout, size empty field to min (and any restored value if present)
-    requestAnimationFrame(() => growElaborate(elab));
-  });
-  const actions = document.createElement('div'); actions.className = 'cc-actions';
-  const send = document.createElement('button'); send.type = 'button';
-  send.className = 'btn btn-sm btn-primary cc-confirm'; send.textContent = 'Confirm & Draft Proposal';
-  send.onclick = async () => {
-    const sections = Array.from(host.querySelectorAll('.cc-section')).map(wrap => ({
-      num: wrap.dataset.num || '',
-      id: wrap.dataset.id || '',
-      stem: wrap.dataset.stem || '',
-      multi: wrap.dataset.multi === '1',
-      options: Array.from(wrap.querySelectorAll('input')).map(inp => ({
-        label: inp.dataset.label || '', checked: !!inp.checked,
-      })),
-      elaborate: (wrap.querySelector('.cc-elab') || {}).value || '',
-    }));
-    const text = serializeConfirmCard({ preamble: '', sections, epilogue: '' });
-    send.disabled = true;
-    // Immediately grey out founding status actions — no second draft/skip while proposing.
-    setFoundingActionsEnabled(false);
-    // Clear interview questions from chat — ticks still go to the API; the card is clutter once submitted.
-    const chat = $('chat');
-    for(const el of [...chat.querySelectorAll('.msg.confirm-card')]) el.remove();
-    for(const el of [...chat.querySelectorAll('.msg.user')]){
-      if(looksLikeConfirmCard(el.textContent || '')) el.remove();
-    }
-    for(const el of [...chat.querySelectorAll('.msg.agent')]){
-      if(looksLikeConfirmCard(el.textContent || el.innerText || '')) el.remove();
-    }
-    const kick = chat.querySelector('#interview-start');
-    if(kick) kick.remove();
-    addMsg('sys', 'Answers submitted — drafting the Desk Proposal…');
-    // Send ticks into the interview session (not painted as a user bubble), then auto-advance.
-    await ivTurn(text);
-    if(document.body.classList.contains('founding') && !busy){
-      await finishInterview();
-    }
-  };
-  actions.append(send); host.appendChild(actions);
-  // Card is complete — release the kickoff freeze (viewport stays on the banner).
-  unlockInterviewScroll();
-  return true;
-}
-function maybeUpgradeConfirmCard(node, text){
-  if(!document.body.classList.contains('founding')) return false;
-  if(!looksLikeConfirmCard(text)) return false;
-  const card = parseConfirmCard(text);
-  if(!card.sections.length) return false;
-  return renderConfirmCard(node, card);
-}
-
 /* File-select brief dumps into chat are retired (brief lives in #desk-brief).
    Historical chatlog rows used cls=ctx; they are skipped on restore. Sweep steers
    use addMsg('sys', …) instead. */
 
 async function pipeStream(r, out, opts){
+  // A refused request (stale token after a restart, 500 curator-not-found) has a JSON
+  // body, not a stream: surface it instead of reading nothing and "finishing".
+  if(!r.ok) throw await apiErrorText(r);
   const say = out || addMsg;  // default sink: the right chat pane
   const trackCtx = !!(opts && opts.trackCtx);  // only genuine chat turns drive the context bar
   // Prime the window from the model we *asked* for — stream "model" events often
   // arrive after the first usage, which used to paint 100% red against the 200k default.
   if(trackCtx && opts && opts.model) applyCtxModel(opts.model);
-  const coalesceAgent = !out;  // default chat: one bubble per turn (needed for confirm-card upgrade)
+  const coalesceAgent = !out;  // default chat: one bubble per turn, rendered as GFM at the end
   const reader = r.body.getReader();
   const dec = new TextDecoder();
   let buf = '';
@@ -4970,18 +4827,10 @@ async function pipeStream(r, out, opts){
             agentNode.className = 'msg agent';
             $('chat').appendChild(agentNode);
           }
-          // Founding confirmation cards stream as raw GFM first; hide the dump once we
-          // know it's a card, then maybeUpgradeConfirmCard replaces this node at end.
-          if(document.body.classList.contains('founding') && looksLikeConfirmCard(agentAcc)){
-            agentNode.className = 'msg agent cc-pending';
-            agentNode.textContent = 'Preparing interview questions…';
-          } else if(agentAcc.includes('```')){
-            agentNode.textContent = agentAcc;
-          } else if(agentAcc.includes('**')){
-            agentNode.innerHTML = esc(agentAcc).replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
-          } else {
-            agentNode.textContent = agentAcc;
-          }
+          // Stream as plaintext; pretty GFM lands once the turn finishes.
+          // P4: do not hide founding turns as "Preparing interview questions…".
+          agentNode.classList.remove('md');
+          agentNode.textContent = agentAcc;
           // Kickoff freeze: stay on the banner. Otherwise follow the stream tail.
           if(interviewScrollLock) scheduleHoldInterviewAtTop();
           else chatScrollToBottom();
@@ -5012,16 +4861,11 @@ async function pipeStream(r, out, opts){
   }
   if(agentNode && agentAcc){
     logChat('agent', agentAcc);
-    const upgraded = maybeUpgradeConfirmCard(agentNode, agentAcc);
-    // If upgrade failed but we were in pending state, fall back to readable text so
-    // the user is never stuck with only "Preparing interview questions…".
-    if(!upgraded && agentNode.classList.contains('cc-pending')){
-      agentNode.className = 'msg agent';
-      agentNode.textContent = agentAcc;
-      // Failed upgrade — release freeze so the user can read the plaintext.
-      if(interviewScrollLock) unlockInterviewScroll();
-      else chatScrollToBottom();
-    }
+    // Display-only GFM; founding is a conversation, never a tick form (P4).
+    agentNode.className = 'msg agent';
+    fillAgentMarkdown(agentNode, agentAcc);
+    if(interviewScrollLock) unlockInterviewScroll();
+    else chatScrollToBottom();
     // Announce once per completed turn, not per token (brief 09).
     announceChat('Agent: ' + agentAcc);
   }
@@ -5672,14 +5516,14 @@ function offerRefoundInterview(id, backupPath){
   // Quiet sys line (no path dump as the only outcome)
   addMsg('sys', 'Desk reset — previous setup backed up.');
   const card = document.createElement('div');
-  card.className = 'msg confirm-card refound-offer';
+  card.className = 'msg refound-offer';
   card.setAttribute('role', 'group');
   card.setAttribute('aria-label', 'Begin founding interview?');
   const q = document.createElement('div');
   q.className = 'rf-q';
   q.textContent = 'Would you like to build a fresh Kettle setup now?';
   const actions = document.createElement('div');
-  actions.className = 'cc-actions';
+  actions.className = 'rf-actions';
   const yes = document.createElement('button');
   yes.type = 'button';
   yes.className = 'btn btn-sm btn-primary';
@@ -6252,13 +6096,18 @@ async function submitAddProj(){
     $('addname').value = name;
   }
   if(!name){ addMsg('err', 'give the project a name'); return; }
+  const note = ($('addnote') && $('addnote').value.trim()) || '';
+  if(!note){
+    addMsg('err', 'a sentence or two on what this is and what you want from a second reader — required');
+    try { $('addnote').focus(); } catch(_){}
+    return;
+  }
   if(busy){ addMsg('err', 'agent busy — wait for the current stream to finish'); return; }
   let added;
   try {
     added = await jpost('/api/projects/add', {
-      name, root,
+      name, root, note,
       kit: ($('addkit') && $('addkit').value) || '',
-      note: ($('addnote') && $('addnote').value.trim()) || '',
       max_depth: ($('adddepth') && $('adddepth').value) || '',
     });
   } catch(err){ addMsg('err', 'add project failed: ' + err); return; }  // modal stays open to correct
@@ -6314,7 +6163,7 @@ if($('addroot')){
 }
 /* ================= founding interview (agent chat) =================
    Phase A: survey + prompt list + open discussion (read-only interview).
-   Phase B (finish ✓): write DESK-PROPOSAL.md, load it in the editor (proposing).
+   Phase B (Draft Proposal ✓): write DESK-PROPOSAL.md, load it in the editor (proposing).
    Phase C (approve proposal): curator digests the edited proposal, founds desk, first batch.
    Chat stays live through B so the user can ask for proposal revisions. */
 const SKIPPED_FOUNDING = new Set();   // desks the user chose to open un-founded this session
@@ -6382,16 +6231,6 @@ function enterInterview(opts){
   } else if(opts.resume){
     addMsg('sys', 'Interview in progress — continue below, or Draft Proposal ✓ when ready.');
   }
-  // Promote any restored GFM confirmation blurb into interactive ticks.
-  let upgraded = false;
-  for(const el of [...$('chat').querySelectorAll('.msg.agent')]){
-    if(maybeUpgradeConfirmCard(el, el.innerText || el.textContent || '')) upgraded = true;
-  }
-  // maybeUpgradeConfirmCard → unlockInterviewScroll when a card is present
-  if(!upgraded && interviewScrollLock && hasTurns){
-    // Restored transcript with no card yet — leave unlocked so history is scrollable
-    unlockInterviewScroll();
-  }
 }
 function exitInterview(){
   if(interviewScrollLock) unlockInterviewScroll();
@@ -6412,10 +6251,7 @@ async function ivTurn(m){
     if(interviewScrollLock) unlockInterviewScroll();
   }
   busy = false; hideSpin();
-  // If the stream finished without a confirm card (open chat turn mid-founding),
-  // release the freeze so the user can scroll freely again.
-  if(interviewScrollLock && !$('chat').querySelector('.msg.confirm-card'))
-    unlockInterviewScroll();
+  if(interviewScrollLock) unlockInterviewScroll();
   if(document.body.classList.contains('founding')){
     try { $('chatin').focus({ preventScroll: true }); }
     catch(_){ $('chatin').focus(); }
@@ -6456,10 +6292,7 @@ async function finishInterview(){
   setFoundingActionsEnabled(false);
   const pid = PROJECT;
   exitInterview();
-  // Avoid stacking a second drafting banner if the card submit already added one.
-  const hasDraftBanner = [...$('chat').querySelectorAll('.msg.sys')].some(
-    el => /drafting the Desk Proposal/i.test(el.textContent || ''));
-  if(!hasDraftBanner) addMsg('sys', 'Answers submitted — drafting the Desk Proposal…');
+  addMsg('sys', 'drafting the Desk Proposal from your conversation…');
   busy = true; showSpin(); $('sweepbtn').disabled = true;
   try {
     const r = await fetch('/api/propose', {method:'POST',
@@ -6478,7 +6311,10 @@ async function enterProposing(pid){
   try {
     Q = await jget('/api/queue?project=' + encodeURIComponent(pid));
     renderQueue();
-    const prop = (Q.entries || []).find(e => isProposalEntry(e) && e.status !== 'approved');
+    // Prefer a pending proposal; an approved one whose Found Desk never finished is
+    // still the document of record until the core says founded.
+    const props = (Q.entries || []).filter(isProposalEntry);
+    const prop = props.find(e => e.status !== 'approved') || props[0];
     if(prop){
       await select(prop.id);
       // select() clears founding chrome; restore proposing after load
@@ -6531,7 +6367,7 @@ function skipInterview(){
     const briefEl = $('briefbody');
     const takeaway = $('takeaway');
     if(takeaway){ takeaway.hidden = true; takeaway.textContent = ''; }
-    if(briefEl) briefEl.innerHTML = '<span class="muted">not founded yet — reselect the project to resume founding, or finish ✓ in the agent chat</span>';
+    if(briefEl) briefEl.innerHTML = '<span class="muted">not founded yet — reselect the project to resume founding, or Draft Proposal ✓ when ready</span>';
   }
 }
 
@@ -6552,15 +6388,6 @@ function growTextarea(el, maxLines = 10, maxHeightPx){
 function autoGrow(){ growTextarea($('chatin'), 10); }
 function autoGrowComment(){
   growTextarea($('commentin'), 10, Math.floor(window.innerHeight * 0.5));
-}
-/** Founding confirm-card "Elaborate" boxes — grow with text, cap ~half the chat column. */
-function growElaborate(el){
-  if(!el) return;
-  const chat = $('chat');
-  const cap = chat
-    ? Math.max(88, Math.floor(chat.clientHeight * 0.45))
-    : Math.floor(window.innerHeight * 0.35);
-  growTextarea(el, 16, cap);
 }
 
 $('editor').addEventListener('input', onEditorInput);
@@ -7050,7 +6877,22 @@ async function loadProject(pid, opts){
     addMsg(m.cls, m.text);
   }
   restoring = false;
-  const qData = await jget('/api/queue?project=' + encodeURIComponent(pid));
+  let qData;
+  try {
+    qData = await jget('/api/queue?project=' + encodeURIComponent(pid));
+  } catch(err){
+    // One broken desk (unparseable queue.json, a moved folder) must not take down the
+    // whole sitting: say what is wrong here and leave the other projects usable.
+    if(PROJECT !== pid) return;
+    exitInterview();                 // clear the previous project's founding chrome
+    setProposingChrome(false);
+    clearProposalGuideChrome();
+    Q = {curated: '', entries: []};
+    renderQueue();
+    renderInfo(null);
+    addMsg('err', 'this desk could not load: ' + err);
+    return;
+  }
   // an unfounded desk opens the founding interview in the agent chat
   let ivst = {status: 'none'};
   try { ivst = await jget('/api/interview?project=' + encodeURIComponent(pid)); } catch(e){}
@@ -7062,10 +6904,15 @@ async function loadProject(pid, opts){
   const contentEnts = (Q.entries || []).filter(e => !isProposalEntry(e));
   const hasContent = contentEnts.length > 0;
   const hasProposal = !!(ivst.has_proposal || (Q.entries || []).some(isProposalEntry));
-  const proposing = !hasContent && (
-    ivst.status === 'proposing' || (hasProposal && ivst.status !== 'founded')
+  // Founded is the core's predicate (charter AND content entries), not "has entries":
+  // a found run that filed entries but never wrote PROJECT.md is still founding.
+  const founded = (typeof ivst.founded === 'boolean')
+    ? ivst.founded
+    : (ivst.status === 'founded' || hasContent);   // interview status unavailable
+  const proposing = !founded && (
+    ivst.status === 'proposing' || hasProposal
   ) && !SKIPPED_FOUNDING.has(pid);
-  const unfounded = !hasContent && !proposing && (
+  const unfounded = !founded && !proposing && (
     ivst.status === 'interviewing' ||
     (ivst.status !== 'founded' && /awaiting founding/i.test(Q.curated || ''))
   ) && !SKIPPED_FOUNDING.has(pid);

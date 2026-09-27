@@ -35,6 +35,40 @@ SKIP_DIRS = {".kettle", ".setsweep", ".git", "node_modules", "__pycache__", ".ve
 MAX_BYTES = 1_000_000          # skip files larger than this (likely data/media, not prose/source)
 
 
+class UnsafeDeskPath(ValueError):
+    """A desk write whose path escapes the project through a symlink."""
+
+
+def confine(path: Path | str, root: Path | str) -> Path:
+    """Refuse to write `path` when its final component is a symlink (dangling or not), or
+    when the deepest existing ancestor resolves outside `root`. A registered folder is
+    not trusted: a planted `.kettle/working-record.jsonl -> ~/.zshrc`, or a symlinked
+    `runtime/snapshots`, must not turn a desk write into a write elsewhere."""
+    root_r = Path(root).resolve()
+    p = Path(path)
+    if not p.is_absolute():
+        p = Path(root) / p
+    if p.is_symlink():
+        raise UnsafeDeskPath(f"{p} is a symlink — Kettle does not write through links in a project")
+    anc = p.parent
+    while not os.path.lexists(anc) and anc != anc.parent:
+        anc = anc.parent
+    if not anc.resolve().is_relative_to(root_r):
+        raise UnsafeDeskPath(f"{p} leads outside the project ({anc.resolve()}) through a symlink")
+    return p
+
+
+def write_confined(path: Path | str, root: Path | str, text: str, *, append: bool = False) -> None:
+    """Write or append text without following a symlink at the final component (O_NOFOLLOW
+    closes the gap between the check and the open)."""
+    p = confine(path, root)
+    flags = os.O_WRONLY | os.O_CREAT | (os.O_APPEND if append else os.O_TRUNC)
+    flags |= getattr(os, "O_NOFOLLOW", 0)
+    fd = os.open(str(p), flags, 0o644)
+    with os.fdopen(fd, "a" if append else "w", encoding="utf-8") as f:
+        f.write(text)
+
+
 def _now() -> str:
     return datetime.now().astimezone().isoformat(timespec="seconds")
 
@@ -114,8 +148,9 @@ def load_baseline(root: Path | str) -> dict:
 
 def save_baseline(root: Path | str, manifest: dict) -> dict:
     d = desk_dir(root)
+    confine(d / BASELINE_NAME, root)
     d.mkdir(parents=True, exist_ok=True)
-    (d / BASELINE_NAME).write_text(json.dumps(manifest, indent=1, ensure_ascii=False))
+    write_confined(d / BASELINE_NAME, root, json.dumps(manifest, indent=1, ensure_ascii=False))
     return manifest
 
 
@@ -151,9 +186,9 @@ def log_edit(root: Path | str, actor: str, actor_kind: str, files: Iterable[str]
     rec = {"ts": ts or _now(), "actor": actor, "actor_kind": actor_kind,
            "session": session, "files": list(files), "summary": summary}
     d = desk_dir(root)
+    confine(d / RECORD_NAME, root)
     d.mkdir(parents=True, exist_ok=True)
-    with (d / RECORD_NAME).open("a", encoding="utf-8") as f:
-        f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    write_confined(d / RECORD_NAME, root, json.dumps(rec, ensure_ascii=False) + "\n", append=True)
     return rec
 
 
@@ -324,16 +359,14 @@ def ensure_directive(root: Path | str, agent_file: str = "CLAUDE.md") -> dict:
     d = desk_dir(root)
     desk_name = d.name
     directive = _directive_block(desk_name)
+    confine(d / "EDITING.md", root)
     d.mkdir(parents=True, exist_ok=True)
     editing_created = False
     if not (d / "EDITING.md").exists():
-        (d / "EDITING.md").write_text(
-            EDITING_MD.replace("{desk_name}", desk_name),
-            encoding="utf-8",
-        )
+        write_confined(d / "EDITING.md", root, EDITING_MD.replace("{desk_name}", desk_name))
         editing_created = True
 
-    f = root / agent_file
+    f = confine(root / agent_file, root)
     existing = f.read_text(encoding="utf-8") if f.exists() else ""
     present_tag = next(
         (
@@ -356,7 +389,7 @@ def ensure_directive(root: Path | str, agent_file: str = "CLAUDE.md") -> dict:
     else:
         new = directive + "\n"
         action = "created"
-    f.write_text(new, encoding="utf-8")
+    write_confined(f, root, new)
     return {"file": str(f), "action": action, "editing_created": editing_created}
 
 
@@ -369,11 +402,71 @@ def _git_dir(root: Path | str) -> Path:
     return desk_dir(root) / "lineage.git"
 
 
+# Never let the lineage repo's own config run code: hooks, fsmonitor, a pager, an
+# external diff or attributes-driven filters are all ways a folder that ships
+# `.kettle/lineage.git` could execute something on the next snapshot.
+_GIT_HARDENING = ["-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false",
+                  "-c", "core.pager=cat", "-c", "diff.external=", "-c", "core.sshCommand=false",
+                  "-c", "core.attributesFile=/dev/null"]
+
+_LINEAGE_CONFIG = """[core]
+\trepositoryformatversion = 0
+\tfilemode = true
+\tbare = false
+[user]
+\temail = desk@kettle.local
+\tname = Kettle
+"""
+
+# Which lineage.git directories Kettle itself created. Kept OUTSIDE every project tree
+# (anything inside a registered folder can be forged by whoever made the folder).
+TRUST_PATH = Path.home() / ".cache" / "kettle" / "lineage-trust.json"
+
+
 def _git(root: Path, *args, check: bool = True):
     import subprocess
     return subprocess.run(
-        ["git", "--git-dir", str(_git_dir(root)), "--work-tree", str(root), *args],
+        ["git", *_GIT_HARDENING, "--git-dir", str(_git_dir(root)), "--work-tree", str(root),
+         *args],
         capture_output=True, text=True, check=check)
+
+
+def _trust_key(gd: Path) -> str:
+    st = gd.stat()
+    return f"{gd.resolve()}|{st.st_dev}|{st.st_ino}"
+
+
+def _load_trust() -> set:
+    try:
+        return set(json.loads(TRUST_PATH.read_text()).get("repos") or [])
+    except (OSError, json.JSONDecodeError, AttributeError):
+        return set()
+
+
+def _record_trust(gd: Path) -> None:
+    repos = _load_trust() | {_trust_key(gd)}
+    TRUST_PATH.parent.mkdir(parents=True, exist_ok=True)
+    tmp = TRUST_PATH.with_name(TRUST_PATH.name + f".{os.getpid()}.tmp")
+    tmp.write_text(json.dumps({"repos": sorted(repos)}, indent=1))
+    os.replace(tmp, TRUST_PATH)
+
+
+def _lineage_git_is_ours(gd: Path) -> bool:
+    try:
+        return _trust_key(gd) in _load_trust()
+    except OSError:
+        return False
+
+
+def _reset_lineage_config(gd: Path) -> None:
+    """Rewrite what Kettle controls before every run: a fixed config (no filters,
+    includes or aliases) and no repo-level attributes file."""
+    (gd / "config").write_text(_LINEAGE_CONFIG)
+    for name in ("commondir", "info/attributes"):
+        try:
+            (gd / name).unlink()
+        except FileNotFoundError:
+            pass
 
 
 def git_snapshot(root: Path | str, message: str) -> Optional[str]:
@@ -385,19 +478,25 @@ def git_snapshot(root: Path | str, message: str) -> Optional[str]:
     root = Path(root)
     gd = _git_dir(root)
     try:
+        if gd.is_symlink() or (gd.exists() and not _lineage_git_is_ours(gd)):
+            # Not created by Kettle (or created before trust was recorded): never run it.
+            # Set it aside, untouched, and start a fresh history Kettle does trust.
+            aside = gd.with_name(f"lineage.git.untrusted-{datetime.now():%Y%m%d-%H%M%S}")
+            os.replace(gd, aside)
+        confine(gd / "config", root)
         if not gd.exists():
             _git(root, "init", "-q")
-            _git(root, "config", "user.email", "desk@kettle.local", check=False)
-            _git(root, "config", "user.name", "Kettle", check=False)
+            _record_trust(gd)
             # keep the user's .git, desk machinery, and heavy noise out of the lineage history
             (gd / "info").mkdir(parents=True, exist_ok=True)
             (gd / "info" / "exclude").write_text(
                 "\n".join([".git", ".kettle", ".setsweep", "node_modules", "__pycache__",
                            ".venv", "venv", "dist", "build", ".cache", ""]))
+        _reset_lineage_config(gd)
         _git(root, "add", "-A")
         if _git(root, "diff", "--cached", "--quiet", check=False).returncode == 0:
             return None                                    # nothing changed
         _git(root, "commit", "-q", "-m", message)
         return _git(root, "rev-parse", "--short", "HEAD").stdout.strip() or None
-    except (subprocess.CalledProcessError, OSError):
+    except (subprocess.CalledProcessError, OSError, UnsafeDeskPath):
         return None

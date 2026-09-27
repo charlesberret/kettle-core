@@ -28,17 +28,22 @@ contracts are still at `0`.
 
 - ~~Restructure the flat modules into a package with bundled `static/` and `kits/`
   resources~~ (done — wheel serves the browser UI; editable remains the contributor path).
-- Wheel and pipx-style install verification in CI (package layout + server smoke).
-- Expanded `kettle doctor`: provider CLI resolve, registry/desk integrity,
-  runtime discovery, legacy `.setsweep/` hints (metrics beacons remain follow-ups).
+- ~~Wheel and pipx-style install verification in CI (package layout + server
+  smoke).~~ (shipped — `.github/workflows/test.yml` `package-install` job: wheel
+  contents audit, clean-venv install + `kettle --help`/import/doctor smoke, and an
+  ephemeral-port server boot hitting `GET /`, `/api/ping`, `/api/kits`.)
+- ~~Expanded `kettle doctor`: provider CLI resolve, registry/desk integrity,
+  runtime discovery, legacy `.setsweep/` hints~~ (shipped — see `doctor_checks()` /
+  `install_doctor_checks()` / `desk_doctor_checks()` / `runtime_doctor_checks()` in
+  `cli.py` and INSTALL.md; metrics beacons for `doctor` itself remain a follow-up).
 - Reserve the PyPI name `kettle` with a minimal placeholder upload when publish
   credentials are available.
 
 ### Security
 
-- Add explicit Host and Origin validation to the localhost HTTP surface.
-- Design a per-boot authentication token shared through the local discovery
-  record.
+- ~~Add explicit Host and Origin validation to the localhost HTTP surface.~~
+- ~~Design a per-boot authentication token shared through the local discovery
+  record.~~ (shipped: `X-Kettle-Token` + Host/Origin; [`docs/AUTH-TOKEN.md`](./docs/AUTH-TOKEN.md))
 - Replace any provider permission that is only prompt-fenced with an enforceable
   process or filesystem boundary where the host permits it.
 - Keep remote and multi-user serving out of scope until there is a separate
@@ -51,6 +56,16 @@ contracts are still at `0`.
 - Never maintain two writable desks for one project (migrate refuses split desks).
 - Publish a deprecation window before removing the old command aliases or
   process identity.
+
+## Now: founding initiation (P1–P5)
+
+- ~~Founded = `PROJECT.md` and a content queue entry (not the proposal stub alone).~~
+- ~~Deterministic survey cites git activity and mtimes.~~
+- ~~Founding sentence required at add; quoted first in the charter.~~
+- Interview is a conversation (one mission question); sitting must not paint a
+  confirmation-card form. Leftover card CSS/parser is cleanup.
+- Next (P5): four-heading proposal diet; Found lands on the first brief in the
+  editor; cut `founding-answers.md`.
 
 ## Now: themes and the CLI sitting editor
 

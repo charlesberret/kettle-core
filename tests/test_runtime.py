@@ -9,6 +9,8 @@ The two tests that matter most are the regressions for the haywire token bar:
 cache re-reads into the context bar so it sails past the window) so it can't return.
 """
 import io
+import os
+import re
 import json
 import tempfile
 import unittest
@@ -520,6 +522,82 @@ class TestProviderCapabilities(unittest.TestCase):
                 f"{provider}: PROVIDER_CAPABILITIES.read_only_tier disagrees with tools_argv",
             )
 
+    def test_claude_interview_does_not_pass_bare_allowedTools(self):
+        """Claude CLI  (2026) requires a value after --allowedTools.
+
+        A founding interview used to pass the flag with no tools; that now
+        exits 1: option '--allowedTools, --allowed-tools <tools...>' argument
+        missing. plan mode is the tool-less posture.
+        """
+        for p in ("claude", "cli"):
+            argv = tools_argv("interview", p)
+            self.assertNotEqual(argv, ["--allowedTools"], p)
+            if "--allowedTools" in argv:
+                i = argv.index("--allowedTools")
+                self.assertLess(i + 1, len(argv), p)
+                self.assertFalse(str(argv[i + 1]).startswith("-"), p)
+            self.assertEqual(argv[:2], ["--permission-mode", "plan"], p)
+        self.assertEqual(tools_argv("interview", "cli"), ["--permission-mode", "plan"])
+
+    def test_claude_interview_is_truly_tool_less(self):
+        """plan mode alone left 34 built-in tools and every user MCP connector
+        (verified 2026-09-15). The founding interview gets no tools at all."""
+        argv = tools_argv("interview", "claude")
+        self.assertEqual(argv[:4], ["--permission-mode", "plan", "--tools", ""])
+        self.assertIn("--strict-mcp-config", argv)
+
+    def test_claude_tiers_ignore_the_registered_folders_agent_config(self):
+        """claude -p skips workspace trust, so a hostile folder's .claude hooks and
+        .mcp.json servers ran on the first curator turn. Every Claude tier loads
+        user settings only and no MCP config Kettle did not pass."""
+        for tier in ("interview", "chat", "sweep", "agent"):
+            argv = tools_argv(tier, "claude")
+            with self.subTest(tier=tier):
+                i = argv.index("--setting-sources")
+                self.assertEqual(argv[i + 1], "user")
+                self.assertIn("--strict-mcp-config", argv)
+
+    def test_claude_write_tiers_name_their_builtins(self):
+        """--tools bounds the built-in set (no WebFetch/WebSearch/Task); the
+        fine-grained allowlist still pre-approves within it."""
+        for tier in ("chat", "sweep", "agent"):
+            argv = tools_argv(tier, "claude")
+            _mode, allow, _deny = runtime.TOOL_TIERS[tier]
+            with self.subTest(tier=tier):
+                named = set(argv[argv.index("--tools") + 1].split(","))
+                self.assertEqual(named, {str(r).split("(", 1)[0] for r in allow})
+                self.assertNotIn("WebFetch", named)
+                self.assertNotIn("Task", named)
+                deny = argv[argv.index("--disallowedTools") + 1:argv.index("--setting-sources")]
+                for rule in ("Write(.gemini/**)", "Edit(.gemini/**)",
+                             "Write(.codex/**)", "Edit(.codex/**)"):
+                    self.assertIn(rule, deny)
+
+    def test_no_tier_allows_a_shell_command_that_runs_other_programs(self):
+        """A prefix allowlist is only as strong as its weakest binary: `rg --pre`,
+        `fd -x`, `find -exec`, `awk system()`, `sed e`, `sort --compress-program`
+        each run arbitrary code (rg --pre verified under the chat tier)."""
+        exec_capable = {"rg", "fd", "find", "awk", "sed", "sort", "xargs", "env",
+                        "python", "python3", "node", "perl", "ruby", "sh", "bash", "zsh"}
+        for tier, (_mode, allow, _deny) in runtime.TOOL_TIERS.items():
+            for rule in allow:
+                m = re.match(r"Bash\((\S+?)[: ]", str(rule))
+                if m:
+                    with self.subTest(tier=tier, rule=rule):
+                        self.assertNotIn(m.group(1), exec_capable)
+
+    def test_custom_cli_provider_does_not_get_claude_only_flags(self):
+        for tier in ("interview", "chat", "sweep"):
+            argv = tools_argv(tier, "cli")
+            with self.subTest(tier=tier):
+                self.assertNotIn("--setting-sources", argv)
+                self.assertNotIn("--strict-mcp-config", argv)
+                self.assertNotIn("--tools", argv)
+
+    def test_curator_env_drops_workspace_trust_overrides(self):
+        env = runtime.curator_env({"PATH": "/bin", "GEMINI_CLI_TRUST_WORKSPACE": "true"})
+        self.assertEqual(env, {"PATH": "/bin"})
+
     def test_grok_interview_is_tool_less_but_writes_unfenced(self):
         # Interview: no open Bash / always-approve → read_only_tier True.
         # Chat/sweep still bypassPermissions + Bash → fenced_writes False.
@@ -659,6 +737,74 @@ class TestRuntimeSpawn(unittest.TestCase):
             ))
             self.assertEqual(len(rt.ledger.turns("pre")), 1)
 
+
+    def test_spawn_stops_a_curator_that_goes_silent(self):
+        import threading
+
+        class HangingStdout:
+            def __init__(self):
+                self.release = threading.Event()
+
+            def __iter__(self):
+                yield json.dumps({"type": "system", "subtype": "init",
+                                  "session_id": "sid-h", "model": "m"}) + "\n"
+                self.release.wait(5)
+
+        out = HangingStdout()
+
+        class FakeProc:
+            stdout = out
+            returncode = None
+            killed = False
+
+            def kill(self):
+                FakeProc.killed = True
+                FakeProc.returncode = -9
+                out.release.set()
+
+            def wait(self, timeout=None):
+                return self.returncode
+
+            def poll(self):
+                return self.returncode
+
+        with tempfile.TemporaryDirectory() as d:
+            rt = Runtime("claude", Path(d), idle_timeout=0.2)
+            with mock.patch("kettle.runtime.subprocess.Popen", return_value=FakeProc()):
+                evs = list(rt.spawn("hi", cwd=d))
+        self.assertTrue(FakeProc.killed)
+        self.assertTrue(any(e["t"] == "error" and "idle timeout" in e["s"] for e in evs))
+        self.assertEqual(evs[-1]["t"], "done")
+
+    def test_spawn_reports_a_missing_curator_cli_instead_of_raising(self):
+        with tempfile.TemporaryDirectory() as d:
+            rt = Runtime(str(Path(d) / "no-such-claude"), Path(d))
+            evs = list(rt.spawn("hi", cwd=d))
+        self.assertEqual([e["t"] for e in evs], ["error", "done"])
+        self.assertIn("curator CLI not found", evs[0]["s"])
+        self.assertIn("no-such-claude", evs[0]["s"])
+
+    def test_spawn_child_env_drops_workspace_trust_overrides(self):
+        class FakeProc:
+            def __init__(self):
+                self.stdout = io.StringIO("")
+                self.returncode = 0
+
+            def wait(self, timeout=None):
+                return 0
+
+            def poll(self):
+                return 0
+
+        with tempfile.TemporaryDirectory() as d:
+            rt = Runtime("claude", Path(d))
+            with mock.patch.dict(os.environ, {"GEMINI_CLI_TRUST_WORKSPACE": "true"}), \
+                    mock.patch("kettle.runtime.subprocess.Popen",
+                               return_value=FakeProc()) as popen:
+                list(rt.spawn("hi", cwd=d))
+            env = popen.call_args.kwargs["env"]
+            self.assertNotIn("GEMINI_CLI_TRUST_WORKSPACE", env)
+            self.assertIn("PATH", env)
 
 if __name__ == "__main__":
     unittest.main()

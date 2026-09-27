@@ -42,9 +42,9 @@ token.
 
 | Surface | Mechanism |
 |---|---|
-| Web UI (`static/index.html`) | Server injects `<meta name="kettle-token">` into the served HTML; the page reads it and sends `X-Kettle-Token` on every `/api/` fetch. |
+| Web UI (`static/index.html`) | Server injects `<meta name="kettle-token">` into the served HTML **only when the connecting socket belongs to the server's own Unix user** (see *Who gets the page's token*); the page reads it and sends `X-Kettle-Token` on every `/api/` fetch. |
 | CLI / TUI (`kettle-tui`) | Reads `token` from `~/.cache/kettle/server.json` and sends `X-Kettle-Token`. |
-| Editor viewports (`kettle-vscode`, `kettle-desktop`) | **Should** read `token` from the same discovery record and send it. **See Conformance — currently they do not.** |
+| Editor viewports (`kettle-vscode`, `kettle-desktop`) | `kettle-vscode` reads `token` from the discovery record itself and sends it. `kettle-desktop`'s live sitting is the served `static/index.html` (same-origin), so it inherits the meta-tag path above; the shell also exposes an IPC bridge for the token, currently unused by the live renderer. **See Conformance.** |
 | Core circuit-breaker | `_discovery_token()` reads the record so a new boot can authenticate its ping to a live predecessor before deferring/replacing. |
 
 **How it is enforced.** `Handler.check_request_guards(require_token=…)`:
@@ -59,6 +59,24 @@ The dispatcher sets `require_token = url.path.startswith("/api/")`, so **every
 static assets do not (they only clear Host/Origin), which is what lets the web UI
 bootstrap and read the injected meta tag.
 
+**Who gets the page's token.** Because `GET /` needs no token, anything that can reach
+loopback could once read the token out of the page — including another Unix user's
+process, which defeats the 0600 record. The server now looks up the owner of the
+*client* socket before injecting the meta tag (`server.peer_is_own_user`):
+
+- **macOS / BSD:** `lsof -nP -a -iTCP@<client-host>:<client-port> -Fpun`, taking the
+  process whose socket has that address as its *local* end. `lsof` run as the user
+  cannot list other users' processes, so another user's client is simply not found.
+- **Linux:** the matching row of `/proc/net/tcp` and its `uid` column.
+
+The token goes into the page only when that uid equals the server's. Otherwise the page
+loads without it: every `/api/` call returns `403 auth`, and the sitting says it could not
+confirm the browser runs as the user. The lookup costs one `lsof` call per page load on
+macOS (~0.1 s). On a platform where the owner cannot be determined, set
+`KETTLE_SKIP_PEER_CHECK=1` to restore the old behaviour knowingly. The Electron shell and
+any browser the user opens run as the user, so nothing changes for them; `kettle-vscode`
+never loads `/`.
+
 **Rotation.** New token every boot. A restart (`--replace`, crash + relaunch,
 new session) mints a fresh token and overwrites the discovery record; the old
 token is dead the moment the old process exits. There is no in-session rotation
@@ -68,8 +86,9 @@ and no expiry — lifetime is exactly the process lifetime.
 
 In scope — the token (with Host/Origin) defends against:
 
-- **Other local users** on a shared machine: they cannot read the 0600 record,
-  so they cannot mint valid `/api/` requests.
+- **Other local users** on a shared machine: they cannot read the 0600 record, and the
+  served page withholds the token from a socket they own, so they cannot mint valid
+  `/api/` requests.
 - **Malicious web origins**: a page the user visits cannot read the token (it is
   not in the DOM of *their* origin, and CORS/Origin rules block cross-origin
   reads), so DNS-rebinding / CSRF against the localhost port is refused at the
@@ -90,21 +109,25 @@ Out of scope — explicitly not defended:
 |---|---|
 | Web UI | ✅ meta-tag injection |
 | `kettle-tui` | ✅ from discovery record |
-| `kettle-vscode` | ❌ `KettleApi` sends only `Content-Type` — **all `/api/` calls 403** |
-| `kettle-desktop` | ❌ `app/api.js` sends only `Content-Type` — **all `/api/` calls 403** |
+| `kettle-vscode` | ✅ `KettleApi` (`src/api.ts`) reads `token` fresh from `~/.cache/kettle/server.json` on every request and sends `X-Kettle-Token` |
+| `kettle-desktop` | ✅ (indirect) — the shipped sitting is core's own `static/index.html`, loaded same-origin off the sidecar, so it gets the server-injected `<meta name="kettle-token">` and sends the header exactly like the Web UI. `main.js`/`preload.js` also expose an IPC bridge (`window.kettle.getCoreToken`) that reads the same discovery record, but as of this record the live renderer does not call it — the only caller is the retired `legacy/v2-scaffold/app.js` scaffold. |
 
-The two editor viewports were not updated when the token gate landed, so against
-a current core their ping (and everything else) is rejected with
-`403 {code:"auth"}`. For the plugin this presents as "core couldn't launch from
-the editor host" — the failed ping reads as *unreachable*, the auto-start loop
-spawns cores it equally cannot reach, and it gives up. Fixing those two clients
-to read the discovery token and send the header is tracked as follow-up work; it
-is the implementation this design record unblocks.
+`kettle-vscode` was updated to read the discovery token and send it (closing the gap
+this record originally flagged). `kettle-desktop` never needed the bridge for its
+current, minimal shell — it inherits the Web UI's own token path by loading the same
+served HTML — but the bridge exists unused, which is worth cleaning up or wiring to a
+real caller before it looks like dead code with no owner.
+
+The served sitting also carries a per-response `Content-Security-Policy`
+(`server.sitting_csp`): script execution is limited to same-origin plus the exact
+sha256-pinned inline `<script>` blocks index.html ships, so an injected `<script>` or
+`<img onerror>` in a rendered file cannot exfiltrate the token even if it got past the
+sanitizer. See `kettle/server.py` `sitting_csp()`.
 
 ## Follow-ups
 
-- Make `kettle-vscode` and `kettle-desktop` read `token` from the discovery
-  record and send `X-Kettle-Token` on every `/api/` request (ping + streams).
+- Wire `kettle-desktop`'s `getCoreToken` IPC bridge to an actual caller, or remove it —
+  today it is unused by the live renderer.
 - Consider a shared, tested token-read helper per client so a future
   discovery-schema change updates one place.
 - No token-in-URL and no env-var token: keep the secret in the 0600 file only.

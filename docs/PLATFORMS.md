@@ -10,7 +10,7 @@ and holds no durable Desk state of its own. The wire contract is
 |---|---|---|
 | Attach and read | Discover core, list projects, read queue and files | Ping, discovery, projects, queue, file |
 | Full sitting | Comment, approve, chat, inspect diffs, sweep | Read surface plus sitting writes and NDJSON streams |
-| Founding | Bring a new project under care | Interview, propose, approve proposal, found |
+| Founding | Bring a new project under care | Register (founding sentence) → interview → propose → Found Desk |
 
 ## Current viewports
 
@@ -23,7 +23,10 @@ and holds no durable Desk state of its own. The wire contract is
 
 The desktop does not own a frontend. A desktop UX gap is normally a core web
 gap. The editor extension may adapt layout to the host but must preserve the
-same founding state and ritual meanings.
+same founding state and ritual meanings. Sitting visual, copy, and palette
+changes land in this tree; desktop inherits `static/index.html`. VS Code runs
+`sync-ui-copy` / `sync-palette` when those sources change. See
+[`REVIEW.md`](./REVIEW.md).
 
 ## Founding state
 
@@ -58,7 +61,8 @@ A new viewport should have:
 4. tests for discovery, contract rejection, and ritual semantics;
 5. a packaging and update path.
 
-For a non-TypeScript host, [`API.md`](../API.md) is the platform. A shared
+For a non-TypeScript host, [`API.md`](../API.md) is the platform and
+[`SITTING-FLOWS.md`](./SITTING-FLOWS.md) is the order of calls. A shared
 client should be extracted only after multiple real consumers need it.
 
 Kettle remains a single-user, loopback-only instrument. Remote and multi-user

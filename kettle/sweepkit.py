@@ -111,6 +111,47 @@ def assess_close(proj: dict) -> dict[str, Any]:
     }
 
 
+# ---------- sweep healthbeacon ----------
+#
+# runtime/sweep-health.json records every sweep that spawns a curator: `running` at
+# spawn, then `done` or `failed` when the stream ends. A mechanical close archives the
+# queue *before* the accrue curator runs, so a curator that dies leaves an empty, quiet
+# queue that used to read as "nothing to sweep" forever; the beacon is how the next
+# sweep knows to restock instead. A `running` beacon that outlives its process (server
+# killed mid-turn) reads the same as `failed`.
+
+SWEEP_HEALTH_NAME = "sweep-health.json"
+
+
+def sweep_health_path(proj: dict) -> Path:
+    return server.runtime_dir(proj) / SWEEP_HEALTH_NAME
+
+
+def read_sweep_health(proj: dict) -> dict[str, Any]:
+    try:
+        data = json.loads(sweep_health_path(proj).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def write_sweep_health(proj: dict, **fields: Any) -> dict[str, Any]:
+    """Replace the beacon with `fields` (plus project + updated stamp); returns it."""
+    beacon = {
+        "project": proj.get("id"),
+        "updated": datetime.now().astimezone().isoformat(timespec="seconds"),
+        **fields,
+    }
+    server.atomic_write(sweep_health_path(proj),
+                        json.dumps(beacon, indent=2, ensure_ascii=False))
+    return beacon
+
+
+def last_sweep_incomplete(proj: dict) -> bool:
+    """True when the most recent curator sweep did not finish cleanly."""
+    return read_sweep_health(proj).get("state") in ("running", "failed")
+
+
 def stage_inbox_approved(proj: dict) -> dict[str, Any]:
     """Copy approved inbox drafts to outbound/. Never transmits. No-op if not inbox."""
     intake = server.intake_paths(proj)
@@ -127,9 +168,10 @@ def stage_inbox_approved(proj: dict) -> dict[str, Any]:
         try:
             src = server.safe_path(e["path"], server.project_root(proj))
             dest = outbound / src.name
-            shutil.copy2(src, dest)
+            server._confine_to_project(dest)
+            shutil.copy2(src, dest, follow_symlinks=False)
             staged.append({"id": e.get("id"), "from": str(src), "to": str(dest)})
-        except (OSError, PermissionError, KeyError, RuntimeError) as err:
+        except (OSError, PermissionError, KeyError, RuntimeError, ValueError) as err:
             errors.append({"id": e.get("id"), "error": str(err)})
     return {"staged": staged, "errors": errors, "outbound": str(outbound)}
 
@@ -140,42 +182,50 @@ def archive_queue(
     only_approved: bool = False,
     entry_ids: list[str] | None = None,
 ) -> dict[str, Any]:
-    """Move selected entries to archive/{today}-batch.json and delete their snapshots.
+    """Move selected entries to a new archive/<stamp>-batch.json and delete their snapshots.
 
     Default: archive the entire current queue (normal desk close).
     Inbox mode: pass only_approved=True to leave pending entries in place.
+    Each pass writes its own file — sweeps run several times a day, and merging into a
+    shared daily file meant one unreadable archive silently swallowed earlier entries.
+    Comments consumed by the archived entries are retired in comments.log.
     """
-    q = server.load_queue(proj)
-    entries = list(q.get("entries") or [])
-    if entry_ids is not None:
-        want = {str(i) for i in entry_ids}
-        take = [e for e in entries if str(e.get("id")) in want]
-        leave = [e for e in entries if str(e.get("id")) not in want]
-    elif only_approved:
-        take = [e for e in entries if e.get("status") == "approved"]
-        leave = [e for e in entries if e.get("status") != "approved"]
-    else:
-        take, leave = entries, []
-
-    if not take:
-        return {"archived": [], "remaining": len(leave), "archive_path": None}
-
     today = date.today().isoformat()
     arch_dir = server.desk_dir(proj) / "archive"
-    arch_dir.mkdir(parents=True, exist_ok=True)
-    arch_path = arch_dir / f"{today}-batch.json"
-    prior: list = []
-    if arch_path.exists():
-        try:
-            prior = json.loads(arch_path.read_text()).get("entries") or []
-        except (OSError, json.JSONDecodeError):
-            prior = []
-    batch = {
-        "archived": today,
-        "project": proj.get("id"),
-        "entries": prior + take,
-    }
-    server.atomic_write(arch_path, json.dumps(batch, indent=2, ensure_ascii=False))
+    moved: dict[str, Any] = {"take": [], "leave": [], "path": None}
+
+    def apply(q):
+        # Select under the queue lock: an approve, comment or intake entry that lands
+        # between reading the queue and writing it back must not be dropped.
+        entries = list(q.get("entries") or [])
+        if entry_ids is not None:
+            want = {str(i) for i in entry_ids}
+            take = [e for e in entries if str(e.get("id")) in want]
+            leave = [e for e in entries if str(e.get("id")) not in want]
+        elif only_approved:
+            take = [e for e in entries if e.get("status") == "approved"]
+            leave = [e for e in entries if e.get("status") != "approved"]
+        else:
+            take, leave = entries, []
+        moved["take"], moved["leave"] = take, leave
+        if not take:
+            return
+        arch_dir.mkdir(parents=True, exist_ok=True)
+        arch_path = _new_archive_path(arch_dir)
+        batch = {"archived": today, "project": proj.get("id"), "entries": take}
+        # archive first: if this write fails the queue is left untouched
+        server.atomic_write(arch_path, json.dumps(batch, indent=2, ensure_ascii=False))
+        moved["path"] = arch_path
+        q["entries"] = leave
+        if not leave:
+            q["curated"] = f"swept {today}"
+
+    server.mutate_queue(proj, apply)
+    take, leave = moved["take"], moved["leave"]
+    if not take:
+        return {"archived": [], "remaining": len(leave), "archive_path": None}
+    arch_path = moved["path"]
+    server.close_comments(proj, [e.get("id") for e in take])
 
     deleted_snaps = []
     for e in take:
@@ -187,22 +237,23 @@ def archive_queue(
             except OSError:
                 pass
 
-    new_q = dict(q)
-    new_q["entries"] = leave
-    if not leave:
-        new_q["curated"] = f"swept {today}"
-
-    def apply(_q):
-        _q.clear()
-        _q.update(new_q)
-
-    server.mutate_queue(proj, apply)
     return {
         "archived": [e.get("id") for e in take],
         "remaining": len(leave),
         "archive_path": str(arch_path),
         "snapshots_deleted": deleted_snaps,
     }
+
+
+def _new_archive_path(arch_dir: Path) -> Path:
+    """archive/<YYYY-MM-DD-HHMMSS>-batch.json, suffixed -2, -3 … — never an existing file."""
+    stamp = datetime.now().strftime("%Y-%m-%d-%H%M%S")
+    path = arch_dir / f"{stamp}-batch.json"
+    n = 2
+    while path.exists():
+        path = arch_dir / f"{stamp}-{n}-batch.json"
+        n += 1
+    return path
 
 
 def write_session_log_stub(
@@ -217,6 +268,10 @@ def write_session_log_stub(
     sess_dir = server.runtime_dir(proj) / "sessions"
     sess_dir.mkdir(parents=True, exist_ok=True)
     path = sess_dir / f"{stamp}-session.md"
+    n = 2
+    while path.exists():                      # two passes in one second: never overwrite
+        path = sess_dir / f"{stamp}-{n}-session.md"
+        n += 1
     lines = [
         f"# Sweep {stamp}",
         "",
@@ -239,7 +294,7 @@ def write_session_log_stub(
         lines.append("")
         lines.extend(extra_lines)
     lines.append("")
-    path.write_text("\n".join(lines), encoding="utf-8")
+    server.atomic_write(path, "\n".join(lines))
     return path
 
 

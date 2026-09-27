@@ -15,7 +15,9 @@ Run standalone (web mode):  python3 server.py [--port 4242] [--no-open]
 Bundled (Electron .app):     PyInstaller sidecar; set DESK_PROJECTS for the registry path.
 """
 
+import base64
 import difflib
+import hashlib
 import json
 import math
 import os
@@ -25,8 +27,10 @@ import re
 import secrets
 import shutil
 import signal
+import stat
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import urllib.request
@@ -121,7 +125,8 @@ def resolve_projects_path() -> Path:
 PROJECTS_PATH = resolve_projects_path()
 SETTINGS_PATH = PROJECTS_PATH.parent / "settings.json"
 # Legacy constant — prefer current_curator().resolved_command() for new code.
-CLAUDE = shutil.which("claude") or str(HOME / ".local/bin/claude")
+CLAUDE = shutil.which("claude") or "claude"
+_CLAUDE_AT_IMPORT = CLAUDE  # tests replace CLAUDE with a stub; agent_bin honors that
 SERVER_PORT = None  # bound port, recorded at startup for the admin report
 SERVER_STARTED = None  # ISO timestamp, set at bind
 SERVER_TOKEN = None  # per-boot auth token; required on every /api/ request
@@ -129,7 +134,118 @@ DEFAULT_PORT = 4242  # one port for native app and web mode alike — a bookmark
                      # tab always reaches the live server, never a stale orphan
 RUNTIME_PATH = HOME / ".cache/kettle/server.json"  # discovery: port + token (mode 0600)
 TOKEN_HEADER = "X-Kettle-Token"
+# ---------- who is asking for the page? (the token is handed only to our own user) ----------
+#
+# GET / needs no token (it is how a viewport gets one), so anything that can reach
+# loopback used to read the token from the page — including another Unix user's process,
+# which the 0600 discovery file is meant to keep out. The page now carries the token only
+# when the connecting socket belongs to this server's own uid. Set
+# KETTLE_SKIP_PEER_CHECK=1 on a platform where the owner cannot be determined.
+
+
+def _lsof_peer_uid(client_host: str, client_port: int) -> int | None:
+    """macOS / BSD: uid of the process whose socket's LOCAL end is client_host:client_port.
+    lsof run as this user lists only processes it may inspect, so another user's client is
+    simply absent (None)."""
+    lsof = shutil.which("lsof") or "/usr/sbin/lsof"
+    try:
+        out = subprocess.run(
+            [lsof, "-nP", "-a", f"-iTCP@{client_host}:{client_port}", "-Fpun"],
+            capture_output=True, text=True, timeout=2,
+        ).stdout
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return parse_lsof_peer_uid(out, client_host, client_port)
+
+
+def parse_lsof_peer_uid(out: str, client_host: str, client_port: int) -> int | None:
+    uid = None
+    want = f"{client_host}:{client_port}->"
+    for line in out.splitlines():
+        if line.startswith("p"):
+            uid = None
+        elif line.startswith("u"):
+            try:
+                uid = int(line[1:])
+            except ValueError:
+                uid = None
+        elif line.startswith("n") and line[1:].startswith(want):
+            return uid
+    return None
+
+
+def parse_proc_net_tcp_uid(text: str, client_host: str, client_port: int) -> int | None:
+    """Linux /proc/net/tcp: the row whose local address is the client's socket."""
+    try:
+        want_ip = "".join(f"{int(b):02X}" for b in reversed(client_host.split(".")))
+    except ValueError:
+        return None
+    for row in text.splitlines()[1:]:
+        f = row.split()
+        if len(f) < 8 or ":" not in f[1]:
+            continue
+        ip, port = f[1].split(":")
+        if ip == want_ip and int(port, 16) == client_port:
+            try:
+                return int(f[7])
+            except ValueError:
+                return None
+    return None
+
+
+def peer_is_own_user(client_host: str, client_port: int) -> bool:
+    if os.environ.get("KETTLE_SKIP_PEER_CHECK") == "1":
+        return True
+    if sys.platform.startswith("linux"):
+        try:
+            uid = parse_proc_net_tcp_uid(Path("/proc/net/tcp").read_text(),
+                                         client_host, client_port)
+        except OSError:
+            uid = None
+    else:
+        uid = _lsof_peer_uid(client_host, client_port)
+    return uid is not None and uid == os.getuid()
+
+
+_INLINE_SCRIPT_RE = re.compile(rb"<script(?![^>]*\bsrc=)[^>]*>(.*?)</script>", re.DOTALL | re.IGNORECASE)
+
+
+def sitting_csp(body: bytes) -> str:
+    """Content-Security-Policy for the served sitting.
+
+    Scripts run only from this origin or as the exact inline blocks shipped in
+    index.html (sha256-pinned per response, so editing the file needs no manual
+    hash bump). Anything a rendered file or agent reply manages to inject — an
+    <img onerror>, a <script>, a javascript: link — is refused by the browser even
+    if the sanitizer misses it. Styles stay 'unsafe-inline' (the sitting uses style
+    attributes); style injection cannot run code or read the token. Remote images are
+    refused, so a document cannot beacon out when it is opened.
+    """
+    # Browsers normalize CRLF / lone CR to LF before hashing an inline script, so a
+    # checkout with CRLF line endings must hash the normalized text or the sitting blanks.
+    text = body.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+    hashes = " ".join(
+        "'sha256-" + base64.b64encode(hashlib.sha256(m.group(1)).digest()).decode() + "'"
+        for m in _INLINE_SCRIPT_RE.finditer(text)
+    )
+    return "; ".join([
+        "default-src 'self'",
+        f"script-src 'self' {hashes}".rstrip(),
+        "style-src 'self' 'unsafe-inline'",
+        # No remote images: an <img> in a registered document would report the reader's
+        # IP and the moment they opened it (a canary). Kettle never transmits.
+        "img-src 'self' data:",
+        "font-src 'self'",
+        "connect-src 'self'",
+        "object-src 'none'",
+        "base-uri 'none'",
+        "form-action 'none'",
+        "frame-ancestors 'none'",
+    ])
 QUEUE_LOCK = threading.Lock()
+SWEEPS_LOCK = threading.Lock()
+CURATOR_STREAMS: dict[str, int] = {}  # resolved project root → live curator streams
+SWEEPS_IN_FLIGHT: set[str] = set()  # project ids with a sweep stream open in this process
 SETTINGS_LOCK = threading.Lock()
 PROJECTS_LOCK = threading.Lock()
 DEFAULT_CURATOR_IDLE_TIMEOUT_S = 300.0
@@ -168,8 +284,11 @@ def agent_bin() -> str:
     cfg = current_curator()
     fallback = curator_mod.DEFAULT_COMMAND.get(cfg.provider, "claude")
     cmd = (cfg.command or fallback).strip() or fallback
-    if cmd == "claude":
+    if cmd == "claude" and CLAUDE != _CLAUDE_AT_IMPORT:
         return CLAUDE
+    # Resolve on every turn, like /api/ping and `kettle doctor`: installing the CLI
+    # after launch works without a restart, and a missing CLI is reported by its own
+    # name rather than an invented ~/.local/bin path.
     return cfg.resolved_command()
 
 
@@ -293,6 +412,19 @@ def _env_allowed_roots() -> list[Path]:
     return out
 
 
+def _gated_env_roots(roots: list[Path]) -> list[Path]:
+    """Drop extra fence roots that would expose home itself or credential folders — the
+    same gate project roots pass at registration."""
+    kept = []
+    for r in roots:
+        problem = project_root_problem(r)
+        if problem:
+            sys.stderr.write(f"kettle: ignoring KETTLE_ALLOWED_ROOTS entry {r}: {problem}\n")
+            continue
+        kept.append(r)
+    return kept
+
+
 # The fence = these base roots + every registered project root (see allowed_roots()). Base
 # defaults to empty for portability; the author can restore prior behavior with, e.g.,
 # KETTLE_ALLOWED_ROOTS="$HOME/cloud/sync:$HOME/Library/Mobile Documents/com~apple~CloudDocs".
@@ -390,7 +522,7 @@ BOOTSTRAP_PROMPT = _load_prompt(
 
 # ---- the founding interview (agent chat, multi-turn) ----
 # Phase A (survey): core builds a deterministic snapshot (survey.py) — no curator tools.
-# Phase B (interview): tool-less curator turn — opening + confirmation card + discussion.
+# Phase B (interview): tool-less curator conversation (one mission question; no card).
 # Phase C (finish → propose): write ONE DESK-PROPOSAL.md and queue it for the editor.
 # Phase D (approve proposal → found): digest the *edited* proposal, write the desk, first batch.
 PROPOSAL_ENTRY_ID = "desk-proposal"
@@ -532,7 +664,19 @@ def runtime_dir(proj: dict) -> Path:
     doesn't race these rapid rewrites. The durable desk files stay in desk_dir() and sync
     normally. (A sync idiosyncrasy is fixed at the sync layer, not by moving state outside
     the sandbox.)"""
-    d = desk_dir(proj) / "runtime"
+    root = project_root(proj).resolve()
+    if not root.is_dir():
+        # never mkdir(parents=True) a moved or deleted project back into existence
+        raise FileNotFoundError(f"project folder is missing: {project_root(proj)} — was it "
+                                "moved or deleted? Edit the project's folder in the sitting.")
+    desk = desk_dir(proj)
+    d = desk / "runtime"
+    for candidate in (desk, d):
+        if candidate.is_symlink() and not candidate.resolve().is_relative_to(root):
+            # A registered folder that ships `.kettle -> ~/elsewhere` would move every
+            # desk write (and the curator's) outside the project fence.
+            raise ValueError(f"desk directory {candidate} is a symlink leading outside "
+                             f"the project ({candidate.resolve()}) — refusing to use it")
     d.mkdir(parents=True, exist_ok=True)
     return d
 
@@ -546,12 +690,21 @@ def comments_log_path(proj: dict) -> Path:
     return runtime_dir(proj) / "comments.log"
 
 
+# A comments.log line whose text is `[kettle:closed through N]` retires that entry's
+# comments on physical lines < N. The log stays append-only; a sweep that consumed the
+# comments (or a user clearing a note) appends the marker instead of editing lines, so a
+# file that returns to the queue later does not replay settled direction.
+_COMMENTS_CLOSED_RE = re.compile(r"^\[kettle:closed through (\d+)\]$")
+
+
 def parse_comments_log(path: Path) -> dict[str, list[dict[str, str]]]:
-    """Parse runtime/comments.log → entry-id → [{date, text}, …] (append order preserved)."""
-    out: dict[str, list[dict[str, str]]] = {}
+    """Parse runtime/comments.log → entry-id → [{date, text}, …] (append order preserved).
+
+    Comments retired by a close marker are omitted."""
+    out: dict[str, list[dict]] = {}
     if not path.is_file():
         return out
-    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+    for idx, line in enumerate(path.read_text(encoding="utf-8", errors="replace").splitlines()):
         line = line.strip()
         if not line or line.startswith("#"):
             continue
@@ -559,9 +712,40 @@ def parse_comments_log(path: Path) -> dict[str, list[dict[str, str]]]:
         if len(parts) < 3:
             continue
         entry_id, text = parts[1].strip(), parts[2].strip()
-        if entry_id and text:
-            out.setdefault(entry_id, []).append({"date": parts[0].strip(), "text": text})
-    return out
+        if not (entry_id and text):
+            continue
+        m = _COMMENTS_CLOSED_RE.match(text)
+        if m:
+            through = int(m.group(1))
+            kept = [r for r in out.get(entry_id, []) if r["_line"] >= through]
+            if kept:
+                out[entry_id] = kept
+            else:
+                out.pop(entry_id, None)
+            continue
+        out.setdefault(entry_id, []).append({"date": parts[0].strip(), "text": text, "_line": idx})
+    return {eid: [{"date": r["date"], "text": r["text"]} for r in rows]
+            for eid, rows in out.items()}
+
+
+def comments_log_line_count(proj: dict) -> int:
+    """Physical line count of comments.log — the `through` bound for a close marker."""
+    path = comments_log_path(proj)
+    try:
+        return len(path.read_text(encoding="utf-8", errors="replace").splitlines())
+    except FileNotFoundError:
+        return 0
+
+
+def close_comments(proj: dict, entry_ids, through: int | None = None) -> None:
+    """Retire comments for entry_ids written before line `through` (default: all so far)."""
+    ids = [str(i) for i in entry_ids if str(i or "").strip()]
+    if not ids:
+        return
+    bound = comments_log_line_count(proj) if through is None else int(through)
+    ts = date.today().isoformat()
+    append_line(comments_log_path(proj),
+                "".join(f"{ts}\t{eid}\t[kettle:closed through {bound}]\n" for eid in ids))
 
 
 def enrich_queue_comments(proj: dict, q: dict) -> None:
@@ -622,6 +806,10 @@ def safe_path(p: str, base: Path | None = None) -> Path:
 
 # ---------- queue io ----------
 
+class QueueCorrupt(ValueError):
+    """queue.json exists but does not parse — surfaced, never silently replaced."""
+
+
 def load_queue(proj: dict) -> dict:
     """Read queue.json. Retries once on FileNotFoundError — the curator Write tool
     may briefly unlink/truncate the file while restocking after a sweep, and a
@@ -630,15 +818,20 @@ def load_queue(proj: dict) -> dict:
     with QUEUE_LOCK:
         for attempt in (0, 1):
             try:
-                if not qp.exists():
+                if not os.path.lexists(qp):
                     qp.parent.mkdir(parents=True, exist_ok=True)
-                    qp.write_text(json.dumps(EMPTY_QUEUE, indent=2))
-                return json.loads(qp.read_text())
+                    atomic_write(qp, json.dumps(EMPTY_QUEUE, indent=2))
+                try:
+                    return json.loads(qp.read_text())
+                except json.JSONDecodeError as e:
+                    raise QueueCorrupt(
+                        f"{qp} is not valid JSON ({e.msg}, line {e.lineno}) — fix it by hand "
+                        "or move it aside; Kettle will not overwrite it") from None
             except FileNotFoundError:
                 if attempt == 0:
                     continue
                 qp.parent.mkdir(parents=True, exist_ok=True)
-                qp.write_text(json.dumps(EMPTY_QUEUE, indent=2))
+                atomic_write(qp, json.dumps(EMPTY_QUEUE, indent=2))
                 return json.loads(qp.read_text())
     return dict(EMPTY_QUEUE)
 
@@ -651,11 +844,20 @@ def mutate_queue(proj: dict, fn) -> dict:
         except FileNotFoundError:
             qp.parent.mkdir(parents=True, exist_ok=True)
             q = dict(EMPTY_QUEUE)
+        except json.JSONDecodeError as e:
+            raise QueueCorrupt(
+                f"{qp} is not valid JSON ({e.msg}, line {e.lineno}) — fix it by hand "
+                "or move it aside; Kettle will not overwrite it") from None
         fn(q)
-        tmp = qp.with_suffix(".json.tmp")
-        tmp.write_text(json.dumps(q, indent=2, ensure_ascii=False))
-        tmp.replace(qp)
+        atomic_write(qp, json.dumps(q, indent=2, ensure_ascii=False))
         return q
+
+
+def _capped(text: str, cap: int, path: Path) -> str:
+    if len(text) <= cap:
+        return text
+    return (text[:cap].rstrip() + f"\n[… truncated at {cap} of {len(text)} characters — "
+            f"read {path} for the rest]")
 
 
 def project_orientation(proj: dict) -> str:
@@ -665,14 +867,17 @@ def project_orientation(proj: dict) -> str:
     Identity lives in these files, not in any one session: any fresh agent that reads
     them IS the curator."""
     desk = desk_dir(proj)
+    # Caps sized to the files' own line budgets (PROJECT/MEMORY ~80 lines, FAMILIARITY
+    # ~120) so the newest rulings at the tail are not silently cut; anything longer is
+    # truncated with a visible marker pointing at the file.
     sections = (
-        ("PROJECT.md", 2500, "Project orientation (PROJECT.md, curator-maintained)"),
-        ("MEMORY.md", 2000, "Curator memory (MEMORY.md — rulings already made and user "
+        ("PROJECT.md", 6000, "Project orientation (PROJECT.md, curator-maintained)"),
+        ("MEMORY.md", 6000, "Curator memory (MEMORY.md — rulings already made and user "
                             "preferences already learned; honor these without re-asking)"),
-        ("FAMILIARITY.md", 3000, "Project familiarity (FAMILIARITY.md — accrued map of this "
+        ("FAMILIARITY.md", 9000, "Project familiarity (FAMILIARITY.md — accrued map of this "
                                  "corpus: families, roles, paths, relationships, pitfalls; "
                                  "use it to write better briefs and deepen it when restocking)"),
-        ("SWEEP-ACTIONS.md", 1500, "Sweep actions (SWEEP-ACTIONS.md — extra work after "
+        ("SWEEP-ACTIONS.md", 3000, "Sweep actions (SWEEP-ACTIONS.md — extra work after "
                                    "archive/restock: outbound stage, egress for dispatch, "
                                    "plaintext sitting logs, sheets, reporting. Never transmit "
                                    "mail/Slack/webhooks from the desk; stage or egress only)"),
@@ -684,7 +889,20 @@ def project_orientation(proj: dict) -> str:
         except OSError:
             continue
         if text:
-            parts.append(f"{label}:\n{text[:cap]}")
+            parts.append(f"{label}:\n{_capped(text, cap, desk / fname)}")
+    # Claude curator turns load settings from the user scope only (runtime.
+    # CLAUDE_PROJECT_ISOLATION), which also stops the CLI reading the project's own
+    # CLAUDE.md. Its conventions still matter to review, so carry the text — never its
+    # hooks or settings — for every provider.
+    try:
+        conventions = (project_root(proj) / "CLAUDE.md").read_text(
+            encoding="utf-8", errors="replace").strip()
+    except OSError:
+        conventions = ""
+    if conventions:
+        parts.append("Project instructions (the project's own CLAUDE.md — conventions for "
+                     "agents working in this tree; text only):\n"
+                     + _capped(conventions, 4000, project_root(proj) / "CLAUDE.md"))
     return "\n\n".join(parts)
 
 
@@ -716,7 +934,7 @@ def sweep_precomputed_context(proj: dict, entries: list) -> str:
             lines.append("diff:")
             lines.append(text)
         else:
-            sp = runtime_dir(proj) / "snapshots" / f"{eid}.orig"
+            sp = _snapshot_path(proj, eid)
             if sp.exists():
                 lines.append("diff: (identical to snapshot)")
             else:
@@ -749,6 +967,16 @@ def scope_note(proj: dict) -> str:
             f"director{'y level' if d == 1 else 'y levels'} of the root — {detail}. Deeper "
             "subtrees are out of scope; do not trawl them. If the user explicitly points you at a "
             "deeper file you may open that one file, but do not expand the desk's scope to its subtree.")
+
+
+def founding_sentence_block(proj: dict, *, instruction: str) -> str:
+    """The user's own founding sentence — required at add, before the interview ever
+    starts (P3). Quoted first, ahead of survey/kit context: their words beat
+    inference. '' when somehow missing (legacy desk added before this was required)."""
+    note = (load_session(proj).get("founding_note") or "").strip()
+    if not note:
+        return ""
+    return f"THE USER'S FOUNDING SENTENCE (typed at add, before anything else — {instruction}):\n{note}"
 
 
 def build_refresh_briefs_prompt(proj: dict) -> str | None:
@@ -908,7 +1136,7 @@ def survey_path(proj: dict) -> Path:
 
 def ensure_founding_survey(proj: dict) -> dict:
     """Build and persist a deterministic survey for the founding interview."""
-    snap = survey_mod.build_survey(project_root(proj))
+    snap = survey_mod.build_survey(project_root(proj), max_depth=proj.get("max_depth"))
     sp = survey_path(proj)
     sp.parent.mkdir(parents=True, exist_ok=True)
     atomic_write(sp, survey_mod.dump(snap))
@@ -960,9 +1188,7 @@ def ensure_snapshots(proj: dict, q: dict):
         except (PermissionError, KeyError, OSError, RuntimeError):
             continue  # source missing or outside safe roots: skip cleanly
         snap_dir.mkdir(parents=True, exist_ok=True)
-        tmp = dest.with_name(dest.name + ".tmp")
-        tmp.write_bytes(data)
-        tmp.replace(dest)
+        atomic_write(dest, data)
 
 
 def _snapshot_path(proj: dict, entry_id) -> Path:
@@ -1096,24 +1322,130 @@ def save_settings(patch: dict) -> dict:
         return cur
 
 
-def atomic_write(path: Path, text: str):
-    tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(text, encoding="utf-8")
-    tmp.replace(path)
+def _confine_to_project(path: Path) -> None:
+    """When `path` lies inside a registered project, refuse it if it reaches outside
+    that project through a symlink (lineage.confine). Kettle's own files (settings,
+    registry, caches) are not under a project and pass through."""
+    p = Path(os.path.abspath(path))
+    best = None
+    try:
+        projects = load_projects()
+    except Exception:  # noqa: BLE001 — registry trouble surfaces elsewhere
+        return
+    for proj in projects:
+        try:
+            root = project_root(proj)
+        except (OSError, RuntimeError, KeyError):
+            continue
+        if p.is_relative_to(root) and (best is None or len(root.parts) > len(best.parts)):
+            best = root
+    if best is not None:
+        lineage.confine(p, best)
+
+
+def append_line(path: Path, text: str) -> None:
+    """Append to a desk log (comments, approvals) without following a planted symlink."""
+    _confine_to_project(path)
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    flags = os.O_WRONLY | os.O_CREAT | os.O_APPEND | getattr(os, "O_NOFOLLOW", 0)
+    fd = os.open(str(path), flags, 0o644)
+    with os.fdopen(fd, "a", encoding="utf-8") as f:
+        f.write(text)
+
+
+def atomic_write(path: Path, data: str | bytes) -> None:
+    """Write via a fresh temp file in the same directory, then rename over `path`.
+
+    The temp file is created with O_EXCL under a random name, so a symlink planted at a
+    predictable `<name>.tmp` cannot redirect the write outside the fence. An existing
+    file keeps its permission bits; a new one gets 0644."""
+    path = Path(path)
+    _confine_to_project(path)
+    try:
+        mode = stat.S_IMODE(path.lstat().st_mode) & 0o777
+    except OSError:
+        mode = 0o644
+    fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix="." + path.name + ".", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(data.encode("utf-8") if isinstance(data, str) else data)
+        os.chmod(tmp, mode)
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
 
 
 def slug(s: str) -> str:
     return re.sub(r"[^A-Za-z0-9._-]+", "_", s).strip("_") or "x"
 
 
+def project_id_for(name: str) -> str:
+    """Registry id for a project name. ASCII names keep their familiar slug; a name with
+    no ASCII letters or digits (e.g. 書簡, Письма) gets a short stable hash instead of
+    collapsing to `x` for every such project."""
+    if re.search(r"[A-Za-z0-9]", name or ""):
+        return slug(name).lower()
+    import hashlib as _hashlib
+    return "p-" + _hashlib.sha1(name.strip().encode("utf-8")).hexdigest()[:8]
+
+
+def project_root_problem(rp: Path) -> str | None:
+    """Why a resolved folder cannot be a project root, or None. Roots extend the file
+    fence: every file under one becomes readable, writable and visible to curators."""
+    home = HOME.resolve()
+    if not rp.is_relative_to(home):
+        return f"folder must be under {HOME}"
+    if rp == home:
+        return f"folder cannot be your whole home folder ({HOME}) — choose the project's own folder"
+
+    def under(a: Path, b: Path) -> bool:
+        # macOS volumes are usually case-insensitive: ~/.SSH is ~/.ssh
+        fold = (lambda x: [part.casefold() for part in x.parts]) if sys.platform == "darwin" \
+            else (lambda x: list(x.parts))
+        pa, pb = fold(a), fold(b)
+        return pa[:len(pb)] == pb
+
+    for sp in (home / n for n in (".ssh", ".gnupg", ".aws", ".claude", ".config", ".cache",
+                                  ".kube", ".docker")):
+        if under(rp, sp) or under(sp, rp):
+            return (f"folder {rp} overlaps {sp}, which holds credentials or agent "
+                    "configuration — choose the project's own folder")
+    library = home / "Library"
+    synced = [library / "Mobile Documents", library / "CloudStorage"]
+    if (under(rp, library) and not any(under(rp, d) for d in synced)) or rp == library:
+        return (f"folder {rp} is inside ~/Library (keychains, mail, app data) — choose the "
+                "project's own folder (iCloud Drive and CloudStorage folders are fine)")
+    registry_dir = PROJECTS_PATH.parent.resolve()
+    if registry_dir.is_relative_to(rp):
+        # a curator with write tools in this root could rewrite settings.json
+        # (curator.command) or the project registry
+        return (f"folder {rp} contains Kettle's own settings ({registry_dir}) — "
+                "choose the project's own folder")
+    return None
+
+
+# Env-supplied fence roots pass the same gate as project roots (applied here, once the
+# gate exists; tests may still assign BASE_ALLOWED_ROOTS directly).
+BASE_ALLOWED_ROOTS = _gated_env_roots(BASE_ALLOWED_ROOTS)
+
+
 def register_project(name: str, root: str, kit: str | None = None,
-                     max_depth=None) -> dict:
+                     max_depth=None, note: str | None = None) -> dict:
     """Register a project: validate, append to the registry, seed its desk. The single
     source of truth for 'add a project', shared by the HTTP handler and the CLI so the
     fence gate (project roots must be under $HOME — registered roots extend the file-API
     fence) is enforced one way. Raises ValueError(message) on any validation failure;
     returns the project dict on success. Creates the registry if it does not exist yet
-    (first run), so a fresh install can register its first desk."""
+    (first run), so a fresh install can register its first desk.
+
+    `note` (the founding sentence) is optional *here* — this is the low-level
+    primitive other callers (migration, tests) may use without a human at the
+    keyboard. The human-facing entry points (`add_project` HTTP handler, `kettle add`
+    CLI) require it before they ever call this."""
     name = str(name or "").strip()
     root_raw = str(root or "").strip()
     if not name:
@@ -1126,9 +1458,10 @@ def register_project(name: str, root: str, kit: str | None = None,
         raise ValueError(f"cannot resolve folder: {root_raw}")
     if not rp.is_dir():
         raise ValueError(f"folder does not exist (or is not a directory): {rp}")
-    if not rp.is_relative_to(HOME.resolve()):
-        raise ValueError(f"folder must be under {HOME}")
-    pid = slug(name).lower()
+    problem = project_root_problem(rp)
+    if problem:
+        raise ValueError(problem)
+    pid = project_id_for(name)
     proj = {
         "id": pid,
         "name": name,
@@ -1157,15 +1490,37 @@ def register_project(name: str, root: str, kit: str | None = None,
             indent=2, ensure_ascii=False))
     from . import egress as _egress
     _egress.ensure_egress(proj)
+    note = str(note or "").strip()
+    if note:                       # the user's founding sentence → quoted first at every turn
+        save_session(proj, founding_note=note)
     return proj
 
 
+# What refound keeps. Append-only records are never auto-mutated (ARCHITECTURE.md), so
+# starting founding over resets the charter and the live queue, not the history: who
+# edited what, past sittings, archived batches, staged egress not yet picked up, and the
+# user's own comments and approvals.
+REFOUND_KEEP = frozenset({
+    "working-record.jsonl", "lineage-baseline.json", "lineage.git", "EDITING.md",
+    "sessions", "archive", "outbound",
+})
+REFOUND_KEEP_RUNTIME = frozenset({"comments.log", "approvals.log", "sessions"})
+
+
 def refound_desk(proj: dict) -> dict:
-    """Reset a project's desk to the pristine UNFOUNDED seed so its founding interview runs
-    again on next selection. The whole old desk (charter, memory, runtime, queue, transcript)
-    is copied to a machine-local backup first; the user's founding note is carried into the
-    fresh seed so the rerun keeps their steer."""
+    """Reset a project's desk to the UNFOUNDED seed so its founding interview runs again on
+    next selection. The whole old desk is copied to a machine-local backup first. The
+    charter, memory, familiarity, proposal, queue, session and snapshots are cleared;
+    append-only records (REFOUND_KEEP) stay in place. The user's founding note is carried
+    into the fresh seed so the rerun keeps their steer."""
+    if curator_stream_active(proj):
+        raise RuntimeError("a curator turn is still running on this desk — wait for it to "
+                           "finish (or stop it) before refounding")
     desk = desk_dir(proj)
+    root = project_root(proj)
+    if (desk.is_symlink() or os.path.lexists(desk)) and not desk.resolve().is_relative_to(root):
+        raise lineage.UnsafeDeskPath(f"desk {desk} leads outside the project ({desk.resolve()}) "
+                                     "— refusing to reset it")
     note = ""
     sj = desk / "runtime" / "session.json"
     try:
@@ -1175,16 +1530,45 @@ def refound_desk(proj: dict) -> dict:
         pass
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     bk = HOME / ".cache" / "kettle-refound-backups" / f"{proj['id']}-{stamp}"
+    kept: list[str] = []
     if desk.exists():
         bk.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copytree(desk, bk)
-        shutil.rmtree(desk)
+        shutil.copytree(desk, bk, symlinks=True)
+        for child in desk.iterdir():
+            if child.name in REFOUND_KEEP:
+                kept.append(child.name)
+                continue
+            if child.name == "runtime" and child.is_dir() and not child.is_symlink():
+                for rchild in child.iterdir():
+                    if rchild.name in REFOUND_KEEP_RUNTIME:
+                        kept.append(f"runtime/{rchild.name}")
+                    elif rchild.is_dir() and not rchild.is_symlink():
+                        shutil.rmtree(rchild)
+                    else:
+                        rchild.unlink()
+                continue
+            if child.is_dir() and not child.is_symlink():
+                shutil.rmtree(child)
+            else:
+                child.unlink()
     rt = desk / "runtime"
     rt.mkdir(parents=True, exist_ok=True)
     atomic_write(rt / "queue.json",
                  json.dumps(dict(EMPTY_QUEUE, curated="awaiting founding curation"), indent=2))
     atomic_write(rt / "session.json", json.dumps({"founding_note": note}, indent=2))
-    return {"ok": True, "backup": str(bk), "note_preserved": bool(note)}
+    return {"ok": True, "backup": str(bk), "note_preserved": bool(note), "kept": sorted(kept)}
+
+
+def _stream_key(root) -> str:
+    try:
+        return str(Path(root).resolve())
+    except OSError:
+        return str(root)
+
+
+def curator_stream_active(proj: dict) -> bool:
+    with SWEEPS_LOCK:
+        return CURATOR_STREAMS.get(_stream_key(project_root(proj)), 0) > 0
 
 
 def project_for_path(p: Path) -> dict | None:
@@ -1229,16 +1613,129 @@ def proposal_on_disk(proj: dict) -> bool:
         return False
 
 
-def mark_founded_if_filed(proj: dict) -> bool:
-    """A desk is founded once the curator has filed at least one *content* queue entry
-    (not the desk-proposal placeholder). Shared by founding handlers and the CLI."""
+def clear_proposal_entry(proj: dict) -> None:
+    """Remove the desk-proposal placeholder from the queue once real founding has
+    landed. `kits/prompts/found.md` lets the curator leave it behind, and a stale one
+    can go on pointing at a proposal file long since archived, renamed, or migrated
+    away (the pre-Kettle `.setsweep/DESK-PROPOSAL.md` path is a live example)."""
+    def strip(q):
+        q["entries"] = [e for e in (q.get("entries") or []) if not is_proposal_entry(e)]
+    mutate_queue(proj, strip)
+
+
+def mark_founded_if_filed(proj: dict, *, founding_step: bool = False) -> bool:
+    """A desk is founded once it has a charter (`PROJECT.md`) on disk AND the curator
+    has filed at least one *content* queue entry (not the desk-proposal placeholder).
+    Heals both directions: promotes to founded once charter and content both land
+    (clearing any leftover desk-proposal entry), and demotes a desk stuck at
+    'founded' with no charter — a stale mark from before this predicate existed, or a
+    charter that has since gone missing — back to interviewing. Never demotes for an
+    empty *queue* alone: a genuinely founded desk's queue legitimately empties between
+    a sweep and its restock. Shared by founding handlers and the CLI.
+
+    While a Desk Proposal awaits approval (status proposing) only a founding step —
+    Found Desk, bootstrap, `kettle found` — may promote. A propose turn that ignores its
+    prompt and writes a charter plus entries must not found the desk behind the user's
+    approval, and neither may the next queue read."""
     try:
-        if content_entries(load_queue(proj)):
-            save_session(proj, status="founded")
+        has_charter = (desk_dir(proj) / "PROJECT.md").is_file()
+        q = load_queue(proj)
+        founded_now = has_charter and bool(content_entries(q))
+        status = load_session(proj).get("status")
+        was_founded = status == "founded"
+        if founded_now and not was_founded and not founding_step and status == "proposing":
+            return False
+        if founded_now:
+            if not was_founded:
+                save_session(proj, status="founded")
+            if any(is_proposal_entry(e) for e in (q.get("entries") or [])):
+                clear_proposal_entry(proj)
             return True
+        if was_founded and not has_charter:
+            save_session(proj, status="interviewing")
     except Exception:  # noqa: BLE001
         pass
     return False
+
+
+def ensure_proposal_entry(proj: dict) -> bool:
+    """Re-file the desk-proposal queue entry when DESK-PROPOSAL.md exists on an unfounded
+    desk but the queue lost it (a propose turn that wrote the file and no entry, or an
+    approve whose Found Desk never finished). Without it the sitting has nothing to open
+    and the desk is stuck until refound. Returns True when an entry was added."""
+    if not proposal_on_disk(proj) or desk_is_founded(proj):
+        return False
+    added = []
+
+    def add(q):
+        entries = q.get("entries") or []
+        if content_entries(q) or any(is_proposal_entry(e) for e in entries):
+            return
+        entries.append({
+            "id": PROPOSAL_ENTRY_ID,
+            "title": "Desk Proposal",
+            "path": str(proposal_path(proj)),
+            "project": proj.get("name"),
+            "project_root": str(project_root(proj)),
+            "ask_type": "judgment",
+            "ask": "Edit this proposal until it matches your intent, then approve to found the desk",
+            "urgency": "high",
+            "status": "pending",
+            "founding_phase": "proposal",
+            "brief": "This is the Kettle Desk Proposal. Approving it founds the desk from this text.",
+        })
+        q["entries"] = entries
+        added.append(True)
+
+    mutate_queue(proj, add)
+    return bool(added)
+
+
+def build_found_prompt(proj: dict, *, session_id: str | None, bootstrap: bool = False) -> str:
+    """The one founding prompt, shared by POST /api/found, POST /api/bootstrap and
+    `kettle found` so no entry point drops the user's founding sentence, the queue
+    schema, the kit context or the scope note.
+
+    Digests DESK-PROPOSAL.md when present; otherwise resumes the interview session
+    (legacy found) or, with no session or when `bootstrap` is set, founds one-shot from
+    the files. The founding-sentence block leads the prompt (P3: the user's words come
+    before any instructions or inference); the prompts refer to it as 'above'."""
+    fields = dict(
+        name=proj["name"], root=str(project_root(proj)),
+        desk_dir=str(desk_dir(proj)), queue_path=str(queue_path(proj)),
+        proposal_path=str(proposal_path(proj)),
+    )
+    has_proposal = not bootstrap and proposal_on_disk(proj)
+    if has_proposal:
+        prompt = FOUND_PROMPT.format(**fields)
+    elif session_id and not bootstrap:
+        prompt = FOUND_LEGACY_PROMPT.format(**fields)
+    else:
+        prompt = BOOTSTRAP_PROMPT.format(
+            name=fields["name"], root=fields["root"],
+            desk_dir=fields["desk_dir"], queue_path=fields["queue_path"],
+        )
+    fs = founding_sentence_block(
+        proj, instruction="PROJECT.md must open with it under a 'Your Words' heading")
+    if fs:
+        prompt = fs + "\n\n" + prompt
+    # Single-source schema + cold-re-entry brief standard (kits/prompts/queue-schema.md).
+    if QUEUE_SCHEMA:
+        prompt += "\n\n" + QUEUE_SCHEMA
+    kit_ctx = kits.as_context(
+        kits.for_project(proj, APPDIR / "kits", load_settings()), "found")
+    if kit_ctx:
+        prompt += "\n\n" + kit_ctx
+    if has_proposal:
+        prompt += (
+            "\n\nCRITICAL: Re-read the proposal file on disk immediately before writing "
+            "desk files — the user may have edited it in the center pane after you "
+            "drafted it. Their on-disk text is authoritative."
+        )
+    sc = scope_note(proj)
+    if sc:
+        prompt += "\n\n" + sc
+    return prompt
 
 
 def desk_is_founded(proj: dict) -> bool:
@@ -1401,6 +1898,8 @@ def admin_report(active_pid: str | None) -> dict:
         "sentinel": None,
         "events": None,
         "watcher": None,
+        # Kettle's own folder-watcher beacon (kettle_watch.py) — always reported.
+        "watch_health": _read_json(HOME / ".cache" / "kettle" / "watch-health.json") or None,
     }
     if fleet:
         health = _read_json(CACHE / "inventory-health.json")
@@ -1504,8 +2003,9 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if url.path in ("/", "/index.html"):
                 body = (STATIC / "index.html").read_bytes()
-                # Inject per-boot token so same-origin UI can authorize /api/ calls.
-                if SERVER_TOKEN:
+                # Inject the per-boot token so the same-origin UI can authorize /api/ calls —
+                # only for a page requested by this server's own user.
+                if SERVER_TOKEN and peer_is_own_user(*self.client_address[:2]):
                     meta = (
                         f'<meta name="kettle-token" content="{SERVER_TOKEN}">'
                     ).encode()
@@ -1513,6 +2013,10 @@ class Handler(BaseHTTPRequestHandler):
                         body = body.replace(b"<head>", b"<head>\n" + meta, 1)
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Security-Policy", sitting_csp(body))
+                self.send_header("X-Frame-Options", "DENY")
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.send_header("Referrer-Policy", "no-referrer")
                 # Sitting UI iterates quickly — never let Electron/browser keep a stale shell.
                 self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
                 self.send_header("Pragma", "no-cache")
@@ -1659,6 +2163,8 @@ class Handler(BaseHTTPRequestHandler):
                         st = load_session(proj).get("status")
                         if st not in ("founded", "proposing"):
                             save_session(proj, status="proposing")
+                    ensure_proposal_entry(proj)
+                    entries = load_queue(proj).get("entries") or []
                 iv = load_interview(proj)
                 # has_entries = content work (viewport founded signal); proposal alone is not.
                 self.send_json({
@@ -1669,6 +2175,10 @@ class Handler(BaseHTTPRequestHandler):
                     "has_proposal": proposal_on_disk(proj) or any(
                         is_proposal_entry(e) for e in entries),
                     "proposal_path": str(proposal_path(proj)),
+                    # The founded predicate (charter AND content entries) — viewports
+                    # use this, not has_entries, to decide founded.
+                    "founded": iv.get("status") == "founded",
+                    "has_charter": (desk_dir(proj) / "PROJECT.md").is_file(),
                 })
             elif url.path == "/api/file":
                 proj = get_project(qs.get("project", [None])[0])
@@ -1677,6 +2187,10 @@ class Handler(BaseHTTPRequestHandler):
                                 "content": p.read_text(encoding="utf-8", errors="replace")})
             else:
                 self.send_json({"error": "not found"}, 404)
+        except QueueCorrupt as e:
+            self.send_err(409, str(e), "queue_corrupt")
+        except lineage.UnsafeDeskPath as e:
+            self.send_err(403, str(e), "unsafe_path")
         except PermissionError as e:
             self.send_err(403, str(e), "forbidden")
         except FileNotFoundError as e:
@@ -1695,9 +2209,7 @@ class Handler(BaseHTTPRequestHandler):
             if url.path == "/api/save":
                 sp = get_project(d.get("project")) if d.get("project") else None
                 p = safe_path(d["path"], project_root(sp) if sp else None)
-                tmp = p.with_name(p.name + ".desk-tmp")
-                tmp.write_text(d["content"], encoding="utf-8")
-                tmp.replace(p)  # atomic write; rely on your VCS/sync layer for version history
+                atomic_write(p, d["content"])  # rely on your VCS/sync layer for version history
                 proj = project_for_path(p)            # the user's own edit → user lineage
                 if proj:
                     try:
@@ -1708,16 +2220,21 @@ class Handler(BaseHTTPRequestHandler):
             elif url.path == "/api/approve":
                 proj = get_project(d.get("project"))
 
+                newly = []
+
                 def approve(q):
                     e = find_entry(q, d["id"])
+                    if e.get("status") == "approved" and e.get("approved"):
+                        return  # already bookmarked: keep the original date, log once
                     e["status"] = "approved"
                     e["approved"] = date.today().isoformat()
+                    newly.append(True)
 
                 q = mutate_queue(proj, approve)
                 e = find_entry(q, d["id"])
-                log = runtime_dir(proj) / "approvals.log"
-                with log.open("a") as f:
-                    f.write(f"{e['approved']}\t{e['id']}\t{e['path']}\t{e.get('ask','')}\n")
+                if newly:
+                    append_line(runtime_dir(proj) / "approvals.log",
+                                f"{e['approved']}\t{e['id']}\t{e['path']}\t{e.get('ask','')}\n")
                 # Proposal approve is only a bookmark here; the client streams POST /api/found
                 # so the curator digests on-disk edits and files the first content batch.
                 self.send_json({
@@ -1789,8 +2306,10 @@ class Handler(BaseHTTPRequestHandler):
 
                 mutate_queue(proj, setc)
                 if text:
-                    with (runtime_dir(proj) / "comments.log").open("a") as f:
-                        f.write(f"{ts}\t{d['id']}\t{text.replace(chr(10), ' / ')}\n")
+                    append_line(runtime_dir(proj) / "comments.log",
+                                f"{ts}\t{d['id']}\t{text.replace(chr(10), ' / ')}\n")
+                else:
+                    close_comments(proj, [d["id"]])  # a cleared note is retracted, not replayed
                 self.send_json({"ok": True, "comment": text})
             elif url.path == "/api/clear-session":
                 proj = get_project(d.get("project"))
@@ -1850,6 +2369,10 @@ class Handler(BaseHTTPRequestHandler):
                 self.open_link(d)
             else:
                 self.send_json({"error": "not found"}, 404)
+        except QueueCorrupt as e:
+            self.send_err(409, str(e), "queue_corrupt")
+        except lineage.UnsafeDeskPath as e:
+            self.send_err(403, str(e), "unsafe_path")
         except json.JSONDecodeError as e:
             self.send_err(400, str(e), "bad_json")
         except PermissionError as e:
@@ -2049,10 +2572,24 @@ class Handler(BaseHTTPRequestHandler):
 
     def sweep(self, d):
         proj = get_project(d.get("project"))
+        with SWEEPS_LOCK:
+            if proj["id"] in SWEEPS_IN_FLIGHT:
+                self.stream_idle("A sweep is already running for this desk — wait for it to finish.")
+                return
+            SWEEPS_IN_FLIGHT.add(proj["id"])
+        try:
+            self._sweep(proj, d)
+        finally:
+            with SWEEPS_LOCK:
+                SWEEPS_IN_FLIGHT.discard(proj["id"])
+
+    def _sweep(self, proj, d):
         ledger = proj.get("ledger") or "(no ledger configured — queue/approvals only)"
         rd = runtime_dir(proj)
         cl_path = comments_log_path(proj)
         stamp = datetime.now().strftime("%Y-%m-%d-%H%M%S")
+        last = sweepkit.read_sweep_health(proj)
+        interrupted = last.get("state") in ("running", "failed")
         status = sweepkit.assess_close(proj)
         close: dict = {"ok": False, "action": "skipped", "status": status}
         if status.get("can_mechanical_close"):
@@ -2061,10 +2598,28 @@ class Handler(BaseHTTPRequestHandler):
         # Fully idle, or quiet inbox close with nothing left to accrue → no curator spawn
         st = close.get("status") or status
         if st.get("fully_idle"):
-            self.stream_idle("Nothing to sweep — queue empty and quiet.")
-            return
+            if interrupted and st.get("needs_accrue"):
+                # The previous sweep closed the queue and then died before restocking.
+                # An empty quiet queue is its wreckage, not an idle desk: restock now.
+                close = {
+                    "ok": True, "action": "resume_interrupted_sweep",
+                    "needs_accrue": True, "interrupted_sweep": last,
+                    "session_log": last.get("session_log") or "",
+                }
+            else:
+                note = ""
+                if interrupted:
+                    note = (f" (last sweep did not finish: {last.get('error') or last.get('state')}"
+                            f" at {last.get('updated', '?')})")
+                    # Reported once; a quiet desk with nothing to restock is not still failing.
+                    sweepkit.write_sweep_health(proj, state="idle", phase="close", stamp=stamp,
+                                                previous=last)
+                self.stream_idle("Nothing to sweep — queue empty and quiet." + note)
+                return
         if close.get("ok") and close.get("action") == "mechanical_close" and not close.get("needs_accrue"):
             n = len((close.get("archived") or {}).get("archived") or [])
+            sweepkit.write_sweep_health(proj, state="done", phase="close", stamp=stamp,
+                                        session_log=close.get("session_log") or "")
             self.stream_idle(
                 f"Quiet close complete ({n} entr{'y' if n == 1 else 'ies'} archived"
                 + ("; inbox drafts staged" if (close.get("staged") or {}).get("staged") else "")
@@ -2074,6 +2629,9 @@ class Handler(BaseHTTPRequestHandler):
 
         accrue_only = bool(close.get("ok") and close.get("needs_accrue"))
         queue_entries = load_queue(proj).get("entries", [])
+        # Bound the comments this prompt shows in the same breath as reading them: a note
+        # typed while the rest of the prompt is assembled must not be retired unread.
+        comments_through = comments_log_line_count(proj)
         user_comments = sweep_user_comments_block(parse_comments_log(cl_path), queue_entries)
 
         if accrue_only:
@@ -2084,7 +2642,8 @@ class Handler(BaseHTTPRequestHandler):
                 session_log=close.get("session_log") or "",
             )
             prompt += "\n\n---\nCLOSE KIT RESULT:\n" + json.dumps(
-                {k: close[k] for k in ("action", "archived", "staged", "session_log", "needs_accrue")
+                {k: close[k] for k in ("action", "archived", "staged", "session_log", "needs_accrue",
+                                       "interrupted_sweep")
                  if k in close}, indent=2)
             prompt += "\n---\n"
         else:
@@ -2176,22 +2735,43 @@ class Handler(BaseHTTPRequestHandler):
                 kw["model"] = m
             save_session(proj, **kw)
 
+        # The comments this prompt carried are consumed only if the curator finishes.
+        shown_ids = [e.get("id") for e in queue_entries if e.get("id")]
+        phase = "accrue" if accrue_only else "sweep"
+        started = sweepkit.write_sweep_health(
+            proj, state="running", phase=phase, stamp=stamp, pid=os.getpid(),
+            session_log=close.get("session_log") or "",
+        )
+
+        def on_finish(outcome):
+            sweepkit.write_sweep_health(
+                proj, state="done" if outcome["ok"] else "failed", phase=phase,
+                stamp=stamp, started=started["updated"], exit=outcome.get("exit"),
+                error=outcome.get("error"), session_log=close.get("session_log") or "",
+            )
+            if outcome["ok"] and shown_ids:
+                close_comments(proj, shown_ids, through=comments_through)
+
         self.run_curator(cmd, str(project_root(proj)), prior_sid=sid, persist=persist,
-                         role="sweep")
+                         role="sweep", on_finish=on_finish)
 
     # ---- add project: registry append + desk seed ----
     def add_project(self, d):
         # registration logic (validation, fence gate, registry append, desk seed) lives in
         # the module-level register_project so the CLI shares it; here we only translate.
+        note = str(d.get("note") or "").strip()
+        if not note:
+            self.send_json({
+                "error": "founding sentence required: in a sentence or two, what is this "
+                         "and what do you want from a second reader here?",
+            }, 400)
+            return
         try:
             proj = register_project(d.get("name", ""), d.get("root", ""),
-                                    d.get("kit"), d.get("max_depth"))
+                                    d.get("kit"), d.get("max_depth"), note)
         except ValueError as e:
             self.send_json({"error": str(e)}, 400)
             return
-        note = str(d.get("note") or "").strip()
-        if note:                       # the user's founding steer → woven into the charter at found
-            save_session(proj, founding_note=note)
         # Flat fields kept for the web UI (`added.id`); `project` + `ok` for typed clients.
         self.send_json({"ok": True, "project": proj, "home": str(HOME), **proj})
 
@@ -2202,7 +2782,10 @@ class Handler(BaseHTTPRequestHandler):
         except KeyError:
             self.send_json({"error": f"no such project: {d.get('id')}"}, 400)
             return
-        self.send_json(refound_desk(proj))
+        try:
+            self.send_json(refound_desk(proj))
+        except RuntimeError as e:
+            self.send_err(409, str(e), "busy")
 
     # ---- curator kits: save (fork-on-edit / create) and delete a user kit ----
     def save_kit(self, d):
@@ -2258,8 +2841,9 @@ class Handler(BaseHTTPRequestHandler):
         if not rp.is_dir():
             self.send_json({"error": f"folder does not exist (or is not a directory): {rp}"}, 400)
             return
-        if not rp.is_relative_to(HOME.resolve()):
-            self.send_json({"error": f"folder must be under {HOME}"}, 400)
+        problem = project_root_problem(rp)
+        if problem:
+            self.send_json({"error": problem}, 400)
             return
         root_clean = root_raw.rstrip("/") or root_raw
         with PROJECTS_LOCK:
@@ -2296,20 +2880,15 @@ class Handler(BaseHTTPRequestHandler):
         if desk_is_founded(proj):
             self.stream_idle("Desk already founded. Use refound to start over.")
             return
-        if mark_founded_if_filed(proj):
+        if mark_founded_if_filed(proj, founding_step=True):
             self.stream_idle("Queue already has content entries — marked founded.")
             return
-        prompt = BOOTSTRAP_PROMPT.format(
-            name=proj["name"], root=str(project_root(proj)),
-            desk_dir=str(desk_dir(proj)), queue_path=str(queue_path(proj)),
-        )
-        if QUEUE_SCHEMA:
-            prompt += "\n\n" + QUEUE_SCHEMA
+        prompt = build_found_prompt(proj, session_id=None, bootstrap=True)
         cmd = build_turn_cmd(
             prompt, task="setup", request_model=d.get("model"), tools_tier="sweep",
         )
         self.run_curator(cmd, str(project_root(proj)))
-        mark_founded_if_filed(proj)
+        mark_founded_if_filed(proj, founding_step=True)
 
     # ---- the founding interview: core survey + tool-less conversation ----
     def interview(self, d):
@@ -2326,26 +2905,23 @@ class Handler(BaseHTTPRequestHandler):
         sid = session_id_for_curator(
             proj=proj, model=current_curator().model_for("chat", d.get("model")),
         )
+        if sid and load_session(proj).get("status") != "interviewing":
+            # A chat (or `kettle chat`) before the interview opened this session without
+            # the founding role, survey or founding sentence. Resuming it would leave the
+            # kickoff pointing at a survey the curator never received: start fresh.
+            sid = None
         message = str(d.get("message") or "").strip() or INTERVIEW_KICKOFF
         role = None
         if not sid:  # first turn: build survey, open named project session (no tools)
             snap = ensure_founding_survey(proj)
             role = INTERVIEW_ROLE.format(name=proj["name"], root=str(project_root(proj)))
+            fs = founding_sentence_block(
+                proj, instruction="quote it in your opening line, don't paraphrase it")
+            if fs:
+                role += "\n\n" + fs
             role += "\n\n" + survey_mod.as_prompt_block(snap)
-            note = (load_session(proj).get("founding_note") or "").strip()
-            if note:
-                role += ("\n\nThe user left a founding note — project-specific quirks and needs "
-                         "to honor; weave them into the prompt list (as defaults / deltas), "
-                         "not as blank interrogation:\n" + note)
-            kit = kits.for_project(proj, APPDIR / "kits", load_settings())
-            # Do not pre-tick the card from survey heuristics — blank for the user.
-            # Survey text (as_prompt_block) still guides the opening prose.
-            kit_ctx = kits.as_context(kit, "interview")
-            if kit_ctx:
-                role += "\n\n" + kit_ctx
-            else:
-                role += "\n\n" + kits.as_context(
-                    {"name": "general", "interview": []}, "interview")
+            # No confirmation card (P4) — kit stems now feed only the propose turn's
+            # stated defaults, not a founding Q&A form.
             sc = scope_note(proj)
             if sc:
                 role += "\n\n" + sc
@@ -2390,7 +2966,9 @@ class Handler(BaseHTTPRequestHandler):
             desk_dir=str(desk_dir(proj)), queue_path=str(queue_path(proj)),
             proposal_path=str(prop),
         )
-        prompt = PROPOSE_PROMPT.format(**fields)
+        fs = founding_sentence_block(
+            proj, instruction="open 'What This Project Is' with it, quoted")
+        prompt = (fs + "\n\n" if fs else "") + PROPOSE_PROMPT.format(**fields)
         # Single-source schema + cold-re-entry brief standard (kits/prompts/queue-schema.md).
         if QUEUE_SCHEMA:
             prompt += "\n\n" + QUEUE_SCHEMA
@@ -2398,14 +2976,6 @@ class Handler(BaseHTTPRequestHandler):
             kits.for_project(proj, APPDIR / "kits", load_settings()), "found")
         if kit_ctx:
             prompt += "\n\n" + kit_ctx
-        iv_kit = kits.for_project(proj, APPDIR / "kits", load_settings())
-        iv_ctx = kits.as_context(iv_kit or {"name": "general", "interview": []}, "interview")
-        if iv_ctx:
-            prompt += ("\n\nHonor the interview prompt list / user answers when drafting "
-                       "the proposal:\n" + iv_ctx)
-        note = (load_session(proj).get("founding_note") or "").strip()
-        if note:
-            prompt += ("\n\nUser's founding note (honor in the proposal):\n" + note)
         sc = scope_note(proj)
         if sc:
             prompt += "\n\n" + sc
@@ -2426,12 +2996,12 @@ class Handler(BaseHTTPRequestHandler):
 
         self.run_curator(cmd, str(project_root(proj)), prior_sid=sid, persist=persist,
                          role="founding-curator")
-        # Ensure proposing even if the agent forgot to set status mid-stream
-        if not mark_founded_if_filed(proj):
-            if proposal_on_disk(proj) or desk_is_proposing(proj):
-                save_session(proj, status="proposing")
-            elif any(is_proposal_entry(e) for e in (load_queue(proj).get("entries") or [])):
-                save_session(proj, status="proposing")
+        # Ensure proposing even if the agent forgot to set status mid-stream. Propose
+        # never founds the desk: that is Found Desk's job, after the user approves.
+        if proposal_on_disk(proj) or desk_is_proposing(proj) or any(
+                is_proposal_entry(e) for e in (load_queue(proj).get("entries") or [])):
+            save_session(proj, status="proposing")
+            ensure_proposal_entry(proj)
 
     # ---- approve proposal (or legacy): digest proposal / found desk + first content batch ----
     def found(self, d):
@@ -2439,7 +3009,7 @@ class Handler(BaseHTTPRequestHandler):
         if desk_is_founded(proj):
             self.stream_idle("Desk already founded. Use refound to start over.")
             return
-        if mark_founded_if_filed(proj):
+        if mark_founded_if_filed(proj, founding_step=True):
             self.stream_idle("Queue already has content entries — marked founded.")
             return
         turn_model = current_curator().model_for("setup", d.get("model"))
@@ -2447,48 +3017,8 @@ class Handler(BaseHTTPRequestHandler):
         if not sid:
             sid = session_id_for_curator(
                 proj=proj, model=current_curator().model_for("chat", d.get("model")))
-        fields = dict(
-            name=proj["name"], root=str(project_root(proj)),
-            desk_dir=str(desk_dir(proj)), queue_path=str(queue_path(proj)),
-            proposal_path=str(proposal_path(proj)),
-        )
         has_proposal = proposal_on_disk(proj)
-        if has_proposal:
-            prompt = FOUND_PROMPT.format(**fields)
-        elif sid:
-            prompt = FOUND_LEGACY_PROMPT.format(**fields)
-        else:
-            prompt = BOOTSTRAP_PROMPT.format(
-                name=proj["name"], root=str(project_root(proj)),
-                desk_dir=str(desk_dir(proj)), queue_path=str(queue_path(proj)),
-            )
-        # Single-source schema + cold-re-entry brief standard (kits/prompts/queue-schema.md).
-        if QUEUE_SCHEMA:
-            prompt += "\n\n" + QUEUE_SCHEMA
-        kit_ctx = kits.as_context(
-            kits.for_project(proj, APPDIR / "kits", load_settings()), "found")
-        if kit_ctx:
-            prompt += "\n\n" + kit_ctx
-        if has_proposal:
-            prompt += (
-                "\n\nCRITICAL: Re-read the proposal file on disk immediately before writing "
-                "desk files — the user may have edited it in the center pane after you "
-                "drafted it. Their on-disk text is authoritative."
-            )
-        else:
-            iv_kit = kits.for_project(proj, APPDIR / "kits", load_settings())
-            iv_ctx = kits.as_context(iv_kit or {"name": "general", "interview": []}, "interview")
-            if iv_ctx:
-                prompt += ("\n\nUse the interview confirmation card (and the user's ticks/"
-                           "elaborations in this session) when writing founding-answers.md and "
-                           "SWEEP-ACTIONS.md:\n" + iv_ctx)
-        note = (load_session(proj).get("founding_note") or "").strip()
-        if note:
-            prompt += ("\n\nUser's founding note (honor in the charter and first queue):\n"
-                       + note)
-        sc = scope_note(proj)
-        if sc:
-            prompt += "\n\n" + sc
+        prompt = build_found_prompt(proj, session_id=sid)
         cmd = build_turn_cmd(
             prompt, task="setup", request_model=d.get("model"),
             session_id=sid, name=session_name(proj), tools_tier="sweep",
@@ -2506,10 +3036,11 @@ class Handler(BaseHTTPRequestHandler):
 
         self.run_curator(cmd, str(project_root(proj)), prior_sid=sid, persist=persist,
                          role="founding-curator")
-        mark_founded_if_filed(proj)
+        if not mark_founded_if_filed(proj, founding_step=True):
+            ensure_proposal_entry(proj)  # keep the proposal openable after a failed Found
 
     def run_curator(self, cmd, cwd, prior_sid=None, persist=None, record_user_message=None,
-                    role="agent", notice=None):
+                    role="agent", notice=None, on_finish=None):
         """Spawn the active curator CLI; forward normalized events as ndjson to the client.
 
         Stream parsing, usage accounting, and transcript capture live in `runtime.py` —
@@ -2519,21 +3050,41 @@ class Handler(BaseHTTPRequestHandler):
         append the turn to the desk's own ledger at `<root>/.kettle/sessions/<id>.jsonl`
         — so continuity is the desk's, not the agent process's. Event shapes are unchanged
         (model/text/tool/done/error); `usage` is additive and ignored by older frontends;
-        `done.ctx` is now true single-call occupancy, not the turn's summed aggregate."""
+        `done.ctx` is now true single-call occupancy, not the turn's summed aggregate.
+
+        `on_finish(outcome)` (optional) is called exactly once with
+        `{"ok": bool, "exit": int | None, "error": str | None}` — ok only when the CLI
+        exited cleanly, reported no error event, and the client stayed to the end."""
         proc = None
         has_streamed = False
+
+        def finish(ok: bool, error: str | None) -> None:
+            if on_finish is None:
+                return
+            try:
+                on_finish({"ok": ok, "error": error,
+                           "exit": proc.returncode if proc is not None else None})
+            except Exception:  # noqa: BLE001 — bookkeeping must not break the stream
+                pass
+
         try:
             # stderr merged into stdout: a second unread pipe can deadlock the CLI mid-stream
             proc = subprocess.Popen(
                 cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                env=runtime.curator_env(),
             )
         except Exception as exc:  # noqa: BLE001 — executable missing / spawn refused
-            self.send_err(500, f"curator failed to start: {exc}", "internal")
+            msg = runtime.spawn_error_text(cmd, exc, current_curator().provider)
+            finish(False, msg)
+            self.send_err(500, msg, "curator_unavailable")
             return
 
         # From this point the response belongs to the NDJSON stream. Any later failure is
         # represented as stream events; never attempt a second HTTP response.
         has_streamed = True
+        stream_key = _stream_key(cwd)
+        with SWEEPS_LOCK:
+            CURATOR_STREAMS[stream_key] = CURATOR_STREAMS.get(stream_key, 0) + 1
         self.send_response(200)
         self.send_header("Content-Type", "application/x-ndjson; charset=utf-8")
         self.send_header("Cache-Control", "no-cache")
@@ -2547,6 +3098,7 @@ class Handler(BaseHTTPRequestHandler):
         cap = {"sid": prior_sid, "text": [], "tools": [], "edits": []}
         noise: list[str] = []  # non-JSON CLI chatter (e.g. Grok resume 404)
         saw_error_evt = False
+        failure: list[str] = []  # first reason this turn did not complete cleanly
         done_sent = False
         pending_done = None
         client_gone = False
@@ -2622,11 +3174,13 @@ class Handler(BaseHTTPRequestHandler):
                         cap["edits"].append(evt["path"])
                 elif evt["t"] == "error":
                     saw_error_evt = True
+                    failure.append(str(evt.get("s") or "curator reported an error"))
                 if evt["t"] == "done":
                     pending_done = evt
                     break
                 if not emit(evt):  # client gone
                     client_gone = True
+                    failure.append("client disconnected; curator stopped")
                     stop_process()
                     break
             if not client_gone:
@@ -2639,14 +3193,19 @@ class Handler(BaseHTTPRequestHandler):
                 )
                 msg = (f"{detail} (exit {proc.returncode})" if detail
                        else f"curator exited {proc.returncode}")
+                failure.append(msg)
                 emit({"t": "error", "s": msg})
+            elif proc.returncode not in (0, None):
+                failure.append(f"curator exited {proc.returncode}")
             emit(pending_done or {"t": "done"})
         except TimeoutError as exc:
+            failure.append(str(exc))
             stop_process()
             if has_streamed:
                 emit({"t": "error", "s": str(exc)})
                 emit({"t": "done"})
         except Exception as e:  # noqa: BLE001
+            failure.append(str(e) or type(e).__name__)
             stop_process()
             if has_streamed:
                 emit({"t": "error", "s": str(e)})
@@ -2669,9 +3228,17 @@ class Handler(BaseHTTPRequestHandler):
                 except OSError:
                     pass
             if proc.poll() is None:
+                failure.append("curator still running at stream end; stopped")
                 stop_process()
             if has_streamed and not done_sent:
                 emit({"t": "done"})
+            with SWEEPS_LOCK:
+                left = CURATOR_STREAMS.get(stream_key, 1) - 1
+                if left > 0:
+                    CURATOR_STREAMS[stream_key] = left
+                else:
+                    CURATOR_STREAMS.pop(stream_key, None)
+            finish(not failure, failure[0] if failure else None)
 
     # Back-compat alias for tests / older call sites
     run_claude = run_curator

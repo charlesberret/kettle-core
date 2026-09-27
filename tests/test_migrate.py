@@ -186,6 +186,78 @@ class MigrateTests(unittest.TestCase):
             self.assertTrue((kettle_dir / "settings.json").is_file())
             self.assertFalse((legacy_path.parent / "settings.json").exists())
 
+    def _seed_stale_paths(self, root, desk):
+        """A legacy desk whose queue.json and registry `ledger` field carry absolute
+        `<root>/.setsweep/...` paths — the leftover migrate.py (pre-fix) never touched."""
+        resolved_root = server.project_root({"root": str(root)})
+        resolved_desk = resolved_root / ".setsweep"
+        stale_path = str(resolved_desk / "DESK-PROPOSAL.md")
+        unrelated_path = str(resolved_root / "notes.md")
+        (desk / "runtime" / "queue.json").write_text(
+            json.dumps({"entries": [
+                {"id": "desk-proposal", "title": "Desk Proposal", "status": "pending",
+                 "path": stale_path},
+                {"id": "unrelated", "title": "Unrelated", "status": "pending",
+                 "path": unrelated_path},
+            ]}),
+            encoding="utf-8",
+        )
+        stale_ledger = str(resolved_desk / "LEDGER.md")
+        reg = json.loads(self.registry.read_text(encoding="utf-8"))
+        for p in reg["projects"]:
+            p["ledger"] = stale_ledger
+        self.registry.write_text(json.dumps(reg), encoding="utf-8")
+        new_desk = resolved_root / ".kettle"
+        return {
+            "stale_path": stale_path, "new_path": str(new_desk / "DESK-PROPOSAL.md"),
+            "unrelated_path": unrelated_path,
+            "stale_ledger": stale_ledger, "new_ledger": str(new_desk / "LEDGER.md"),
+        }
+
+    def test_dry_run_lists_rewrites_without_writing(self):
+        proj, root, desk = self._seed_legacy_desk("rewrite-dry")
+        paths = self._seed_stale_paths(root, desk)
+
+        code, out, err = self.run_cli(["migrate"])
+        self.assertEqual((code, err), (0, ""))
+        self.assertIn(paths["stale_path"], out)
+        self.assertIn(paths["new_path"], out)
+        self.assertIn(paths["stale_ledger"], out)
+        self.assertIn(paths["new_ledger"], out)
+        self.assertNotIn(paths["unrelated_path"] + "  →", out)  # never planned as a rewrite
+
+        # nothing written on a dry run
+        entries = json.loads(
+            (desk / "runtime" / "queue.json").read_text(encoding="utf-8")
+        )["entries"]
+        by_id = {e["id"]: e for e in entries}
+        self.assertEqual(by_id["desk-proposal"]["path"], paths["stale_path"])
+        self.assertEqual(by_id["unrelated"]["path"], paths["unrelated_path"])
+        reg = json.loads(self.registry.read_text(encoding="utf-8"))
+        live = next(p for p in reg["projects"] if p["id"] == proj["id"])
+        self.assertEqual(live["ledger"], paths["stale_ledger"])
+
+    def test_apply_rewrites_queue_paths_and_ledger_leaves_unrelated_untouched(self):
+        proj, root, desk = self._seed_legacy_desk("rewrite-apply")
+        paths = self._seed_stale_paths(root, desk)
+
+        code, out, err = self.run_cli(["migrate", "--apply"])
+        self.assertEqual((code, err), (0, ""))
+        self.assertIn("applied", out)
+
+        kettle = root / ".kettle"
+        entries = json.loads(
+            (kettle / "runtime" / "queue.json").read_text(encoding="utf-8")
+        )["entries"]
+        by_id = {e["id"]: e for e in entries}
+        self.assertEqual(by_id["desk-proposal"]["path"], paths["new_path"])
+        # a path that was never under the legacy desk is left exactly as it was
+        self.assertEqual(by_id["unrelated"]["path"], paths["unrelated_path"])
+
+        reg = json.loads(self.registry.read_text(encoding="utf-8"))
+        live = next(p for p in reg["projects"] if p["id"] == proj["id"])
+        self.assertEqual(live["ledger"], paths["new_ledger"])
+
     def test_help_lists_migrate(self):
         out, err = io.StringIO(), io.StringIO()
         with redirect_stdout(out), redirect_stderr(err):

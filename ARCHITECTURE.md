@@ -56,22 +56,33 @@ Wire contract: [`API.md`](./API.md).
 
 | Tier | Used for | Grant |
 |------|----------|--------|
-| interview (tool-less) | founding interview (until Finish) | no tools — core survey snapshot only (`survey.py`) |
-| project-write | review chat, sweep, found/finish | Edit / Write under `acceptEdits`, fenced to the project root |
-| never | anyone | network beyond localhost; auto-mutation of append-only records; paths outside the fence |
+| interview (tool-less) | founding interview (until Finish) | no tools — core survey snapshot only (`survey.py`); Claude: `--tools ""` |
+| project-write | review chat, sweep, found/finish | Edit / Write under `acceptEdits`, run with the project as cwd, plus a short shell allowlist with no program-running commands |
+| never | anyone | a registered folder's own agent config (hooks, MCP servers: Claude runs with `--setting-sources user --strict-mcp-config`); auto-mutation of append-only records by core |
+
+**Honest fence:** the HTTP file API is fenced (`safe_path`, registered roots). Curator write
+tiers are **trusted, not fenced**: `rm`/`mv`/`cp`/`tee` take arbitrary paths, Claude's
+`acceptEdits` auto-approves ordinary filesystem commands, and Grok's write tier is
+`bypassPermissions` with open Bash (`fenced_writes: False`). Only an OS sandbox around the
+curator process would enforce the project root (`docs/briefs/19-enforce-the-fence.md`).
 
 Provider quirks for *write* tiers are single-sourced in `runtime.PROVIDER_CAPABILITIES`.
 Founding no longer depends on per-provider read-only shell modes.
 
 ## Founding state machine
 
-1. **Register** a folder (`kettle add` or in-app add) — seeds an empty desk + queue
-   “awaiting founding.”
-2. **Survey** — core maps the folder deterministically (no curator CLI).
-3. **Interview** — tool-less curator chat over that snapshot; user’s words beat the files.
-4. **Propose** — Finish drafts `.kettle/DESK-PROPOSAL.md` into the editor.
-5. **Approve proposal** — curator digests *user-edited* text and founds the desk
-   (charter, memory, first queue batch).
+1. **Register** a folder (`kettle add` or in-app add) — **founding sentence
+   required** (“what is this, and what do you want from a second reader here?”).
+   Seeds an empty desk + queue “awaiting founding.”
+2. **Survey** — core maps the folder deterministically (`survey.py`: tree, git
+   activity, mtimes). No curator CLI.
+3. **Interview** — tool-less **conversation** over that snapshot (one mission
+   question in prose; no confirmation card). User’s words beat the files.
+4. **Propose** — **Draft Proposal ✓** writes `.kettle/DESK-PROPOSAL.md` into the
+   editor. The user edits that file.
+5. **Found Desk** — curator digests *user-edited* text and writes the desk
+   (charter opens with **Your Words** quoting the founding sentence). A desk is
+   **founded** only when `PROJECT.md` exists **and** the queue has a content entry.
 6. **Sitting** — user works the queue: read, comment, approve/rework.
 7. **Sweep** — closes the sitting: apply rulings, assess diffs, restock queue, stage egress.
 
@@ -102,8 +113,12 @@ do not relabel user claims. CLI: `kettle lineage` / `kettle bind`. HTTP:
 
 - No API keys stored — ambient curator-CLI login only.
 - File fence on every route that touches the filesystem.
-- Rendered markdown is allowlist-sanitized (DOMPurify) before reading-view HTML.
+- Per-boot `X-Kettle-Token` (discovery file mode 0600) and Host/Origin gates on
+  the localhost HTTP surface. See [`docs/AUTH-TOKEN.md`](./docs/AUTH-TOKEN.md).
+- Rendered markdown is allowlist-sanitized (DOMPurify) before HTML (reading view
+  and agent chat).
 - Admin “fleet” diagnostics are opt-in (`settings.admin.fleet_panels`).
+- Remote and multi-user serving are out of scope.
 
 ## Layout of this package
 
@@ -113,14 +128,16 @@ runtime for server and CLI, with `static/` and `kits/` shipped as package data. 
 UI. Canonical install path: `~/.kettle-venv` (see [`INSTALL.md`](./INSTALL.md)).
 `kettle doctor` checks PATH and package-module importability.
 
-**Sitting UI** is only `kettle/static/index.html` (plus themes/fonts). Type hierarchy,
-buttons, and meta-pane rules: [`docs/UI.md`](./docs/UI.md). Desktop does not fork that file.
+**Sitting UI** is only `kettle/static/index.html` (plus themes/fonts). Structure:
+[`docs/UI-STRUCTURE.md`](./docs/UI-STRUCTURE.md). Type hierarchy, buttons, and
+meta-pane rules: [`docs/UI.md`](./docs/UI.md). Desktop does not fork that file.
 
 ## Further reading
 
 | Doc | Role |
 |-----|------|
 | [`README.md`](./README.md) | Product intro, glossary, quickstart |
+| [`docs/REVIEW.md`](./docs/REVIEW.md) | Briefing for a full-tree review of current form |
 | [`INSTALL.md`](./INSTALL.md) | Install, PATH, reinstall rule |
 | [`API.md`](./API.md) | HTTP contract for viewports |
 | [`ROADMAP.md`](./ROADMAP.md) | Phased plan and release ladder |

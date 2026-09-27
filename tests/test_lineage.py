@@ -17,6 +17,9 @@ import kettle.lineage as lineage
 class LineageTest(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp(prefix="lin-test-"))
+        saved_trust = lineage.TRUST_PATH
+        lineage.TRUST_PATH = self.tmp.parent / (self.tmp.name + "-trust.json")
+        self.addCleanup(lambda: setattr(lineage, "TRUST_PATH", saved_trust))
         (self.tmp / "a.md").write_text("alpha\n")
         (self.tmp / "b.md").write_text("beta\n")
         lineage.accept_baseline(self.tmp)        # baseline = current state
@@ -157,6 +160,55 @@ class LineageTest(unittest.TestCase):
         self.assertFalse((self.tmp / ".kettle").exists())
 
     # ---- optional git substrate ----
+
+    def test_git_snapshot_refuses_a_shipped_lineage_repo(self):
+        """A folder that ships .kettle/lineage.git with hooks or filters must not get
+        them run by Kettle's snapshot."""
+        import shutil as _shutil
+        import subprocess as _sp
+        if _shutil.which("git") is None:
+            self.skipTest("git not installed")
+        (self.tmp / "a.md").write_text("x\n")
+        gd = lineage._git_dir(self.tmp)
+        gd.parent.mkdir(parents=True, exist_ok=True)
+        _sp.run(["git", "init", "-q", "--bare", str(gd)], check=True)
+        marker = self.tmp / "HOOK-RAN"
+        (gd / "config").write_text((gd / "config").read_text()
+                                   + f'[filter "evil"]\n\tclean = touch {marker}\n')
+        lineage.git_snapshot(self.tmp, "lineage: test")
+        self.assertFalse(marker.exists())
+        # the shipped repo is set aside untouched, and a fresh trusted history replaces it
+        self.assertTrue(list(gd.parent.glob("lineage.git.untrusted-*")))
+        self.assertTrue(lineage._lineage_git_is_ours(gd))
+
+    def test_git_snapshot_ignores_a_forged_trust_marker_and_config_filters(self):
+        """Nothing inside the tree can vouch for a lineage repo; even a trusted repo has
+        its config rewritten before each run, so an injected filter never runs."""
+        import shutil as _shutil
+        if _shutil.which("git") is None:
+            self.skipTest("git not installed")
+        (self.tmp / "a.md").write_text("x\n")
+        self.assertIsNotNone(lineage.git_snapshot(self.tmp, "lineage: first"))
+        gd = lineage._git_dir(self.tmp)
+        marker = self.tmp / "FILTER-RAN"
+        (gd / "config").write_text((gd / "config").read_text()
+                                   + f'[core][filter "x"]\n\tclean = touch {marker}\n')
+        (gd / "info" / "attributes").write_text("* filter=x\n")
+        (self.tmp / "a.md").write_text("changed\n")
+        lineage.git_snapshot(self.tmp, "lineage: second")
+        self.assertFalse(marker.exists())
+
+    def test_working_record_does_not_follow_a_planted_symlink(self):
+        victim = self.tmp.parent / (self.tmp.name + "-victim-zshrc")
+        victim.write_text("# rc\n")
+        self.addCleanup(lambda: victim.unlink(missing_ok=True))
+        rec = lineage.record_path(self.tmp)
+        rec.parent.mkdir(parents=True, exist_ok=True)
+        rec.unlink(missing_ok=True)
+        rec.symlink_to(victim)
+        with self.assertRaises(lineage.UnsafeDeskPath):
+            lineage.log_edit(self.tmp, "agent", "agent", ["n$(touch x).md"])
+        self.assertEqual(victim.read_text(), "# rc\n")
 
     def test_git_snapshot_uses_separate_history_leaving_project_git_untouched(self):
         import shutil, subprocess

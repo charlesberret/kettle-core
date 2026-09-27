@@ -189,15 +189,25 @@ def _read_discovery(path: Path | None = None) -> tuple[dict | None, str | None]:
     return data, None
 
 
-def _ping_localhost(port: int, timeout: float = _DOCTOR_PING_TIMEOUT_S) -> dict | None:
-    """GET /api/ping on loopback only. Never binds; never probes port 4242."""
+def _ping_localhost(
+    port: int, token: str | None = None, timeout: float = _DOCTOR_PING_TIMEOUT_S,
+) -> dict | None:
+    """GET /api/ping on loopback only. Never binds; never probes port 4242.
+
+    /api/ping is under /api/ and so requires the per-boot ``X-Kettle-Token``
+    (server.py's ``check_request_guards``) — without it every live server answers 403
+    and doctor misreports a healthy server as "stale discovery?". *token* should come
+    straight from the already-parsed discovery record (``~/.cache/kettle/server.json``),
+    the same file that carries the port.
+    """
     if not isinstance(port, int) or port <= 0 or port == server.DEFAULT_PORT:
         # Refuse the conventional live port so tools never disturb a bookmarked desk.
         return None
+    req = urllib.request.Request(f"http://127.0.0.1:{port}/api/ping")
+    if token:
+        req.add_header(server.TOKEN_HEADER, token)
     try:
-        with urllib.request.urlopen(
-            f"http://127.0.0.1:{port}/api/ping", timeout=timeout,
-        ) as resp:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
             payload = json.loads(resp.read())
     except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError, ValueError):
         return None
@@ -274,9 +284,30 @@ def install_doctor_checks(
         except OSError:
             resolved = first
             is_canon = False
+
+        # A single `kettle` on PATH that resolves cleanly is fine even outside the
+        # canonical venv — README.md / CONTRIBUTING.md both walk contributors through a
+        # plain `.venv`. Only fail this row when PATH holds *multiple* installs that
+        # resolve to genuinely different targets (a real "which one runs?" hazard).
+        extras = hits[1:]
+        distinct_extra = False
+        if extras:
+            try:
+                first_key = str(resolved)
+            except OSError:
+                first_key = str(first)
+            for extra in extras:
+                try:
+                    extra_key = str(extra.resolve())
+                except OSError:
+                    extra_key = str(extra)
+                if extra_key != first_key:
+                    distinct_extra = True
+                    break
+
         rows.append({
             "name": "kettle-on-path",
-            "ok": is_canon,
+            "ok": not distinct_extra,
             "detail": (
                 f"resolves to {first}"
                 + (f" → {resolved}" if resolved != first else "")
@@ -284,14 +315,20 @@ def install_doctor_checks(
             ),
             "docs": "INSTALL.md § Canonical install",
         })
-        extras = hits[1:]
-        if extras:
+        if distinct_extra:
             rows.append({
                 "name": "kettle-path-extras",
                 "ok": False,
-                "detail": f"{len(extras)} extra on PATH: "
+                "detail": f"{len(extras)} extra on PATH resolving elsewhere: "
                           + ", ".join(str(p) for p in extras),
                 "docs": "INSTALL.md § PATH hygiene",
+            })
+        elif extras:
+            rows.append({
+                "name": "kettle-path-extras",
+                "ok": True,
+                "detail": f"{len(extras)} extra on PATH but resolve(s) to the same install",
+                "docs": "INSTALL.md § Canonical install",
             })
         else:
             rows.append({
@@ -628,7 +665,8 @@ def runtime_doctor_checks(
         return rows
 
     if ping is ...:
-        ping = _ping_localhost(port)
+        token = discovery.get("token") if isinstance(discovery, dict) else None
+        ping = _ping_localhost(port, token)
 
     if ping is None:
         rows.append({
@@ -733,15 +771,30 @@ def _default_name(path: str) -> str:
 def cmd_add(args) -> int:
     """Register a folder as a desk (shares the server's validation + fence gate)."""
     name = args.name or _default_name(args.path)
+    note = (args.note or "").strip()
+    if not note:
+        if not sys.stdin.isatty():
+            print("founding sentence required: pass --note \"in a sentence or two, what "
+                  "is this and what do you want from a second reader here?\"", file=sys.stderr)
+            return 2
+        print("In a sentence or two: what is this, and what do you want from a second "
+              "reader here?")
+        try:
+            note = input("> ").strip()
+        except EOFError:
+            note = ""
+        if not note:
+            print("founding sentence required — nothing registered.", file=sys.stderr)
+            return 2
     try:
-        proj = server.register_project(name, args.path)
+        proj = server.register_project(name, args.path, note=note)
     except ValueError as e:
         print(f"could not register: {e}", file=sys.stderr)
         return 2
     print(f"registered [{proj['id']}] {proj['name']}")
     print(f"  root: {server.project_root(proj)}")
     print(f"  desk: {server.desk_dir(proj)}  (queue seeded — awaiting founding)")
-    print(f"\nnext:  kettle chat  {proj['id']}     # talk to the curator, found the desk")
+    print(f"\nnext:  kettle found {proj['id']}     # the curator founds the desk from your files")
     print(f"       kettle queue {proj['id']}     # see what's been filed")
     return 0
 
@@ -798,23 +851,19 @@ def cmd_bind(args) -> int:
 
 def cmd_found(args) -> int:
     """Found the desk: digests DESK-PROPOSAL.md when present, else one-shot from files /
-    interview session. Mirrors the server's found()."""
+    interview session. Same prompt, guard and founded predicate as the server's found()."""
     proj = server.get_project(args.project)
-    sid = server.load_session(proj).get("session_id")
-    fields = dict(
-        name=proj["name"], root=str(server.project_root(proj)),
-        desk_dir=str(server.desk_dir(proj)), queue_path=str(server.queue_path(proj)),
-        proposal_path=str(server.proposal_path(proj)),
-    )
-    if server.proposal_on_disk(proj):
-        prompt = server.FOUND_PROMPT.format(**fields)
-    elif sid:
-        prompt = server.FOUND_LEGACY_PROMPT.format(**fields)
-    else:
-        prompt = server.BOOTSTRAP_PROMPT.format(
-            name=proj["name"], root=str(server.project_root(proj)),
-            desk_dir=str(server.desk_dir(proj)), queue_path=str(server.queue_path(proj)),
-        )
+    if server.desk_is_founded(proj):
+        print(f"{proj['id']} is already founded — use Refound in the sitting to start over.")
+        return 0
+    if server.mark_founded_if_filed(proj, founding_step=True):
+        print(f"{proj['id']}: charter and content entries already on disk — marked founded.")
+        return 0
+    cfg0 = server.current_curator()
+    sid = server.session_id_for_curator(proj=proj, model=cfg0.model_for("setup", args.model))
+    if not sid:
+        sid = server.session_id_for_curator(proj=proj, model=cfg0.model_for("chat", args.model))
+    prompt = server.build_found_prompt(proj, session_id=sid)
     # Resolve the provider from settings exactly as the HTTP routes do, and let
     # build_turn_cmd → runtime.build_argv single-source the sweep tier (write powers,
     # confined by cwd + acceptEdits) and the dialect flags — no Claude hardcoding.
@@ -824,7 +873,8 @@ def cmd_found(args) -> int:
         session_id=sid, name=server.session_name(proj), tools_tier="sweep",
     )
     rt = runtime.Runtime(server.agent_bin(), server.desk_dir(proj) / "sessions",
-                         provider=cfg.provider)
+                         provider=cfg.provider,
+                         idle_timeout=server.curator_idle_timeout_s())
     print(f"· founding {proj['id']} — the curator surveys {server.project_root(proj)} …\n")
     for ev in rt.spawn(prompt, cwd=str(server.project_root(proj)), session_id=sid,
                        role="found", cmd=cmd):
@@ -846,16 +896,21 @@ def cmd_found(args) -> int:
                 print(f"  [agent error: {ev['error']}]")
         elif t == "error":
             print(f"\n  [error: {ev['s']}]")
-    founded = server.mark_founded_if_filed(proj)
+    founded = server.mark_founded_if_filed(proj, founding_step=True)
+    if not founded:
+        server.ensure_proposal_entry(proj)
     n = len(server.load_queue(proj).get("entries", []))
     print(f"\n{'✓ founded' if founded else '✗ not yet founded'} — "
           f"{n} entr{'y' if n == 1 else 'ies'} in the queue.")
     if founded:
         print(f"next:  kettle queue {proj['id']}   ·   "
               f"kettle chat {proj['id']} <entry-id>")
-    else:
-        print("(no entries filed — run `kettle found` again, or read the survey above.)")
-    return 0
+        return 0
+    has_charter = (server.desk_dir(proj) / "PROJECT.md").is_file()
+    print("(a desk is founded when PROJECT.md exists and the queue has a content entry; "
+          + ("no content entries were filed" if has_charter else "PROJECT.md was not written")
+          + " — run `kettle found` again, or read the report above.)")
+    return 1
 
 
 def cmd_queue(args) -> int:
@@ -893,7 +948,8 @@ def cmd_refresh_briefs(args) -> int:
         session_id=sid, name=server.session_name(proj), tools_tier="sweep",
     )
     rt = runtime.Runtime(server.agent_bin(), server.desk_dir(proj) / "sessions",
-                         provider=cfg.provider)
+                         provider=cfg.provider,
+                         idle_timeout=server.curator_idle_timeout_s())
     print(f"· refreshing briefs on {proj['id']} — {n} entr"
           f"{'y' if n == 1 else 'ies'} …\n")
     for ev in rt.spawn(prompt, cwd=str(server.project_root(proj)), session_id=sid,
@@ -1001,7 +1057,8 @@ def cmd_chat(args) -> int:
     entry = server.find_entry(server.load_queue(proj), args.id) if args.id else None
     cfg = server.current_curator()
     rt = runtime.Runtime(server.agent_bin(), server.desk_dir(proj) / "sessions",
-                         provider=cfg.provider)
+                         provider=cfg.provider,
+                         idle_timeout=server.curator_idle_timeout_s())
     root = str(server.project_root(proj))
 
     where = f"file [{entry['id']}]" if entry else "project-level"
@@ -1167,7 +1224,11 @@ def cmd_migrate(args) -> int:
     return 0
 
 
-def main(argv=None) -> int:
+def build_parser() -> tuple[argparse.ArgumentParser, argparse._SubParsersAction]:
+    """Build the CLI's argparse tree. Returns (parser, subparsers-action) so callers
+    (`main`, `command_names`) share one definition of what a subcommand is — the
+    unified entrypoint's routing table is derived from `command_names()` rather than
+    kept as a second hand-written list that can drift (see kettle_main.py)."""
     ap = argparse.ArgumentParser(
         prog="kettle", description="CLI viewport over the desk.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -1226,9 +1287,17 @@ def main(argv=None) -> int:
     )
     mig.set_defaults(fn=cmd_migrate)
     a = sub.add_parser("add", help="register a folder as a desk")
-    a.add_argument("path"); a.add_argument("--name", default=None); a.set_defaults(fn=cmd_add)
+    a.add_argument("path"); a.add_argument("--name", default=None)
+    a.add_argument("--note", default=None,
+                   help="founding sentence — what this is and what you want from a second "
+                        "reader here (required; prompted if omitted on a TTY)")
+    a.set_defaults(fn=cmd_add)
     i = sub.add_parser("init", help="register the current folder as a desk")
-    i.add_argument("--name", default=None); i.set_defaults(fn=cmd_init)
+    i.add_argument("--name", default=None)
+    i.add_argument("--note", default=None,
+                   help="founding sentence — what this is and what you want from a second "
+                        "reader here (required; prompted if omitted on a TTY)")
+    i.set_defaults(fn=cmd_init)
     f = sub.add_parser("found", help="curator founds the desk (charter, memory, first queue)")
     f.add_argument("project"); f.add_argument("--model", default=None); f.set_defaults(fn=cmd_found)
     g = sub.add_parser("lineage", help="who edited what: agent / user / unattributed")
@@ -1277,6 +1346,18 @@ def main(argv=None) -> int:
     eg.set_defaults(fn=cmd_egress)
     es = sub.add_parser("egress-status", help="list staged desk egress memos")
     es.add_argument("project"); es.set_defaults(fn=cmd_egress_status)
+    return ap, sub
+
+
+def command_names() -> frozenset[str]:
+    """Every subcommand `main()` dispatches — single source for the unified entrypoint's
+    routing table (kettle_main.CLI_CMDS) so the two can't drift out of sync."""
+    _, sub = build_parser()
+    return frozenset(sub.choices.keys())
+
+
+def main(argv=None) -> int:
+    ap, _sub = build_parser()
     args = ap.parse_args(argv)
     if not getattr(args, "fn", None):   # bare `kettle` → show the menu, exit clean
         ap.print_help()

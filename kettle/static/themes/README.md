@@ -6,8 +6,12 @@ and the built-in CLI editor.
 | File | Role |
 |------|------|
 | `index.json` | Catalog: default id (`kettle`) + bundled theme ids |
-| `kettle.json` | **Marquee** product theme (shipped as default) |
+| `kettle.json` | **Marquee** product theme (shipped as default) — *generated* |
+| `kettle-<pack>.json` | Glaze family (cerise, nectar, artichaut, marseille, cobalt, graphite) — *generated* |
 | `*.json` | Other bundled packs (Nord, Solarized, …) |
+
+Generated files come from `~/cloud/sync/design/palettes/scripts/kettle-promote.py`;
+edit the palette there, not here (`docs/THEMES.md`).
 
 Custom user packs load from the user themes directory (see
 [`docs/THEMES.md`](../../docs/THEMES.md)), not from this folder.
@@ -32,6 +36,16 @@ Custom user packs load from the user themes directory (see
 - **ansi** — indices 0–15 (standard terminal palette order).
 - **iface / slots** — role → ANSI index (not raw hex), so packs stay portable.
 - **marquee** — only the product default should set `true`.
+
+Optional per-mode keys (the loader ignores what it does not know):
+
+- **ifaceOpacity / slotOpacity** — solid % per role, overriding the sitting defaults.
+- **resolved** — hex for `well`, `ground`, `panel`, `active`, `line`, `highlight`,
+  `muted`, `faint`: the shade steps and text tones the index map cannot carry,
+  for consumers that take hex (kettle-vscode). Not read by the desk.
+- **glaze** — `{hex, on_glaze, wash, accent}` on glaze packs, with a top-level
+  **voice** (`text` | `body`): the enamel, the text polarity it can carry,
+  and the wash a fixed-text selection falls back to.
 
 The shortcut file `../kettle-palette.json` mirrors the marquee pack for
 adapters that only need the brand palette (e.g. VS Code theme projection).
