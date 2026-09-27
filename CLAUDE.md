@@ -80,8 +80,10 @@ checked against the live tree before reuse.
 ## Conventions
 
 - Package layout under `kettle/` with bundled `static/` and `kits/`; install editable
-  (`pip install -e .`) for contributors, or from a wheel for a self-contained UI. Canonical
-  venv: `~/.kettle-venv` — see `INSTALL.md` and `kettle doctor`.
+  (`pip install -e .`) for contributors, or from a wheel for a self-contained UI. Or
+  build a standalone binary with `tools/build-binary.sh` (PyInstaller, build-time only).
+  Contributor venv is any `.venv`; `~/.kettle-venv` is conventional, not required —
+  see `INSTALL.md` and `kettle doctor`.
 - Architecture invariants hold: localhost-only, file-fence on every route, append-only records
   never auto-mutated, user's words beat the files, memory is distillation, every automated
   actor beats a healthbeacon. Full list in [`ARCHITECTURE.md`](./ARCHITECTURE.md).

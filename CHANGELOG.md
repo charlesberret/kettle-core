@@ -7,6 +7,17 @@ and Desk schema have their own integer contract versions.
 
 ### Added
 
+- **Standalone binary.** `tools/build-binary.sh` + `packaging/kettle.spec` build a single
+  `kettle` executable (~9 MB) with the sitting, kits and interpreter inside it: no Python on
+  the target machine. The script builds in a throwaway venv (PyInstaller stays a build-time
+  dependency; the package remains stdlib-only) and then proves the bundle — `doctor`, an
+  ephemeral-port boot, `/api/ping` with the discovery token, and `GET /` returning the real
+  sitting. A `standalone-binary` CI job runs it on Ubuntu and macOS. The same spec
+  builds a directory bundle (`KETTLE_BUNDLE=onedir`) for hosts that launch the core as
+  a sidecar, replacing kettle-desktop's own stale copy of the recipe.
+- `kettle --version` / `-V` prints the version plus the API and desk-schema contract
+  integers. The binary could not previously name itself.
+
 - `kettle migrate`: dry-run-first migration of `.setsweep/` desks → `.kettle/` (and the
   legacy Setsweep user registry when clearly applicable). Default is dry-run; pass
   `--apply` to write. Refuses split desks (both directories present) so a project never
@@ -24,6 +35,17 @@ and Desk schema have their own integer contract versions.
   `kettle --help`.
 
 ### Changed
+
+- **Install is no longer a venv convention.** `INSTALL.md` leads with `uv tool install` /
+  `pipx` for users, a standalone binary for machines without Python, and an editable
+  checkout for contributors. `~/.kettle-venv` is conventional, not required; the rule that
+  remains is one `kettle` on PATH.
+- `kettle doctor`'s install section is five rows instead of seven: `python-version`,
+  `package-version`, `kettle-on-path`, `kettle-path-extras`, and one `package-import` row
+  that replaces `py-modules-list` / `install-mapping` / `py-modules-importable`. It asks the
+  only question that matters — does the package import, and is its bundled `static/` +
+  `kits/` data there — and reports a standalone binary as such instead of describing an
+  interpreter the user never installed.
 
 - Founding interview no longer passes a bare `--allowedTools` to Claude Code
   CLI (current CLIs require a value and exit 1). Claude's interview uses

@@ -122,8 +122,17 @@ def _py_modules_from_pyproject(path: Path | None = None) -> list[str]:
     return list(PACKAGE_MODULES)
 
 
+def _is_frozen() -> bool:
+    """True when running from the standalone binary (PyInstaller bundle)."""
+    return bool(getattr(sys, "frozen", False))
+
+
 def _package_install_info(dist_name: str = DIST_NAME) -> tuple[str, str]:
     """Return (version, install_mode) for the installed distribution."""
+    if _is_frozen():
+        from kettle import __version__
+
+        return __version__, "standalone binary"
     try:
         dist = importlib.metadata.distribution(dist_name)
     except importlib.metadata.PackageNotFoundError:
@@ -256,15 +265,16 @@ def install_doctor_checks(
     rows.append({
         "name": "python-version",
         "ok": py_ok,
-        "detail": f"{sys.version.split()[0]} ({sys.executable})",
-        "docs": "INSTALL.md § Canonical install",
+        "detail": (f"{sys.version.split()[0]} (bundled in the binary)" if _is_frozen()
+                   else f"{sys.version.split()[0]} ({sys.executable})"),
+        "docs": "INSTALL.md § Install",
     })
     pkg_version, install_mode = _package_install_info()
     rows.append({
         "name": "package-version",
         "ok": install_mode != "not-installed",
         "detail": f"{DIST_NAME} {pkg_version} ({install_mode})",
-        "docs": "INSTALL.md § Canonical install",
+        "docs": "INSTALL.md § Install",
     })
 
     # --- which kettle ---
@@ -273,7 +283,7 @@ def install_doctor_checks(
             "name": "kettle-on-path",
             "ok": False,
             "detail": "no `kettle` on PATH",
-            "docs": "INSTALL.md § Canonical install",
+            "docs": "INSTALL.md § Install",
         })
     else:
         first = hits[0]
@@ -313,7 +323,7 @@ def install_doctor_checks(
                 + (f" → {resolved}" if resolved != first else "")
                 + ("" if is_canon else f" (canonical is {canonical})")
             ),
-            "docs": "INSTALL.md § Canonical install",
+            "docs": "INSTALL.md § Install",
         })
         if distinct_extra:
             rows.append({
@@ -328,84 +338,60 @@ def install_doctor_checks(
                 "name": "kettle-path-extras",
                 "ok": True,
                 "detail": f"{len(extras)} extra on PATH but resolve(s) to the same install",
-                "docs": "INSTALL.md § Canonical install",
+                "docs": "INSTALL.md § Install",
             })
         else:
             rows.append({
                 "name": "kettle-path-extras",
                 "ok": True,
                 "detail": "single kettle on PATH",
-                "docs": "INSTALL.md § Canonical install",
+                "docs": "INSTALL.md § Install",
             })
 
-    # --- package modules importable + kettle present in installed top_level ---
-    if not modules:
+    # --- can this install actually load the product? ---
+    #
+    # Three rows used to police the flat-module layout (py-modules-list,
+    # install-mapping, py-modules-importable): they checked pyproject's module list
+    # against top_level.txt and imported each name. After the package restructure the
+    # only question that matters is whether `kettle` imports and carries its data, and
+    # a standalone binary has no site-packages to inspect at all. One row, one answer.
+    if _is_frozen():
         rows.append({
-            "name": "py-modules-list",
+            "name": "package-import",
+            "ok": True,
+            "detail": f"bundled package, data at {server.APPDIR}",
+            "docs": "INSTALL.md § Install",
+        })
+        return rows
+
+    missing: list[str] = []
+    for name in modules:
+        try:
+            if importlib.util.find_spec(name) is None:
+                missing.append(name)
+        except (ImportError, ModuleNotFoundError, ValueError):
+            missing.append(name)
+
+    if missing:
+        rows.append({
+            "name": "package-import",
             "ok": False,
-            "detail": "could not resolve kettle.PACKAGE_MODULES",
+            "detail": "not importable (reinstall): " + ", ".join(missing),
             "docs": "INSTALL.md § Reinstall rule",
         })
         return rows
 
-    # Row name kept as py-modules-list for doctor output stability.
+    data_ok = server.STATIC.joinpath("index.html").is_file() and (
+        server.APPDIR / "kits" / "_base.md").is_file()
     rows.append({
-        "name": "py-modules-list",
-        "ok": True,
-        "detail": f"{len(modules)} modules from {modules_source}",
-        "docs": "kettle/__init__.py PACKAGE_MODULES",
+        "name": "package-import",
+        "ok": data_ok,
+        "detail": (f"{len(modules)} modules importable; data at {server.APPDIR}"
+                   if data_ok else
+                   f"{len(modules)} modules importable but package data is missing "
+                   f"under {server.APPDIR} (reinstall)"),
+        "docs": "INSTALL.md § Install",
     })
-
-    if top_level is None:
-        rows.append({
-            "name": "install-mapping",
-            "ok": False,
-            "detail": f"distribution {DIST_NAME!r} not installed in this interpreter "
-                      f"({sys.executable})",
-            "docs": "INSTALL.md § Reinstall rule",
-        })
-    else:
-        # Package layout: top_level.txt lists the distribution package name only.
-        if "kettle" not in top_level:
-            listed = ", ".join(top_level) if top_level else "(empty)"
-            rows.append({
-                "name": "install-mapping",
-                "ok": False,
-                "detail": "installed top_level missing 'kettle' (reinstall): " + listed,
-                "docs": "INSTALL.md § Reinstall rule",
-            })
-        else:
-            rows.append({
-                "name": "install-mapping",
-                "ok": True,
-                "detail": "installed top_level includes kettle package",
-                "docs": "INSTALL.md § Reinstall rule",
-            })
-
-    missing_import = []
-    for name in modules:
-        try:
-            spec = importlib.util.find_spec(name)
-        except (ImportError, ModuleNotFoundError, ValueError):
-            spec = None
-        if spec is None:
-            missing_import.append(name)
-    if missing_import:
-        rows.append({
-            "name": "py-modules-importable",
-            "ok": False,
-            "detail": "not importable (reinstall editable?): "
-                      + ", ".join(missing_import),
-            "docs": "INSTALL.md § Reinstall rule",
-        })
-    else:
-        rows.append({
-            "name": "py-modules-importable",
-            "ok": True,
-            "detail": f"all {len(modules)} package modules importable",
-            "docs": "INSTALL.md § Reinstall rule",
-        })
-
     return rows
 
 

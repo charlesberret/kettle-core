@@ -359,8 +359,8 @@ class CliTests(unittest.TestCase):
         self.assertNotIn("--name", cmd)
         self.assertIn("grok-4.5", cmd)
 
-    def test_install_doctor_flags_stale_mapping_and_path_extras(self):
-        """Brief 20: doctor catches PATH strays and top_level missing the kettle package."""
+    def test_install_doctor_flags_path_strays(self):
+        """Doctor catches two different installs answering to `kettle`."""
         canon = Path("/tmp/fake-venv/bin/kettle")
         rows = cli.install_doctor_checks(
             path_hits=[
@@ -368,7 +368,6 @@ class CliTests(unittest.TestCase):
                 Path("/Users/me/.local/bin/kettle"),
             ],
             package_modules=["kettle", "kettle.cli", "kettle.server"],
-            top_level=["cli", "server"],  # flat leftovers — missing kettle package
             canonical=canon,
         )
         by_name = {r["name"]: r for r in rows}
@@ -377,23 +376,46 @@ class CliTests(unittest.TestCase):
         self.assertFalse(by_name["kettle-on-path"]["ok"])
         self.assertFalse(by_name["kettle-path-extras"]["ok"])
         self.assertIn("extra on PATH", by_name["kettle-path-extras"]["detail"])
-        self.assertFalse(by_name["install-mapping"]["ok"])
-        self.assertIn("kettle", by_name["install-mapping"]["detail"])
-        # Real modules remain importable in this process even when top_level is stale.
-        self.assertTrue(by_name["py-modules-importable"]["ok"])
 
-    def test_install_doctor_accepts_package_top_level(self):
-        """Wheel/editable installs list only the kettle package in top_level.txt."""
+    def test_install_doctor_asks_one_question_about_the_package(self):
+        """The three module-mapping rows collapsed into one: does it import, and is
+        its data there? A stale top_level.txt is not a finding if the product loads."""
         rows = cli.install_doctor_checks(
             path_hits=[cli.CANONICAL_KETTLE],
             package_modules=["kettle", "kettle.cli", "kettle.server"],
-            top_level=["kettle"],
+            top_level=["cli", "server"],  # flat leftovers; irrelevant now
             canonical=cli.CANONICAL_KETTLE,
         )
         by_name = {r["name"]: r for r in rows}
-        self.assertTrue(by_name["py-modules-list"]["ok"])
-        self.assertIn("caller", by_name["py-modules-list"]["detail"])
-        self.assertTrue(by_name["install-mapping"]["ok"])
+        self.assertTrue(by_name["package-import"]["ok"])
+        self.assertIn("data at", by_name["package-import"]["detail"])
+        for retired in ("py-modules-list", "install-mapping", "py-modules-importable"):
+            self.assertNotIn(retired, by_name)
+
+    def test_install_doctor_flags_a_package_that_cannot_import(self):
+        rows = cli.install_doctor_checks(
+            path_hits=[cli.CANONICAL_KETTLE],
+            package_modules=["kettle", "kettle.no_such_module"],
+            canonical=cli.CANONICAL_KETTLE,
+        )
+        by_name = {r["name"]: r for r in rows}
+        self.assertFalse(by_name["package-import"]["ok"])
+        self.assertIn("kettle.no_such_module", by_name["package-import"]["detail"])
+
+    def test_install_doctor_in_the_standalone_binary(self):
+        """The binary has no site-packages to inspect: doctor says so instead of
+        reporting an interpreter the user never installed."""
+        with mock.patch.object(cli, "_is_frozen", return_value=True):
+            rows = cli.install_doctor_checks(
+                path_hits=[Path("/usr/local/bin/kettle")],
+                package_modules=["kettle"],
+                canonical=cli.CANONICAL_KETTLE,
+            )
+        by_name = {r["name"]: r for r in rows}
+        self.assertTrue(by_name["package-import"]["ok"])
+        self.assertIn("bundled package", by_name["package-import"]["detail"])
+        self.assertIn("bundled in the binary", by_name["python-version"]["detail"])
+        self.assertIn("standalone binary", by_name["package-version"]["detail"])
 
     def test_install_doctor_single_noncanonical_kettle_is_ok(self):
         """README.md / CONTRIBUTING.md both walk a contributor through a plain `.venv`,
@@ -430,13 +452,12 @@ class CliTests(unittest.TestCase):
         self.assertTrue(by_name["kettle-on-path"]["ok"])
         self.assertTrue(by_name["kettle-path-extras"]["ok"])
 
-    def test_install_doctor_green_when_canonical_and_mapped(self):
+    def test_install_doctor_green_when_one_install_loads(self):
         modules = cli._package_modules()
         self.assertIn("kettle.egress", modules)
         rows = cli.install_doctor_checks(
             path_hits=[cli.CANONICAL_KETTLE],
             package_modules=modules,
-            top_level=["kettle"],
             canonical=cli.CANONICAL_KETTLE,
         )
         self.assertTrue(all(r["ok"] for r in rows), rows)
@@ -445,7 +466,7 @@ class CliTests(unittest.TestCase):
         self.assertIn(code, (0, 1))
         self.assertEqual(err, "")
         self.assertIn("kettle-on-path", out)
-        self.assertIn("py-modules-importable", out)
+        self.assertIn("package-import", out)
         self.assertIn("provider-cli", out)
         self.assertIn("registry", out)
         self.assertIn("desk-integrity", out)

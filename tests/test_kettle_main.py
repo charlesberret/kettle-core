@@ -2,6 +2,7 @@
 """Routing tests for the installed `kettle` entrypoint."""
 
 import io
+import sys
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from unittest import mock
@@ -77,6 +78,44 @@ class EntrypointTest(unittest.TestCase):
             code = kettle_main.main(["mystery"])
         self.assertEqual(code, 2)
         self.assertIn("unknown command", err.getvalue())
+
+
+class ServerFlagRouting(unittest.TestCase):
+    """A sidecar host (kettle-desktop) launches `kettle --port <n> --no-open` with no
+    subcommand; the standalone binary is launched the same way. Leading flags belong
+    to the server, not to the unknown-command path."""
+
+    def _routes_to_server(self, argv):
+        called = {}
+
+        def fake_main():
+            called["server"] = True
+            return 0
+
+        buf = io.StringIO()
+        with mock.patch.object(server, "main", fake_main), redirect_stdout(buf), \
+                redirect_stderr(buf):
+            code = kettle_main.main(argv)
+        return code, called.get("server", False)
+
+    def test_port_and_no_open_reach_the_server(self):
+        for argv in (["--port", "0"], ["--no-open"], ["--web", "--port", "0"], []):
+            with self.subTest(argv=argv):
+                code, hit = self._routes_to_server(argv)
+                self.assertEqual(code, 0)
+                self.assertTrue(hit, f"{argv} did not reach server.main()")
+
+    def test_version_and_help_do_not_start_a_server(self):
+        for argv in (["--version"], ["-V"], ["--help"]):
+            with self.subTest(argv=argv):
+                code, hit = self._routes_to_server(argv)
+                self.assertEqual(code, 0)
+                self.assertFalse(hit, f"{argv} started a server")
+
+    def test_an_unknown_word_is_still_an_error(self):
+        code, hit = self._routes_to_server(["definitely-not-a-command"])
+        self.assertEqual(code, 2)
+        self.assertFalse(hit)
 
 
 if __name__ == "__main__":
