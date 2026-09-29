@@ -98,6 +98,15 @@ class Base(unittest.TestCase):
 
 class HelperTests(Base):
 
+    def test_new_desk_file_is_owner_only(self):
+        path = self.tmp / "fresh-desk.json"
+        server.atomic_write(path, "{}")
+        mode = path.stat().st_mode & 0o777
+        self.assertEqual(mode, 0o600)
+        log = self.tmp / "comments.log"
+        server.append_line(log, "note\n")
+        self.assertEqual(log.stat().st_mode & 0o777, 0o600)
+
     def test_get_project_requires_id(self):
         with self.assertRaises(KeyError) as cm:
             server.get_project(None)

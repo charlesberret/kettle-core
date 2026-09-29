@@ -41,7 +41,7 @@
     /* Add project */
     addProjectTitle: "Add Project",
     addProjectNote:
-      "Name a folder under your home. The interview starts in the agent pane — finish ✓ drafts a proposal you edit, then use Found Desk.",
+      "Name a folder under your home. The interview starts in the agent pane — Draft Proposal ✓ drafts a proposal you edit, then use Found Desk.",
     addProjectStart: "Start Interview",
   };
   root.KETTLE_UI_COPY = COPY;

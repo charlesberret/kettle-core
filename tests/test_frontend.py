@@ -218,7 +218,7 @@ class ViewportRitualRegressionBar(unittest.TestCase):
         stream = function_source(html, "pipeStream")
         self.assertIn("fillAgentMarkdown", stream)
         self.assertRegex(html, r"\.msg\.agent\.md\s*\{")
-        self.assertIn("ui-2026-09-15g", html)
+        self.assertIn("ui-2026-09-27a", html)
 
     def test_markdown_is_sanitized_as_a_string_before_it_reaches_the_dom(self):
         """Assigning marked output to innerHTML and cleaning the node afterwards is

@@ -5,6 +5,12 @@ and Desk schema have their own integer contract versions.
 
 ## Unreleased
 
+### Changed
+
+- Add-project copy says **Draft Proposal ✓**, not the retired “finish ✓”.
+- Agent chat paints GFM while the reply is still streaming.
+- New desk files and lineage records are created mode `0600`. Existing files keep their bits.
+
 ### Added
 
 - **Standalone binary.** `tools/build-binary.sh` + `packaging/kettle.spec` build a single

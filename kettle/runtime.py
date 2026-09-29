@@ -189,6 +189,9 @@ def _normalize_event(ev: dict, meter: UsageMeter,
         return
 
     # --- Grok Build CLI (streaming-json): token deltas + terminal `end` ---
+    # Verified live 2026-09-27 (`grok -p … --output-format streaming-json`):
+    # thought/data, text/data, usage, end{stopReason,sessionId}. `usage` is
+    # ignored here; occupancy is taken from `end`.
     if t == "text" and "data" in ev:
         data = ev.get("data")
         if data:
