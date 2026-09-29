@@ -32,6 +32,8 @@ kettle --web              # the sitting in a browser
 Two installs answering to the same name is the only install problem that actually bites.
 `kettle doctor` fails when `which -a kettle` finds installs that resolve to genuinely
 different targets; a single install anywhere is fine, canonical venv or not.
+Invoking the checkout binary directly (`.venv/bin/kettle doctor`) is also fine
+when nothing named `kettle` is on PATH. That is the clone README's first check.
 
 ```sh
 which -a kettle    # expect one path (or several symlinks to the same file)

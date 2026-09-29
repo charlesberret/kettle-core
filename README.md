@@ -37,6 +37,10 @@ python3 -m venv .venv
 .venv/bin/kettle --web
 ```
 
+`doctor` accepts that `.venv/bin/kettle` even when `kettle` is not on PATH.
+Activate the venv before the bare commands below (`source .venv/bin/activate`),
+or keep the `.venv/bin/` prefix.
+
 Open [http://127.0.0.1:4242](http://127.0.0.1:4242), add a project folder (a
 founding sentence is required), and complete the founding interview. You can
 also stay in the terminal:
