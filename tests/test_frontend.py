@@ -303,6 +303,93 @@ class ViewportRitualRegressionBar(unittest.TestCase):
 
 
 @unittest.skipIf(NODE is None, "node not on PATH — frontend syntax gate skipped")
+class UiDebugMode(unittest.TestCase):
+    """The copy inspector: off by default, and it never writes into the app."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.html = INDEX.read_text(encoding="utf-8")
+
+    def function(self, name):
+        return function_source(self.html, name)
+
+    def test_every_debug_rule_is_gated_behind_the_body_class(self):
+        """Debug CSS must be inert in a normal sitting, not merely unused."""
+        loose = []
+        for line in self.html.splitlines():
+            t = line.strip()
+            if not t or t.startswith(("/*", "*", "//")):
+                continue
+            if ("uic-hot" in t or "uic-over" in t or "uidebug-ids" in t) and "{" in t:
+                if "body.uidebug" not in t:
+                    loose.append(t[:90])
+        self.assertEqual([], loose, f"debug rules outside body.uidebug: {loose}")
+
+    def test_debug_mode_is_off_unless_asked_for(self):
+        """No persisted flag and no ?uidebug=1 means a normal sitting."""
+        src = self.html
+        self.assertNotIn("classList.add('uidebug')", src)  # only setUiDebug toggles it
+        self.assertIn("q.get('uidebug') === '1'", src)
+        self.assertIn("localStorage.getItem('kettleUiDebug')", src)
+        # it is a per-viewer developer affordance, so it must not reach desk state
+        self.assertNotIn("saveSettings({uiDebug", src)
+
+    def test_edits_go_to_the_api_never_to_package_data(self):
+        save = self.function("uidSave")
+        self.assertIn("jpost('/api/ui-copy'", save)
+        for forbidden in ("static/", "index.html", "ui-copy.json"):
+            self.assertNotIn(forbidden, save)
+
+    def test_no_drag_to_resize(self):
+        """Size and placement are retuned through CSS tokens, not by dragging.
+
+        A drag handle would imply the sitting can express any geometry; it cannot,
+        and the value lives in a token either way.
+        """
+        for fn in ("uidRenderBadge", "uidHover", "uidClick"):
+            src = self.function(fn)
+            self.assertNotIn("mousedown", src)
+            self.assertNotIn("left_click_drag", src)
+            self.assertNotIn("resize", src)
+
+    def test_plain_clicks_still_reach_the_sitting(self):
+        """Inspecting a state you must click into requires the sitting to keep working."""
+        click = self.function("uidClick")
+        self.assertIn("if(!UID.on || !e.altKey) return;", click)
+
+    def test_token_values_are_set_as_custom_properties_only(self):
+        apply_ = self.function("applyUiTokens")
+        self.assertIn("root.style.setProperty(name", apply_)
+        self.assertIn("/^--[a-z][a-z0-9-]*$/.test(name)", apply_)
+        # never a stylesheet insertion, which would accept arbitrary declarations
+        self.assertNotIn("insertRule", apply_)
+        self.assertNotIn("innerHTML", apply_)
+
+    def test_copy_is_painted_as_text_not_markup(self):
+        """A catalog string is data. Rendering it as HTML would make copy a script sink."""
+        apply_ = self.function("applyUiCopy")
+        self.assertIn("el.textContent = v", apply_)
+        self.assertNotIn("innerHTML", apply_)
+        badge = self.function("uidRenderBadge")
+        self.assertIn("textContent", badge)
+
+    def test_wrapper_elements_are_skipped_not_blanked(self):
+        """textContent on a tagged wrapper would delete its children."""
+        apply_ = self.function("applyUiCopy")
+        self.assertIn("if(el.children.length)", apply_)
+        self.assertIn("UIC_SKIPPED.push", apply_)
+
+    def test_copy_lands_even_if_init_fails(self):
+        """init() can die on a bad project; the sitting must still read correctly."""
+        self.assertIn("applyUiCopy();\napplyUiTokens();", self.html)
+
+    def test_the_inspector_offers_a_pasteable_reference(self):
+        """The point of the overlay: a line that names the key and the file."""
+        badge = self.function("uidRenderBadge")
+        self.assertIn("UID.ref = 'kettle ui: '", badge)
+        self.assertIn("file=", badge)
+
+
 class FrontendSyntaxGate(unittest.TestCase):
 
     def test_index_html_has_inline_scripts(self):

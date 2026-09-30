@@ -14,6 +14,11 @@ Two override kinds, and the difference matters:
   element exists. It is a staging area, not a destination; `promote_plan()` turns
   one into a real key so it can join the contract.
 
+A third section, **tokens**, holds CSS custom properties (`--pane-gap` and friends).
+Those are size and placement, not copy — they live here because they are the same
+concern (tweaks the user made to their own sitting, kept out of package data), and
+the sitting applies them at boot from the same payload.
+
 Nothing here writes to `static/`. Package data is read-only in a wheel and lives in
 a vanishing temp dir inside the standalone binary, and `index.html` is run-critical
 (CLAUDE.md). User edits land in `ui-copy-overrides.json` beside `settings.json`.
@@ -27,7 +32,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 CATALOG_NAME = "ui-copy.json"
-OVERRIDES_NAME = "ui-copy-overrides.json"
+OVERRIDES_NAME = "sitting-overrides.json"
 
 # A key is an identifier so it can be a property name in every viewport's language.
 KEY_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,79}$")
@@ -35,6 +40,14 @@ KEY_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,79}$")
 # else. An override is a label change, not a licence to restyle the document, and a
 # broad selector ("*", "body") would let one stray edit blank the whole sitting.
 SELECTOR_RE = re.compile(r"^#[A-Za-z][A-Za-z0-9_-]{0,63}$")
+# A CSS custom property name, nothing else: an override retunes a token the
+# stylesheet already reads, it does not add declarations.
+TOKEN_RE = re.compile(r"^--[a-z][a-z0-9-]{0,63}$")
+# A token value must be inert. `;` or `}` would end the declaration and start a new
+# one; url() would make the sitting fetch something; var() could recurse. None of
+# those is needed to change a length, a color, or a font stack.
+TOKEN_VALUE_BAD = re.compile(r"[;{}<>\\]|url\(|var\(|@import|expression\(", re.I)
+MAX_TOKEN_VALUE = 120
 # Attributes an override may set. All are rendered as text by the browser — none can
 # execute, and none can move an element somewhere it was not already.
 FIELDS = ("text", "short", "title", "placeholder", "aria-label")
@@ -77,7 +90,7 @@ def load_catalog(static_dir: Path) -> dict:
 
 def load_overrides(path: Path | None) -> dict:
     """Read user overrides. Corrupt or absent means "no overrides", never an error."""
-    empty: dict[str, dict] = {"keys": {}, "selectors": {}}
+    empty: dict[str, dict] = {"keys": {}, "selectors": {}, "tokens": {}}
     if not path:
         return empty
     try:
@@ -88,10 +101,19 @@ def load_overrides(path: Path | None) -> dict:
         return empty
     keys = raw.get("keys") if isinstance(raw.get("keys"), dict) else {}
     sels = raw.get("selectors") if isinstance(raw.get("selectors"), dict) else {}
+    toks = raw.get("tokens") if isinstance(raw.get("tokens"), dict) else {}
     return {
         "keys": {k: v for k, v in keys.items() if KEY_RE.match(str(k)) and isinstance(v, dict)},
         "selectors": {
             s: v for s, v in sels.items() if SELECTOR_RE.match(str(s)) and isinstance(v, dict)
+        },
+        "tokens": {
+            t: v
+            for t, v in toks.items()
+            if TOKEN_RE.match(str(t))
+            and isinstance(v, str)
+            and len(v) <= MAX_TOKEN_VALUE
+            and not TOKEN_VALUE_BAD.search(v)
         },
     }
 
@@ -117,6 +139,7 @@ def payload(static_dir: Path, overrides_path: Path | None = None) -> dict:
         "_schema": catalog.get("_schema", 1),
         "keys": keys,
         "selectors": over["selectors"],
+        "tokens": over["tokens"],
         "overridden": sorted(over["keys"]),
     }
 
@@ -147,7 +170,26 @@ def validate_patch(patch: Any) -> dict:
     """
     if not isinstance(patch, dict):
         raise CopyError("patch must be an object")
-    out: dict[str, dict] = {"keys": {}, "selectors": {}}
+    out: dict[str, Any] = {"keys": {}, "selectors": {}, "tokens": {}}
+    tokens = patch.get("tokens", {})
+    if tokens:
+        if not isinstance(tokens, dict):
+            raise CopyError("tokens must be an object")
+        for name, value in tokens.items():
+            if not TOKEN_RE.match(str(name)):
+                raise CopyError(f"not a CSS custom property: {name!r}")
+            if value is None:
+                out["tokens"][str(name)] = None
+                continue
+            if not isinstance(value, str):
+                raise CopyError(f"{name!r} must be a string")
+            if len(value) > MAX_TOKEN_VALUE:
+                raise CopyError(f"{name!r} exceeds {MAX_TOKEN_VALUE} characters")
+            if TOKEN_VALUE_BAD.search(value):
+                raise CopyError(
+                    f"{name!r}: a token value may not contain ; {{ }} url() or var()"
+                )
+            out["tokens"][str(name)] = value
     for kind, pattern in (("keys", KEY_RE), ("selectors", SELECTOR_RE)):
         section = patch.get(kind, {})
         if section in (None, {}):
@@ -177,7 +219,7 @@ def validate_patch(patch: Any) -> dict:
                     raise CopyError(f"{name!r}.{field} exceeds {MAX_TEXT} characters")
                 clean[field] = value
             out[kind][str(name)] = clean
-    if not out["keys"] and not out["selectors"]:
+    if not out["keys"] and not out["selectors"] and not out["tokens"]:
         raise CopyError("patch changes nothing")
     return out
 
@@ -191,7 +233,13 @@ def apply_patch(current: dict, patch: dict) -> dict:
     merged = {
         "keys": dict(current.get("keys") or {}),
         "selectors": dict(current.get("selectors") or {}),
+        "tokens": dict(current.get("tokens") or {}),
     }
+    for name, value in (patch.get("tokens") or {}).items():
+        if value is None or value == "":
+            merged["tokens"].pop(name, None)
+        else:
+            merged["tokens"][name] = value
     for kind in ("keys", "selectors"):
         for name, fields in (patch.get(kind) or {}).items():
             if fields is None:
@@ -207,7 +255,7 @@ def apply_patch(current: dict, patch: dict) -> dict:
                 merged[kind][name] = entry
             else:
                 merged[kind].pop(name, None)
-    total = len(merged["keys"]) + len(merged["selectors"])
+    total = len(merged["keys"]) + len(merged["selectors"]) + len(merged["tokens"])
     if total > MAX_ENTRIES:
         raise CopyError(f"too many overrides ({total} > {MAX_ENTRIES})")
     return merged
@@ -217,12 +265,15 @@ def write_overrides(path: Path, doc: dict, writer: Callable[[Path, str], None]) 
     """Persist overrides through the caller's atomic writer (server owns the fence)."""
     body = {
         "_note": (
-            "User overrides for sitting UI copy — written by the sitting's UI debug "
-            "mode. `keys` reach every viewport; `selectors` are local to the web "
-            "sitting until promoted. Delete an entry to restore the shipped string."
+            "Your tweaks to this sitting, written by its UI debug mode. `keys` are "
+            "catalog strings and reach every viewport; `selectors` relabel one element "
+            "of the web sitting and stay local until promoted; `tokens` retune CSS "
+            "custom properties the stylesheet already reads. Delete an entry — or the "
+            "whole file — to go back to the shipped sitting."
         ),
         "keys": doc.get("keys") or {},
         "selectors": doc.get("selectors") or {},
+        "tokens": doc.get("tokens") or {},
     }
     writer(Path(path), json.dumps(body, indent=2, ensure_ascii=False) + "\n")
     return body
@@ -267,6 +318,13 @@ def promote_plan(static_dir: Path, overrides_path: Path | None = None) -> dict:
         "catalog": str(catalog_path(static_dir)),
         "ready": ready,
         "needs_key": needs_key,
+        # Tokens are not copy and have no catalog to land in: promoting one means
+        # changing its default in index.html's :root (or the theme pack it comes
+        # from), which is a design decision, not a string edit.
+        "tokens": [
+            {"token": t, "to": v, "work": "change the default on :root in index.html"}
+            for t, v in sorted(over["tokens"].items())
+        ],
     }
 
 
@@ -303,6 +361,7 @@ def render_js(pay: dict) -> str:
         f"  root.KETTLE_UI_COPY_META = {_js_literal(meta)};\n"
         f"  root.KETTLE_UI_COPY_SELECTORS = {_js_literal(pay.get('selectors') or {})};\n"
         f"  root.KETTLE_UI_COPY_OVERRIDDEN = {_js_literal(pay.get('overridden') or [])};\n"
+        f"  root.KETTLE_UI_TOKENS = {_js_literal(pay.get('tokens') or {})};\n"
         "  if (typeof module !== \"undefined\" && module.exports) module.exports = root.KETTLE_UI_COPY;\n"
         '})(typeof globalThis !== "undefined" ? globalThis : this);\n'
     )

@@ -30,6 +30,7 @@ from pathlib import Path
 import kettle.server as server
 import kettle.kettle_contract as kettle_contract
 import kettle.sweepkit as sweepkit
+import kettle.uicopy as uicopy
 from unittest import mock
 
 
@@ -78,7 +79,7 @@ class Base(unittest.TestCase):
         server.SETTINGS_PATH = self.tmp / "settings.json"
         # Redirected for every test, not just the copy ones: a stray POST /api/ui-copy
         # must never rewrite the developer's own sitting copy.
-        server.UI_COPY_OVERRIDES = self.tmp / "ui-copy-overrides.json"
+        server.UI_COPY_OVERRIDES = self.tmp / uicopy.OVERRIDES_NAME
         server.BASE_ALLOWED_ROOTS = [self.tmp]
         server.HOME = self.tmp  # so add_project's under-HOME gate accepts temp roots
         server.RUNTIME_PATH = self.tmp / "cache" / "server.json"

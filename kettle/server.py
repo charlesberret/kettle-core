@@ -130,9 +130,10 @@ def resolve_projects_path() -> Path:
 
 PROJECTS_PATH = resolve_projects_path()
 SETTINGS_PATH = PROJECTS_PATH.parent / "settings.json"
-# Sitting copy the user retyped in UI debug mode. Beside settings.json because
-# package data (static/) is read-only in a wheel and a temp dir in the binary.
-UI_COPY_OVERRIDES = PROJECTS_PATH.parent / "ui-copy-overrides.json"
+# Sitting tweaks the user made in UI debug mode — retyped copy and retuned CSS
+# tokens. Beside settings.json because package data (static/) is read-only in a
+# wheel and a vanishing temp dir in the standalone binary.
+UI_COPY_OVERRIDES = PROJECTS_PATH.parent / uicopy.OVERRIDES_NAME
 # Legacy constant — prefer current_curator().resolved_command() for new code.
 CLAUDE = shutil.which("claude") or "claude"
 _CLAUDE_AT_IMPORT = CLAUDE  # tests replace CLAUDE with a stub; agent_bin honors that
