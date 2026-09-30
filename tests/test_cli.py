@@ -535,7 +535,23 @@ class CliTests(unittest.TestCase):
         by_name = {r["name"]: r for r in rows}
         self.assertTrue(by_name["desk-integrity"]["ok"])
         self.assertTrue(by_name["legacy-migration"]["ok"])
+        self.assertTrue(by_name["legacy-migration"]["hint"])
         self.assertIn(".setsweep", by_name["legacy-migration"]["detail"])
+        hint_text, hint_code = cli.format_doctor(rows)
+        self.assertEqual(hint_code, 0)
+        self.assertIn("hint  legacy-migration", hint_text)
+        self.assertIn("→ INSTALL.md", hint_text)
+        self.assertNotIn("all checks green", hint_text)
+        clean = [dict(r) for r in rows if r["name"] != "legacy-migration"]
+        clean.append({
+            "name": "legacy-migration",
+            "ok": True,
+            "detail": "no legacy .setsweep/ desks in registry",
+        })
+        clean_text, clean_code = cli.format_doctor(clean)
+        self.assertEqual(clean_code, 0)
+        self.assertIn("ok    legacy-migration", clean_text)
+        self.assertIn("all checks green", clean_text)
 
         split_root = self.tmp / "split-desk"
         split_root.mkdir()
