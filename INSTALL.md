@@ -192,7 +192,9 @@ Rules:
   Kettle user path. If the Kettle registry already exists, the registry step is skipped.
 
 `kettle doctor` reports legacy desks and split risk; its docs pointer names this
-section and `kettle migrate --help`.
+section and `kettle migrate --help`. A setsweep-only desk is a `hint` and the
+command still exits 0, because that desk is the supported dual-read install.
+Both directories at once is `FAIL`.
 
 **Sync tip:** exclude `.kettle/runtime/` from file-sync tools so the queue/chatlog/snapshots
 do not race. Durable charter/memory files under `.kettle/` may sync normally. See
