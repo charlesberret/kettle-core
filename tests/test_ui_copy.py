@@ -61,13 +61,28 @@ def tagged_sites() -> list[tuple[str, str, str | None]]:
     return out
 
 
-def keys_from_js(text: str) -> dict[str, str]:
-    """Parse simple key: "value" pairs (not a full JS parser) — for the VS Code mirror."""
+def keys_from_ts(text: str) -> dict[str, str]:
+    """The generated mirror's UI_COPY map (not a full TS parser).
+
+    Two traps, both of which bit this test when it was written:
+
+    * `UI_COPY_SHORT` declares the *same key names* with terse values, so parsing
+      the whole file merges the two maps and every key with a short variant
+      compares unequal. Slice the UI_COPY block first.
+    * The values are emitted by `JSON.stringify`, so they are JSON string literals.
+      Decoding them with `unicode_escape` turns every em dash into mojibake
+      (`\xe2\x80\x94`) and reports a mismatch that is not there. Parse them as JSON.
+    """
+    start = text.find("export const UI_COPY = {")
+    if start < 0:
+        return {}
+    end = text.find("} as const;", start)
+    block = text[start:end if end > 0 else len(text)]
     out: dict[str, str] = {}
     for m in re.finditer(
-        r'^\s*"?([a-zA-Z_][a-zA-Z0-9_]*)"?\s*:\s*"((?:\\.|[^"\\])*)"', text, re.M
+        r'^\s*"?([a-zA-Z_][a-zA-Z0-9_]*)"?\s*:\s*("(?:\\.|[^"\\])*")', block, re.M
     ):
-        out[m.group(1)] = m.group(2).encode("utf-8").decode("unicode_escape")
+        out[m.group(1)] = json.loads(m.group(2))
     return out
 
 
@@ -259,7 +274,7 @@ class VsCodeMirror(unittest.TestCase):
             k: v["text"]
             for k, v in json.loads(CATALOG.read_text(encoding="utf-8"))["keys"].items()
         }
-        mirror = keys_from_js(VSCODE_TS.read_text(encoding="utf-8"))
+        mirror = keys_from_ts(VSCODE_TS.read_text(encoding="utf-8"))
         missing = sorted(set(core) - set(mirror))
         self.assertEqual(
             [], missing, f"run `npm run sync-ui-copy` in kettle-vscode: {missing}"

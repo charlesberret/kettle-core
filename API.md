@@ -48,6 +48,67 @@ still declare which values they support and report skew clearly instead of
 guessing at an unfamiliar route or file shape. A move to `1` is the explicit
 compatibility promise.
 
+### `GET /api/ui-copy`
+
+The sitting's copy catalog, merged from `static/ui-copy.json` (shipped) and the
+user's `sitting-overrides.json`. Every viewport reads this rather than hardcoding
+its own wording — see `docs/UI.md` § Shared UI copy.
+
+```json
+{
+  "_schema": 1,
+  "keys": {
+    "sweepLabel": {
+      "text": "Sweep",
+      "short": "sweep",
+      "note": "Ritual button: close the sitting."
+    }
+  },
+  "selectors": {"#addgo": {"text": "go"}},
+  "tokens": {"--btn-radius": "5px"},
+  "overridden": ["sweepLabel"]
+}
+```
+
+`text` is the string; `short` is an optional terse variant for a narrow surface
+(a TUI status bar) and means the same thing in fewer words; `note` says where the
+string appears, so a reader holding only the key can act on it. `overridden` names
+the keys the user has changed. `selectors` and `tokens` apply to the web sitting
+only — a selector relabels one element whose text is still hardcoded, and a token
+retunes a CSS custom property.
+
+The same catalog is served as JavaScript at `GET /ui-copy.js`
+(`window.KETTLE_UI_COPY`), rendered from the JSON per request so no generated file
+can drift from it.
+
+### `POST /api/ui-copy`
+
+Persist an override from the sitting's UI debug mode. Body carries any of `keys`,
+`selectors`, `tokens`; a `null` entry (or `""` for one field) removes that
+override and restores the shipped value. Returns the merged catalog.
+
+```json
+{"keys": {"sweepLabel": {"text": "Close Sitting"}}, "tokens": {"--btn-radius": "2px"}}
+```
+
+Writes land in `sitting-overrides.json` beside `settings.json`. Package data under
+`static/` is never modified — it is read-only in a wheel and a temporary
+extraction inside the standalone binary.
+
+Refused with 400: a key that is not an identifier, a selector broader than a
+single `#id`, a field outside `text`/`short`/`title`/`placeholder`/`aria-label`,
+a token name that is not a CSS custom property, a token value containing
+`;` `{` `}` `url(` or `var(`, text over 2000 characters, or more than 500
+overrides in total.
+
+### `GET /api/ui-copy/promote`
+
+What it would take to fold the current overrides back into the shipped catalog:
+`ready` (key overrides, a one-line edit to `ui-copy.json`), `needs_key` (selector
+overrides whose string is still hardcoded in `index.html`, so promoting means
+minting a key and tagging the element), and `tokens` (defaults that would move on
+`:root`). Returned as data for an agent to carry out.
+
 ### `GET /api/themes`
 
 Color theme catalog for the sitting Appearance menu, desktop shell, and CLI
