@@ -1684,14 +1684,15 @@
 
 <div id="left">
   <div id="queue">
-    <h1>Queue</h1>
+    <h1 data-uic="queueTitle">Queue</h1>
     <div id="qlist"></div>
   </div>
   <div id="divQ" class="hdivider" title="drag to resize"></div>
   <div id="meta">
     <h1>
-      <span class="t-heading" style="letter-spacing:.18em">Info</span>
-      <span id="metabar"><button id="metaedit" class="btn btn-sm btn-default" title="edit entry fields">edit</button></span>
+      <span class="t-heading" style="letter-spacing:.18em" data-uic="metaTitle">Info</span>
+      <span id="metabar"><button id="metaedit" class="btn btn-sm btn-default" title="edit entry fields"
+              data-uic="metaEditLabel">edit</button></span>
     </h1>
     <dl id="metadl" class="meta-view"></dl>
   </div>
@@ -1748,7 +1749,7 @@
   <div id="desk-top">
     <div id="desk-chrome">
       <div id="desk-proj">
-        <span class="project-label">Project</span>
+        <span class="project-label" data-uic="deskProjectLabel">Project</span>
         <select id="proj" title="Select project" aria-label="Select project"></select>
         <div id="gitmap" class="gitmap-nogit" title="git activity" aria-label="Project git commit activity" role="img"></div>
       </div>
@@ -1768,29 +1769,35 @@
   </div>
   <!-- Founding status sits under the project bar (hidden unless body.founding). -->
   <div id="foundinghead">
-    <span class="ivtitle">founding interview</span>
+    <span class="ivtitle" data-uic="foundingHeadTitle">founding interview</span>
     <span class="ivacts">
-      <button id="ivskip" type="button" class="btn btn-sm btn-ghost" title="leave founding for later — open the project as-is (no charter or queue yet); reselect it to resume founding">skip for now</button>
-      <button id="ivfinish" type="button" class="btn btn-sm btn-ghost" title="skip remaining chat and draft the desk proposal now">Draft Proposal ✓</button>
+      <button id="ivskip" type="button" class="btn btn-sm btn-ghost" title="leave founding for later — open the project as-is (no charter or queue yet); reselect it to resume founding"
+              data-uic="skipFoundingLabel" data-uic-title="skipFoundingHint">skip for now</button>
+      <button id="ivfinish" type="button" class="btn btn-sm btn-ghost" title="skip remaining chat and draft the desk proposal now"
+              data-uic="draftProposalLabel" data-uic-title="draftProposalHint">Draft Proposal ✓</button>
     </span>
   </div>
   <div id="divBrief" class="hdivider" title="drag to resize brief / chat"></div>
   <div id="ritual" class="actions-ritual" role="group" aria-label="Desk actions">
-    <button id="approve" class="btn btn-sm btn-default" title="Bookmark a ruling — does not apply or commit">Approve</button>
-    <button id="comment" class="btn btn-sm btn-default" title="Leave a note on this file for the agent to address during the sweep">Comment</button>
-    <button id="sweepbtn" class="btn btn-sm btn-default" title="close the sitting — apply rulings, diff &amp; assess the batch, fix/flag ripples, log the session, restock the queue">Sweep</button>
+    <button id="approve" class="btn btn-sm btn-default" title="Bookmark a ruling — does not apply or commit"
+            data-uic="approveLabel" data-uic-title="approveHint">Approve</button>
+    <button id="comment" class="btn btn-sm btn-default" title="Leave a note on this file for the agent to address during the sweep"
+            data-uic="commentLabel" data-uic-title="commentHint">Comment</button>
+    <button id="sweepbtn" class="btn btn-sm btn-default" title="close the sitting — apply rulings, diff &amp; assess the batch, fix/flag ripples, log the session, restock the queue"
+            data-uic="sweepLabel" data-uic-title="sweepHint">Sweep</button>
   </div>
   <div id="commentpanel">
-    <textarea id="commentin" spellcheck="false" placeholder="a note for the sweep, tied to this file — Enter saves · Shift+Enter newline · Esc cancels"></textarea>
-    <div class="crow"><span id="commenthint">tied to this file; the sweep reads it when it closes the sitting</span><span style="flex:1"></span><button id="commentsave" class="btn btn-sm btn-primary">save</button></div>
+    <textarea id="commentin" spellcheck="false" data-uic-ph="commentPlaceholder"
+              placeholder="a note for the sweep, tied to this file — Enter saves · Shift+Enter newline · Esc cancels"></textarea>
+    <div class="crow"><span id="commenthint" data-uic="commentTiedHint">tied to this file; the sweep reads it when it closes the sitting</span><span style="flex:1"></span><button id="commentsave" class="btn btn-sm btn-primary" data-uic="commentSaveLabel">save</button></div>
   </div>
   <div id="divDesk" class="hdivider" title="drag to resize brief / chat"></div>
   <div id="chatwrap">
     <div id="chat"></div>
     <div id="chat-live" class="sr-only" aria-live="polite" aria-atomic="true"></div>
-    <div id="spin"><span id="spinlabel">working…</span><span class="spin-elapsed" id="spinelapsed"></span></div>
+    <div id="spin"><span id="spinlabel" data-uic="spinWorking">working…</span><span class="spin-elapsed" id="spinelapsed"></span></div>
     <div id="chatbar">
-      <textarea id="chatin" placeholder="Chat with the Kettle agent…"></textarea>
+      <textarea id="chatin" data-uic-ph="chatPlaceholder" placeholder="Chat with the Kettle agent…"></textarea>
     </div>
     <!-- Agent controls sit under the chat entry (not in desk chrome) -->
     <div id="agentbar" role="group" aria-label="Agent controls">
@@ -1817,16 +1824,16 @@
 
 <div id="addbg">
   <div id="addmodal" role="dialog" aria-modal="true" aria-labelledby="addmodal-h">
-    <h2 id="addmodal-h">Add Project</h2>
-    <p class="mnote" style="margin:0 0 12px">Name a folder under your home. The interview starts in the agent pane — Draft Proposal ✓ drafts a proposal you edit, then use Found Desk.</p>
+    <h2 id="addmodal-h" data-uic="addProjectTitle">Add Project</h2>
+    <p class="mnote" style="margin:0 0 12px" data-uic="addProjectNote">Name a folder under your home. The interview starts in the agent pane — Draft Proposal ✓ drafts a proposal you edit, then use Found Desk.</p>
     <div class="add-hot">
-      <input id="addname" placeholder="name" spellcheck="false" aria-label="project name">
+      <input id="addname" data-uic-ph="addProjectNamePlaceholder" placeholder="name" spellcheck="false" aria-label="project name">
       <div class="add-pathrow">
-        <input id="addroot" placeholder="folder (absolute or ~/ path)" spellcheck="false" aria-label="project folder">
+        <input id="addroot" data-uic-ph="addProjectFolderPlaceholder" placeholder="folder (absolute or ~/ path)" spellcheck="false" aria-label="project folder">
         <button id="addbrowse" class="btn btn-sm btn-ghost browse" type="button" title="choose folder">browse…</button>
       </div>
-      <label for="addnote" class="mnote" style="margin:8px 0 4px">In a sentence or two: what is this, and what do you want from a second reader here?</label>
-      <textarea id="addnote" class="kitnote" required spellcheck="false" placeholder="e.g. a research folder that grows fast — flag anything that looks stale or contradicts what's already written" aria-label="founding sentence — what this is and what you want from a second reader here"></textarea>
+      <label for="addnote" class="mnote" style="margin:8px 0 4px" data-uic="addProjectFoundingQuestion">In a sentence or two: what is this, and what do you want from a second reader here?</label>
+      <textarea id="addnote" class="kitnote" required spellcheck="false" data-uic-ph="addProjectFoundingPlaceholder" placeholder="e.g. a research folder that grows fast — flag anything that looks stale or contradicts what's already written" aria-label="founding sentence — what this is and what you want from a second reader here"></textarea>
     </div>
     <details class="add-advanced">
       <summary>more options</summary>
@@ -1845,20 +1852,20 @@
     <div class="mrow">
       <span style="flex:1"></span>
       <button id="addcancel" class="btn btn-md btn-ghost" title="Esc">cancel</button>
-      <button id="addgo" class="btn btn-md btn-primary" title="⌘Enter">start interview</button>
+      <button id="addgo" class="btn btn-md btn-primary" title="⌘Enter" data-uic="addProjectStart">Start Interview</button>
     </div>
   </div>
 </div>
 
 <div id="setupbg">
   <div id="setupmodal" role="dialog" aria-modal="true" aria-labelledby="setupmodal-h">
-    <h2 id="setupmodal-h">Kettle</h2>
-    <div class="mnote">Pick the agent CLI that runs founding, chat, and sweeps. Kettle never stores API keys — sign in to the CLI or set its key in your shell.</div>
+    <h2 id="setupmodal-h" data-uic="setupTitle">Kettle</h2>
+    <div class="mnote" data-uic="setupNote">Pick the agent CLI that runs founding, chat, and sweeps. Kettle never stores API keys — sign in to the CLI or set its key in your shell.</div>
     <div class="mrow" style="margin-bottom:8px">
       <span class="lbl">provider</span>
       <select id="setupProvider" style="flex:1" title="Agent CLI family" aria-label="Provider"></select>
     </div>
-    <div id="setupstatus" class="mnote" style="margin:0">checking curator…</div>
+    <div id="setupstatus" class="mnote" style="margin:0" data-uic="setupChecking">checking curator…</div>
     <div id="setuprows"></div>
     <div class="mrow">
       <span style="flex:1"></span>
@@ -1869,10 +1876,10 @@
 
 <div id="sweepbg" style="position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:21;">
   <div id="sweepconfirm" role="dialog" aria-modal="true" aria-labelledby="sweepconfirm-h">
-    <h2 id="sweepconfirm-h">Sweep the Desk?</h2>
-    <div style="font-size:13px;color:var(--fg)">Closes the sitting: applies ticked rulings (launches become logged directives), diffs and assesses every reviewed entry, fixes or flags ripples, writes the session log, and restocks the queue.</div>
+    <h2 id="sweepconfirm-h" data-uic="sweepConfirmTitle">Sweep the Desk?</h2>
+    <div style="font-size:13px;color:var(--fg)" data-uic="sweepConfirmBody">Closes the sitting: applies ticked rulings (launches become logged directives), diffs and assesses every reviewed entry, fixes or flags ripples, writes the session log, and restocks the queue.</div>
     <label><input type="checkbox" id="sweepnoask"> don't ask again (button becomes a 3-second undo instead)</label>
-    <textarea id="sweepthrust" spellcheck="false" placeholder="a steer for this pass — what's most on your mind as you close the sitting. the agent reads it first (optional · ⌘Enter sweeps)"></textarea>
+    <textarea id="sweepthrust" spellcheck="false" data-uic-ph="sweepThrustPlaceholder" placeholder="a steer for this pass — what's most on your mind as you close the sitting. the agent reads it first (optional · ⌘Enter sweeps)"></textarea>
     <div style="display:flex;justify-content:flex-end;gap:8px;">
       <button id="sweepcancel" class="btn btn-md btn-ghost">cancel</button>
       <button id="sweepgo" class="btn btn-md btn-primary">sweep</button>
@@ -1882,7 +1889,7 @@
 
 <div id="refoundbg">
   <div id="refoundmodal" role="dialog" aria-modal="true" aria-labelledby="refoundmodal-h">
-    <h2 id="refoundmodal-h">Re-found this project?</h2>
+    <h2 id="refoundmodal-h" data-uic="refoundTitle">Re-found this project?</h2>
     <p class="mnote" style="margin:0">
       <strong id="refoundname">—</strong> will be reset to an unfounded seed.
       The current <code>.kettle</code> desk is copied to a backup first; your project
@@ -2369,13 +2376,69 @@
 <script src="/purify.min.js"></script>
 <script src="/ui-copy.js"></script>
 <script>
-/* Canonical UI strings — static/ui-copy.js (window.KETTLE_UI_COPY). Keep in
-   sync with kettle-vscode src/uiCopy.ts — see docs/UI.md. */
+/* Canonical UI strings. Source of truth is static/ui-copy.json; the server renders
+   it into /ui-copy.js with the user's overrides already merged. Edit the JSON —
+   never a string in this file, and never a generated copy. See docs/UI.md. */
 const UIC = (typeof KETTLE_UI_COPY !== 'undefined' && KETTLE_UI_COPY) || {};
+const UIC_META = (typeof KETTLE_UI_COPY_META !== 'undefined' && KETTLE_UI_COPY_META) || {};
+const UIC_SEL = (typeof KETTLE_UI_COPY_SELECTORS !== 'undefined' && KETTLE_UI_COPY_SELECTORS) || {};
+const UIC_OVERRIDDEN = new Set(
+  (typeof KETTLE_UI_COPY_OVERRIDDEN !== 'undefined' && KETTLE_UI_COPY_OVERRIDDEN) || []);
 function uic(key, fallback){
   const v = UIC[key];
   return (typeof v === 'string' && v) ? v : fallback;
 }
+/* Terse variant for a narrow surface; same meaning, fewer words. Falls back to the
+   full string, so a key without a `short` is never a blank. */
+function uicShort(key, fallback){
+  const m = UIC_META[key];
+  if(m && typeof m.short === 'string' && m.short) return m.short;
+  return uic(key, fallback);
+}
+
+/* Paint catalogued copy over the literal text in the markup.
+
+   The literal stays in index.html as the fallback: if /ui-copy.js fails to load,
+   the sitting reads exactly as it did before this pass existed. That is why the
+   markup keeps real English instead of empty tagged shells.
+
+   data-uic → textContent · data-uic-title/-ph/-aria → that attribute. */
+const UIC_ATTR_MAP = {'data-uic-title': 'title', 'data-uic-ph': 'placeholder',
+                      'data-uic-aria': 'aria-label'};
+const UIC_SKIPPED = [];  /* tagged elements the pass refused — surfaced in debug mode */
+function applyUiCopy(root){
+  const scope = root || document;
+  scope.querySelectorAll('[data-uic]').forEach(el => {
+    const key = el.getAttribute('data-uic');
+    const v = uic(key, null);
+    if(v === null) return;
+    /* textContent would delete child elements. A tagged wrapper is a tagging
+       mistake, not a licence to blank the node — record it and leave it alone. */
+    if(el.children.length){ UIC_SKIPPED.push({key: key, reason: 'has child elements'}); return; }
+    el.textContent = v;
+  });
+  for(const attr in UIC_ATTR_MAP){
+    scope.querySelectorAll('[' + attr + ']').forEach(el => {
+      const v = uic(el.getAttribute(attr), null);
+      if(v !== null) el.setAttribute(UIC_ATTR_MAP[attr], v);
+    });
+  }
+  /* Selector overrides: elements whose text is still hardcoded above. Local to this
+     sitting until promoted into a real key — see kettle/uicopy.py promote_plan(). */
+  for(const sel in UIC_SEL){
+    const fields = UIC_SEL[sel];
+    let el = null;
+    try { el = document.querySelector(sel); } catch(e) { continue; }
+    if(!el || !fields) continue;
+    if(typeof fields.text === 'string' && !el.children.length) el.textContent = fields.text;
+    ['title', 'placeholder', 'aria-label'].forEach(prop => {
+      if(typeof fields[prop] === 'string') el.setAttribute(prop, fields[prop]);
+    });
+  }
+}
+/* Run now, not from init(): the markup above is already parsed, and copy must land
+   even when init() dies on a bad project or an unreachable curator. */
+applyUiCopy();
 
 /* running in-memory JS error log — the diagnostics tab renders the last
    ~30, most recent first; the banner stays as the loud, immediate signal */
@@ -4899,7 +4962,7 @@ async function refreshOpenFile(wrotePaths){
 let spinTimer = null, spinStart = 0;
 function setSpinLabel(msg){
   const lab = $('spinlabel');
-  if(lab) lab.textContent = msg || 'working…';
+  if(lab) lab.textContent = msg || uic('spinWorking', 'working…');
 }
 function showSpin(msg){
   setSpinLabel(msg || 'working…');
@@ -6273,15 +6336,15 @@ function showProposalGuide(){
   }
   const ab = $('approve');
   if(ab){
-    ab.title = 'Found this desk from your edited proposal';
-    ab.textContent = 'Found Desk';
+    ab.title = uic('approveHintFounding', 'Found this desk from your edited proposal');
+    ab.textContent = uic('approveLabelFounding', 'Found Desk');
   }
 }
 function clearProposalGuideChrome(){
   const ab = $('approve');
   if(ab){
-    ab.title = 'Bookmark a ruling — does not apply or commit';
-    ab.textContent = 'Approve';
+    ab.title = uic('approveHint', 'Bookmark a ruling — does not apply or commit');
+    ab.textContent = uic('approveLabel', 'Approve');
   }
 }
 async function finishInterview(){

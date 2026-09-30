@@ -49,6 +49,7 @@ from . import survey as survey_mod  # deterministic founding survey (tool-less i
 from . import sweepkit  # mechanical sweep close-kit (status · archive · stage · thin log)
 from . import theme_catalog  # bundled + user color theme packs (web, desktop, CLI)
 from . import gitmap  # local git contribution heatmap (desk chrome; no network)
+from . import uicopy  # canonical sitting UI copy: catalog + user overrides
 
 HOME = Path.home()
 
@@ -129,6 +130,9 @@ def resolve_projects_path() -> Path:
 
 PROJECTS_PATH = resolve_projects_path()
 SETTINGS_PATH = PROJECTS_PATH.parent / "settings.json"
+# Sitting copy the user retyped in UI debug mode. Beside settings.json because
+# package data (static/) is read-only in a wheel and a temp dir in the binary.
+UI_COPY_OVERRIDES = PROJECTS_PATH.parent / "ui-copy-overrides.json"
 # Legacy constant — prefer current_curator().resolved_command() for new code.
 CLAUDE = shutil.which("claude") or "claude"
 _CLAUDE_AT_IMPORT = CLAUDE  # tests replace CLAUDE with a stub; agent_bin honors that
@@ -2028,7 +2032,21 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
                 self.wfile.write(body)
-            elif url.path in ("/marked.min.js", "/themes.js", "/purify.min.js", "/ui-copy.js"):
+            elif url.path == "/ui-copy.js":
+                # Rendered from static/ui-copy.json on every request, with the user's
+                # overrides already merged in. No generated file exists to drift, and
+                # a copy tweak shows up on reload without restarting the server.
+                body = uicopy.render_js(
+                    uicopy.payload(STATIC, UI_COPY_OVERRIDES)
+                ).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/javascript")
+                self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+                self.send_header("Pragma", "no-cache")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+            elif url.path in ("/marked.min.js", "/themes.js", "/purify.min.js"):
                 body = (STATIC / url.path.lstrip("/")).read_bytes()
                 self.send_response(200)
                 self.send_header("Content-Type", "application/javascript")
@@ -2079,6 +2097,14 @@ class Handler(BaseHTTPRequestHandler):
             elif url.path == "/api/settings":
                 # Always surface a normalized curator block (migration is read-side)
                 self.send_json(curator_mod.ensure_curator_settings(load_settings()))
+            elif url.path == "/api/ui-copy":
+                # The merged catalog, for viewports that are not the web sitting
+                # (TUI, plugins) and for the sitting's own debug mode.
+                self.send_json(uicopy.payload(STATIC, UI_COPY_OVERRIDES))
+            elif url.path == "/api/ui-copy/promote":
+                # What it would cost to fold the current overrides back into the
+                # shipped catalog, as data an agent can act on.
+                self.send_json(uicopy.promote_plan(STATIC, UI_COPY_OVERRIDES))
             elif url.path == "/api/themes":
                 # Color theme catalog for web/desktop Appearance and CLI parity.
                 full = (qs.get("full", ["0"])[0] or "0").lower() in ("1", "true", "yes")
@@ -2248,6 +2274,21 @@ class Handler(BaseHTTPRequestHandler):
                 })
             elif url.path == "/api/settings":
                 self.send_json(save_settings(d))
+            elif url.path == "/api/ui-copy":
+                # Persist a copy tweak. Never touches static/ or index.html — both are
+                # read-only or run-critical; the override file is the only write target.
+                try:
+                    patch = uicopy.validate_patch(d if isinstance(d, dict) else {})
+                    merged = uicopy.apply_patch(
+                        uicopy.load_overrides(UI_COPY_OVERRIDES), patch
+                    )
+                    uicopy.write_overrides(
+                        UI_COPY_OVERRIDES, merged, lambda p, text: atomic_write(p, text)
+                    )
+                except uicopy.CopyError as e:
+                    self.send_json({"error": str(e)}, 400)
+                else:
+                    self.send_json(uicopy.payload(STATIC, UI_COPY_OVERRIDES))
             elif url.path == "/api/themes/install":
                 # Write a host-neutral pack into the user themes directory.
                 try:

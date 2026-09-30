@@ -204,7 +204,11 @@ class ViewportRitualRegressionBar(unittest.TestCase):
         proposing = self.function("setProposingChrome")
         self.assertIn("classList.toggle('proposing'", proposing)
         self.assertNotIn("pointerEvents = 'none'", proposing)
-        self.assertIn("ab.textContent = 'Found Desk'", self.function("showProposalGuide"))
+        # The label comes from the catalog now, with the old literal as the fallback
+        # for a sitting that could not load /ui-copy.js — assert both, so neither the
+        # key nor the offline fallback can quietly disappear.
+        guide = self.function("showProposalGuide")
+        self.assertIn("uic('approveLabelFounding', 'Found Desk')", guide)
 
     def test_agent_chat_renders_gfm(self):
         """Agent bubbles must paint GFM (headings, lists, task ticks), not raw markdown."""
