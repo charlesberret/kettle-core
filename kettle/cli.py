@@ -69,6 +69,25 @@ def _k(n) -> str:
     return f"{n/1000:.0f}k" if n >= 1000 else str(n)
 
 
+def _invoked_kettle() -> Path | None:
+    """The `kettle` binary this process was started as, when it is not a PATH lookup.
+
+    `python3 -m venv .venv && .venv/bin/kettle doctor` is the clone README. That
+    binary is not on PATH, and doctor must not fail the stranger for following it.
+    """
+    if not sys.argv or not sys.argv[0]:
+        return None
+    candidate = Path(sys.argv[0])
+    if candidate.name not in {"kettle", "kettle.exe"}:
+        return None
+    try:
+        if candidate.is_file() and os.access(candidate, os.X_OK):
+            return candidate
+    except OSError:
+        return None
+    return None
+
+
 def _which_all(cmd: str = "kettle") -> list[Path]:
     """Every executable `cmd` on PATH, in resolution order (no duplicates)."""
     seen: set[str] = set()
@@ -279,12 +298,27 @@ def install_doctor_checks(
 
     # --- which kettle ---
     if not hits:
-        rows.append({
-            "name": "kettle-on-path",
-            "ok": False,
-            "detail": "no `kettle` on PATH",
-            "docs": "INSTALL.md § Install",
-        })
+        invoked = _invoked_kettle()
+        if invoked is not None:
+            rows.append({
+                "name": "kettle-on-path",
+                "ok": True,
+                "detail": f"invoked as {invoked}; not on PATH",
+                "docs": "README.md § Try it",
+            })
+            rows.append({
+                "name": "kettle-path-extras",
+                "ok": True,
+                "detail": "no other kettle on PATH",
+                "docs": "INSTALL.md § Install",
+            })
+        else:
+            rows.append({
+                "name": "kettle-on-path",
+                "ok": False,
+                "detail": "no `kettle` on PATH",
+                "docs": "INSTALL.md § Install",
+            })
     else:
         first = hits[0]
         try:

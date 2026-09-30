@@ -417,6 +417,21 @@ class CliTests(unittest.TestCase):
         self.assertIn("bundled in the binary", by_name["python-version"]["detail"])
         self.assertIn("standalone binary", by_name["package-version"]["detail"])
 
+    def test_install_doctor_invoked_binary_not_on_path_is_ok(self):
+        """The clone README runs `.venv/bin/kettle doctor` with nothing named kettle on PATH."""
+        invoked = Path("/tmp/kettle-stranger/.venv/bin/kettle")
+        with mock.patch.object(cli, "_invoked_kettle", return_value=invoked):
+            rows = cli.install_doctor_checks(
+                path_hits=[],
+                package_modules=["kettle", "kettle.cli", "kettle.server"],
+                canonical=cli.CANONICAL_KETTLE,
+            )
+        by_name = {r["name"]: r for r in rows}
+        self.assertTrue(by_name["kettle-on-path"]["ok"])
+        self.assertIn("not on PATH", by_name["kettle-on-path"]["detail"])
+        self.assertIn(str(invoked), by_name["kettle-on-path"]["detail"])
+        self.assertTrue(by_name["kettle-path-extras"]["ok"])
+
     def test_install_doctor_single_noncanonical_kettle_is_ok(self):
         """README.md / CONTRIBUTING.md both walk a contributor through a plain `.venv`,
         not ~/.kettle-venv. A single, cleanly-resolving `kettle` on PATH must not FAIL
