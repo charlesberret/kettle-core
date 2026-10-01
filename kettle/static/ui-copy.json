@@ -4,32 +4,33 @@
   "_fields": {
     "text": "The string. Titles/heds: Title Case. Body copy and button labels: sentence case or lowercase per docs/UI.md.",
     "short": "Optional terse variant for a narrow surface (TUI status bar, a 2-line pane). Viewports prefer it when space is tight and fall back to text. Same meaning, fewer words — never a different instruction.",
-    "note": "Where this string appears and what it is for. Written for a reader (human or agent) who has only the key."
+    "note": "Where this string appears and what it is for. Written for a reader (human or agent) who has only the key.",
+    "states": "One message per flow state from docs/SITTING-FLOWS.md, in three registers: `line` for a status bar, `short` for one sentence, `full` for a guide. Same meaning, fewer words as the surface narrows — never a different instruction. A viewport renders the register its chrome affords instead of writing its own sentence."
   },
   "keys": {
     "streamIdle": {
       "text": "Chat stream idle",
-      "short": "idle",
-      "note": "Agent pane status when no curator stream is running."
+      "short": "Agent idle",
+      "note": "Agent pane status when no agent stream is running."
     },
     "spinWorking": {
-      "text": "working…",
-      "short": "working",
-      "note": "Spinner label while a curator turn is in flight."
+      "text": "Working…",
+      "short": "Working",
+      "note": "Spinner label while an agent turn is in flight."
     },
     "chatPlaceholder": {
       "text": "Chat with the Kettle agent…",
-      "short": "chat",
+      "short": "Chat",
       "note": "Chat input placeholder on a founded desk."
     },
     "chatPlaceholderFounding": {
-      "text": "Chat with the Kettle agent…",
-      "short": "answer the curator",
+      "text": "Chat with the Kettle agent (recommended)",
+      "short": "Chat with the agent",
       "note": "Chat input placeholder during the founding interview (P3)."
     },
     "chatPlaceholderProposing": {
-      "text": "Ask to revise the proposal — or edit it, then Found Desk",
-      "short": "revise, or Found Desk",
+      "text": "Ask the agent to revise the proposal",
+      "short": "Revise, then approve",
       "note": "Chat input placeholder while a Desk Proposal is on the editor (P4)."
     },
     "editorPlaceholder": {
@@ -37,18 +38,17 @@
       "note": "Editor placeholder on a founded desk with no entry open. Intentionally empty."
     },
     "editorPlaceholderFounding": {
-      "text": "Founding Interview — work in the agent pane on the right",
-      "short": "founding — work in the agent pane",
+      "text": "Chat with the agent to establish your project.",
       "note": "Editor placeholder during the founding interview; the editor is not the work surface yet."
     },
     "editorPlaceholderProposing": {
-      "text": "Desk Proposal — edit, then use Found Desk",
-      "short": "edit, then Found Desk",
+      "text": "Edit and approve the proposal to found the project desk",
+      "short": "Edit and approve the proposal",
       "note": "Editor placeholder when the Desk Proposal is the open document."
     },
     "commentPlaceholder": {
-      "text": "a note for the sweep, tied to this file — Enter saves · Shift+Enter newline · Esc cancels",
-      "short": "note for the sweep",
+      "text": "A note on this file for the agent to read during the sweep — Enter saves · Shift+Enter newline · Esc cancels",
+      "short": "Note for the sweep",
       "note": "Comment box placeholder, including its key bindings."
     },
     "foundingQueueHintTitle": {
@@ -56,27 +56,26 @@
       "note": "Queue empty-state hed during the founding interview."
     },
     "foundingQueueHintBody": {
-      "text": "The curator is in the agent pane. Answer there, then Draft Proposal ✓ when ready. The queue fills after you use Found Desk on the proposal.",
-      "short": "Answer the curator in the agent pane, then Draft Proposal ✓.",
+      "text": "Chat with the Kettle agent to set up your project with a queue of files to review.",
+      "short": "Chat with the agent to set up your project.",
       "note": "Queue empty-state body during founding — says where the work is and what fills the queue."
     },
     "proposingQueueHintTitle": {
       "text": "Desk Proposal",
-      "note": "Queue empty-state hed while a proposal awaits Found Desk."
+      "note": "Queue empty-state hed while a proposal awaits Approve."
     },
     "proposingQueueHintBody": {
-      "text": "Edit the proposal in the editor until it matches your project, needs, and expectations. Chat with the curator to revise or co-write. Press Found Desk only when it feels right — that founds the desk and stocks the first queue.",
-      "short": "Edit the proposal until it matches your intent, then Found Desk.",
+      "text": "Edit the proposal in the editor until it matches the project's needs and your expectations. Chat with the agent to revise or co-write the proposal. When it feels right, select \"Approve\" to found the project desk and stock the first queue for your review.",
+      "short": "Edit the proposal, then select 'approve' to continue.",
       "note": "Queue empty-state body while proposing. The short form is what a status bar shows."
     },
     "noEntryBriefBody": {
-      "text": "The Kettle file panel contains a batch of files for you to review, edit, approve, and sweep when the batch is finished.",
-      "short": "A batch of files to review, edit, approve, then sweep.",
-      "note": "Second line of the Desk brief when a project is bound but no queue entry is selected."
+      "text": "The Kettle file queue offers a batch of files for you to review, edit, approve, and sweep when the batch is finished.",
+      "short": "A batch of files to review, edit, approve, then sweep when you're finished.",
+      "note": "Second line of the brief when a project desk is bound and no queue entry is selected."
     },
     "queueTitle": {
       "text": "Queue",
-      "short": "Q",
       "note": "Hed of the queue pane (left column, top)."
     },
     "metaTitle": {
@@ -84,7 +83,7 @@
       "note": "Hed of the entry-metadata pane (left column, bottom)."
     },
     "metaEditLabel": {
-      "text": "edit",
+      "text": "Edit",
       "note": "Button in the Info pane hed that switches entry fields to editable."
     },
     "deskProjectLabel": {
@@ -94,74 +93,77 @@
     "approveLabel": {
       "text": "Approve",
       "short": "approve",
-      "note": "Ritual button: bookmark a ruling on the open entry. Becomes approveLabelFounding while proposing."
+      "note": "Ritual control: rules on the open entry. Reads Approve in both states — while a proposal is open, pressing it founds the project desk."
     },
     "approveLabelFounding": {
-      "text": "Found Desk",
-      "short": "found",
-      "note": "The same ritual button while a Desk Proposal is open — pressing it founds the desk (P4 → founded)."
+      "text": "Approve",
+      "note": "The same control while proposing. Same word since 2026-10-01; kept as its own key so a viewport may still differ if it needs to."
     },
     "approveHint": {
-      "text": "Bookmark a ruling — does not apply or commit",
-      "note": "Tooltip on Approve. States what it does not do, which is the common misread."
+      "text": "Mark a ruling — this does not apply changes to the files until you click 'Sweep'",
+      "note": "Tooltip on Approve. States what it does not do, which is the common misread.",
+      "short": "Mark a ruling on this file."
     },
     "approveHintFounding": {
-      "text": "Found this desk from your edited proposal",
-      "note": "Tooltip on the ritual button while it reads Found Desk (proposing)."
+      "text": "Found the project desk by editing and approving the proposal",
+      "note": "Tooltip on the ritual control while a proposal is open. The label does not change (Approve was retired 2026-10-01); the sitting promotes the control visually instead.",
+      "short": "Edit and approve the proposal"
     },
     "commentLabel": {
       "text": "Comment",
-      "short": "comment",
       "note": "Ritual button: open the note box for the open file."
     },
     "commentHint": {
       "text": "Leave a note on this file for the agent to address during the sweep",
-      "note": "Tooltip on Comment."
+      "note": "Tooltip on Comment.",
+      "short": "Leave a note for the agent"
     },
     "commentTiedHint": {
-      "text": "tied to this file; the sweep reads it when it closes the sitting",
-      "short": "the sweep reads this",
+      "text": "The comment is tied to this file. The agent reads it when you close the sitting with a sweep.",
+      "short": "The agent reads the comment during the sweep",
       "note": "Hint under the comment box, explaining when the note is consumed."
     },
     "commentSaveLabel": {
-      "text": "save",
+      "text": "Save",
       "note": "Button that commits the comment box."
     },
     "sweepLabel": {
       "text": "Sweep",
-      "short": "sweep",
       "note": "Ritual button: close the sitting."
     },
     "sweepHint": {
-      "text": "close the sitting — apply rulings, diff & assess the batch, fix/flag ripples, log the session, restock the queue",
-      "short": "close the sitting",
+      "text": "Close the sitting: apply rulings, diff & assess the batch, fix/flag ripples, log the session, restock the queue",
+      "short": "Close the sitting",
       "note": "Tooltip on Sweep — the full list of what closing does."
     },
     "foundingHeadTitle": {
-      "text": "founding interview",
-      "short": "founding",
-      "note": "Status strip under the project bar while the founding interview runs."
+      "text": "Founding Interview",
+      "note": "Status strip under the project bar while the founding interview runs. Title Case as a hed (docs/UI.md); the term is lowercase in prose."
     },
     "draftProposalLabel": {
-      "text": "Draft Proposal ✓",
-      "short": "draft proposal",
-      "note": "Ends the interview early and drafts the Desk Proposal (P3 → P4). The ✓ is part of the label."
+      "text": "Auto: let the Kettle agent decide",
+      "short": "Auto-mode",
+      "note": "Ends the founding interview early and writes the Desk Proposal."
     },
     "draftProposalHint": {
-      "text": "skip remaining chat and draft the desk proposal now",
-      "note": "Tooltip on Draft Proposal ✓."
+      "text": "Skip the rest of the interview and let the agent draft the Desk Proposal now",
+      "note": "Tooltip on Draft Proposal ✓.",
+      "short": "Skip the interview"
     },
     "skipFoundingLabel": {
-      "text": "skip for now",
-      "note": "Leaves founding for later and opens the project as-is."
+      "text": "Skip: open a blank project for now",
+      "note": "Leaves founding for later and opens the project as-is.",
+      "short": "Skip interview"
     },
     "skipFoundingHint": {
-      "text": "leave founding for later — open the project as-is (no charter or queue yet); reselect it to resume founding",
-      "note": "Tooltip on skip for now. Names the cost (no charter, no queue) and how to resume."
+      "text": "Leave the founding process for later — open the project with no charter or file queue",
+      "note": "Tooltip on skip for now. Names the cost (no charter, no queue) and how to resume.",
+      "short": "Leave the founding for later"
     },
     "sweepConfirmTitle": {
       "text": "Sweep the Desk?",
-      "note": "Hed of the sweep confirmation dialog."
+      "note": "Hed of the sweep confirmation dialog.",
+      "short": "Sweep now?"
     },
     "sweepConfirmBody": {
       "text": "Closes the sitting: applies ticked rulings (launches become logged directives), diffs and assesses every reviewed entry, fixes or flags ripples, writes the session log, and restocks the queue.",
@@ -169,57 +171,101 @@
       "note": "Body of the sweep confirmation — the authoritative description of what a sweep does."
     },
     "sweepThrustPlaceholder": {
-      "text": "a steer for this pass — what's most on your mind as you close the sitting. the agent reads it first (optional · ⌘Enter sweeps)",
-      "short": "a steer for this pass (optional)",
+      "text": "Steer this pass: what's on your mind as you close the sitting? The agent reads this first (optional)",
+      "short": "Tell the agent something to steer this pass (optional)",
       "note": "Placeholder for the optional free-text steer on the sweep dialog."
     },
     "addProjectTitle": {
       "text": "Add Project",
-      "note": "Hed of the add-project dialog."
+      "note": "Hed of the add-project dialog.",
+      "short": "Add project"
     },
     "addProjectNote": {
-      "text": "Name a folder under your home. The interview starts in the agent pane — Draft Proposal ✓ drafts a proposal you edit, then use Found Desk.",
-      "short": "Name a folder; the interview starts in the agent pane.",
+      "text": "Name the project folder",
       "note": "Body of the add-project dialog — sets up what happens after Start Interview."
     },
     "addProjectStart": {
       "text": "Start Interview",
-      "short": "start",
-      "note": "Button that registers the project and opens founding (P1 to P3). Title Case: docs/UI.md lists it by name among the signature actions that are also titles, beside Found Desk and Draft Proposal. The web markup read 'start interview' until 2026-09-30, so the sitting and the VS Code mirror disagreed."
+      "short": "Start",
+      "note": "Button that registers the project and opens founding (P1 to P3). Title Case: docs/UI.md lists it among the signature actions that are also titles."
     },
     "addProjectNamePlaceholder": {
-      "text": "name",
+      "text": "Name",
       "note": "Placeholder for the project's display name."
     },
     "addProjectFolderPlaceholder": {
-      "text": "folder (absolute or ~/ path)",
+      "text": "Folder path",
       "note": "Placeholder for the project root."
     },
     "addProjectFoundingQuestion": {
-      "text": "In a sentence or two: what is this, and what do you want from a second reader here?",
-      "short": "What is this, and what do you want from a second reader?",
+      "text": "What's the state of this project and how could a second reader help?",
       "note": "The one mission question of registration (P1). Founding is a conversation, not a confirmation card — see docs/REVIEW.md."
     },
     "addProjectFoundingPlaceholder": {
-      "text": "e.g. a research folder that grows fast — flag anything that looks stale or contradicts what's already written",
+      "text": "Example: \"This project is growing quickly. Start by flagging anything that looks stale or contradictory.\"",
       "note": "Example answer to the founding question. An example, not an instruction."
     },
     "refoundTitle": {
       "text": "Re-found this project?",
-      "note": "Hed of the re-found dialog."
+      "note": "Hed of the re-found dialog.",
+      "short": "Re-found project?"
     },
     "setupTitle": {
       "text": "Kettle",
-      "note": "Hed of the first-run curator setup dialog."
+      "note": "Hed of the first-run agent setup dialog."
     },
     "setupNote": {
-      "text": "Pick the agent CLI that runs founding, chat, and sweeps. Kettle never stores API keys — sign in to the CLI or set its key in your shell.",
-      "short": "Pick the agent CLI. Kettle never stores API keys.",
+      "text": "Pick the agent that runs the founding, chat, and sweep process. Kettle never stores keys. Sign in with your browser or set the API key in your shell.",
+      "short": "Pick the agent Kettle will run. Kettle never stores API keys.",
       "note": "Body of first-run setup. The key promise (no stored keys) must survive any rewrite."
     },
     "setupChecking": {
-      "text": "checking curator…",
+      "text": "Checking agent…",
       "note": "Placeholder status while first-run setup probes the selected CLI."
+    }
+  },
+  "states": {
+    "attached": {
+      "line": "Pick a file",
+      "short": "Pick a file to begin.",
+      "full": "The queue holds a batch of files the Kettle agent staged for this sitting. Pick an entry to read the file and its brief. Rule on what matters, then sweep to close the sitting.",
+      "note": "Shown wherever a viewport explains an open project desk with no file selected."
+    },
+    "interviewing": {
+      "line": "Chat with the agent",
+      "short": "Chat with the Kettle agent; when you are done it drafts a proposal to review.",
+      "full": "Chat with the Kettle agent to tell it what this project is and what you want from a second reader. When you are ready to proceed, the agent writes a proposal for you to review and edit. The queue fills after you approve the proposal.",
+      "note": "The founding interview (P3). Ends at the Auto control, not at Approve."
+    },
+    "proposing": {
+      "line": "Edit the proposal",
+      "short": "Edit the proposal, then Approve to found the project desk.",
+      "full": "The proposal is open in the editor. This is the document of record for your Kettle project. Read it, change anything that does not fit, and chat with the agent to revise or co-write.",
+      "note": "A proposal is open and the project desk is not founded yet (P4). Replaces thirteen hand-written variants."
+    },
+    "founding": {
+      "line": "Founding…",
+      "short": "Founding the project desk…",
+      "full": "The agent is writing the charter and stocking the first queue from your proposal. This may take a few minutes.",
+      "note": "The found stream is running."
+    },
+    "founded": {
+      "line": "Ready to begin",
+      "short": "The project desk is ready. Pick an entry to begin.",
+      "full": "This project desk now has a charter and a queue. Pick an entry to read the file, review the agent-written brief, edit and comment on each file, then sweep when the batch is done.",
+      "note": "An ordinary founded project desk."
+    },
+    "sweeping": {
+      "line": "Sweeping…",
+      "short": "Sweeping the batch and restocking the queue.",
+      "full": "The agent is applying your rulings, assessing the batch, fixing or flagging ripples, writing the session log, and restocking the queue.",
+      "note": "A sweep is running."
+    },
+    "broken": {
+      "line": "This project desk needs attention.",
+      "short": "Kettle could not read this project desk. Nothing has been changed.",
+      "full": "Kettle could not read this project desk. Its folder may have moved, or its records may be unreadable. Nothing has been changed on disk. Check the project folder, or re-found the project desk to start a fresh project.",
+      "note": "The project desk cannot be read. Never implies data loss: Kettle does not touch the user's files."
     }
   }
 }

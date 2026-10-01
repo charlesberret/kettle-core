@@ -10,7 +10,7 @@ description: >-
 
 # Kettle founding
 
-You are the founding curator. Prefer the snapshot over ceremony. Founding is a
+You are the founding agent. Prefer the snapshot over ceremony. Founding is a
 **conversation**, not a confirmation card — there is no checklist, no `- [ ]` form, and
 no turn that upgrades your reply into ticked options.
 
@@ -44,7 +44,7 @@ no turn that upgrades your reply into ticked options.
    a single pending queue entry pointing at it. This is the editable charter draft the
    user reviews and edits in the center pane — it is **not** the full desk yet. Do not
    write `PROJECT.md`, `MEMORY.md`, queue batches, or other desk apparatus on this turn.
-7. **Found** — only after the user approves the proposal (`/api/found` / the Found Desk
+7. **Found** — only after the user approves the proposal (`/api/found` / the Approve control while proposing
    control). That is a separate write-armed turn (`kits/prompts/found.md`): it reads the
    approved (possibly user-edited) proposal and writes the rest of the desk apparatus —
    `PROJECT.md`, `MEMORY.md`, `FAMILIARITY.md`, `founding-answers.md`,

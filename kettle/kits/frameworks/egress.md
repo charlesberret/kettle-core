@@ -3,7 +3,7 @@
 The desk's `outbound/` folder (the `outbound/` directory inside the desk directory named
 elsewhere in this prompt — do not assume it is `.kettle/`; an unmigrated desk keeps its
 legacy directory) is the **staging queue** for signals meant for other agents or systems.
-Stage here; never transmit mail or route outside the project from the curator sandbox.
+Stage here; never transmit mail or route outside the project from the agent sandbox.
 External pickup drains `Status: staged` files and routes them.
 
 **Not** the inbox kit's `<root>/outbox` — that holds approved mail drafts for an out-of-band sender.

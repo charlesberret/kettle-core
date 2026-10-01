@@ -29,7 +29,7 @@ The one-line question an entry puts to the user — what judgment is wanted on t
 Not a synonym for this term:
 
 - `request` — the product word is ask
-- `prompt` — 'prompt' means the curator's instructions
+- `prompt` — 'prompt' means the `curator`'s instructions
 
 ### brief
 
@@ -50,11 +50,11 @@ What a desk is for and how it should be worked, written at founding. Lives in PR
 
 Not a synonym for this term:
 
-- `config` — a charter is prose the user and curator both read
+- `config` — a charter is prose the user and `curator` both read
 
 ### desk
 
-One project as Kettle holds it: its charter, memory, queue, and records, kept in the project's desk directory. A desk is founded once and then worked, sitting by sitting.
+One project as Kettle holds it: its charter, memory, queue, and records, kept in the project's desk directory. User-facing copy names it **the project desk**; `desk` alone remains the term in code, prompts, docs and file names (DESK-PROPOSAL.md).
 
 *casing: `lower`*
 
@@ -62,6 +62,7 @@ Not a synonym for this term:
 
 - `workspace` — a desk is not an IDE workspace
 - `Desk directory` — common noun
+- `the desk` — on screen it is `the project desk`; bare `desk` is for code and docs
 
 ### egress
 
@@ -86,7 +87,7 @@ Not a synonym for this term:
 
 ### founding
 
-Bringing a desk into being: register, survey, interview, Draft Proposal, Found Desk. Founding is a conversation, not a confirmation card.
+Bringing a desk into being: register, survey, interview, Draft Proposal, `Found Desk`. Founding is a conversation, not a confirmation card.
 
 *casing: `lower`*
 
@@ -97,13 +98,9 @@ Not a synonym for this term:
 
 ### founding interview
 
-The tool-less conversation in which the curator learns what the project is and what the user wants from a second reader. A common noun: lowercase in prose.
+The tool-less conversation in which the curator learns what the project is and what the user wants from a second reader. A common noun: lowercase in prose. Lowercase in prose; as a pane hed it takes Title Case like any hed (docs/UI.md), which is why `Founding Interview` is correct in the status strip.
 
 *casing: `lower`*
-
-Wrong spellings (these fail the linter):
-
-- `Founding Interview` — a common noun, not a document title — lowercase in prose
 
 Not a synonym for this term:
 
@@ -145,7 +142,7 @@ One working session at a desk: the user reviews the queue, rules on entries, and
 
 Not a synonym for this term:
 
-- `session` — 'session' is the curator's conversation state, not the user's working period
+- `session` — 'session' is the `curator`'s conversation state, not the user's working period
 
 ### sweep
 
@@ -171,17 +168,22 @@ Not a synonym for this term:
 
 ## Roles
 
-### curator
+### agent
 
-The project's resident agent: curates the queue, converses about the open file, and sweeps. Its identity lives in files, not in a session, so any agent that reads them is the curator.
+The project's resident agent: curates the queue, converses about the open file, and sweeps. Its identity lives in files, not in a session, so any model that reads them is the agent. Renamed from `curator` on 2026-10-01; the verb `curate` and the adjective `curatorial` survive, and so does every identifier (`curator.provider` in settings, `/api/curator`, `curatorProvider`), which is contract, not copy.
 
 *casing: `lower`*
 
+Retired — must not come back (these fail the linter):
+
+- `curator` — the role is `agent` in user-facing copy (2026-10-01)
+- `Curator` — the role is `agent` in user-facing copy (2026-10-01)
+
 Not a synonym for this term:
 
-- `assistant` — generic; the curator is a defined role
-- `the AI` — never refer to the curator this way in product copy
-- `the bot` — never refer to the curator this way in product copy
+- `assistant` — generic; the agent is a defined role
+- `the AI` — never refer to the agent this way in product copy
+- `the bot` — never refer to the agent this way in product copy
 
 ## Documents
 
@@ -200,9 +202,13 @@ Not a synonym for this term:
 
 ### Approve
 
-The control that bookmarks a ruling on the open entry. It does not apply or commit anything — only a sweep does that.
+The control that rules on the open entry. On a founded project desk it bookmarks a ruling and applies nothing until a sweep. While a proposal is open it founds the project desk — the label no longer changes, so the sitting promotes the control visually instead (`body.proposing #approve`).
 
 *casing: `title` · not case-checked*
+
+Retired — must not come back (these fail the linter):
+
+- `Found Desk` — the control reads Approve in both states (2026-10-01); `found` survives as the verb
 
 Not a synonym for this term:
 
@@ -224,20 +230,6 @@ Retired — must not come back (these fail the linter):
 
 - `finish ✓` — retired label
 - `Finish Interview` — retired label
-
-### Found Desk
-
-The control that founds the desk from the edited Desk Proposal and stocks the first queue. The Approve control takes this label while proposing.
-
-*casing: `title`*
-
-Wrong spellings (these fail the linter):
-
-- `found desk` — a named control — Title Case
-
-Not a synonym for this term:
-
-- `Create Desk` — a desk is founded, not created
 
 ### Start Interview
 

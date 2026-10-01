@@ -31,7 +31,7 @@ You are closing a Kettle sitting. Prefer scripts over ceremony.
 - Dump sitting transcripts into FAMILIARITY.
 - Transmit inbox outbound mail — staging only (`<root>/outbox`).
 - Confuse desk egress (the desk's `outbound/` folder) with inbox mail outbox.
-- Execute mail/Slack/webhook dispatch from the curator — stage or egress only.
+- Execute mail/Slack/webhook dispatch from the agent — stage or egress only.
 - Tell peer agents (or imply in egress) that pending queue work is cleared — only **approved** entries after this sitting are cleared.
 
 ## Frameworks

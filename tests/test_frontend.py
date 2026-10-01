@@ -196,6 +196,15 @@ class ViewportRitualRegressionBar(unittest.TestCase):
         self.assertIn("revealQueue(pid", found)
 
     def test_proposal_phase_keeps_the_found_action_visible(self):
+        """Pressing Approve on a proposal founds the desk — that must still read.
+
+        The button used to say "Found Desk" while proposing, so the label itself
+        warned that this press was the big one. The 2026-10-01 copy pass retired that
+        label: it now reads Approve in both states. The CSS promotion is therefore the
+        ONLY thing left distinguishing them, which makes this assertion load-bearing
+        rather than decorative — if the rule goes, nothing on the control says that
+        pressing it founds the desk.
+        """
         self.assertRegex(
             self.html,
             r"body\.proposing\s+#approve\s*\{",
@@ -204,11 +213,15 @@ class ViewportRitualRegressionBar(unittest.TestCase):
         proposing = self.function("setProposingChrome")
         self.assertIn("classList.toggle('proposing'", proposing)
         self.assertNotIn("pointerEvents = 'none'", proposing)
-        # The label comes from the catalog now, with the old literal as the fallback
-        # for a sitting that could not load /ui-copy.js — assert both, so neither the
-        # key nor the offline fallback can quietly disappear.
+        # Label and tooltip both come from the catalog, with the shipped strings as the
+        # fallback for a sitting that could not load /ui-copy.js.
         guide = self.function("showProposalGuide")
-        self.assertIn("uic('approveLabelFounding', 'Found Desk')", guide)
+        self.assertIn("uic('approveLabelFounding', 'Approve')", guide)
+        self.assertIn("uic('approveHintFounding',", guide)
+
+    def test_found_desk_is_retired_from_the_sitting(self):
+        """The control label was retired on 2026-10-01; "found" survives as the verb."""
+        self.assertNotIn("Found Desk", self.html)
 
     def test_agent_chat_renders_gfm(self):
         """Agent bubbles must paint GFM (headings, lists, task ticks), not raw markdown."""

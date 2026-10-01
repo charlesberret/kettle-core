@@ -28,7 +28,7 @@ Route shapes, the error envelope and the NDJSON event table are in
 1. **MUST** read `~/.cache/kettle/server.json` for `port` + `token` (the graphical sitting is
    served the token in a meta tag instead; that path is for browsers only).
 2. **MUST** `GET /api/ping` → `app: "kettle"`, `version`, `api_version`, `desk_schema_version`,
-   plus the active curator, and keep `api_version` where a bug report can see it. `API_VERSION`
+   plus the active agent, and keep `api_version` where a bug report can see it. `API_VERSION`
    is still `0` (deliberately pre-stable), so **SHOULD NOT** refuse an unknown value yet: warn
    and proceed. Once core reaches `1`, refuse a core whose `api_version` is above the highest
    you support (decision D4).
@@ -97,7 +97,7 @@ unfounded desk. **MUST** then run §3.5 rather than treating it as an ordinary a
 §4.
 
 **TUI §2.** Save matched (`POST /api/save`). Approve matched as a bookmark, and the founding
-fork now matched (`9c9d8ed`): Approve always POSTs, and Found Desk runs only when the response
+fork now matched (`9c9d8ed`): Approve always POSTs, and founding runs only when the response
 carries `founding: true`, never from a local phase. Comment matched, including empty `text` to
 clear. Sweep §4.
 
@@ -135,8 +135,8 @@ and fail to write `PROJECT.md`. `has_charter` is reported beside it for diagnosi
 - Subsequent turns send the user's text.
 - The interview is **tool-less**: expect `text` events, no `tool` events.
 - **SHOULD** offer "resume" wording when re-entering an interview that already has turns; the
-  reference sitting sends a one-line steer asking the curator to restate where things stand.
-- Core starts a **fresh** curator session unless the stored session is already an interview, so
+  reference sitting sends a one-line steer asking the agent to restate where things stand.
+- Core starts a **fresh** agent session unless the stored session is already an interview, so
   a chat opened before founding cannot become the interview.
 
 ### 3.3 Draft Proposal
@@ -145,8 +145,8 @@ queue entry (`desk-proposal`). Status becomes `proposing`.
 
 - **MUST NOT** treat propose as founding. Core refuses to promote a desk to `founded` from a
   propose turn.
-- **SHOULD** open the proposal file in the file surface afterwards and tell the user to edit it
-  there.
+- **SHOULD** open the proposal file in the file surface afterwards and render
+  `states.proposing` at the register its chrome affords (§7).
 
 ### 3.4 The user edits the proposal
 Ordinary §1/§2.1 file editing, plus §5 chat to revise. **MUST** keep the proposal openable
@@ -159,7 +159,7 @@ hand-edited queue, an older core). A viewport that only ever polls with `mutate=
 **SHOULD** issue one mutating read when the user explicitly refreshes an unfounded desk
 (decision D1).
 
-### 3.5 Found Desk
+### 3.5 Found the project desk
 1. **MUST** `POST /api/approve` on the proposal entry. Its response carries `founding: true`;
    that flag is core's own answer and is preferred over a locally cached phase, which can be
    stale after another viewport acted on the same desk (decision D3).
@@ -167,9 +167,9 @@ hand-edited queue, an older core). A viewport that only ever polls with `mutate=
    streams.
 3. **MUST** re-read `GET /api/interview` when the stream ends and announce a founded desk
    **only when `founded` is true**. A stream that ended is not a founded desk.
-4. If still false: say so, keep the desk in `proposing`, and let the user revise and press
-   Found Desk again.
-5. **SHOULD** disable Approve / Found Desk while the stream runs, so a second press cannot
+4. If still false: render `states.proposing`, keep the desk in `proposing`, and let the
+   user revise and press Approve again.
+5. **SHOULD** disable Approve while the stream runs, so a second press cannot
    start a second founding.
 6. **SHOULD** reload the queue and select the first content entry once founded.
 
@@ -178,7 +178,7 @@ hand-edited queue, an older core). A viewport that only ever polls with `mutate=
   a core state; core still reports the founding phase.
 - `POST /api/projects/refound {id}` resets founding state, keeps append-only records, and backs
   the desk up under `~/.cache/kettle-refound-backups/`. It is refused with
-  `409 {code:"busy"}` while a curator turn streams on that desk. **SHOULD** offer to start the
+  `409 {code:"busy"}` while an agent turn streams on that desk. **SHOULD** offer to start the
   interview again afterwards rather than doing it automatically.
 
 **TUI §3.** Founded predicate **matched** (as of `0619b60`; was **guessed** via `has_entries`).
@@ -206,7 +206,7 @@ optional steer for this pass.
 3. **MUST NOT** start a second sweep on a desk that is already sweeping. Core also refuses:
    the stream then carries one `text` notice ("A sweep is already running for this desk") and a
    `done`.
-4. Core may answer without spawning a curator at all: "Nothing to sweep — queue empty and
+4. Core may answer without spawning an agent at all: "Nothing to sweep — queue empty and
    quiet", or a quiet mechanical close. Both arrive as a `text` + `done` NDJSON pair.
 5. **MUST** reload the queue when the stream ends (the sweep restocks it) and re-render the
    Brief region.
@@ -265,17 +265,17 @@ and clear-session **matched**, both manual (palette), never automatic.
 | Code | Status | Means | Viewport |
 |---|---|---|---|
 | `auth` | 403 | Token stale or missing | Re-read discovery, retry once; if the page itself was never given a token, say so |
-| `curator_unavailable` | 500 | Curator CLI missing or not executable | Show the message; it names the binary and points at `kettle doctor` |
+| `curator_unavailable` | 500 | Agent CLI missing or not executable | Show the message; it names the binary and points at `kettle doctor` |
 | `queue_corrupt` | 409 | `queue.json` does not parse (never overwritten by core) | Desk-local error; keep other desks usable |
 | `unsafe_path` | 403 | A desk write would follow a symlink out of the project | Show it; do not retry |
-| `busy` | 409 | Refound while a curator turn streams | Ask the user to wait |
+| `busy` | 409 | Refound while an agent turn streams | Ask the user to wait |
 | `not_found` | 404 | Unknown entry, missing file, moved project folder | Refresh the queue / project list |
 | `bad_request`, `bad_json` | 400 | Malformed call | Fix the call |
 
 **MUST** check the HTTP status **before** reading a stream: a refused streaming route returns a
 JSON error body, not NDJSON. Reading it as a stream makes a failed turn look like a silent one.
 
-A stream can also end in an `error` event with a `done` — for example the curator idle timeout
+A stream can also end in an `error` event with a `done` — for example the agent idle timeout
 (`curator.idle_timeout_s`, default 300 s). **SHOULD** show those as agent-level failures, not
 as chat text.
 
@@ -287,7 +287,34 @@ refreshes `GET /api/projects` and drops the desk when it has left the registry (
 
 ---
 
-## 7. Decisions
+## 7. What a viewport says
+
+This file used to tell a viewport to "tell the user" something and leave it to invent
+the sentence. Four viewports obeying that correctly produced thirteen different
+sentences for one moment, which is how the sitting, the TUI and the Desk panel ended
+up disagreeing about what pressing Approve does.
+
+The words now live in the catalog, keyed by the states this file already names:
+`states.attached`, `.interviewing`, `.proposing`, `.founding`, `.founded`,
+`.sweeping`, `.broken` in `kettle/static/ui-copy.json`, served at
+`GET /api/ui-copy` and as `KETTLE_UI_STATES` in `/ui-copy.js`.
+
+Each carries three registers of **the same message**, never a different instruction:
+
+| Register | For |
+|---|---|
+| `line` | a status bar or a one-line strip |
+| `short` | one sentence — a takeaway, a toast, a brief line |
+| `full` | a guide bubble or an empty-state body |
+
+A viewport **MUST** render the register its chrome affords and **MUST NOT** author its
+own sentence for a state the catalog covers. A missing register falls back to the
+longest one present: too many words beats none.
+
+This does not cover transient, specific messages ("the agent is still working"), which
+stay where they are — a state message describes a state, not an event.
+
+## 8. Decisions
 
 Settled by kettle-core and kettle-tui on 2026-09-15, from the TUI's marking pass. Each is
 written into the section above; they are collected here so a third viewport does not re-argue
@@ -304,7 +331,7 @@ Open, deliberate divergences (recorded, not faults): the TUI's dirty-buffer moda
 autosave, its plain-text agent stream instead of display markdown (the P4 rule it must keep is
 *never interactive*), and no chatlog, interjection queue or auto-compact.
 
-## 8. What this file does not decide
+## 9. What this file does not decide
 
 Layout, region jobs, keybindings and ritual copy: [`UI-STRUCTURE.md`](./UI-STRUCTURE.md) and
 [`UI.md`](./UI.md). Capability levels and what a viewport must ship:

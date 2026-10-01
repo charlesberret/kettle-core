@@ -7,6 +7,20 @@ and Desk schema have their own integer contract versions.
 
 ### Changed
 
+- **The agent is called the agent.** `curator` is retired from everything a user or
+  the model reads: the sitting, the copy catalog, and all 10,294 words of the prompt
+  corpus. The verb `curate`, the adjective `curatorial` and the `curated` queue field
+  survive, and every identifier (`curator.provider`, `/api/curator`, `curatorProvider`)
+  is unchanged — those are contract, not copy.
+- **`Found Desk` is retired as a control label.** The ritual control reads **Approve**
+  in both states; while a proposal is open, pressing it founds the project desk and
+  the sitting promotes the control visually (`body.proposing #approve`) instead of
+  renaming it. "Found" survives as the verb.
+- **A project is "the project desk" on screen**; `desk` alone stays the term in code,
+  prompts, docs and file names.
+- Sitting copy rewritten end to end from a full editorial pass: 32 of 47 catalog
+  strings, plus every `short` variant.
+
 - **UI copy is one catalog in JSON.** `static/ui-copy.json` replaces
   `static/ui-copy.js`, which is deleted — `/ui-copy.js` is now rendered from the
   JSON per request, so no generated file can drift from it. Python viewports read
@@ -21,6 +35,13 @@ and Desk schema have their own integer contract versions.
 - New desk files and lineage records are created mode `0600`. Existing files keep their bits.
 
 ### Added
+
+- **State messages.** `ui-copy.json` gains a `states` section keyed by the flow states
+  `docs/SITTING-FLOWS.md` names, each in three registers (`line` / `short` / `full`).
+  Thirteen hand-written variants of "edit the proposal, then found the desk" — seven in
+  `index.html`, four in the TUI, two catalog keys — collapse to one message. The spec
+  now says *render `states.proposing`* where it used to say "tell the user", and
+  `SITTING-FLOWS.md` §7 makes that a MUST.
 
 - **UI debug mode** (Diagnostics → Inspect Interface Copy, or `?uidebug=1`).
   Outlines catalogued copy, names the key, the binding and the owning file, and

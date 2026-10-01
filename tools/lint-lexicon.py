@@ -143,7 +143,12 @@ def check_text(text: str, terms: list[dict], *, where: str, line_no: int) -> lis
         for check_name, key in (("avoid-form", "avoid"), ("retired-form", "retired")):
             for bad in t.get(key, []):
                 form = bad["form"]
-                for m in re.finditer(re.escape(form), masked):
+                # Whole words only. Without the boundaries, retiring `curator` also
+                # flags `curatorial` and `curated` — 94 false warnings on the first
+                # run of the rename, and the kind of noise that gets a linter turned
+                # off. A form ending in punctuation (`finish ✓`) still works: \w only
+                # guards an alphanumeric neighbour.
+                for m in re.finditer(r"(?<!\w)" + re.escape(form) + r"(?!\w)", masked):
                     findings.append({
                         "check": check_name, "where": where, "line": line_no,
                         "term": term, "found": form, "why": bad["why"],

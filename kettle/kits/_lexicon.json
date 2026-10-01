@@ -11,7 +11,7 @@
       "term": "desk",
       "kind": "concept",
       "casing": "lower",
-      "gloss": "One project as Kettle holds it: its charter, memory, queue, and records, kept in the project's desk directory. A desk is founded once and then worked, sitting by sitting.",
+      "gloss": "One project as Kettle holds it: its charter, memory, queue, and records, kept in the project's desk directory. User-facing copy names it **the project desk**; `desk` alone remains the term in code, prompts, docs and file names (DESK-PROPOSAL.md).",
       "avoid": [],
       "not_synonyms": [
         {
@@ -21,6 +21,10 @@
         {
           "form": "Desk directory",
           "why": "common noun"
+        },
+        {
+          "form": "the desk",
+          "why": "on screen it is `the project desk`; bare `desk` is for code and docs"
         }
       ]
     },
@@ -34,7 +38,7 @@
       "not_synonyms": [
         {
           "form": "session",
-          "why": "'session' is the curator's conversation state, not the user's working period"
+          "why": "'session' is the `curator`'s conversation state, not the user's working period"
         }
       ]
     },
@@ -106,7 +110,7 @@
         },
         {
           "form": "prompt",
-          "why": "'prompt' means the curator's instructions"
+          "why": "'prompt' means the `curator`'s instructions"
         }
       ]
     },
@@ -148,25 +152,35 @@
     },
     {
       "id": "curator",
-      "term": "curator",
+      "term": "agent",
       "kind": "role",
       "casing": "lower",
-      "gloss": "The project's resident agent: curates the queue, converses about the open file, and sweeps. Its identity lives in files, not in a session, so any agent that reads them is the curator.",
-      "avoid": [],
+      "gloss": "The project's resident agent: curates the queue, converses about the open file, and sweeps. Its identity lives in files, not in a session, so any model that reads them is the agent. Renamed from `curator` on 2026-10-01; the verb `curate` and the adjective `curatorial` survive, and so does every identifier (`curator.provider` in settings, `/api/curator`, `curatorProvider`), which is contract, not copy.",
       "not_synonyms": [
         {
           "form": "assistant",
-          "why": "generic; the curator is a defined role"
+          "why": "generic; the agent is a defined role"
         },
         {
           "form": "the AI",
-          "why": "never refer to the curator this way in product copy"
+          "why": "never refer to the agent this way in product copy"
         },
         {
           "form": "the bot",
-          "why": "never refer to the curator this way in product copy"
+          "why": "never refer to the agent this way in product copy"
         }
-      ]
+      ],
+      "retired": [
+        {
+          "form": "curator",
+          "why": "the role is `agent` in user-facing copy (2026-10-01)"
+        },
+        {
+          "form": "Curator",
+          "why": "the role is `agent` in user-facing copy (2026-10-01)"
+        }
+      ],
+      "avoid": []
     },
     {
       "id": "charter",
@@ -179,7 +193,7 @@
       "not_synonyms": [
         {
           "form": "config",
-          "why": "a charter is prose the user and curator both read"
+          "why": "a charter is prose the user and `curator` both read"
         }
       ]
     },
@@ -211,7 +225,7 @@
       "term": "founding",
       "kind": "concept",
       "casing": "lower",
-      "gloss": "Bringing a desk into being: register, survey, interview, Draft Proposal, Found Desk. Founding is a conversation, not a confirmation card.",
+      "gloss": "Bringing a desk into being: register, survey, interview, Draft Proposal, `Found Desk`. Founding is a conversation, not a confirmation card.",
       "avoid": [],
       "not_synonyms": [
         {
@@ -229,13 +243,8 @@
       "term": "founding interview",
       "kind": "concept",
       "casing": "lower",
-      "gloss": "The tool-less conversation in which the curator learns what the project is and what the user wants from a second reader. A common noun: lowercase in prose.",
-      "avoid": [
-        {
-          "form": "Founding Interview",
-          "why": "a common noun, not a document title — lowercase in prose"
-        }
-      ],
+      "gloss": "The tool-less conversation in which the curator learns what the project is and what the user wants from a second reader. A common noun: lowercase in prose. Lowercase in prose; as a pane hed it takes Title Case like any hed (docs/UI.md), which is why `Founding Interview` is correct in the status strip.",
+      "avoid": [],
       "not_synonyms": [
         {
           "form": "onboarding interview",
@@ -259,25 +268,6 @@
         {
           "form": "draft desk",
           "why": "not a product term"
-        }
-      ]
-    },
-    {
-      "id": "found-desk",
-      "term": "Found Desk",
-      "kind": "control",
-      "casing": "title",
-      "gloss": "The control that founds the desk from the edited Desk Proposal and stocks the first queue. The Approve control takes this label while proposing.",
-      "avoid": [
-        {
-          "form": "found desk",
-          "why": "a named control — Title Case"
-        }
-      ],
-      "not_synonyms": [
-        {
-          "form": "Create Desk",
-          "why": "a desk is founded, not created"
         }
       ]
     },
@@ -312,7 +302,7 @@
       "term": "Approve",
       "kind": "control",
       "casing": "title",
-      "gloss": "The control that bookmarks a ruling on the open entry. It does not apply or commit anything — only a sweep does that.",
+      "gloss": "The control that rules on the open entry. On a founded project desk it bookmarks a ruling and applies nothing until a sweep. While a proposal is open it founds the project desk — the label no longer changes, so the sitting promotes the control visually instead (`body.proposing #approve`).",
       "avoid": [],
       "not_synonyms": [
         {
@@ -321,7 +311,13 @@
         }
       ],
       "lint_case": false,
-      "lint_note": "Not case-checked: the term is a single ordinary word, so a lowercase occurrence is the concept, not a misspelling of the control."
+      "lint_note": "Not case-checked: the term is a single ordinary word, so a lowercase occurrence is the concept, not a misspelling of the control.",
+      "retired": [
+        {
+          "form": "Found Desk",
+          "why": "the control reads Approve in both states (2026-10-01); `found` survives as the verb"
+        }
+      ]
     },
     {
       "id": "sweep-control",

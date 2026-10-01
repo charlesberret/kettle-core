@@ -86,15 +86,36 @@ class Catches(unittest.TestCase):
         self.assertIn("wrong-case", checks("edit the desk proposal, then found"))
 
     def test_wrong_case_on_a_multiword_control(self):
-        self.assertIn("wrong-case", checks("press found desk when ready"))
+        self.assertIn("wrong-case", checks("click start interview to begin"))
 
     def test_stray_capital_on_a_common_noun(self):
         self.assertIn("stray-capital", checks("the Sitting ends with a sweep"))
 
-    def test_avoid_form(self):
-        found = [f for f in check("the Founding Interview begins") if f["check"] == "avoid-form"]
+    def test_retired_role_name(self):
+        """`curator` became `agent` in user-facing copy on 2026-10-01."""
+        found = [f for f in check("the curator files a brief") if f["check"] == "retired-form"]
+        self.assertTrue(found, "the retired role name must still be caught")
+        self.assertIn("agent", found[0]["why"])
+
+    def test_retired_control_name(self):
+        """The control reads Approve in both states; `Found Desk` must not come back."""
+        found = [f for f in check("press Found Desk when ready") if f["check"] == "retired-form"]
         self.assertTrue(found)
-        self.assertIn("lowercase", found[0]["why"])
+
+    def test_the_verb_survives_the_retired_control(self):
+        """Only the label was retired. "found the project desk" is still correct."""
+        self.assertEqual([], [f for f in check("Approve founds the project desk.")
+                              if f["check"] == "retired-form"])
+
+    def test_retired_forms_match_whole_words_only(self):
+        """Retiring `curator` must not flag `curatorial`, `curated` or `curate`.
+
+        It did, on the first run of the rename: 94 false warnings, every one of them
+        a word that merely starts the same way.
+        """
+        for ok in ("real curatorial briefs", 'the "curated" field', "you curate a queue"):
+            with self.subTest(text=ok):
+                self.assertEqual([], [f for f in check(ok) if f["check"] == "retired-form"])
 
 
 class Exemptions(unittest.TestCase):
@@ -106,8 +127,8 @@ class Exemptions(unittest.TestCase):
         self.assertNotIn("stray-capital", checks("Add Project"))
 
     def test_a_common_noun_inside_a_title_term_is_that_term(self):
-        self.assertNotIn("stray-capital", checks("press Found Desk to finish"))
         self.assertNotIn("stray-capital", checks("the Desk Proposal is open"))
+        self.assertNotIn("stray-capital", checks("open the Desk Proposal now"))
 
     def test_sentence_start_capital_is_english(self):
         self.assertNotIn("stray-capital", checks("Sweep closes the sitting."))
@@ -166,8 +187,9 @@ class Baseline(unittest.TestCase):
         """Documented intent, checked cheaply: the file is a debt, not a config."""
         doc = json.loads((ROOT / "kettle" / "kits" / "_lexicon-baseline.json").read_text())
         self.assertIn("Shrink this list", doc["_note"])
-        self.assertLessEqual(len(doc["known"]), 8,
-                             "the baseline grew — fix the violation instead")
+        self.assertEqual([], doc["known"],
+                         "the baseline is empty as of 2026-10-01 — fix the violation "
+                         "rather than adding to this list")
 
 
 if __name__ == "__main__":
