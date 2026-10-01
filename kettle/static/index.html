@@ -1851,27 +1851,27 @@
   </div>
   <!-- Founding status sits under the project bar (hidden unless body.founding). -->
   <div id="foundinghead">
-    <span class="ivtitle" data-uic="foundingHeadTitle">Founding Interview</span>
+    <span class="ivtitle" data-uic="foundingHeadTitle">Setting up your project</span>
     <span class="ivacts">
-      <button id="ivskip" type="button" class="btn btn-sm btn-ghost" title="Leave the founding process for later — open the project with no charter or file queue"
+      <button id="ivskip" type="button" class="btn btn-sm btn-ghost" title="Set this up later — open the project now, with no files lined up"
               data-uic="skipFoundingLabel" data-uic-title="skipFoundingHint">Skip: open a blank project for now</button>
-      <button id="ivfinish" type="button" class="btn btn-sm btn-ghost" title="Skip the rest of the interview and let the agent draft the Desk Proposal now"
+      <button id="ivfinish" type="button" class="btn btn-sm btn-ghost" title="Skip the rest of the questions and let the agent write the proposal now"
               data-uic="draftProposalLabel" data-uic-title="draftProposalHint">Auto: let the Kettle agent decide</button>
     </span>
   </div>
   <div id="divBrief" class="hdivider" title="drag to resize brief / chat"></div>
   <div id="ritual" class="actions-ritual" role="group" aria-label="Desk actions">
-    <button id="approve" class="btn btn-sm btn-default" title="Mark a ruling — this does not apply changes to the files until you click 'Sweep'"
+    <button id="approve" class="btn btn-sm btn-default" title="Mark your decision on this file. Nothing changes until you press Sweep."
             data-uic="approveLabel" data-uic-title="approveHint">Approve</button>
-    <button id="comment" class="btn btn-sm btn-default" title="Leave a note on this file for the agent to address during the sweep"
+    <button id="comment" class="btn btn-sm btn-default" title="Leave a note on this file for the agent to act on"
             data-uic="commentLabel" data-uic-title="commentHint">Comment</button>
-    <button id="sweepbtn" class="btn btn-sm btn-default" title="Close the sitting: apply rulings, diff &amp; assess the batch, fix/flag ripples, log the session, restock the queue"
+    <button id="sweepbtn" class="btn btn-sm btn-default" title="Finish this batch: apply your decisions, review what changed, note anything else it affects, and line up the next files"
             data-uic="sweepLabel" data-uic-title="sweepHint">Sweep</button>
   </div>
   <div id="commentpanel">
     <textarea id="commentin" spellcheck="false" data-uic-ph="commentPlaceholder"
-              placeholder="A note on this file for the agent to read during the sweep — Enter saves · Shift+Enter newline · Esc cancels"></textarea>
-    <div class="crow"><span id="commenthint" data-uic="commentTiedHint">The comment is tied to this file. The agent reads it when you close the sitting with a sweep.</span><span style="flex:1"></span><button id="commentsave" class="btn btn-sm btn-primary" data-uic="commentSaveLabel">Save</button></div>
+              placeholder="A note on this file for the agent to read when you finish this batch — Enter saves · Shift+Enter newline · Esc cancels"></textarea>
+    <div class="crow"><span id="commenthint" data-uic="commentTiedHint">This note stays with the file. The agent reads it when you press Sweep.</span><span style="flex:1"></span><button id="commentsave" class="btn btn-sm btn-primary" data-uic="commentSaveLabel">Save</button></div>
   </div>
   <div id="divDesk" class="hdivider" title="drag to resize brief / chat"></div>
   <div id="chatwrap">
@@ -1942,7 +1942,7 @@
 <div id="setupbg">
   <div id="setupmodal" role="dialog" aria-modal="true" aria-labelledby="setupmodal-h">
     <h2 id="setupmodal-h" data-uic="setupTitle">Kettle</h2>
-    <div class="mnote" data-uic="setupNote">Pick the agent that runs the founding, chat, and sweep process. Kettle never stores keys. Sign in with your browser or set the API key in your shell.</div>
+    <div class="mnote" data-uic="setupNote">Pick the agent that runs setup, chat, and reviews. Kettle never stores keys. Sign in with your browser or set the API key in your shell.</div>
     <div class="mrow" style="margin-bottom:8px">
       <span class="lbl">provider</span>
       <select id="setupProvider" style="flex:1" title="Agent CLI family" aria-label="Provider"></select>
@@ -1958,10 +1958,10 @@
 
 <div id="sweepbg" style="position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:21;">
   <div id="sweepconfirm" role="dialog" aria-modal="true" aria-labelledby="sweepconfirm-h">
-    <h2 id="sweepconfirm-h" data-uic="sweepConfirmTitle">Sweep the Desk?</h2>
-    <div style="font-size:13px;color:var(--fg)" data-uic="sweepConfirmBody">Closes the sitting: applies ticked rulings (launches become logged directives), diffs and assesses every reviewed entry, fixes or flags ripples, writes the session log, and restocks the queue.</div>
+    <h2 id="sweepconfirm-h" data-uic="sweepConfirmTitle">Finish This Batch?</h2>
+    <div style="font-size:13px;color:var(--fg)" data-uic="sweepConfirmBody">Applies the decisions you marked, reviews what changed in each file, notes anything else it affects, saves a record of this round, and lines up the next batch.</div>
     <label><input type="checkbox" id="sweepnoask"> don't ask again (button becomes a 3-second undo instead)</label>
-    <textarea id="sweepthrust" spellcheck="false" data-uic-ph="sweepThrustPlaceholder" placeholder="Steer this pass: what's on your mind as you close the sitting? The agent reads this first (optional)"></textarea>
+    <textarea id="sweepthrust" spellcheck="false" data-uic-ph="sweepThrustPlaceholder" placeholder="Anything on your mind as you finish? The agent reads this first (optional)"></textarea>
     <div style="display:flex;justify-content:flex-end;gap:8px;">
       <button id="sweepcancel" class="btn btn-md btn-ghost">cancel</button>
       <button id="sweepgo" class="btn btn-md btn-primary">sweep</button>
@@ -1971,7 +1971,7 @@
 
 <div id="refoundbg">
   <div id="refoundmodal" role="dialog" aria-modal="true" aria-labelledby="refoundmodal-h">
-    <h2 id="refoundmodal-h" data-uic="refoundTitle">Re-found this project?</h2>
+    <h2 id="refoundmodal-h" data-uic="refoundTitle">Set up this project again?</h2>
     <p class="mnote" style="margin:0">
       <strong id="refoundname">—</strong> will be reset to an unfounded seed.
       The current <code>.kettle</code> desk is copied to a backup first; your project
@@ -6490,14 +6490,14 @@ function showProposalGuide(){
   }
   const ab = $('approve');
   if(ab){
-    ab.title = uic('approveHintFounding', 'Found the project desk by editing and approving the proposal');
+    ab.title = uic('approveHintFounding', 'Approve the proposal to set up your project');
     ab.textContent = uic('approveLabelFounding', 'Approve');
   }
 }
 function clearProposalGuideChrome(){
   const ab = $('approve');
   if(ab){
-    ab.title = uic('approveHint', "Mark a ruling — this does not apply changes to the files until you click 'Sweep'");
+    ab.title = uic('approveHint', 'Mark your decision on this file. Nothing changes until you press Sweep.');
     ab.textContent = uic('approveLabel', 'Approve');
   }
 }

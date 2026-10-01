@@ -118,6 +118,62 @@ class Catches(unittest.TestCase):
                 self.assertEqual([], [f for f in check(ok) if f["check"] == "retired-form"])
 
 
+class HouseWordsStayOffScreen(unittest.TestCase):
+    """The check that earns this tool's keep.
+
+    The first version of the linter enforced that we spell our own vocabulary
+    consistently. That protected the vocabulary and did nothing for the person trying
+    to use Kettle — and it hardened into CI the very entrenchment it should have
+    caught. A user should not need a glossary; `house` terms stay off screen and the
+    lexicon names the plain word instead.
+    """
+
+    def house(self, text):
+        return {f["found"].lower() for f in lint.check_house_words(text, TERMS, where="t")}
+
+    def test_catches_the_words_a_user_would_have_to_learn(self):
+        for text, word in [("Found the desk from your proposal", "desk"),
+                           ("Close the sitting", "sitting"),
+                           ("Rule on each entry", "entry"),
+                           ("read the brief first", "brief"),
+                           ("the charter is written", "charter")]:
+            with self.subTest(text=text):
+                self.assertIn(word, self.house(text))
+
+    def test_names_the_plain_word_as_the_fix(self):
+        f = lint.check_house_words("found the desk", TERMS, where="t")
+        fixes = " ".join(x["fix"] for x in f)
+        self.assertIn("project", fixes)
+
+    def test_leaves_plain_copy_alone(self):
+        for ok in ["press Sweep when you are done",
+                   "Edit the proposal, then approve it to set up your project",
+                   "Kettle lines up a batch of files for you to review",
+                   "Chat with the agent about this file"]:
+            with self.subTest(text=ok):
+                self.assertEqual(set(), self.house(ok))
+
+    def test_a_house_word_in_backticks_is_us_talking_about_it(self):
+        """docs and notes discuss `desk` on purpose; that is not copy."""
+        self.assertEqual(set(), self.house("the `desk` directory holds its records"))
+
+    def test_the_shipped_catalog_is_clean(self):
+        """Every string a user reads, checked against the whole house vocabulary."""
+        doc = json.loads((ROOT / "kettle" / "static" / "ui-copy.json").read_text())
+        bad = []
+        for key, rec in doc["keys"].items():
+            for field in ("text", "short"):
+                if rec.get(field):
+                    bad += [f"{key}.{field}: {f['found']}"
+                            for f in lint.check_house_words(rec[field], TERMS, where=key)]
+        for state, rec in doc.get("states", {}).items():
+            for field in ("line", "short", "full"):
+                if rec.get(field):
+                    bad += [f"states.{state}.{field}: {f['found']}"
+                            for f in lint.check_house_words(rec[field], TERMS, where=state)]
+        self.assertEqual([], bad, "house vocabulary reached the screen")
+
+
 class Exemptions(unittest.TestCase):
     """Each of these was a false positive in the first run."""
 

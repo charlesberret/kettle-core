@@ -17,6 +17,9 @@ violation in the prompt corpus or the copy catalog, and warns elsewhere.
 - **`not_synonyms`** — Different words that do not mean this term. Guidance for writers and for the curator; never linted, because only a reader can tell whether 'summary' is standing in for 'brief'.
 - **`lint_case`** — false when the term is a single ordinary word and the lowercase form is legitimately the concept.
 - **`retired`** — Literal strings that used to mean this term and must not come back (an old button label, a renamed document). Decidable, so these are errors too.
+- **`audience`** — `house` (never on screen) or `both` (allowed everywhere).
+- **`plain`** — For a `house` term: what a user sees instead. The linter quotes it as the fix.
+- **`lint_house`** — false when the house word is also an ordinary English word in another part of speech, so the on-screen check would fire on correct copy.
 
 ## Concepts
 
@@ -54,15 +57,9 @@ Not a synonym for this term:
 
 ### desk
 
-One project as Kettle holds it: its charter, memory, queue, and records, kept in the project's desk directory. User-facing copy names it **the project desk**; `desk` alone remains the term in code, prompts, docs and file names (DESK-PROPOSAL.md).
+One project as Kettle holds it: its notes, memory, queue and records, in the project's desk directory. House word. On screen a user has a **project** — never a desk, and never a "project desk": a user should not have to learn what a desk is to use Kettle.
 
 *casing: `lower`*
-
-Not a synonym for this term:
-
-- `workspace` — a desk is not an IDE workspace
-- `Desk directory` — common noun
-- `the desk` — on screen it is `the project desk`; bare `desk` is for code and docs
 
 ### egress
 
@@ -146,7 +143,7 @@ Not a synonym for this term:
 
 ### sweep
 
-Closing the sitting: apply rulings, diff and assess the batch, fix or flag ripples, write the session log, restock the queue. Both noun and verb.
+Finishing a batch: apply the user's decisions, review what changed, note the ripples, save a record, line up the next files. The one invented word Kettle asks a user to learn, and only because it is a button they press — so prose says what it does ('press Sweep: the agent applies your decisions') rather than assuming they know.
 
 *casing: `lower`*
 
@@ -189,7 +186,7 @@ Not a synonym for this term:
 
 ### Desk Proposal
 
-The document the founding interview produces, written to DESK-PROPOSAL.md. The user edits it until it matches the project, then founds the desk from it. The document of record during the proposing state.
+The document the setup questions produce, written to DESK-PROPOSAL.md. House name. On screen it is just **the proposal**.
 
 *casing: `title` · file: `DESK-PROPOSAL.md`*
 

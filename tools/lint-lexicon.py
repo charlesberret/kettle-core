@@ -16,8 +16,11 @@ Severity follows who reads the text:
   warn    everything else           docs, READMEs, catalog `note` fields: read by a
                                     person who can shrug
 
-Three checks:
+Four checks:
 
+  house-word    a house term on a surface a user reads. The check that matters most:
+                a user should not need a glossary to use Kettle, and the catalog is
+                the one place that is enforceable. The fix names the plain word.
   avoid-form    a spelling the lexicon explicitly rejects, with the reason
   retired-form  a label or name that was replaced and must not come back
   wrong-case    a Title Case term (a document or a named control) written some
@@ -199,6 +202,39 @@ def check_markdown(path: Path, terms: list[dict], rel: str) -> list[dict]:
     return findings
 
 
+HOUSE_SKIP = re.compile(r"`[^`]*`")
+
+
+def check_house_words(text: str, terms: list[dict], *, where: str) -> list[dict]:
+    """Flag a house term on a surface a user reads.
+
+    This is the inversion that matters. The first version of this linter enforced
+    that we spell our own vocabulary consistently — which protected the vocabulary
+    and did nothing for the person trying to use the product. A user should not have
+    to learn what a "desk" or a "sitting" is; those words are precise for us and
+    opaque to them. So on user-facing surfaces the rule is not "spell it our way",
+    it is "do not make them learn it".
+    """
+    masked = HOUSE_SKIP.sub(lambda m: "\0" * len(m.group(0)), text)
+    out = []
+    for t in terms:
+        if t.get("audience") != "house" or t.get("lint_house") is False:
+            continue
+        word = t["term"]
+        pat = re.compile(r"(?<![\w-])" + re.escape(word) + r"(?:s|es|ing)?(?![\w-])", re.I)
+        for m in pat.finditer(masked):
+            if "\0" in masked[m.start():m.end()]:
+                continue
+            plain = t.get("plain")
+            out.append({
+                "check": "house-word", "where": where, "line": 0, "term": word,
+                "found": masked[m.start():m.end()],
+                "why": "house word — a user should not have to learn it",
+                "fix": f"say {plain!r}" if plain else "internal term; it has no place on screen",
+            })
+    return out
+
+
 def check_catalog(path: Path, terms: list[dict], rel: str) -> list[dict]:
     """Catalog values are read verbatim; notes are developer prose."""
     findings = []
@@ -207,14 +243,28 @@ def check_catalog(path: Path, terms: list[dict], rel: str) -> list[dict]:
         for field in ("text", "short"):
             v = rec.get(field)
             if isinstance(v, str) and v:
-                for f in check_text(v, terms, where=f"{rel}:{key}.{field}", line_no=0):
+                w = f"{rel}:{key}.{field}"
+                for f in check_text(v, terms, where=w, line_no=0) + \
+                        check_house_words(v, terms, where=w):
                     f["severity_hint"] = "error"
                     findings.append(f)
         note = rec.get("note")
         if isinstance(note, str) and note:
+            # developer prose: spelling is checked, house words are welcome
             for f in check_text(note, terms, where=f"{rel}:{key}.note", line_no=0):
                 f["severity_hint"] = "warn"
                 findings.append(f)
+    for state, rec in (doc.get("states") or {}).items():
+        if not isinstance(rec, dict):
+            continue
+        for field in ("line", "short", "full"):
+            v = rec.get(field)
+            if isinstance(v, str) and v:
+                w = f"{rel}:states.{state}.{field}"
+                for f in check_text(v, terms, where=w, line_no=0) + \
+                        check_house_words(v, terms, where=w):
+                    f["severity_hint"] = "error"
+                    findings.append(f)
     return findings
 
 
