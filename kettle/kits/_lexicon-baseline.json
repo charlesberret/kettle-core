@@ -1,0 +1,37 @@
+{
+  "_note": "Known lexicon violations, accepted for now so CI can block new drift. Shrink this list; never grow it. Regenerate with tools/lint-lexicon.py --update-baseline after fixing some.",
+  "known": [
+    {
+      "id": "kettle/kits/prompts/found-legacy.md|wrong-case|desk proposal",
+      "fix": "use 'Desk Proposal'"
+    },
+    {
+      "id": "kettle/kits/prompts/found.md|wrong-case|desk proposal",
+      "fix": "use 'Desk Proposal'"
+    },
+    {
+      "id": "kettle/kits/prompts/interview-role.md|wrong-case|desk proposal",
+      "fix": "use 'Desk Proposal'"
+    },
+    {
+      "id": "kettle/kits/prompts/propose.md|stray-capital|Queue",
+      "fix": "use 'queue'"
+    },
+    {
+      "id": "kettle/kits/prompts/propose.md|wrong-case|desk PROPOSAL",
+      "fix": "use 'Desk Proposal'"
+    },
+    {
+      "id": "kettle/static/ui-copy.json:draftProposalHint.text|wrong-case|desk proposal",
+      "fix": "use 'Desk Proposal'"
+    },
+    {
+      "id": "kettle/static/ui-copy.json:draftProposalLabel.short|wrong-case|draft proposal",
+      "fix": "use 'Draft Proposal'"
+    },
+    {
+      "id": "kettle/static/ui-copy.json:editorPlaceholderFounding.text|avoid-form|Founding Interview",
+      "fix": "use 'founding interview'"
+    }
+  ]
+}

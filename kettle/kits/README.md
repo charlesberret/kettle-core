@@ -86,3 +86,5 @@ These are *personal* to a project and its owner — never hardcode them into a s
   **forks a copy** into the user layer; the shipped file stays pristine.
 - **Resolution for a project:** explicit `kit` assignment → that kind's default → none (unset).
 - **Import/export** — a kit is just JSON.
+
+`_lexicon.json` is the product's controlled vocabulary and `_lexicon-baseline.json` the violations not yet fixed. Both carry the `_` prefix for the same reason `_base.md` does: `load_defaults()` skips it, so they are not mistaken for kits. See `docs/LEXICON.md`.

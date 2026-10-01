@@ -246,6 +246,39 @@ jobs:
           print("pipx-style kettle:", out)
           PY
 
+  lexicon:
+    # The prompt corpus and the copy catalog are where vocabulary drift reaches a
+    # user: an LLM mirrors the casing it is shown, so a term misspelled in a prompt
+    # comes back in every brief the curator writes. Those two are blocking. Docs are
+    # reported, not enforced — drift there costs a reader a moment, not the product
+    # its voice.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: docs/LEXICON.md matches the lexicon
+        run: tools/render-lexicon-doc.py --check
+      - name: Lint the prompt corpus and the copy catalog
+        run: tools/lint-lexicon.py
+      - name: Report drift elsewhere (never fails the build)
+        if: always()
+        run: |
+          tools/lint-lexicon.py --json > /tmp/lex.json || true
+          python3 - <<'EOF' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          d = json.load(open("/tmp/lex.json"))
+          w = d["warnings"]
+          print(f"### Lexicon: {len(d['errors'])} errors, {len(w)} warnings\n")
+          if w:
+              print("| where | found | fix |")
+              print("|---|---|---|")
+              for f in w[:60]:
+                  loc = f"{f['where']}:{f['line']}" if f["line"] else f["where"]
+                  print(f"| `{loc}` | `{f['found']}` | {f['fix']} |")
+          EOF
+
   standalone-binary:
     # The one recipe that turns the package into something a stranger can run. It
     # rots silently otherwise: kettle-desktop's sidecar spec still points at the

@@ -1,0 +1,174 @@
+#!/usr/bin/env python3
+"""The lexicon, and the linter that enforces it.
+
+The linter's value is precision, not coverage: its first run produced 548 findings,
+of which almost all were noise, and a tool people turn off enforces nothing. These
+tests pin the exemptions that made it usable — they are the feature.
+"""
+
+from __future__ import annotations
+
+import importlib.util
+import json
+import unittest
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+LEXICON = ROOT / "kettle" / "kits" / "_lexicon.json"
+DOC = ROOT / "docs" / "LEXICON.md"
+
+
+def _load(name: str):
+    spec = importlib.util.spec_from_file_location(name, ROOT / "tools" / f"{name}.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+lint = _load("lint-lexicon")
+render = _load("render-lexicon-doc")
+TERMS = lint.load_lexicon()
+
+
+def check(text: str):
+    return lint.check_text(text, TERMS, where="t", line_no=1)
+
+
+def checks(text: str):
+    return {f["check"] for f in check(text)}
+
+
+class LexiconShape(unittest.TestCase):
+    def test_ids_unique_and_every_term_glossed(self):
+        doc = json.loads(LEXICON.read_text(encoding="utf-8"))
+        ids = [t["id"] for t in doc["terms"]]
+        self.assertEqual(len(ids), len(set(ids)))
+        for t in doc["terms"]:
+            self.assertTrue(t.get("gloss"), f"{t['id']} has no gloss")
+            self.assertIn(t["casing"], ("title", "lower"))
+
+    def test_retired_forms_are_literal_and_linted(self):
+        """A replaced label is decidable by literal match, so it stays an error."""
+        found = [f for f in check("press finish ✓ to continue") if f["check"] == "retired-form"]
+        self.assertTrue(found, "a retired label must still be caught")
+
+    def test_avoid_holds_only_spellings_of_its_own_term(self):
+        """`avoid` is linted, so it must be decidable.
+
+        A different word ("summary" for "brief") is only wrong when it *means* the
+        term, which no regex can tell. Those belong in `not_synonyms`, which is
+        guidance and never linted.
+        """
+        for t in json.loads(LEXICON.read_text(encoding="utf-8"))["terms"]:
+            for bad in t.get("avoid", []):
+                self.assertEqual(
+                    bad["form"].lower().replace("-", " ").replace("✓", "").strip(),
+                    t["term"].lower().replace("-", " ").replace("✓", "").strip(),
+                    f"{t['id']}: {bad['form']!r} is a synonym, not a spelling — "
+                    "move it to not_synonyms",
+                )
+
+    def test_single_word_controls_are_not_case_checked(self):
+        """Sweep/Approve/Comment share a spelling with the concept."""
+        for t in json.loads(LEXICON.read_text(encoding="utf-8"))["terms"]:
+            if t["casing"] == "title" and " " not in t["term"]:
+                self.assertIs(t.get("lint_case"), False, f"{t['id']} would flag the concept")
+
+    def test_generated_doc_is_current(self):
+        self.assertEqual(0, render.main.__wrapped__() if hasattr(render.main, "__wrapped__") else 0)
+        body = render.render(json.loads(LEXICON.read_text(encoding="utf-8")))
+        self.assertEqual(body, DOC.read_text(encoding="utf-8"),
+                         "docs/LEXICON.md is stale — run tools/render-lexicon-doc.py")
+
+
+class Catches(unittest.TestCase):
+    def test_wrong_case_on_a_document_name(self):
+        self.assertIn("wrong-case", checks("edit the desk proposal, then found"))
+
+    def test_wrong_case_on_a_multiword_control(self):
+        self.assertIn("wrong-case", checks("press found desk when ready"))
+
+    def test_stray_capital_on_a_common_noun(self):
+        self.assertIn("stray-capital", checks("the Sitting ends with a sweep"))
+
+    def test_avoid_form(self):
+        found = [f for f in check("the Founding Interview begins") if f["check"] == "avoid-form"]
+        self.assertTrue(found)
+        self.assertIn("lowercase", found[0]["why"])
+
+
+class Exemptions(unittest.TestCase):
+    """Each of these was a false positive in the first run."""
+
+    def test_a_hed_may_capitalise_a_common_noun(self):
+        """docs/UI.md puts heds in Title Case, so 'Sweep the Desk?' is correct."""
+        self.assertNotIn("stray-capital", checks("Sweep the Desk?"))
+        self.assertNotIn("stray-capital", checks("Add Project"))
+
+    def test_a_common_noun_inside_a_title_term_is_that_term(self):
+        self.assertNotIn("stray-capital", checks("press Found Desk to finish"))
+        self.assertNotIn("stray-capital", checks("the Desk Proposal is open"))
+
+    def test_sentence_start_capital_is_english(self):
+        self.assertNotIn("stray-capital", checks("Sweep closes the sitting."))
+        self.assertNotIn("stray-capital", checks("- Desk records are append-only"))
+
+    def test_code_spans_and_paths_are_not_prose(self):
+        self.assertEqual([], check("see `desk proposal` in the schema"))
+        self.assertEqual([], check("writes DESK-PROPOSAL.md to the desk"))
+        self.assertEqual([], check("kettle/kits/prompts/desk proposal/x.md"))
+
+    def test_the_lowercase_concept_is_not_a_miscased_control(self):
+        """'sweep' the act must not read as a misspelling of the Sweep control."""
+        self.assertEqual([], check("close each sitting with a sweep"))
+        self.assertEqual([], check("approve alone is a desk bookmark"))
+
+
+class Severity(unittest.TestCase):
+    def test_catalog_values_are_errors_and_notes_are_warnings(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as td:
+            p = Path(td) / "ui-copy.json"
+            p.write_text(json.dumps({"keys": {
+                "a": {"text": "edit the desk proposal", "note": "about the desk proposal"},
+            }}), encoding="utf-8")
+            found = lint.check_catalog(p, TERMS, "ui-copy.json")
+            by_field = {f["where"].rsplit(".", 1)[-1]: f["severity_hint"] for f in found}
+            self.assertEqual("error", by_field["text"])
+            self.assertEqual("warn", by_field["note"])
+
+
+class Baseline(unittest.TestCase):
+    """The baseline blocks new drift without rewriting unreviewed copy first."""
+
+    def test_baseline_entries_all_still_match_something(self):
+        """A stale exemption is a lie about the codebase, so it fails the lint too."""
+        import subprocess
+
+        r = subprocess.run(
+            [str(ROOT / "tools" / "lint-lexicon.py"), "--json"],
+            capture_output=True, text=True, cwd=ROOT,
+        )
+        self.assertEqual([], json.loads(r.stdout)["stale_baseline"],
+                         "run tools/lint-lexicon.py --update-baseline")
+
+    def test_repo_has_no_unbaselined_errors(self):
+        import subprocess
+
+        r = subprocess.run(
+            [str(ROOT / "tools" / "lint-lexicon.py")],
+            capture_output=True, text=True, cwd=ROOT,
+        )
+        self.assertEqual(0, r.returncode, r.stdout + r.stderr)
+
+    def test_baseline_only_shrinks(self):
+        """Documented intent, checked cheaply: the file is a debt, not a config."""
+        doc = json.loads((ROOT / "kettle" / "kits" / "_lexicon-baseline.json").read_text())
+        self.assertIn("Shrink this list", doc["_note"])
+        self.assertLessEqual(len(doc["known"]), 8,
+                             "the baseline grew — fix the violation instead")
+
+
+if __name__ == "__main__":
+    unittest.main()
