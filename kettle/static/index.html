@@ -240,6 +240,8 @@
           overflow:hidden; text-overflow:ellipsis; }
   .qitem.approved { opacity:.38; }
   .qitem.approved .qname { text-decoration:line-through; }
+  .qitem.setaside { opacity:.38; }
+  .qitem.setaside .qname { font-style:italic; }
   .qitem.rework { opacity:.38; }
   .qitem.rework .qname { text-decoration:line-through; }
   /* this-sitting change badge — + green / − red everywhere (queue, path, info) */
@@ -269,9 +271,9 @@
      file; sweep needs a project; everything stands down during a running sweep. Kept in lockstep
      so the lower bar reads consistently at every transitional point (launch, project switch, sweep). */
   body.sweeping #ritual button, body.sweeping #viewmode, body.sweeping #findtoggle, body.sweeping #sweepbtn,
-  body.nofile  #approve, body.nofile #comment, body.nofile  #viewmode, body.nofile  #findtoggle,
+  body.nofile  #approve, body.nofile #comment, body.nofile #notthis, body.nofile  #viewmode, body.nofile  #findtoggle,
   body.noproj  #sweepbtn { opacity:.35; pointer-events:none; }
-  body.founding #sweepbtn, body.founding #approve, body.founding #comment, body.founding #metaedit { opacity:.35; pointer-events:none; }
+  body.founding #sweepbtn, body.founding #approve, body.founding #comment, body.founding #notthis, body.founding #metaedit { opacity:.35; pointer-events:none; }
   /* Founding: hide path/brief/ritual and collapse the empty desk head so chat
      can use the full column (long interview streams need that height). */
   body.founding #desk-path, body.founding #desk-brief, body.founding #desk-scroller,
@@ -285,7 +287,8 @@
   body.founding #desk-proj { padding-bottom:8px; }
   /* Charter proposal: only Approve applies — no comment / sweep yet */
   body.proposing #sweepbtn,
-  body.proposing #comment { opacity:.35; pointer-events:none; }
+  body.proposing #comment,
+  body.proposing #notthis { opacity:.35; pointer-events:none; }
   /* Desk-proposal phase: solid link-blue CTA (matches ritual approve ink).
      Must beat later #approve:hover blue wash — inverted white+hover-blue was hideous. */
   body.proposing #approve {
@@ -877,6 +880,19 @@
     background: color-mix(in srgb, var(--ritual-sweep) 24%, transparent);
   }
   #sweepbtn.arming { color: var(--warn); border-color: var(--warn); }
+  /* Not this: the quietest control in the row. It is a correction, not an action the
+     batch is built around, so it takes secondary ink and no fill — the three colored
+     controls stay the ones the eye finds first. */
+  #notthis {
+    background: transparent;
+    border-color: var(--line);
+    color: var(--text-secondary);
+  }
+  #notthis:hover:not(:disabled) {
+    color: var(--text-primary);
+    border-color: color-mix(in srgb, var(--fg) 30%, var(--line));
+  }
+  #notthis:disabled { opacity:.35; }
 
   #chatwrap {
     flex:1 1 0; min-height:72px; display:flex; flex-direction:column; overflow:hidden;
@@ -1865,6 +1881,8 @@
             data-uic="approveLabel" data-uic-title="approveHint">Approve</button>
     <button id="comment" class="btn btn-sm btn-default" title="Leave a note on this file for the agent to act on"
             data-uic="commentLabel" data-uic-title="commentHint">Comment</button>
+    <button id="notthis" class="btn btn-sm btn-default" title="Set this file aside. The agent takes it as a sign of what you don't want, and tells you what it learned when you press Sweep."
+            data-uic="notThisLabel" data-uic-title="notThisHint">Not this</button>
     <button id="sweepbtn" class="btn btn-sm btn-default" title="Finish this batch: apply your decisions, review what changed, note anything else it affects, and line up the next files"
             data-uic="sweepLabel" data-uic-title="sweepHint">Sweep</button>
   </div>
@@ -3914,9 +3932,14 @@ function diffBadge(d){
   const r = d.removed ? `<span class="del">−${d.removed}</span>` : '';
   return `<span class="qdiff">${a}${r}</span>`;
 }
+/* A file is handled once the user has decided about it: approved, sent back for rework,
+   or set aside ("Not this"). Handled files sink to the bottom and do not hold up Sweep. */
+function isHandled(e){
+  return e.status === 'approved' || e.status === 'rework' || e.status === 'set-aside';
+}
 function renderQueue(){
   const order = {high:0, medium:1, low:2};
-  const queueHandled = e => (e.status === 'approved' || e.status === 'rework') ? 1 : 0;
+  const queueHandled = e => isHandled(e) ? 1 : 0;
   const entries = (Q && Q.entries) ? Q.entries : [];
   const list = [...entries].sort((a,b) =>
     queueHandled(a) - queueHandled(b) || (order[a.urgency]??9)-(order[b.urgency]??9));
@@ -3941,7 +3964,7 @@ function renderQueue(){
   }
   for(const e of list){
     const d = document.createElement('div');
-    d.className = 'qitem' + (cur && e.id===cur.id ? ' active':'') + (e.status==='approved' ? ' approved':'')
+    d.className = 'qitem' + (cur && e.id===cur.id ? ' active':'') + (e.status==='approved' ? ' approved':'') + (e.status==='set-aside' ? ' setaside':'')
                 + (e.status==='rework' ? ' rework':'');
     d.tabIndex = 0;
     d.setAttribute('role', 'option');
@@ -3989,14 +4012,38 @@ function commentMark(){
   const has = !!(cur && cur.comment);
   const btn = $('comment');
   if(btn){
-    btn.textContent = 'Comment';
+    btn.textContent = uic('commentLabel', 'Comment');
     btn.classList.toggle('has', has);
   }
+  notThisMark();
   const note = $('fnote');
   if(note){
     note.style.display = has ? 'inline' : 'none';
     note.title = has ? String(cur.comment) : 'this file has a note';
   }
+}
+
+/* "Not this" reads "Bring back" on a file already set aside, and is off for the proposal,
+   which is approved or edited rather than dismissed. */
+function notThisMark(){
+  const b = $('notthis');
+  if(!b) return;
+  const aside = !!(cur && cur.status === 'set-aside');
+  b.textContent = aside ? uic('notThisUndoLabel', 'Bring back') : uic('notThisLabel', 'Not this');
+  b.title = aside ? uic('notThisUndoHint', 'Put this file back in the batch')
+                  : uic('notThisHint', 'Set this file aside');
+  b.disabled = !cur || isProposalEntry(cur);
+}
+async function setAside(){
+  if(!cur || isProposalEntry(cur)) return;
+  const undo = cur.status === 'set-aside';
+  try {
+    const r = await jpost('/api/set-aside', {id: cur.id, project: PROJECT, undo: undo});
+    cur.status = r.status;
+    if(undo) delete cur.set_aside; else cur.set_aside = new Date().toISOString().slice(0, 10);
+    renderQueue(); renderMeta(cur); notThisMark();
+  } catch(err){ addMsg('err', 'could not set this file aside: ' + err); return; }
+  if(!undo) maybeAutoSweep();
 }
 
 function openComment(){
@@ -4013,7 +4060,7 @@ function closeComment(){
 }
 
 const META_OPTS = {
-  status: ['pending', 'approved'],
+  status: ['pending', 'approved', 'set-aside'],
   urgency: ['high', 'medium', 'low'],
   ask_type: ['input', 'tuning', 'judgment', 'fill'],
 };
@@ -5237,7 +5284,7 @@ async function sweep(thrust){
       if(mode === 'reading') renderMd(); else refreshEditorChrome();
     }
     renderQueue();
-    const pending = Q.entries.filter(e => e.status !== 'approved');
+    const pending = Q.entries.filter(e => !isHandled(e));
     if(pending.length){
       const lines = pending.map(e => `• ${e.title} (${e.urgency}) — ${e.ask || ''}`);
       addMsg('sys', 'now in the queue:');
@@ -6621,6 +6668,7 @@ window.addEventListener('resize', () => {
   if($('commentpanel').classList.contains('open')) autoGrowComment();
 });
 $('approve').onclick = approve;
+$('notthis').onclick = setAside;
 $('comment').onclick = () => $('commentpanel').classList.contains('open') ? closeComment() : openComment();
 $('commentsave').onclick = saveComment;
 $('commentin').addEventListener('keydown', e => {
@@ -6634,7 +6682,7 @@ let sweepArm = null;
 function maybeAutoSweep(){
   if(SETTINGS.autoSweep !== true) return;             // off by default
   if(!Q.entries.length) return;                       // nothing to sweep
-  if(Q.entries.some(e => e.status !== 'approved' && e.status !== 'rework')) return;  // unhandled remain
+  if(Q.entries.some(e => !isHandled(e))) return;      // unhandled remain
   if(sweepArm) return;                                // confirm-off undo already armed
   if($('sweepbg').style.display === 'flex') return;   // confirm-on modal already open
   sweepClicked();

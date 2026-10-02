@@ -403,6 +403,37 @@ class UiDebugMode(unittest.TestCase):
         self.assertIn("file=", badge)
 
 
+class NotThis(unittest.TestCase):
+    """The fourth response: set a file aside with one click, bring it back with another."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.html = INDEX.read_text(encoding="utf-8")
+
+    def test_the_control_sits_in_the_ritual_row(self):
+        row = self.html[self.html.index('id="ritual"'):self.html.index('id="commentpanel"')]
+        self.assertLess(row.index('id="comment"'), row.index('id="notthis"'))
+        self.assertLess(row.index('id="notthis"'), row.index('id="sweepbtn"'))
+        self.assertIn("$('notthis').onclick = setAside;", self.html)
+
+    def test_a_set_aside_file_counts_as_handled(self):
+        """Otherwise one set-aside file would block auto-sweep forever."""
+        handled = function_source(self.html, "isHandled")
+        self.assertIn("'set-aside'", handled)
+        self.assertIn("!isHandled(e)", function_source(self.html, "maybeAutoSweep"))
+
+    def test_proposal_cannot_be_set_aside(self):
+        self.assertIn("isProposalEntry(cur)", function_source(self.html, "notThisMark"))
+        self.assertIn("isProposalEntry(cur)", function_source(self.html, "setAside"))
+
+    def test_labels_come_from_the_catalog(self):
+        mark = function_source(self.html, "notThisMark")
+        self.assertIn("uic('notThisLabel'", mark)
+        self.assertIn("uic('notThisUndoLabel'", mark)
+        # and Comment no longer overwrites its own catalog label
+        self.assertIn("uic('commentLabel', 'Comment')", function_source(self.html, "commentMark"))
+
+
 class FrontendSyntaxGate(unittest.TestCase):
 
     def test_index_html_has_inline_scripts(self):

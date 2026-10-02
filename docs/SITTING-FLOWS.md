@@ -93,6 +93,21 @@ unfounded desk. **MUST** then run §3.5 rather than treating it as an ordinary a
 `text` clears the note **and retracts its history**, so a later sweep does not replay it.
 `GET /api/queue` returns `comment_history` per entry (retired comments are already filtered out).
 
+### 2.3a Not this
+`POST /api/set-aside {project, id}` marks the file `set-aside`; `{…, undo: true}` puts it back to
+`pending`. One click, no explanation asked: the sweep works out whether the user meant this file
+or this kind of file, and the next round's notes say which.
+
+- **MUST** offer it on every file except the proposal (core refuses that one with 400).
+- **MUST** label it **Not this**, and **Bring back** on a file already set aside — from the
+  catalog keys `notThisLabel` / `notThisUndoLabel`.
+- **MUST** count a set-aside file as handled, beside approved: it sinks to the bottom of the list
+  and does not hold up an automatic Sweep.
+- **SHOULD** give it the least emphasis of the four controls. It is a correction, not the action
+  a batch is built around.
+
+A set-aside file always makes the next close a judgment close; core never closes it quietly.
+
 ### 2.4 Sweep
 §4.
 

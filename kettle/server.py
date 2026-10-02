@@ -2273,6 +2273,36 @@ class Handler(BaseHTTPRequestHandler):
                     "ok": True,
                     "founding": is_proposal_entry(e) and not desk_is_founded(proj),
                 })
+            elif url.path == "/api/set-aside":
+                # "Not this": one click, no explanation asked. The sweep works out whether
+                # the user meant this file or this kind of file. `undo` brings it back.
+                proj = get_project(d.get("project"))
+                undo = bool(d.get("undo"))
+                refused = []
+
+                def set_aside(q):
+                    e = find_entry(q, d["id"])
+                    if is_proposal_entry(e):
+                        refused.append(True)  # the proposal is approved or edited, not dismissed
+                        return
+                    if undo:
+                        if e.get("status") == "set-aside":
+                            e["status"] = "pending"
+                        e.pop("set_aside", None)
+                    else:
+                        e["status"] = "set-aside"
+                        e["set_aside"] = date.today().isoformat()
+
+                q = mutate_queue(proj, set_aside)
+                if refused:
+                    self.send_json({"error": "The proposal can't be set aside — edit it, "
+                                             "or ask the agent to rewrite it."}, 400)
+                    return
+                e = find_entry(q, d["id"])
+                append_line(runtime_dir(proj) / "set-aside.log",
+                            f"{date.today().isoformat()}\t{'undo' if undo else 'set-aside'}"
+                            f"\t{e['id']}\t{e.get('path', '')}\n")
+                self.send_json({"ok": True, "status": e.get("status")})
             elif url.path == "/api/settings":
                 self.send_json(save_settings(d))
             elif url.path == "/api/ui-copy":
@@ -2710,6 +2740,16 @@ class Handler(BaseHTTPRequestHandler):
             )
             prompt += user_comments if user_comments else "(no comments on file for current queue entries)"
             prompt += "\n---\n"
+            aside = [e for e in queue_entries if e.get("status") == "set-aside"]
+            if aside:
+                prompt += ("\nFILES SET ASIDE (\"Not this\" — see step 4b). Each is shown with the "
+                           "reason you gave for putting it in front of them; that reason is usually "
+                           "what they were rejecting:\n\n")
+                for e in aside:
+                    prompt += (f"- {e.get('id')} · {e.get('path')}\n"
+                               f"  your ask: {e.get('ask') or '—'}\n"
+                               f"  your brief: {e.get('brief') or '—'}\n")
+                prompt += "---\n"
             prompt += "\n" + sweep_precomputed_context(proj, queue_entries)
             prompt += "\n" + sweepkit.status_for_prompt(proj)
             prompt += (

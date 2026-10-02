@@ -127,6 +127,23 @@
       "text": "Save",
       "note": "Button that commits the comment box."
     },
+    "notThisLabel": {
+      "text": "Not this",
+      "note": "Ritual control: set this file aside. One click, no explanation asked — the agent works out whether you meant this file or this kind of file, and says what it took from it in the next round notes."
+    },
+    "notThisHint": {
+      "text": "Set this file aside. The agent takes it as a sign of what you don't want, and tells you what it learned when you press Sweep.",
+      "short": "Set this file aside",
+      "note": "Tooltip on Not this."
+    },
+    "notThisUndoLabel": {
+      "text": "Bring back",
+      "note": "The same control on a file already set aside."
+    },
+    "notThisUndoHint": {
+      "text": "Put this file back in the batch",
+      "note": "Tooltip on Bring back."
+    },
     "sweepLabel": {
       "text": "Sweep",
       "note": "Ritual button: close the sitting."

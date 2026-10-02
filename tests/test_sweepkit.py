@@ -56,6 +56,36 @@ class SweepkitBase(unittest.TestCase):
         server.mutate_queue(self.proj(), lambda qq: qq["entries"][0].update(status="approved"))
 
 
+class SetAsideTests(SweepkitBase):
+    """A file set aside with "Not this" always needs the agent.
+
+    Only the agent can tell whether the user meant this file or this kind of file, so a
+    set-aside file must never slip through the mechanical close that skips it.
+    """
+
+    def test_set_aside_is_never_a_quiet_close(self):
+        self.seed_quiet_approved()
+        server.mutate_queue(self.proj(),
+                            lambda q: q["entries"][0].update(status="set-aside"))
+        st = sweepkit.assess_close(self.proj())
+        self.assertFalse(st["quiet"])
+        self.assertTrue(st["needs_judgment"])
+        self.assertFalse(st["can_mechanical_close"])
+        self.assertTrue(st["changed"][0]["set_aside"])
+
+    def test_inbox_close_archives_set_aside_but_leaves_undecided(self):
+        self.write_queue([
+            {"id": "a", "path": "doc.md", "status": "approved"},
+            {"id": "s", "path": "doc.md", "status": "set-aside"},
+            {"id": "p", "path": "doc.md", "status": "pending"},
+        ])
+        moved = sweepkit.archive_queue(self.proj(), only_approved=True)
+        self.assertEqual({"a", "s"}, set(moved["archived"]))
+        self.assertEqual(1, moved["remaining"])
+        left = server.load_queue(self.proj())["entries"]
+        self.assertEqual(["p"], [e["id"] for e in left])
+
+
 class AssessTests(SweepkitBase):
     def test_quiet_approved_can_mechanical_close(self):
         self.seed_quiet_approved()

@@ -15,7 +15,11 @@ It appears the instant the file loads — **before** any chat reply — so it mu
 ## Three jobs (in order of priority)
 
 1. **Orient** — what kind of document is this, in plain language?
-2. **Refresh** — what situation does it sit in (one short beat of context, no insider slang)?
+2. **Refresh** — why it is in front of them *now*, tied to what they said they want (the
+   **What You Want From This Project** section of the project notes). Quote their words when
+   they fit. This is the most important sentence you write: if your reason is wrong, this is
+   where they will see it and set the file aside — which tells you more than an approval
+   does.
 3. **Invite** — what decision or read is wanted from them (gentle, specific, undemanding)?
 
 The `ask` field is the shortest form of job 3 (one line). The `brief` field does 1–3.
@@ -35,7 +39,8 @@ One sentence a smart non-specialist could use cold:
 Only what helps them open the file without decoding:
 
 - What section or decision to look at first (by plain name, not code).  
-- What “done” looks like in everyday words (approve / send back / note a change).  
+- What “done” looks like in everyday words (approve, leave a note, or set it aside as
+  not what they want).  
 - Spell out every acronym or code the **first** time it appears; if a code is not needed
   to act, **omit it** from the brief (it lives in the file).
 

@@ -30,7 +30,7 @@
         }
       ],
       "audience": "house",
-      "plain": "this round of review, or just: the batch"
+      "plain": "this batch"
     },
     {
       "id": "queue",
@@ -89,7 +89,7 @@
         }
       ],
       "audience": "house",
-      "plain": "the agent's summary"
+      "plain": "summary"
     },
     {
       "id": "ask",
@@ -211,7 +211,7 @@
       "artifact": "MEMORY.md",
       "avoid": [],
       "audience": "house",
-      "plain": "what the agent remembers"
+      "plain": "notes on what you prefer"
     },
     {
       "id": "egress",

@@ -62,8 +62,11 @@ def assess_close(proj: dict) -> dict[str, Any]:
             "file_changed": file_changed,
             "diff": diff,
             "has_snapshot": snap.exists(),
+            "set_aside": e.get("status") == "set-aside",
         }
-        if has_comment or file_changed is True:
+        # A file the user set aside ("Not this") always needs the agent: only it can tell
+        # whether the user meant this file or this kind of file. Never a quiet close.
+        if has_comment or file_changed is True or row["set_aside"]:
             changed.append(row)
         elif file_changed is None:
             unknown.append(row)
@@ -203,8 +206,11 @@ def archive_queue(
             take = [e for e in entries if str(e.get("id")) in want]
             leave = [e for e in entries if str(e.get("id")) not in want]
         elif only_approved:
-            take = [e for e in entries if e.get("status") == "approved"]
-            leave = [e for e in entries if e.get("status") != "approved"]
+            # Inbox close: decided items leave the queue — approved ones (staged
+            # separately) and set-aside ones (never staged). Undecided ones stay.
+            done = ("approved", "set-aside")
+            take = [e for e in entries if e.get("status") in done]
+            leave = [e for e in entries if e.get("status") not in done]
         else:
             take, leave = entries, []
         moved["take"], moved["leave"] = take, leave

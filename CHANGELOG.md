@@ -36,6 +36,22 @@ and Desk schema have their own integer contract versions.
 
 ### Added
 
+- **The file-first journey.** Everything the agent offers reaches the user as a file, with why
+  it is there and what is wanted. The handbook opens with that rule and a plain-word table
+  generated from the lexicon, so the agent writes the way the screen reads.
+  - The setup questions now name files the user can open; a commit count with no file attached
+    no longer counts as an observation.
+  - The proposal is about the user's files and what they want — *What You Want From It* and
+    *The First Files* — instead of a charter for how the agent works.
+  - `PROJECT.md` carries **What You Want From This Project**. The agent may change it only by
+    quoting the change in that round's notes.
+  - Each Sweep opens with one line saying what it is about to do, and ends by writing
+    `.kettle/rounds/<stamp>.md` — what it did, what it now thinks you want, what's next —
+    queued first in the next batch.
+  - Summaries tie each file's reason to the user's own words.
+- **Not this** — a fourth control on every file except the proposal. One click sets the file
+  aside; Bring back undoes it. `POST /api/set-aside`.
+
 - **State messages.** `ui-copy.json` gains a `states` section keyed by the flow states
   `docs/SITTING-FLOWS.md` names, each in three registers (`line` / `short` / `full`).
   Thirteen hand-written variants of "edit the proposal, then found the desk" — seven in
