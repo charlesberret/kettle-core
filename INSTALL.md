@@ -21,7 +21,9 @@ All three answer the same way:
 kettle --version          # kettle X.Y.Z (api 0, desk schema 0)
 kettle doctor             # install health, read-only
 kettle projects           # the CLI viewport
-kettle --web              # the sitting in a browser
+kettle                    # Textual TUI (requires kettle-tui)
+kettle-web                # the sitting in a browser
+kettle --web              # same as kettle-web
 ```
 
 `kettle doctor` never repairs, never deletes PATH entries, and never binds or probes port
@@ -116,8 +118,9 @@ Neither is required for CLI or browser use of this core.
 This repo ships the browser/server and CLI viewports.
 
 ```
-kettle                          browser / server mode   (default; stdlib only)
-kettle --web [--port N]         same as bare launch
+kettle                          Textual TUI (requires kettle-tui on PATH)
+kettle-web                      HTTP sitting host (browser + desktop sidecar)
+kettle --web [--port N]         same as kettle-web
 kettle projects                 list registered desks
 kettle themes                   list bundled and user color themes
 kettle add     <folder>         register a folder as a desk

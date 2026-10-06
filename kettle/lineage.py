@@ -64,7 +64,7 @@ def write_confined(path: Path | str, root: Path | str, text: str, *, append: boo
     p = confine(path, root)
     flags = os.O_WRONLY | os.O_CREAT | (os.O_APPEND if append else os.O_TRUNC)
     flags |= getattr(os, "O_NOFOLLOW", 0)
-    fd = os.open(str(p), flags, 0o644)
+    fd = os.open(str(p), flags, 0o600)
     with os.fdopen(fd, "a" if append else "w", encoding="utf-8") as f:
         f.write(text)
 

@@ -2,6 +2,8 @@
 """Routing tests for the installed `kettle` entrypoint."""
 
 import io
+import os
+import shutil
 import sys
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
@@ -72,6 +74,65 @@ class EntrypointTest(unittest.TestCase):
         self.assertEqual(code, 0)
         web.assert_called_once_with()
 
+    def test_web_main_starts_the_http_host(self):
+        with mock.patch.object(server, "main", return_value=None) as web:
+            code = kettle_main.web_main()
+        self.assertEqual(code, 0)
+        web.assert_called_once_with()
+
+    def test_invoked_as_kettle_web_starts_the_http_host(self):
+        with mock.patch.object(sys, "argv", ["kettle-web"]), \
+                mock.patch.object(server, "main", return_value=0) as web, \
+                mock.patch.object(shutil, "which") as which:
+            code = kettle_main.main()
+        self.assertEqual(code, 0)
+        web.assert_called_once_with()
+        which.assert_not_called()
+
+    def test_bare_launch_execs_kettle_tui(self):
+        with mock.patch.object(shutil, "which", return_value="/usr/bin/kettle-tui"), \
+                mock.patch.object(os, "execvp") as execvp, \
+                mock.patch.object(server, "main") as web:
+            kettle_main.main([])
+        execvp.assert_called_once_with("/usr/bin/kettle-tui", ["/usr/bin/kettle-tui"])
+        web.assert_not_called()
+
+    def test_tui_flags_are_forwarded(self):
+        with mock.patch.object(shutil, "which", return_value="/usr/bin/kettle-tui"), \
+                mock.patch.object(os, "execvp") as execvp:
+            kettle_main.main(["--here"])
+        execvp.assert_called_once_with(
+            "/usr/bin/kettle-tui", ["/usr/bin/kettle-tui", "--here"]
+        )
+
+    def test_missing_kettle_tui_is_an_error(self):
+        err = io.StringIO()
+        with mock.patch.object(shutil, "which", return_value=None), \
+                mock.patch.object(kettle_main, "_tui_executable", return_value=None), \
+                mock.patch.object(server, "main") as web, \
+                redirect_stderr(err):
+            code = kettle_main.main([])
+        self.assertEqual(code, 1)
+        self.assertIn("kettle-tui is not on PATH", err.getvalue())
+        web.assert_not_called()
+
+    def test_tui_next_to_interpreter_counts(self):
+        with mock.patch.object(shutil, "which", return_value=None), \
+                mock.patch.object(
+                    kettle_main, "_tui_executable", return_value="/venv/bin/kettle-tui"
+                ), \
+                mock.patch.object(os, "execvp") as execvp:
+            kettle_main.main([])
+        execvp.assert_called_once_with("/venv/bin/kettle-tui", ["/venv/bin/kettle-tui"])
+
+    def test_frozen_binary_falls_back_to_the_http_host(self):
+        with mock.patch.object(shutil, "which", return_value=None), \
+                mock.patch.object(sys, "frozen", True, create=True), \
+                mock.patch.object(server, "main", return_value=0) as web:
+            code = kettle_main.main([])
+        self.assertEqual(code, 0)
+        web.assert_called_once_with()
+
     def test_unknown_command_is_an_error(self):
         err = io.StringIO()
         with redirect_stderr(err):
@@ -99,11 +160,18 @@ class ServerFlagRouting(unittest.TestCase):
         return code, called.get("server", False)
 
     def test_port_and_no_open_reach_the_server(self):
-        for argv in (["--port", "0"], ["--no-open"], ["--web", "--port", "0"], []):
+        for argv in (["--port", "0"], ["--no-open"], ["--web", "--port", "0"]):
             with self.subTest(argv=argv):
                 code, hit = self._routes_to_server(argv)
                 self.assertEqual(code, 0)
                 self.assertTrue(hit, f"{argv} did not reach server.main()")
+
+    def test_bare_launch_does_not_start_the_http_host(self):
+        with mock.patch.object(shutil, "which", return_value="/usr/bin/kettle-tui"), \
+                mock.patch.object(os, "execvp"):
+            code, hit = self._routes_to_server([])
+        self.assertEqual(code, 0)
+        self.assertFalse(hit)
 
     def test_version_and_help_do_not_start_a_server(self):
         for argv in (["--version"], ["-V"], ["--help"]):

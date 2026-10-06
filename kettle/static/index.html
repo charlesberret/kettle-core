@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <!-- Bump this when sitting UI changes; title shows it so we can confirm the shell loaded. -->
-<meta name="kettle-ui" content="2026-09-15g">
-<title>kettle · ui-2026-09-15g</title>
+<meta name="kettle-ui" content="2026-09-27a">
+<title>kettle · ui-2026-09-27a</title>
 <style>
   /*
    * Type & chrome roles — single source of sitting hierarchy.
@@ -4827,10 +4827,8 @@ async function pipeStream(r, out, opts){
             agentNode.className = 'msg agent';
             $('chat').appendChild(agentNode);
           }
-          // Stream as plaintext; pretty GFM lands once the turn finishes.
-          // P4: do not hide founding turns as "Preparing interview questions…".
-          agentNode.classList.remove('md');
-          agentNode.textContent = agentAcc;
+          // Paint GFM as it arrives so headings and lists are not raw source mid-turn.
+          fillAgentMarkdown(agentNode, agentAcc);
           // Kickoff freeze: stay on the banner. Otherwise follow the stream tail.
           if(interviewScrollLock) scheduleHoldInterviewAtTop();
           else chatScrollToBottom();

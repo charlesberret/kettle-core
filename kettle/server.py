@@ -1353,7 +1353,7 @@ def append_line(path: Path, text: str) -> None:
     _confine_to_project(path)
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     flags = os.O_WRONLY | os.O_CREAT | os.O_APPEND | getattr(os, "O_NOFOLLOW", 0)
-    fd = os.open(str(path), flags, 0o644)
+    fd = os.open(str(path), flags, 0o600)
     with os.fdopen(fd, "a", encoding="utf-8") as f:
         f.write(text)
 
@@ -1363,13 +1363,13 @@ def atomic_write(path: Path, data: str | bytes) -> None:
 
     The temp file is created with O_EXCL under a random name, so a symlink planted at a
     predictable `<name>.tmp` cannot redirect the write outside the fence. An existing
-    file keeps its permission bits; a new one gets 0644."""
+    file keeps its permission bits; a new one gets 0600 (desk state is not world-readable)."""
     path = Path(path)
     _confine_to_project(path)
     try:
         mode = stat.S_IMODE(path.lstat().st_mode) & 0o777
     except OSError:
-        mode = 0o644
+        mode = 0o600
     fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix="." + path.name + ".", suffix=".tmp")
     try:
         with os.fdopen(fd, "wb") as f:
@@ -3410,7 +3410,7 @@ def start_server_preferred(port: int = DEFAULT_PORT,
 
 
 def main():
-    """Blocking web entry (CLI `kettle --web`, desktop sidecar).
+    """Blocking web entry (CLI `kettle-web` / `kettle --web`, desktop sidecar).
 
     Same identity recording as `start_server`. On the default port (no `--port`),
     applies the circuit-breaker via `prepare_bind` so `--replace` actually works

@@ -41,6 +41,7 @@ dev = [
 
 [project.scripts]
 kettle = "kettle.kettle_main:main"
+kettle-web = "kettle.kettle_main:web_main"  # HTTP sitting host (browser + desktop sidecar)
 kettle-watch = "kettle.kettle_watch:main"   # the inbox folder-watch — run on a schedule (cron/timer)
 # Transitional aliases. Keep old installations and automation working while the
 # public product moves to Kettle; remove only in a separately announced release.
