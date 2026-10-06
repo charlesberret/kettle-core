@@ -15,7 +15,10 @@ and Desk schema have their own integer contract versions.
   `short` for narrow surfaces and a required `note`.
 - The **Add Project** button reads **Start Interview**, matching the catalog and
   `docs/UI.md`; the web markup had it lowercase while the VS Code mirror did not.
-
+- Bare `kettle` launches the Textual sitting (`kettle-tui` on PATH). The HTTP host
+  is `kettle-web` (alias: `kettle --web`). Desktop sidecars that pass `--port` /
+  `--no-open` are unchanged. The PyInstaller `kettle` binary still serves the
+  sitting when `kettle-tui` is not on PATH.
 - Add-project copy says **Draft Proposal ✓**, not the retired “finish ✓”.
 - Agent chat paints GFM while the reply is still streaming.
 - New desk files and lineage records are created mode `0600`. Existing files keep their bits.

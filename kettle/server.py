@@ -3452,7 +3452,7 @@ def start_server_preferred(port: int = DEFAULT_PORT,
 
 
 def main():
-    """Blocking web entry (CLI `kettle --web`, desktop sidecar).
+    """Blocking web entry (CLI `kettle-web` / `kettle --web`, desktop sidecar).
 
     Same identity recording as `start_server`. On the default port (no `--port`),
     applies the circuit-breaker via `prepare_bind` so `--replace` actually works

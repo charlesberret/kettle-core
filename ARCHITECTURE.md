@@ -43,7 +43,8 @@ the port fall back to an ephemeral port.
 
 | Viewport | Where |
 |----------|--------|
-| Browser / server | this repo — `kettle` / `kettle --web` |
+| Browser / server | this repo — `kettle-web` / `kettle --web` |
+| Textual TUI | sibling **kettle-tui** — bare `kettle` execs it |
 | CLI | this repo — `kettle projects \| queue \| open \| edit \| chat \| …` (built-in TUI editor) |
 | macOS `.app` | sibling **kettle-desktop** (loads core web UI + theme packs) |
 | VS Code / Cursor | sibling **kettle-vscode** |
