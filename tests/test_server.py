@@ -1348,14 +1348,14 @@ class EndpointTests(ServerFixture):
         server.save_session(self.proj(), status="founded", session_id="done")
         s, body = self._post_stream("/api/found", {"project": "t"})
         self.assertEqual(s, 200)
-        self.assertIn("already founded", body.lower())
+        self.assertIn("already set up", body.lower())
         self.assertEqual(server.load_session(self.proj())["status"], "founded")
         s2, body2 = self._post_stream("/api/bootstrap", {"project": "t"})
         self.assertEqual(s2, 200)
-        self.assertIn("already founded", body2.lower())
+        self.assertIn("already set up", body2.lower())
         s3, body3 = self._post_stream("/api/interview", {"project": "t", "message": "hi"})
         self.assertEqual(s3, 200)
-        self.assertIn("already founded", body3.lower())
+        self.assertIn("already set up", body3.lower())
 
     def test_bootstrap_marks_founded_unsticking_interviewing(self):
         # regression: a desk stuck at 'interviewing' (interrupted founding) must become 'founded'
@@ -2081,7 +2081,7 @@ class EndpointTests(ServerFixture):
         cmds = self._capture_cmds()
         s, body = self._post_stream("/api/sweep", {"project": "t"})
         self.assertEqual(s, 200)
-        self.assertNotIn("Nothing to sweep", body)
+        self.assertNotIn("Nothing to finish", body)
         self.assertTrue(cmds, "expected a restock curator turn")
         prompt = cmds[-1][cmds[-1].index("-p") + 1]
         self.assertIn("ACCRUE + RESTOCK only", prompt)
@@ -2093,7 +2093,7 @@ class EndpointTests(ServerFixture):
         sweepkit.write_sweep_health(self.proj(), state="done", phase="accrue")
         cmds = self._capture_cmds()
         s, body = self._post_stream("/api/sweep", {"project": "t"})
-        self.assertIn("Nothing to sweep", body)
+        self.assertIn("Nothing to finish", body)
         self.assertEqual(cmds, [])
 
     def test_stale_failure_on_an_idle_inbox_desk_is_reported_once(self):
@@ -2131,7 +2131,7 @@ class EndpointTests(ServerFixture):
             server.SWEEPS_IN_FLIGHT.add("t")
         self.addCleanup(lambda: server.SWEEPS_IN_FLIGHT.discard("t"))
         s, body = self._post_stream("/api/sweep", {"project": "t"})
-        self.assertIn("already running", body)
+        self.assertIn("already finishing", body)
         self.assertEqual(cmds, [])
 
     def test_clearing_a_comment_retracts_its_history(self):
@@ -2794,6 +2794,7 @@ class SetAsideEndpointTests(ServerFixture):
                      {"project": "t", "id": "desk-proposal"})
         self.assertEqual(400, s)
         self.assertIn("proposal", j["error"])
+        self.assertEqual("bad_request", j["code"])
         e = server.find_entry(server.load_queue(self.proj()), "desk-proposal")
         self.assertEqual("pending", e["status"])
 

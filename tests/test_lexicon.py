@@ -250,3 +250,17 @@ class Baseline(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LintsAViewportsOwnFiles(unittest.TestCase):
+    """Viewport repos run this linter on their own paths; a path outside core must not crash."""
+
+    def test_a_path_outside_core_is_reported_as_given(self):
+        import subprocess, sys, tempfile
+        with tempfile.TemporaryDirectory() as d:
+            f = Path(d) / "README.md"
+            f.write_text("Open the desk and press Sweep.\n")
+            r = subprocess.run([sys.executable, str(ROOT / "tools" / "lint-lexicon.py"), str(f)],
+                               capture_output=True, text=True)
+        self.assertNotIn("Traceback", r.stderr)
+        self.assertIn(str(f), r.stdout)

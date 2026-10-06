@@ -72,7 +72,7 @@
     "noEntryBriefBody": {
       "text": "Kettle lines up a batch of files for you to review, edit, and approve. When you are done, press Finish batch: the agent applies your decisions and lines up the next one.",
       "short": "A batch of files to review, edit, and approve.",
-      "note": "Second line of the brief when a project desk is bound and no queue entry is selected."
+      "note": "Second line of the brief when a project is bound and no queue entry is selected."
     },
     "queueTitle": {
       "text": "Queue",
@@ -93,7 +93,7 @@
     "approveLabel": {
       "text": "Approve",
       "short": "approve",
-      "note": "Ritual control: rules on the open entry. Reads Approve in both states — while a proposal is open, pressing it founds the project desk."
+      "note": "Ritual control: marks a decision on the open file. Reads Approve in every phase; while a proposal is open, pressing it sets up the project."
     },
     "approveLabelFounding": {
       "text": "Approve",
@@ -106,7 +106,7 @@
     },
     "approveHintFounding": {
       "text": "Approve the proposal to set up your project",
-      "note": "Tooltip on the ritual control while a proposal is open. The label does not change (Approve was retired 2026-10-01); the sitting promotes the control visually instead.",
+      "note": "Tooltip on Approve while a proposal is open. The label does not change (Found Desk was retired 2026-10-01); the sitting promotes the control visually instead.",
       "short": "Edit and approve the proposal"
     },
     "commentLabel": {
@@ -158,6 +158,14 @@
       "text": "Undo",
       "note": "Finish batch, relabelled during the 3-second window when confirmation is off; pressing it cancels."
     },
+    "dontAskAgainLabel": {
+      "text": "Don't ask again",
+      "note": "Checkbox on a confirmation dialog. Viewports may add what changes, e.g. the 3-second Undo on Finish batch."
+    },
+    "cancelLabel": {
+      "text": "Cancel",
+      "note": "Dismisses a dialog without doing anything."
+    },
     "foundingHeadTitle": {
       "text": "Setting up your project",
       "note": "Status strip under the project bar while the founding interview runs. Title Case as a hed (docs/UI.md); the term is lowercase in prose."
@@ -169,7 +177,7 @@
     },
     "draftProposalHint": {
       "text": "Skip the rest of the questions and let the agent write the proposal now",
-      "note": "Tooltip on Draft Proposal ✓.",
+      "note": "Tooltip on the Auto control that ends the interview early.",
       "short": "Skip the interview"
     },
     "skipFoundingLabel": {
@@ -251,7 +259,7 @@
       "line": "Pick a file",
       "short": "Pick a file to begin.",
       "full": "Kettle has lined up a batch of files for you. Pick one to read it with the agent's summary. Mark your decisions as you go, then press Finish batch when you are done.",
-      "note": "Shown wherever a viewport explains an open project desk with no file selected."
+      "note": "Shown wherever a viewport explains an open project with no file selected."
     },
     "interviewing": {
       "line": "Chat with the agent",
@@ -263,7 +271,7 @@
       "line": "Edit the proposal",
       "short": "Edit the proposal, then approve it to set up your project.",
       "full": "The proposal is open in the editor. This is the document of record for your Kettle project. Read it, change anything that does not fit, and chat with the agent to revise or co-write.",
-      "note": "A proposal is open and the project desk is not founded yet (P4). Replaces thirteen hand-written variants."
+      "note": "A proposal is open and the project is not founded yet (P4). Replaces thirteen hand-written variants."
     },
     "founding": {
       "line": "Setting up…",
@@ -275,7 +283,7 @@
       "line": "Ready to begin",
       "short": "Your project is ready. Pick a file to begin.",
       "full": "Your project is set up and the first batch of files is ready. Pick one to read it with the agent's summary, edit and comment as you go, then press Finish batch when you are done.",
-      "note": "An ordinary founded project desk."
+      "note": "An ordinary founded project."
     },
     "sweeping": {
       "line": "Finishing the batch…",
@@ -287,7 +295,7 @@
       "line": "This project needs attention.",
       "short": "Kettle could not open this project. Nothing has been changed.",
       "full": "Kettle could not open this project. Its folder may have moved, or its records may be unreadable. Nothing has been changed on disk. Check the project folder, or set the project up again — your own files are never touched.",
-      "note": "The project desk cannot be read. Never implies data loss: Kettle does not touch the user's files."
+      "note": "The project cannot be read. Never implies data loss: Kettle does not touch the user's files."
     }
   }
 }

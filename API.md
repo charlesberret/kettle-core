@@ -74,6 +74,14 @@ its own wording — see `docs/UI.md` § Shared UI copy.
       "note": "The button that ends a batch. Internally this is a sweep; the word stays off screen."
     }
   },
+  "states": {
+    "sweeping": {
+      "line": "Finishing the batch…",
+      "short": "Applying your decisions and lining up the next batch.",
+      "full": "The agent is applying your decisions, reviewing what changed, …",
+      "note": "A sweep is running."
+    }
+  },
   "selectors": {"#addgo": {"text": "go"}},
   "tokens": {"--btn-radius": "5px"},
   "overridden": ["sweepLabel"]
@@ -83,7 +91,10 @@ its own wording — see `docs/UI.md` § Shared UI copy.
 `text` is the string; `short` is an optional terse variant for a narrow surface
 (a TUI status bar) and means the same thing in fewer words; `note` says where the
 string appears, so a reader holding only the key can act on it. `overridden` names
-the keys the user has changed. `selectors` and `tokens` apply to the web sitting
+the keys the user has changed. `states` holds one message per flow state
+(`attached`, `founded`, `sweeping`, `broken`, …) in three registers: `line` for a
+status line, `short` for a narrow surface, `full` for an empty pane; states are not
+overridable. `selectors` and `tokens` apply to the web sitting
 only — a selector relabels one element whose text is still hardcoded, and a token
 retunes a CSS custom property.
 
