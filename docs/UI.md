@@ -234,6 +234,6 @@ either way.
 
 | Viewport | UI source |
 |----------|-----------|
-| Web / `kettle --web` | `static/index.html` |
+| Web / `kettle-web` | `static/index.html` |
 | Desktop `.app` | Same file via sidecar |
 | VS Code / Cursor Desk | Separate `deskPanel.ts` — should *follow* these roles when restyled; not a second source of truth for the main sitting |

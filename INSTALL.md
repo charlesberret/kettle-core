@@ -21,7 +21,9 @@ All three answer the same way:
 kettle --version          # kettle X.Y.Z (api 0, desk schema 0)
 kettle doctor             # install health, read-only
 kettle projects           # the CLI viewport
-kettle --web              # the sitting in a browser
+kettle                    # Textual TUI (requires kettle-tui)
+kettle-web                # the sitting in a browser
+kettle --web              # same as kettle-web
 ```
 
 `kettle doctor` never repairs, never deletes PATH entries, and never binds or probes port
@@ -32,6 +34,8 @@ kettle --web              # the sitting in a browser
 Two installs answering to the same name is the only install problem that actually bites.
 `kettle doctor` fails when `which -a kettle` finds installs that resolve to genuinely
 different targets; a single install anywhere is fine, canonical venv or not.
+Invoking the checkout binary directly (`.venv/bin/kettle doctor`) is also fine
+when nothing named `kettle` is on PATH. That is the clone README's first check.
 
 ```sh
 which -a kettle    # expect one path (or several symlinks to the same file)
@@ -114,8 +118,9 @@ Neither is required for CLI or browser use of this core.
 This repo ships the browser/server and CLI viewports.
 
 ```
-kettle                          browser / server mode   (default; stdlib only)
-kettle --web [--port N]         same as bare launch
+kettle                          Textual TUI (requires kettle-tui on PATH)
+kettle-web                      HTTP sitting host (browser + desktop sidecar)
+kettle --web [--port N]         same as kettle-web
 kettle projects                 list registered desks
 kettle themes                   list bundled and user color themes
 kettle add     <folder>         register a folder as a desk
@@ -190,7 +195,9 @@ Rules:
   Kettle user path. If the Kettle registry already exists, the registry step is skipped.
 
 `kettle doctor` reports legacy desks and split risk; its docs pointer names this
-section and `kettle migrate --help`.
+section and `kettle migrate --help`. A setsweep-only desk is a `hint` and the
+command still exits 0, because that desk is the supported dual-read install.
+Both directories at once is `FAIL`.
 
 **Sync tip:** exclude `.kettle/runtime/` from file-sync tools so the queue/chatlog/snapshots
 do not race. Durable charter/memory files under `.kettle/` may sync normally. See
