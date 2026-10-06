@@ -86,16 +86,54 @@ def render(doc: dict) -> str:
     return "\n".join(out).rstrip() + "\n"
 
 
+HANDBOOK = ROOT / "kettle" / "kits" / "_base.md"
+BEGIN = "<!-- BEGIN GENERATED: lexicon plain words — tools/render-lexicon-doc.py; do not edit by hand -->"
+END = "<!-- END GENERATED -->"
+
+
+def render_handbook_block(doc: dict) -> str:
+    """The plain-word table the agent reads on every turn.
+
+    This is how generated prose gets the same light touch as the catalog. The agent
+    cannot read the copy catalog, but it reads the handbook every turn, so the
+    house→plain mapping is rendered here from the same file the linter enforces.
+    """
+    rows = ["| Our word (yours, in your own files) | Say to the user |", "|---|---|"]
+    for t in sorted(doc["terms"], key=lambda x: x["term"].lower()):
+        if t.get("audience") != "house":
+            continue
+        plain = t.get("plain") or "(nothing — this is internal and never comes up)"
+        rows.append(f"| {t['term']} | {plain} |")
+    rows.append("")
+    rows.append("Controls the user presses keep their names — Approve, Comment, Not this, Finish batch — "
+                "but say what they do rather than assuming the user knows.")
+    return "\n".join(rows)
+
+
+def splice_handbook(doc: dict, text: str) -> str:
+    a, b = text.index(BEGIN), text.index(END)
+    return text[:a + len(BEGIN)] + "\n" + render_handbook_block(doc) + "\n" + text[b:]
+
+
 def main() -> int:
-    body = render(json.loads(SRC.read_text(encoding="utf-8")))
+    doc = json.loads(SRC.read_text(encoding="utf-8"))
+    body = render(doc)
+    hb_now = HANDBOOK.read_text(encoding="utf-8")
+    hb_want = splice_handbook(doc, hb_now)
     if "--check" in sys.argv:
-        current = OUT.read_text(encoding="utf-8") if OUT.exists() else ""
-        if current != body:
-            print("docs/LEXICON.md is stale — run tools/render-lexicon-doc.py", file=sys.stderr)
+        stale = []
+        if (OUT.read_text(encoding="utf-8") if OUT.exists() else "") != body:
+            stale.append("docs/LEXICON.md")
+        if hb_now != hb_want:
+            stale.append("kettle/kits/_base.md (plain-word table)")
+        if stale:
+            print("stale: " + ", ".join(stale) + " — run tools/render-lexicon-doc.py",
+                  file=sys.stderr)
             return 1
-        print("docs/LEXICON.md up to date")
+        print("docs/LEXICON.md and the handbook table are up to date")
         return 0
     OUT.write_text(body, encoding="utf-8")
+    HANDBOOK.write_text(hb_want, encoding="utf-8")
     print(f"wrote {OUT.relative_to(ROOT)} ({len(json.loads(SRC.read_text())['terms'])} terms)")
     return 0
 

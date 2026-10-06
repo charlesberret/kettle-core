@@ -7,6 +7,30 @@ and Desk schema have their own integer contract versions.
 
 ### Changed
 
+- **Sweep is Finish batch on screen.** The button, its tooltip, the confirmation, the
+  3-second undo (now catalog key `sweepUndoLabel`), the Behavior settings and the chat
+  status lines all say what happens instead of naming an invented act. `sweep` joins the
+  house words; `/api/sweep`, `sweepLabel` and `sweep.log` are unchanged.
+- **The kit editor moved into the Agents tab.** Curators was a second tab about the same
+  agent; its kit editor now sits under the provider and model choices as Agent Kits. A
+  saved `adminTab: "curators"` opens Agents.
+- The ritual row's gap narrows so four controls fit one line in the default meta pane,
+  and its screen-reader label says "Actions on this file".
+
+- **The agent is called the agent.** `curator` is retired from everything a user or
+  the model reads: the sitting, the copy catalog, and all 10,294 words of the prompt
+  corpus. The verb `curate`, the adjective `curatorial` and the `curated` queue field
+  survive, and every identifier (`curator.provider`, `/api/curator`, `curatorProvider`)
+  is unchanged — those are contract, not copy.
+- **`Found Desk` is retired as a control label.** The ritual control reads **Approve**
+  in both states; while a proposal is open, pressing it founds the project desk and
+  the sitting promotes the control visually (`body.proposing #approve`) instead of
+  renaming it. "Found" survives as the verb.
+- **A project is "the project desk" on screen**; `desk` alone stays the term in code,
+  prompts, docs and file names.
+- Sitting copy rewritten end to end from a full editorial pass: 32 of 47 catalog
+  strings, plus every `short` variant.
+
 - **UI copy is one catalog in JSON.** `static/ui-copy.json` replaces
   `static/ui-copy.js`, which is deleted — `/ui-copy.js` is now rendered from the
   JSON per request, so no generated file can drift from it. Python viewports read
@@ -24,6 +48,29 @@ and Desk schema have their own integer contract versions.
 - New desk files and lineage records are created mode `0600`. Existing files keep their bits.
 
 ### Added
+
+- **The file-first journey.** Everything the agent offers reaches the user as a file, with why
+  it is there and what is wanted. The handbook opens with that rule and a plain-word table
+  generated from the lexicon, so the agent writes the way the screen reads.
+  - The setup questions now name files the user can open; a commit count with no file attached
+    no longer counts as an observation.
+  - The proposal is about the user's files and what they want — *What You Want From It* and
+    *The First Files* — instead of a charter for how the agent works.
+  - `PROJECT.md` carries **What You Want From This Project**. The agent may change it only by
+    quoting the change in that round's notes.
+  - Each Sweep opens with one line saying what it is about to do, and ends by writing
+    `.kettle/rounds/<stamp>.md` — what it did, what it now thinks you want, what's next —
+    queued first in the next batch.
+  - Summaries tie each file's reason to the user's own words.
+- **Not this** — a fourth control on every file except the proposal. One click sets the file
+  aside; Bring back undoes it. `POST /api/set-aside`.
+
+- **State messages.** `ui-copy.json` gains a `states` section keyed by the flow states
+  `docs/SITTING-FLOWS.md` names, each in three registers (`line` / `short` / `full`).
+  Thirteen hand-written variants of "edit the proposal, then found the desk" — seven in
+  `index.html`, four in the TUI, two catalog keys — collapse to one message. The spec
+  now says *render `states.proposing`* where it used to say "tell the user", and
+  `SITTING-FLOWS.md` §7 makes that a MUST.
 
 - **UI debug mode** (Diagnostics → Inspect Interface Copy, or `?uidebug=1`).
   Outlines catalogued copy, names the key, the binding and the owning file, and

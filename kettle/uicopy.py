@@ -85,7 +85,9 @@ def load_catalog(static_dir: Path) -> dict:
             v = {"text": v}
         if isinstance(v, dict) and isinstance(v.get("text"), str):
             out[str(k)] = v
-    return {"keys": out, "_schema": raw.get("_schema", 1)}
+    states = raw.get("states")
+    states = states if isinstance(states, dict) else {}
+    return {"keys": out, "states": states, "_schema": raw.get("_schema", 1)}
 
 
 def load_overrides(path: Path | None) -> dict:
@@ -138,6 +140,10 @@ def payload(static_dir: Path, overrides_path: Path | None = None) -> dict:
     return {
         "_schema": catalog.get("_schema", 1),
         "keys": keys,
+        # One message per flow state, in three registers. Not overridable yet: a
+        # state message is the contract between viewports, so retyping one is a
+        # catalog edit, not a per-install tweak.
+        "states": catalog.get("states", {}),
         "selectors": over["selectors"],
         "tokens": over["tokens"],
         "overridden": sorted(over["keys"]),
@@ -160,6 +166,26 @@ def text(pay: dict, key: str, short: bool = False, default: str = "") -> str:
             return s
     t = rec.get("text")
     return t if isinstance(t, str) and t else default
+
+
+def state_text(pay: dict, state: str, register: str = "full", default: str = "") -> str:
+    """The message for a flow state, in the register a surface affords.
+
+    `line` for a status bar, `short` for one sentence, `full` for a guide. A missing
+    register falls back to the longest one present rather than to nothing: a narrow
+    surface showing too many words beats a surface showing none.
+    """
+    rec = (pay.get("states") or {}).get(state)
+    if not isinstance(rec, dict):
+        return default
+    v = rec.get(register)
+    if isinstance(v, str) and v:
+        return v
+    for alt in ("full", "short", "line"):
+        v = rec.get(alt)
+        if isinstance(v, str) and v:
+            return v
+    return default
 
 
 def validate_patch(patch: Any) -> dict:
@@ -362,6 +388,7 @@ def render_js(pay: dict) -> str:
         f"  root.KETTLE_UI_COPY_SELECTORS = {_js_literal(pay.get('selectors') or {})};\n"
         f"  root.KETTLE_UI_COPY_OVERRIDDEN = {_js_literal(pay.get('overridden') or [])};\n"
         f"  root.KETTLE_UI_TOKENS = {_js_literal(pay.get('tokens') or {})};\n"
+        f"  root.KETTLE_UI_STATES = {_js_literal(pay.get('states') or {})};\n"
         "  if (typeof module !== \"undefined\" && module.exports) module.exports = root.KETTLE_UI_COPY;\n"
         '})(typeof globalThis !== "undefined" ? globalThis : this);\n'
     )

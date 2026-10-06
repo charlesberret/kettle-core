@@ -95,6 +95,33 @@ Shared kit: `.btn` + `.btn-sm` / `.btn-md` + role (`.btn-default` | `.btn-primar
   Do not paint the whole pane secondary gray — only the subheaders.
 - Do not auto-inject the brief into chat on file select — brief lives in this pane.
 
+## Who the words are for
+
+Kettle keeps precise internal terms **and** talks to users in words they already have.
+Those are two registers, and `kettle/kits/_lexicon.json` is where they stay straight.
+
+| Audience | Where | Example |
+|---|---|---|
+| `house` | code, prompts, docs, our own conversation | desk, sitting, sweep, ruling, charter, founding, brief, entry |
+| `both` | anywhere, users included | project, file, queue, agent, proposal, Finish batch |
+
+**A house word on screen is a CI error.** Not a style preference — the product's job is
+to be usable without a glossary, and a user should never have to work out what a "desk"
+or a "sitting" is to review their own files. The lexicon names the plain word and
+`tools/lint-lexicon.py` quotes it as the fix.
+
+This replaces an earlier rule that enforced spelling our vocabulary consistently
+*everywhere*, screen included. That protected the vocabulary and cost the reader; it
+also hardened into CI exactly the entrenchment it should have caught.
+
+**No invented words on screen, buttons included.** The button that ends a batch was
+"Sweep" until 2026-10-06; it is **Finish batch** now, and "sweep" is a house word like the
+rest. Prose that names a control still says what it does: "press Finish batch: the agent
+applies your decisions." Any house word in explanatory copy is a bug.
+
+The unit of a user's concern is **their project**. Never a desk, and never a "project
+desk".
+
 ## Shared UI copy (all viewports)
 
 User-facing **strings** must not drift between web, desktop, the plugin Desk, and
@@ -115,9 +142,9 @@ it drifted.
 
 ```json
 "sweepLabel": {
-  "text": "Sweep",
-  "short": "sweep",
-  "note": "Ritual button: close the sitting."
+  "text": "Finish batch",
+  "short": "Finish",
+  "note": "The button that ends a batch. Internally this is a sweep; the word stays off screen."
 }
 ```
 

@@ -9,7 +9,8 @@ violation in the prompt corpus or the copy catalog, and warns elsewhere.
 ## Casing
 
 - **`title`** — A proper name — a document, or a named control that is also a title. Always exactly as `term`, mid-sentence included. docs/UI.md: signature actions that are also titles stay Title Case.
-- **`lower`** — A common noun or verb. Lowercase in prose; a capital is correct only at the start of a sentence or inside a Title Case heading. `sweep` the act is lowercase; `Sweep` the control is its own entry.
+- **`lower`** — A common noun or verb. Lowercase in prose; a capital is correct only at the start of a sentence or inside a Title Case heading. `sweep` the act is a house word; the control is `Finish batch`.
+- **`sentence`** — A two-word control name in sentence case (`Finish batch`, `Not this`). Spelled exactly as `term` when it names the control; the lowercase phrase is ordinary prose.
 
 ## Fields
 
@@ -17,6 +18,9 @@ violation in the prompt corpus or the copy catalog, and warns elsewhere.
 - **`not_synonyms`** — Different words that do not mean this term. Guidance for writers and for the curator; never linted, because only a reader can tell whether 'summary' is standing in for 'brief'.
 - **`lint_case`** — false when the term is a single ordinary word and the lowercase form is legitimately the concept.
 - **`retired`** — Literal strings that used to mean this term and must not come back (an old button label, a renamed document). Decidable, so these are errors too.
+- **`audience`** — `house` (never on screen) or `both` (allowed everywhere).
+- **`plain`** — For a `house` term: what a user sees instead. The linter quotes it as the fix.
+- **`lint_house`** — false when the house word is also an ordinary English word in another part of speech, so the on-screen check would fire on correct copy.
 
 ## Concepts
 
@@ -29,7 +33,7 @@ The one-line question an entry puts to the user — what judgment is wanted on t
 Not a synonym for this term:
 
 - `request` — the product word is ask
-- `prompt` — 'prompt' means the curator's instructions
+- `prompt` — 'prompt' means the `curator`'s instructions
 
 ### brief
 
@@ -50,18 +54,13 @@ What a desk is for and how it should be worked, written at founding. Lives in PR
 
 Not a synonym for this term:
 
-- `config` — a charter is prose the user and curator both read
+- `config` — a charter is prose the user and `curator` both read
 
 ### desk
 
-One project as Kettle holds it: its charter, memory, queue, and records, kept in the project's desk directory. A desk is founded once and then worked, sitting by sitting.
+One project as Kettle holds it: its notes, memory, queue and records, in the project's desk directory. House word. On screen a user has a **project** — never a desk, and never a "project desk": a user should not have to learn what a desk is to use Kettle.
 
 *casing: `lower`*
-
-Not a synonym for this term:
-
-- `workspace` — a desk is not an IDE workspace
-- `Desk directory` — common noun
 
 ### egress
 
@@ -86,7 +85,7 @@ Not a synonym for this term:
 
 ### founding
 
-Bringing a desk into being: register, survey, interview, Draft Proposal, Found Desk. Founding is a conversation, not a confirmation card.
+Bringing a desk into being: register, survey, interview, Draft Proposal, `Found Desk`. Founding is a conversation, not a confirmation card.
 
 *casing: `lower`*
 
@@ -97,13 +96,9 @@ Not a synonym for this term:
 
 ### founding interview
 
-The tool-less conversation in which the curator learns what the project is and what the user wants from a second reader. A common noun: lowercase in prose.
+The tool-less conversation in which the curator learns what the project is and what the user wants from a second reader. A common noun: lowercase in prose. Lowercase in prose; as a pane hed it takes Title Case like any hed (docs/UI.md), which is why `Founding Interview` is correct in the status strip.
 
 *casing: `lower`*
-
-Wrong spellings (these fail the linter):
-
-- `Founding Interview` — a common noun, not a document title — lowercase in prose
 
 Not a synonym for this term:
 
@@ -145,11 +140,11 @@ One working session at a desk: the user reviews the queue, rules on entries, and
 
 Not a synonym for this term:
 
-- `session` — 'session' is the curator's conversation state, not the user's working period
+- `session` — 'session' is the `curator`'s conversation state, not the user's working period
 
 ### sweep
 
-Closing the sitting: apply rulings, diff and assess the batch, fix or flag ripples, write the session log, restock the queue. Both noun and verb.
+Finishing a batch: apply the user's decisions, review what changed, note the ripples, save a record, line up the next files. House word since 2026-10-06: the button reads **Finish batch**, and prose says 'finish the batch'. Identifiers (`/api/sweep`, `sweepLabel`, `sweep.log`) are contract, not copy.
 
 *casing: `lower`*
 
@@ -171,23 +166,28 @@ Not a synonym for this term:
 
 ## Roles
 
-### curator
+### agent
 
-The project's resident agent: curates the queue, converses about the open file, and sweeps. Its identity lives in files, not in a session, so any agent that reads them is the curator.
+The project's resident agent: curates the queue, converses about the open file, and sweeps. Its identity lives in files, not in a session, so any model that reads them is the agent. Renamed from `curator` on 2026-10-01; the verb `curate` and the adjective `curatorial` survive, and so does every identifier (`curator.provider` in settings, `/api/curator`, `curatorProvider`), which is contract, not copy.
 
 *casing: `lower`*
 
+Retired — must not come back (these fail the linter):
+
+- `curator` — the role is `agent` in user-facing copy (2026-10-01)
+- `Curator` — the role is `agent` in user-facing copy (2026-10-01)
+
 Not a synonym for this term:
 
-- `assistant` — generic; the curator is a defined role
-- `the AI` — never refer to the curator this way in product copy
-- `the bot` — never refer to the curator this way in product copy
+- `assistant` — generic; the agent is a defined role
+- `the AI` — never refer to the agent this way in product copy
+- `the bot` — never refer to the agent this way in product copy
 
 ## Documents
 
 ### Desk Proposal
 
-The document the founding interview produces, written to DESK-PROPOSAL.md. The user edits it until it matches the project, then founds the desk from it. The document of record during the proposing state.
+The document the setup questions produce, written to DESK-PROPOSAL.md. House name. On screen it is just **the proposal**.
 
 *casing: `title` · file: `DESK-PROPOSAL.md`*
 
@@ -200,9 +200,13 @@ Not a synonym for this term:
 
 ### Approve
 
-The control that bookmarks a ruling on the open entry. It does not apply or commit anything — only a sweep does that.
+The control that rules on the open entry. On a founded project desk it bookmarks a ruling and applies nothing until a sweep. While a proposal is open it founds the project desk — the label no longer changes, so the sitting promotes the control visually instead (`body.proposing #approve`).
 
 *casing: `title` · not case-checked*
+
+Retired — must not come back (these fail the linter):
+
+- `Found Desk` — the control reads Approve in both states (2026-10-01); `found` survives as the verb
 
 Not a synonym for this term:
 
@@ -225,31 +229,21 @@ Retired — must not come back (these fail the linter):
 - `finish ✓` — retired label
 - `Finish Interview` — retired label
 
-### Found Desk
+### Finish batch
 
-The control that founds the desk from the edited Desk Proposal and stocks the first queue. The Approve control takes this label while proposing.
+The button that finishes a batch (internally, a sweep). Sentence case, like the other two-word controls; prose that names it says 'press Finish batch'.
 
-*casing: `title`*
+*casing: `sentence` · not case-checked*
 
-Wrong spellings (these fail the linter):
+Retired — must not come back (these fail the linter):
 
-- `found desk` — a named control — Title Case
-
-Not a synonym for this term:
-
-- `Create Desk` — a desk is founded, not created
+- `Sweep` — the button is Finish batch on screen (2026-10-06)
 
 ### Start Interview
 
 The control that registers a project and opens founding. docs/UI.md lists it among the signature actions that are also titles.
 
 *casing: `title`*
-
-### Sweep
-
-The control that closes the sitting. The act is 'sweep' (lowercase); this entry is the named control only.
-
-*casing: `title` · not case-checked*
 
 ## Viewports
 

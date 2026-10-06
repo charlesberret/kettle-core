@@ -196,6 +196,15 @@ class ViewportRitualRegressionBar(unittest.TestCase):
         self.assertIn("revealQueue(pid", found)
 
     def test_proposal_phase_keeps_the_found_action_visible(self):
+        """Pressing Approve on a proposal founds the desk — that must still read.
+
+        The button used to say "Found Desk" while proposing, so the label itself
+        warned that this press was the big one. The 2026-10-01 copy pass retired that
+        label: it now reads Approve in both states. The CSS promotion is therefore the
+        ONLY thing left distinguishing them, which makes this assertion load-bearing
+        rather than decorative — if the rule goes, nothing on the control says that
+        pressing it founds the desk.
+        """
         self.assertRegex(
             self.html,
             r"body\.proposing\s+#approve\s*\{",
@@ -204,11 +213,15 @@ class ViewportRitualRegressionBar(unittest.TestCase):
         proposing = self.function("setProposingChrome")
         self.assertIn("classList.toggle('proposing'", proposing)
         self.assertNotIn("pointerEvents = 'none'", proposing)
-        # The label comes from the catalog now, with the old literal as the fallback
-        # for a sitting that could not load /ui-copy.js — assert both, so neither the
-        # key nor the offline fallback can quietly disappear.
+        # Label and tooltip both come from the catalog, with the shipped strings as the
+        # fallback for a sitting that could not load /ui-copy.js.
         guide = self.function("showProposalGuide")
-        self.assertIn("uic('approveLabelFounding', 'Found Desk')", guide)
+        self.assertIn("uic('approveLabelFounding', 'Approve')", guide)
+        self.assertIn("uic('approveHintFounding',", guide)
+
+    def test_found_desk_is_retired_from_the_sitting(self):
+        """The control label was retired on 2026-10-01; "found" survives as the verb."""
+        self.assertNotIn("Found Desk", self.html)
 
     def test_agent_chat_renders_gfm(self):
         """Agent bubbles must paint GFM (headings, lists, task ticks), not raw markdown."""
@@ -388,6 +401,61 @@ class UiDebugMode(unittest.TestCase):
         badge = self.function("uidRenderBadge")
         self.assertIn("UID.ref = 'kettle ui: '", badge)
         self.assertIn("file=", badge)
+
+
+class NotThis(unittest.TestCase):
+    """The fourth response: set a file aside with one click, bring it back with another."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.html = INDEX.read_text(encoding="utf-8")
+
+    def test_the_control_sits_in_the_ritual_row(self):
+        row = self.html[self.html.index('id="ritual"'):self.html.index('id="commentpanel"')]
+        self.assertLess(row.index('id="comment"'), row.index('id="notthis"'))
+        self.assertLess(row.index('id="notthis"'), row.index('id="sweepbtn"'))
+        self.assertIn("$('notthis').onclick = setAside;", self.html)
+
+    def test_a_set_aside_file_counts_as_handled(self):
+        """Otherwise one set-aside file would block auto-sweep forever."""
+        handled = function_source(self.html, "isHandled")
+        self.assertIn("'set-aside'", handled)
+        self.assertIn("!isHandled(e)", function_source(self.html, "maybeAutoSweep"))
+
+    def test_proposal_cannot_be_set_aside(self):
+        self.assertIn("isProposalEntry(cur)", function_source(self.html, "notThisMark"))
+        self.assertIn("isProposalEntry(cur)", function_source(self.html, "setAside"))
+
+    def test_labels_come_from_the_catalog(self):
+        mark = function_source(self.html, "notThisMark")
+        self.assertIn("uic('notThisLabel'", mark)
+        self.assertIn("uic('notThisUndoLabel'", mark)
+        # and Comment no longer overwrites its own catalog label
+        self.assertIn("uic('commentLabel', 'Comment')", function_source(self.html, "commentMark"))
+
+
+class FinishBatchAndAgentsTab(unittest.TestCase):
+    """The words a user meets in the ritual row and in settings (2026-10-06)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.html = INDEX.read_text(encoding="utf-8")
+
+    def test_the_close_button_is_finish_batch_everywhere_it_relabels(self):
+        self.assertIn('data-uic="sweepLabel" data-uic-title="sweepHint">Finish batch</button>', self.html)
+        src = function_source(self.html, "sweepClicked")
+        self.assertNotIn("'Sweep'", src)
+        self.assertIn("uic('sweepUndoLabel', 'Undo')", src)
+
+    def test_the_kit_editor_lives_in_the_agents_tab(self):
+        self.assertNotIn('data-tab="curators"', self.html)
+        self.assertIn('<div class="asec" data-tab="agents" id="kitsec">', self.html)
+        self.assertIn("const ADMIN_TABS = ['appearance','behavior','agents','projects','diagnostics'];",
+                      self.html)
+
+    def test_a_saved_curators_tab_opens_agents(self):
+        self.assertIn("if(name === 'curators') name = 'agents';",
+                      function_source(self.html, "setAdminTab"))
 
 
 class FrontendSyntaxGate(unittest.TestCase):

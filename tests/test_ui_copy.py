@@ -161,7 +161,7 @@ class Rendered(unittest.TestCase):
         flat = re.search(r"root\.KETTLE_UI_COPY = (\{.*?\});\n", js, re.S).group(1)
         self.assertEqual("Chat stream idle", json.loads(flat)["streamIdle"])
         meta = re.search(r"root\.KETTLE_UI_COPY_META = (\{.*?\});\n", js, re.S).group(1)
-        self.assertEqual("idle", json.loads(meta)["streamIdle"]["short"])
+        self.assertEqual("Agent idle", json.loads(meta)["streamIdle"]["short"])
 
 
 class Overrides(unittest.TestCase):
@@ -182,7 +182,8 @@ class Overrides(unittest.TestCase):
 
     def test_short_falls_back_to_text(self):
         pay = uicopy.payload(STATIC)
-        self.assertEqual("Q", uicopy.text(pay, "queueTitle", short=True))
+        # queueTitle has no short of its own, so the resolver falls back to its text
+        self.assertEqual("Queue", uicopy.text(pay, "queueTitle", short=True))
         self.assertEqual("Info", uicopy.text(pay, "metaTitle", short=True))
 
     def test_corrupt_overrides_do_not_break_the_sitting(self):

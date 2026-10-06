@@ -1,22 +1,22 @@
-# Curator kits
+# Agent kits
 
-A **kit** arms a project's resident curator. `_base.md` is the shared handbook every curator
+A **kit** arms a project's resident agent. `_base.md` is the shared handbook every agent
 reads; each `<kind>.json` here is a **kind playbook** layered on top, and a project picks one at
 founding (its `kit` field in `projects.json`) — the user chooses; there is no auto-detection.
 
-The **five** kinds are cut on one axis — the **review posture** the curator takes:
+The **five** kinds are cut on one axis — the **review posture** the agent takes:
 
 - **writing** — prose you compose/refine (notes, drafts, articles, reports, correspondence)
 - **code** — any software project
 - **records** — structured data kept accurate against a source of truth (datasets, inventories, logs)
 - **knowledge** — an interlinked body of canonical docs kept coherent (notes systems, wikis, specs, governance, agent definitions, research archives)
-- **inbox** — a pile to work through (emails, support requests, reports, applications): the curator triages each incoming item and **drafts a response**; you read the summary and edit the reply
+- **inbox** — a pile to work through (emails, support requests, reports, applications): the agent triages each incoming item and **drafts a response**; you read the summary and edit the reply
 
-Leaving a project's kit unset gives a general curator with no specialized lens.
+Leaving a project's kit unset gives a general agent with no specialized lens.
 
 ## Product prompts (`prompts/`)
 
-`prompts/*.md` is Kettle's user-visible curator language: founding, sweep, accrue,
+`prompts/*.md` is Kettle's user-visible agent language: founding, sweep, accrue,
 chat-context, and live-reporting instructions. The server reads each file once at import.
 Prompt files are safe to tune directly; preserve their `{placeholders}` and run the prompt
 format smoke test after editing. A missing file logs a warning and uses a short built-in
@@ -44,7 +44,7 @@ configured on the **project stanza** (not the kit — intake paths are personal 
   and files a queue entry (brief + a `source` field pointing at the incoming item). When `watch`
   is the project root or a subdir, intake ignores its own output (`responses/`, `outbound/`,
   `.kettle/`).
-- **Sweep routes outward** — approve is a bookmark; at sweep the approved drafts are **staged to
+- **Finishing a batch routes outward** — approve is a bookmark; at sweep the approved drafts are **staged to
   `outbound/`** (a send-queue an external tool picks up). The sweep never transmits — staging
   only, per the localhost-only invariant. See [`ARCHITECTURE.md`](../ARCHITECTURE.md) (desk model
   and tool tiers) and the inbox notes below.
@@ -55,7 +55,7 @@ configured on the **project stanza** (not the kit — intake paths are personal 
 |---|---|
 | `name` | display name (e.g. "Writing") |
 | `kind` | the project-kind this is the default for: `writing · code · records · knowledge · inbox` |
-| `lens` | the review lens — what this curator looks for (injected into the review agent) |
+| `lens` | the review lens — what this agent looks for (injected into the review agent) |
 | `urgency` | the high/medium/low rubric for this kind |
 | `firstQueue` | founding heuristic — which documents to surface first |
 | `interview` | kit-specific founding stems (merged with shared base stems: status, horizon, direction, fences, sweep_actions, fleet) |

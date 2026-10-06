@@ -602,7 +602,13 @@ class HelperTests(Base):
             server.register_project("   ", str(folder))
 
 
-class EndpointTests(Base):
+class ServerFixture(Base):
+    """A live server on an ephemeral port over a two-entry queue — and no tests.
+
+    Subclass this, not EndpointTests, for a focused endpoint suite: subclassing
+    EndpointTests re-runs every one of its tests under the new class name, which
+    for a while tripled this file's runtime with no coverage gained.
+    """
 
     def setUp(self):
         super().setUp()
@@ -621,6 +627,9 @@ class EndpointTests(Base):
         self.srv.shutdown()
         self.srv.server_close()
         super().tearDown()
+
+
+class EndpointTests(ServerFixture):
 
     def test_projects_lists_registry(self):
         s, j = _http("GET", f"{self.base}/api/projects")
@@ -2754,7 +2763,51 @@ class LaunchTests(unittest.TestCase):
         self.assertEqual(self.retired, [])
 
 
-class UiCopyEndpointTests(EndpointTests):
+class SetAsideEndpointTests(ServerFixture):
+    """"Not this": one click sets a file aside, a second brings it back."""
+
+    def test_sets_aside_and_logs(self):
+        s, j = _http("POST", f"{self.base}/api/set-aside", {"project": "t", "id": "alpha"})
+        self.assertEqual(200, s)
+        self.assertEqual("set-aside", j["status"])
+        e = server.find_entry(server.load_queue(self.proj()), "alpha")
+        self.assertEqual("set-aside", e["status"])
+        self.assertTrue(e["set_aside"])
+        log = (server.runtime_dir(self.proj()) / "set-aside.log").read_text()
+        self.assertIn("\tset-aside\talpha\t", log)
+
+    def test_undo_brings_it_back(self):
+        _http("POST", f"{self.base}/api/set-aside", {"project": "t", "id": "alpha"})
+        s, j = _http("POST", f"{self.base}/api/set-aside",
+                     {"project": "t", "id": "alpha", "undo": True})
+        self.assertEqual(200, s)
+        self.assertEqual("pending", j["status"])
+        e = server.find_entry(server.load_queue(self.proj()), "alpha")
+        self.assertNotIn("set_aside", e)
+
+    def test_the_proposal_cannot_be_set_aside(self):
+        """It is approved or edited; dismissing it would leave founding nowhere to go."""
+        self.write_queue([{"id": "desk-proposal", "title": "Proposal",
+                           "path": str(self.root / "alpha.md"), "status": "pending",
+                           "founding_phase": "proposal"}])
+        s, j = _http("POST", f"{self.base}/api/set-aside",
+                     {"project": "t", "id": "desk-proposal"})
+        self.assertEqual(400, s)
+        self.assertIn("proposal", j["error"])
+        e = server.find_entry(server.load_queue(self.proj()), "desk-proposal")
+        self.assertEqual("pending", e["status"])
+
+    def test_requires_the_token(self):
+        req = urllib.request.Request(
+            f"{self.base}/api/set-aside",
+            data=json.dumps({"project": "t", "id": "alpha"}).encode(), method="POST")
+        req.add_header("Content-Type", "application/json")
+        with self.assertRaises(urllib.error.HTTPError) as cm:
+            urllib.request.urlopen(req, timeout=10)
+        self.assertEqual(403, cm.exception.code)
+
+
+class UiCopyEndpointTests(ServerFixture):
     """The copy catalog over HTTP: read by every viewport, written by debug mode."""
 
     def test_ui_copy_js_is_rendered_from_the_json(self):

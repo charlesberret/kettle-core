@@ -45,7 +45,7 @@ class LexiconShape(unittest.TestCase):
         self.assertEqual(len(ids), len(set(ids)))
         for t in doc["terms"]:
             self.assertTrue(t.get("gloss"), f"{t['id']} has no gloss")
-            self.assertIn(t["casing"], ("title", "lower"))
+            self.assertIn(t["casing"], ("title", "sentence", "lower"))
 
     def test_retired_forms_are_literal_and_linted(self):
         """A replaced label is decidable by literal match, so it stays an error."""
@@ -86,15 +86,92 @@ class Catches(unittest.TestCase):
         self.assertIn("wrong-case", checks("edit the desk proposal, then found"))
 
     def test_wrong_case_on_a_multiword_control(self):
-        self.assertIn("wrong-case", checks("press found desk when ready"))
+        self.assertIn("wrong-case", checks("click start interview to begin"))
 
     def test_stray_capital_on_a_common_noun(self):
         self.assertIn("stray-capital", checks("the Sitting ends with a sweep"))
 
-    def test_avoid_form(self):
-        found = [f for f in check("the Founding Interview begins") if f["check"] == "avoid-form"]
+    def test_retired_role_name(self):
+        """`curator` became `agent` in user-facing copy on 2026-10-01."""
+        found = [f for f in check("the curator files a brief") if f["check"] == "retired-form"]
+        self.assertTrue(found, "the retired role name must still be caught")
+        self.assertIn("agent", found[0]["why"])
+
+    def test_retired_control_name(self):
+        """The control reads Approve in both states; `Found Desk` must not come back."""
+        found = [f for f in check("press Found Desk when ready") if f["check"] == "retired-form"]
         self.assertTrue(found)
-        self.assertIn("lowercase", found[0]["why"])
+
+    def test_the_verb_survives_the_retired_control(self):
+        """Only the label was retired. "found the project desk" is still correct."""
+        self.assertEqual([], [f for f in check("Approve founds the project desk.")
+                              if f["check"] == "retired-form"])
+
+    def test_retired_forms_match_whole_words_only(self):
+        """Retiring `curator` must not flag `curatorial`, `curated` or `curate`.
+
+        It did, on the first run of the rename: 94 false warnings, every one of them
+        a word that merely starts the same way.
+        """
+        for ok in ("real curatorial briefs", 'the "curated" field', "you curate a queue"):
+            with self.subTest(text=ok):
+                self.assertEqual([], [f for f in check(ok) if f["check"] == "retired-form"])
+
+
+class HouseWordsStayOffScreen(unittest.TestCase):
+    """The check that earns this tool's keep.
+
+    The first version of the linter enforced that we spell our own vocabulary
+    consistently. That protected the vocabulary and did nothing for the person trying
+    to use Kettle — and it hardened into CI the very entrenchment it should have
+    caught. A user should not need a glossary; `house` terms stay off screen and the
+    lexicon names the plain word instead.
+    """
+
+    def house(self, text):
+        return {f["found"].lower() for f in lint.check_house_words(text, TERMS, where="t")}
+
+    def test_catches_the_words_a_user_would_have_to_learn(self):
+        for text, word in [("Found the desk from your proposal", "desk"),
+                           ("Close the sitting", "sitting"),
+                           ("Rule on each entry", "entry"),
+                           ("read the brief first", "brief"),
+                           ("the charter is written", "charter")]:
+            with self.subTest(text=text):
+                self.assertIn(word, self.house(text))
+
+    def test_names_the_plain_word_as_the_fix(self):
+        f = lint.check_house_words("found the desk", TERMS, where="t")
+        fixes = " ".join(x["fix"] for x in f)
+        self.assertIn("project", fixes)
+
+    def test_leaves_plain_copy_alone(self):
+        for ok in ["press Finish batch when you are done",
+                   "Edit the proposal, then approve it to set up your project",
+                   "Kettle lines up a batch of files for you to review",
+                   "Chat with the agent about this file"]:
+            with self.subTest(text=ok):
+                self.assertEqual(set(), self.house(ok))
+
+    def test_a_house_word_in_backticks_is_us_talking_about_it(self):
+        """docs and notes discuss `desk` on purpose; that is not copy."""
+        self.assertEqual(set(), self.house("the `desk` directory holds its records"))
+
+    def test_the_shipped_catalog_is_clean(self):
+        """Every string a user reads, checked against the whole house vocabulary."""
+        doc = json.loads((ROOT / "kettle" / "static" / "ui-copy.json").read_text())
+        bad = []
+        for key, rec in doc["keys"].items():
+            for field in ("text", "short"):
+                if rec.get(field):
+                    bad += [f"{key}.{field}: {f['found']}"
+                            for f in lint.check_house_words(rec[field], TERMS, where=key)]
+        for state, rec in doc.get("states", {}).items():
+            for field in ("line", "short", "full"):
+                if rec.get(field):
+                    bad += [f"states.{state}.{field}: {f['found']}"
+                            for f in lint.check_house_words(rec[field], TERMS, where=state)]
+        self.assertEqual([], bad, "house vocabulary reached the screen")
 
 
 class Exemptions(unittest.TestCase):
@@ -106,8 +183,8 @@ class Exemptions(unittest.TestCase):
         self.assertNotIn("stray-capital", checks("Add Project"))
 
     def test_a_common_noun_inside_a_title_term_is_that_term(self):
-        self.assertNotIn("stray-capital", checks("press Found Desk to finish"))
         self.assertNotIn("stray-capital", checks("the Desk Proposal is open"))
+        self.assertNotIn("stray-capital", checks("open the Desk Proposal now"))
 
     def test_sentence_start_capital_is_english(self):
         self.assertNotIn("stray-capital", checks("Sweep closes the sitting."))
@@ -166,8 +243,9 @@ class Baseline(unittest.TestCase):
         """Documented intent, checked cheaply: the file is a debt, not a config."""
         doc = json.loads((ROOT / "kettle" / "kits" / "_lexicon-baseline.json").read_text())
         self.assertIn("Shrink this list", doc["_note"])
-        self.assertLessEqual(len(doc["known"]), 8,
-                             "the baseline grew — fix the violation instead")
+        self.assertEqual([], doc["known"],
+                         "the baseline is empty as of 2026-10-01 — fix the violation "
+                         "rather than adding to this list")
 
 
 if __name__ == "__main__":

@@ -45,7 +45,7 @@ and founding remain distinct routes.
 |---|---|
 | Approve | Bookmark the user's ruling; do not apply or transmit |
 | Comment | Attach send-back context to the selected entry |
-| Sweep | Close the sitting under explicit policy and restock the queue |
+| Finish batch (sweep) | Close the sitting under explicit policy and restock the queue |
 | Egress | Stage an outward action for review |
 
 Shared visible strings are owned by `static/ui-copy.json`. The web and desktop

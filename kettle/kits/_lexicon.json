@@ -1,9 +1,10 @@
 {
-  "_note": "The product's controlled vocabulary — the one place a Kettle term is defined and spelled. Read by tools/lint-lexicon.py (which fails CI on a violation in the prompt corpus or the copy catalog), projected to docs/LEXICON.md for humans, and rendered into the curator handbook so generated prose uses the same nouns as the chrome. Add a term here before using it anywhere else.",
+  "_note": "The product's vocabulary, split by who reads it. Kettle keeps precise internal terms AND talks to users about their project in words they already have; this file is where those two stay straight. `tools/lint-lexicon.py` fails CI on a house word reaching the screen, and on spelling drift in the prompt corpus. Projected to docs/LEXICON.md; rendered into the agent handbook.",
   "_schema": 1,
   "_casing": {
     "title": "A proper name — a document, or a named control that is also a title. Always exactly as `term`, mid-sentence included. docs/UI.md: signature actions that are also titles stay Title Case.",
-    "lower": "A common noun or verb. Lowercase in prose; a capital is correct only at the start of a sentence or inside a Title Case heading. `sweep` the act is lowercase; `Sweep` the control is its own entry."
+    "lower": "A common noun or verb. Lowercase in prose; a capital is correct only at the start of a sentence or inside a Title Case heading. `sweep` the act is a house word; the control is `Finish batch`.",
+    "sentence": "A two-word control name in sentence case (`Finish batch`, `Not this`). Spelled exactly as `term` when it names the control; the lowercase phrase is ordinary prose."
   },
   "terms": [
     {
@@ -11,18 +12,10 @@
       "term": "desk",
       "kind": "concept",
       "casing": "lower",
-      "gloss": "One project as Kettle holds it: its charter, memory, queue, and records, kept in the project's desk directory. A desk is founded once and then worked, sitting by sitting.",
+      "gloss": "One project as Kettle holds it: its notes, memory, queue and records, in the project's desk directory. House word. On screen a user has a **project** — never a desk, and never a \"project desk\": a user should not have to learn what a desk is to use Kettle.",
       "avoid": [],
-      "not_synonyms": [
-        {
-          "form": "workspace",
-          "why": "a desk is not an IDE workspace"
-        },
-        {
-          "form": "Desk directory",
-          "why": "common noun"
-        }
-      ]
+      "audience": "house",
+      "plain": "project"
     },
     {
       "id": "sitting",
@@ -34,9 +27,11 @@
       "not_synonyms": [
         {
           "form": "session",
-          "why": "'session' is the curator's conversation state, not the user's working period"
+          "why": "'session' is the `curator`'s conversation state, not the user's working period"
         }
-      ]
+      ],
+      "audience": "house",
+      "plain": "this batch"
     },
     {
       "id": "queue",
@@ -54,7 +49,8 @@
           "form": "task list",
           "why": "entries are files to read, not tasks"
         }
-      ]
+      ],
+      "audience": "both"
     },
     {
       "id": "entry",
@@ -72,7 +68,9 @@
           "form": "card",
           "why": "not a board"
         }
-      ]
+      ],
+      "audience": "house",
+      "plain": "file"
     },
     {
       "id": "brief",
@@ -90,7 +88,9 @@
           "form": "description",
           "why": "vague where the standard is specific"
         }
-      ]
+      ],
+      "audience": "house",
+      "plain": "summary"
     },
     {
       "id": "ask",
@@ -106,9 +106,13 @@
         },
         {
           "form": "prompt",
-          "why": "'prompt' means the curator's instructions"
+          "why": "'prompt' means the `curator`'s instructions"
         }
-      ]
+      ],
+      "audience": "house",
+      "plain": "question",
+      "lint_house": false,
+      "lint_note": "Not checked on screen: the house term is the noun (an entry's one-line question), and `ask` is also an ordinary verb a user reads without trouble. A regex cannot tell them apart, and flagging 'Ask the agent' is the kind of noise that gets a linter switched off."
     },
     {
       "id": "ruling",
@@ -126,14 +130,16 @@
           "form": "verdict",
           "why": "not the product word"
         }
-      ]
+      ],
+      "audience": "house",
+      "plain": "decision"
     },
     {
       "id": "sweep",
       "term": "sweep",
       "kind": "concept",
       "casing": "lower",
-      "gloss": "Closing the sitting: apply rulings, diff and assess the batch, fix or flag ripples, write the session log, restock the queue. Both noun and verb.",
+      "gloss": "Finishing a batch: apply the user's decisions, review what changed, note the ripples, save a record, line up the next files. House word since 2026-10-06: the button reads **Finish batch**, and prose says 'finish the batch'. Identifiers (`/api/sweep`, `sweepLabel`, `sweep.log`) are contract, not copy.",
       "avoid": [],
       "not_synonyms": [
         {
@@ -144,29 +150,42 @@
           "form": "commit the sitting",
           "why": "a sweep does not make a git commit"
         }
-      ]
+      ],
+      "audience": "house",
+      "plain": "finish the batch"
     },
     {
       "id": "curator",
-      "term": "curator",
+      "term": "agent",
       "kind": "role",
       "casing": "lower",
-      "gloss": "The project's resident agent: curates the queue, converses about the open file, and sweeps. Its identity lives in files, not in a session, so any agent that reads them is the curator.",
-      "avoid": [],
+      "gloss": "The project's resident agent: curates the queue, converses about the open file, and sweeps. Its identity lives in files, not in a session, so any model that reads them is the agent. Renamed from `curator` on 2026-10-01; the verb `curate` and the adjective `curatorial` survive, and so does every identifier (`curator.provider` in settings, `/api/curator`, `curatorProvider`), which is contract, not copy.",
       "not_synonyms": [
         {
           "form": "assistant",
-          "why": "generic; the curator is a defined role"
+          "why": "generic; the agent is a defined role"
         },
         {
           "form": "the AI",
-          "why": "never refer to the curator this way in product copy"
+          "why": "never refer to the agent this way in product copy"
         },
         {
           "form": "the bot",
-          "why": "never refer to the curator this way in product copy"
+          "why": "never refer to the agent this way in product copy"
         }
-      ]
+      ],
+      "retired": [
+        {
+          "form": "curator",
+          "why": "the role is `agent` in user-facing copy (2026-10-01)"
+        },
+        {
+          "form": "Curator",
+          "why": "the role is `agent` in user-facing copy (2026-10-01)"
+        }
+      ],
+      "avoid": [],
+      "audience": "both"
     },
     {
       "id": "charter",
@@ -179,9 +198,11 @@
       "not_synonyms": [
         {
           "form": "config",
-          "why": "a charter is prose the user and curator both read"
+          "why": "a charter is prose the user and `curator` both read"
         }
-      ]
+      ],
+      "audience": "house",
+      "plain": "project notes"
     },
     {
       "id": "memory",
@@ -190,7 +211,9 @@
       "casing": "lower",
       "gloss": "The desk's distilled standing knowledge, in MEMORY.md. Memory is distillation — it is never a transcript.",
       "artifact": "MEMORY.md",
-      "avoid": []
+      "avoid": [],
+      "audience": "house",
+      "plain": "notes on what you prefer"
     },
     {
       "id": "egress",
@@ -204,14 +227,15 @@
           "form": "outbox",
           "why": "the inbox kit's <root>/outbox is a different thing: approved mail drafts"
         }
-      ]
+      ],
+      "audience": "house"
     },
     {
       "id": "founding",
       "term": "founding",
       "kind": "concept",
       "casing": "lower",
-      "gloss": "Bringing a desk into being: register, survey, interview, Draft Proposal, Found Desk. Founding is a conversation, not a confirmation card.",
+      "gloss": "Bringing a desk into being: register, survey, interview, Draft Proposal, `Found Desk`. Founding is a conversation, not a confirmation card.",
       "avoid": [],
       "not_synonyms": [
         {
@@ -222,33 +246,32 @@
           "form": "setup wizard",
           "why": "founding is a conversation; a wizard is the thing it is not"
         }
-      ]
+      ],
+      "audience": "house",
+      "plain": "setting up"
     },
     {
       "id": "founding-interview",
       "term": "founding interview",
       "kind": "concept",
       "casing": "lower",
-      "gloss": "The tool-less conversation in which the curator learns what the project is and what the user wants from a second reader. A common noun: lowercase in prose.",
-      "avoid": [
-        {
-          "form": "Founding Interview",
-          "why": "a common noun, not a document title — lowercase in prose"
-        }
-      ],
+      "gloss": "The tool-less conversation in which the curator learns what the project is and what the user wants from a second reader. A common noun: lowercase in prose. Lowercase in prose; as a pane hed it takes Title Case like any hed (docs/UI.md), which is why `Founding Interview` is correct in the status strip.",
+      "avoid": [],
       "not_synonyms": [
         {
           "form": "onboarding interview",
           "why": "see founding"
         }
-      ]
+      ],
+      "audience": "house",
+      "plain": "setup questions"
     },
     {
       "id": "desk-proposal",
       "term": "Desk Proposal",
       "kind": "document",
       "casing": "title",
-      "gloss": "The document the founding interview produces, written to DESK-PROPOSAL.md. The user edits it until it matches the project, then founds the desk from it. The document of record during the proposing state.",
+      "gloss": "The document the setup questions produce, written to DESK-PROPOSAL.md. House name. On screen it is just **the proposal**.",
       "artifact": "DESK-PROPOSAL.md",
       "avoid": [],
       "not_synonyms": [
@@ -260,26 +283,9 @@
           "form": "draft desk",
           "why": "not a product term"
         }
-      ]
-    },
-    {
-      "id": "found-desk",
-      "term": "Found Desk",
-      "kind": "control",
-      "casing": "title",
-      "gloss": "The control that founds the desk from the edited Desk Proposal and stocks the first queue. The Approve control takes this label while proposing.",
-      "avoid": [
-        {
-          "form": "found desk",
-          "why": "a named control — Title Case"
-        }
       ],
-      "not_synonyms": [
-        {
-          "form": "Create Desk",
-          "why": "a desk is founded, not created"
-        }
-      ]
+      "audience": "house",
+      "plain": "proposal"
     },
     {
       "id": "draft-proposal",
@@ -297,7 +303,8 @@
           "form": "Finish Interview",
           "why": "retired label"
         }
-      ]
+      ],
+      "audience": "both"
     },
     {
       "id": "start-interview",
@@ -305,14 +312,15 @@
       "kind": "control",
       "casing": "title",
       "gloss": "The control that registers a project and opens founding. docs/UI.md lists it among the signature actions that are also titles.",
-      "avoid": []
+      "avoid": [],
+      "audience": "both"
     },
     {
       "id": "approve",
       "term": "Approve",
       "kind": "control",
       "casing": "title",
-      "gloss": "The control that bookmarks a ruling on the open entry. It does not apply or commit anything — only a sweep does that.",
+      "gloss": "The control that rules on the open entry. On a founded project desk it bookmarks a ruling and applies nothing until a sweep. While a proposal is open it founds the project desk — the label no longer changes, so the sitting promotes the control visually instead (`body.proposing #approve`).",
       "avoid": [],
       "not_synonyms": [
         {
@@ -321,17 +329,31 @@
         }
       ],
       "lint_case": false,
-      "lint_note": "Not case-checked: the term is a single ordinary word, so a lowercase occurrence is the concept, not a misspelling of the control."
+      "lint_note": "Not case-checked: the term is a single ordinary word, so a lowercase occurrence is the concept, not a misspelling of the control.",
+      "retired": [
+        {
+          "form": "Found Desk",
+          "why": "the control reads Approve in both states (2026-10-01); `found` survives as the verb"
+        }
+      ],
+      "audience": "both"
     },
     {
       "id": "sweep-control",
-      "term": "Sweep",
+      "term": "Finish batch",
       "kind": "control",
-      "casing": "title",
-      "gloss": "The control that closes the sitting. The act is 'sweep' (lowercase); this entry is the named control only.",
+      "casing": "sentence",
+      "gloss": "The button that finishes a batch (internally, a sweep). Sentence case, like the other two-word controls; prose that names it says 'press Finish batch'.",
       "avoid": [],
       "lint_case": false,
-      "lint_note": "Not case-checked: the term is a single ordinary word, so a lowercase occurrence is the concept, not a misspelling of the control."
+      "lint_note": "Not case-checked: the term is a single ordinary word, so a lowercase occurrence is the concept, not a misspelling of the control.",
+      "audience": "both",
+      "retired": [
+        {
+          "form": "Sweep",
+          "why": "the button is Finish batch on screen (2026-10-06)"
+        }
+      ]
     },
     {
       "id": "comment",
@@ -341,7 +363,8 @@
       "gloss": "The control that opens a note on the open file for the curator to address during the sweep.",
       "avoid": [],
       "lint_case": false,
-      "lint_note": "Not case-checked: the term is a single ordinary word, so a lowercase occurrence is the concept, not a misspelling of the control."
+      "lint_note": "Not case-checked: the term is a single ordinary word, so a lowercase occurrence is the concept, not a misspelling of the control.",
+      "audience": "both"
     },
     {
       "id": "viewport",
@@ -359,7 +382,8 @@
           "form": "client app",
           "why": "not the product word"
         }
-      ]
+      ],
+      "audience": "house"
     },
     {
       "id": "vscode-desk",
@@ -373,13 +397,21 @@
           "form": "the extension",
           "why": "the extension is the package; the panel it contributes is the `VS Code Desk`"
         }
-      ]
+      ],
+      "audience": "house"
     }
   ],
   "_fields": {
     "avoid": "Literal wrong spellings of THIS term. Decidable by a linter, so these are errors.",
     "not_synonyms": "Different words that do not mean this term. Guidance for writers and for the curator; never linted, because only a reader can tell whether 'summary' is standing in for 'brief'.",
     "lint_case": "false when the term is a single ordinary word and the lowercase form is legitimately the concept.",
-    "retired": "Literal strings that used to mean this term and must not come back (an old button label, a renamed document). Decidable, so these are errors too."
+    "retired": "Literal strings that used to mean this term and must not come back (an old button label, a renamed document). Decidable, so these are errors too.",
+    "audience": "`house` (never on screen) or `both` (allowed everywhere).",
+    "plain": "For a `house` term: what a user sees instead. The linter quotes it as the fix.",
+    "lint_house": "false when the house word is also an ordinary English word in another part of speech, so the on-screen check would fire on correct copy."
+  },
+  "_audience": {
+    "house": "Code, prompts, docs, and our own conversation. Precision for us. A `house` term appearing in ui-copy.json is an error: see `plain` for what the user reads instead.",
+    "both": "Plain enough that a user reads it without being taught, or a control label they learn by pressing. Allowed everywhere."
   }
 }

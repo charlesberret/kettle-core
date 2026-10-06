@@ -48,6 +48,16 @@ still declare which values they support and report skew clearly instead of
 guessing at an unfamiliar route or file shape. A move to `1` is the explicit
 compatibility promise.
 
+### `POST /api/set-aside`
+
+"Not this" on one file. Body `{project, id}` sets the entry's status to `set-aside` and stamps
+`set_aside` with today's date; `{project, id, undo: true}` returns it to `pending`. Each call is
+appended to `.kettle/runtime/set-aside.log`. Returns `{ok, status}`.
+
+The proposal entry is refused with 400: it is approved or edited, not dismissed. A set-aside
+file always forces a judgment close when the user next finishes a batch, where the agent decides whether the
+user meant that file or that kind of file and says so in the round notes.
+
 ### `GET /api/ui-copy`
 
 The sitting's copy catalog, merged from `static/ui-copy.json` (shipped) and the
@@ -59,9 +69,9 @@ its own wording — see `docs/UI.md` § Shared UI copy.
   "_schema": 1,
   "keys": {
     "sweepLabel": {
-      "text": "Sweep",
-      "short": "sweep",
-      "note": "Ritual button: close the sitting."
+      "text": "Finish batch",
+      "short": "Finish",
+      "note": "The button that ends a batch. Internally this is a sweep; the word stays off screen."
     }
   },
   "selectors": {"#addgo": {"text": "go"}},
