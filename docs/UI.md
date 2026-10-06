@@ -97,27 +97,93 @@ Shared kit: `.btn` + `.btn-sm` / `.btn-md` + role (`.btn-default` | `.btn-primar
 
 ## Shared UI copy (all viewports)
 
-User-facing **strings** must not drift between web, desktop, and the plugin Desk.
+User-facing **strings** must not drift between web, desktop, the plugin Desk, and
+the TUI.
 
 | Role | Location |
 |------|----------|
-| **Canonical (edit here only)** | `static/ui-copy.js` → `window.KETTLE_UI_COPY` (`/ui-copy.js`) |
+| **Canonical (edit here only)** | `kettle/static/ui-copy.json` |
+| **Web / desktop** | `GET /ui-copy.js` → `window.KETTLE_UI_COPY`, rendered from the JSON per request |
+| **Python viewports (CLI, TUI)** | `kettle.uicopy`, or `GET /api/ui-copy` out of process |
 | **VS Code (generated)** | `kettle-vscode/src/uiCopy.ts` — **do not hand-edit** |
-| **Desktop** | inherits web (same static files via sidecar) |
 
-**Workflow**
+There is no committed JavaScript copy of the catalog. `static/ui-copy.js` used to
+exist and was deleted: a generated file beside its source is a second source, and
+it drifted.
 
-1. Edit `kettle-core/static/ui-copy.js` only.
-2. In the plugin package: `npm run sync-ui-copy`, then commit the generated snapshot.
-3. Run `npm run check-ui-copy` against the intended core checkout.
-4. Ordinary plugin compile/package consumes the committed snapshot and stays
-   sibling-independent; rebuild/reinstall the VSIX if needed.
+### Each entry
 
-`KETTLE_SRC` (core root) or `KETTLE_UI_COPY` (path to `ui-copy.js`) override discovery
-when the repos are not siblings.
+```json
+"sweepLabel": {
+  "text": "Sweep",
+  "short": "sweep",
+  "note": "Ritual button: close the sitting."
+}
+```
 
-**Test:** `tests/test_ui_copy.py` asserts core keys exist and, when the plugin tree is present,
-that generated `uiCopy.ts` still matches (CI safety if someone hand-edits the mirror).
+- **`text`** — the string. Case follows *Titles, heds, subheds* and *Buttons* above.
+- **`short`** — optional, for a surface too narrow for the full string (a TUI status
+  bar, a two-line pane). Same meaning in fewer words — **never a different
+  instruction**. A viewport asks for it; it falls back to `text`.
+- **`note`** — where this appears and what it is for, written for a reader who has
+  only the key. Required: it is what lets an agent act on a key it has never seen.
+  `tests/test_ui_copy.py` fails on a key without one.
+
+### Binding a string in the sitting
+
+Tag the element; do not read the catalog by hand.
+
+| Attribute | Sets |
+|---|---|
+| `data-uic="key"` | `textContent` |
+| `data-uic-title="key"` | `title` |
+| `data-uic-ph="key"` | `placeholder` |
+| `data-uic-aria="key"` | `aria-label` |
+
+**Keep the real English in the markup.** It is the fallback when `/ui-copy.js`
+cannot load, so the sitting degrades to today's wording rather than to blank
+shells. A test asserts every tagged literal equals its catalog text byte for byte
+— if you change one, change both.
+
+Tag the **leaf** that holds the text. `data-uic` on a wrapper would delete its
+child elements; the boot pass refuses that case and records it instead.
+
+### Workflow
+
+1. Edit `kettle/static/ui-copy.json` only.
+2. Update the literal in `index.html` to match, if the string is tagged there.
+3. In the plugin package: `npm run sync-ui-copy`, then commit the generated
+   snapshot. `npm run check-ui-copy` verifies it against the intended core checkout.
+4. `KETTLE_SRC` (core root) or `KETTLE_UI_COPY` (path to `ui-copy.json`) override
+   discovery when the repos are not siblings.
+
+**Tests:** `tests/test_ui_copy.py` checks required keys, that every key has a note,
+that no `short` is longer than its `text`, that every `data-uic*` tag resolves, that
+tagged literals match exactly, and — when the plugin tree is checked out beside core
+— that the generated mirror still agrees.
+
+## UI debug mode
+
+Diagnostics → **Inspect Interface Copy**, or `?uidebug=1` for one load. Off by
+default; the flag lives in `localStorage`, never in `settings.json`, because it is
+a per-viewer developer affordance and must not follow a project to another machine.
+
+It outlines every element bound to a catalog key, pins an inspector showing that
+key, what it binds, the owning file and the catalog note, and produces one
+pasteable reference line — which is the point: an agent can act on
+`key=sweepLabel · file=kettle/static/ui-copy.json`, and cannot act on "the gray
+text under the queue".
+
+Alt+click edits a string in place. Edits are **overrides**, written to
+`sitting-overrides.json` beside `settings.json` — never into `static/` (read-only
+once installed) or `index.html` (run-critical). Overriding a *key* reaches every
+viewport; overriding a *selector* relabels one element of this sitting only, until
+`GET /api/ui-copy/promote` says what it takes to give it a key.
+
+Size and placement are **tokens, not drag handles**: the inspector lists the CSS
+custom properties the rules matching that element read, and each is editable live.
+The sitting cannot express arbitrary geometry, and the value lives in a token
+either way.
 
 ## Founding / add project (brief 22)
 

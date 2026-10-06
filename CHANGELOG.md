@@ -7,6 +7,14 @@ and Desk schema have their own integer contract versions.
 
 ### Changed
 
+- **UI copy is one catalog in JSON.** `static/ui-copy.json` replaces
+  `static/ui-copy.js`, which is deleted — `/ui-copy.js` is now rendered from the
+  JSON per request, so no generated file can drift from it. Python viewports read
+  the same catalog through `kettle.uicopy` or `GET /api/ui-copy`, which is what
+  the TUI needed and a JavaScript file could never give it. Keys carry an optional
+  `short` for narrow surfaces and a required `note`.
+- The **Add Project** button reads **Start Interview**, matching the catalog and
+  `docs/UI.md`; the web markup had it lowercase while the VS Code mirror did not.
 - Bare `kettle` launches the Textual sitting (`kettle-tui` on PATH). The HTTP host
   is `kettle-web` (alias: `kettle --web`). Desktop sidecars that pass `--port` /
   `--no-open` are unchanged. The PyInstaller `kettle` binary still serves the
@@ -16,6 +24,14 @@ and Desk schema have their own integer contract versions.
 - New desk files and lineage records are created mode `0600`. Existing files keep their bits.
 
 ### Added
+
+- **UI debug mode** (Diagnostics → Inspect Interface Copy, or `?uidebug=1`).
+  Outlines catalogued copy, names the key, the binding and the owning file, and
+  copies a pasteable reference. Alt+click retypes a string; the inspector also
+  lists and retunes the CSS tokens governing an element. Edits are overrides in
+  `sitting-overrides.json` beside `settings.json` — `static/` and `index.html` are
+  never written. New routes: `GET`/`POST /api/ui-copy` and
+  `GET /api/ui-copy/promote`.
 
 - **Standalone binary.** `tools/build-binary.sh` + `packaging/kettle.spec` build a single
   `kettle` executable (~9 MB) with the sitting, kits and interpreter inside it: no Python on

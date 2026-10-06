@@ -1677,6 +1677,88 @@
   .msg.agent.md table { border-collapse:collapse; margin:8px 0; font-size:13px; }
   .msg.agent.md th, .msg.agent.md td { border:1px solid var(--line); padding:3px 8px; text-align:left; }
   .msg.agent.md th { background:var(--panel); color:var(--text-label); }
+
+  /* ---- UI debug mode -------------------------------------------------------
+     A developer overlay, off by default and dead CSS until body.uidebug is set.
+     Outlines only: nothing here changes layout, so inspecting the sitting cannot
+     reflow the thing being inspected.
+
+     Chroma is rationed. Being catalogued is the ordinary case and the commonest
+     outline on screen, so it is gray — spending accent on it would light up half
+     the sitting and leave nothing to mean anything. One element is under the
+     pointer: that one takes the link tint. An element you have overridden is the
+     needs-me case, and it is the only thing wearing gold. */
+  body.uidebug [data-uic], body.uidebug [data-uic-title],
+  body.uidebug [data-uic-ph], body.uidebug [data-uic-aria] {
+    outline:1px dotted color-mix(in srgb, var(--fg) 34%, var(--bg)); outline-offset:1px;
+  }
+  body.uidebug.uidebug-ids [id]:not([data-uic]):not([data-uic-title]):not([data-uic-ph]):not([data-uic-aria]) {
+    outline:1px dashed color-mix(in srgb, var(--fg) 16%, var(--bg)); outline-offset:1px;
+  }
+  /* after the ambient rules, so the two live states win the cascade */
+  body.uidebug .uic-over { outline:1px solid var(--warn); outline-offset:1px; }
+  body.uidebug .uic-hot { outline:2px solid var(--text-link); outline-offset:1px; }
+
+  /* Pinned, not cursor-following: the badge carries buttons, and a panel that
+     runs away from the pointer cannot be clicked. */
+  #uicbadge {
+    position:fixed; left:12px; bottom:12px; width:330px; max-height:60vh; overflow:auto;
+    z-index:40; display:none; padding:10px 12px; border:1px solid var(--line);
+    border-radius:8px; background:var(--panel2); box-shadow:0 6px 24px rgba(0,0,0,.35);
+    font:12px/1.45 var(--ui-font);
+  }
+  body.uidebug #uicbadge { display:block; }
+  #uicbadge h3 {
+    margin:0 0 6px; font:600 11px/1.3 var(--ui-font); letter-spacing:.14em;
+    text-transform:uppercase; color:var(--text-heading);
+  }
+  #uicbadge dl { margin:0; display:grid; grid-template-columns:auto 1fr; gap:2px 8px; }
+  #uicbadge dt { color:var(--text-label); }
+  #uicbadge dd { margin:0; color:var(--text-secondary); word-break:break-word; }
+  #uicbadge dd.key { color:var(--text-primary); font-family:var(--mono-font, monospace); }
+  #uicbadge .uic-note { margin:6px 0 0; color:var(--text-muted); }
+  #uicbadge .uic-flag { color:var(--text-warn); }
+  #uicbadge .uic-acts { display:flex; gap:6px; margin-top:8px; flex-wrap:wrap; }
+  #uicbadge .uic-hint { margin:8px 0 0; color:var(--text-muted); }
+  #uicbadge .uic-toks { margin:8px 0 0; padding-top:8px; border-top:1px solid var(--line); }
+  #uicbadge .uic-tok { display:flex; align-items:center; gap:6px; margin:3px 0; }
+  #uicbadge .uic-tok code {
+    flex:0 0 auto; color:var(--text-label); font-family:var(--mono-font, monospace);
+  }
+  #uicbadge .uic-tok input {
+    flex:1 1 auto; min-width:0; background:var(--bg); color:var(--text-primary);
+    border:1px solid var(--line); border-radius:4px; padding:1px 4px; font:11px var(--ui-font);
+  }
+
+  #uicedit {
+    position:fixed; left:354px; bottom:12px; width:390px; z-index:41; display:none;
+    padding:12px 14px; border:1px solid var(--line); border-radius:8px;
+    background:var(--panel2); box-shadow:0 6px 24px rgba(0,0,0,.45);
+    font:12px/1.45 var(--ui-font);
+  }
+  #uicedit.open { display:block; }
+  #uicedit h3 {
+    margin:0 0 8px; font:600 11px/1.3 var(--ui-font); letter-spacing:.14em;
+    text-transform:uppercase; color:var(--text-heading);
+  }
+  #uicedit label { display:block; margin:6px 0 2px; color:var(--text-label); }
+  #uicedit textarea, #uicedit input {
+    width:100%; box-sizing:border-box; background:var(--bg); color:var(--text-primary);
+    border:1px solid var(--line); border-radius:4px; padding:4px 6px;
+    font:12px/1.4 var(--ui-font); resize:vertical;
+  }
+  #uicedit .uic-scope { color:var(--text-muted); margin:0 0 6px; }
+  #uicedit .uic-acts { display:flex; gap:6px; margin-top:10px; align-items:center; }
+  #uicedit .uic-err { color:var(--text-warn); margin:6px 0 0; min-height:1em; }
+  /* Below ~760px there is no room for the inspector and the editor side by side;
+     the editor takes the corner and covers the badge, which is the right trade
+     when you are typing into it. */
+  @media (max-width: 760px) {
+    #uicedit { left:12px; right:12px; width:auto; }
+  }
+  #uicbadge .uic-tokhed {
+    margin:0 0 4px; color:var(--text-label); font-size:11px;
+  }
 </style>
 </head>
 <body>
@@ -1684,14 +1766,15 @@
 
 <div id="left">
   <div id="queue">
-    <h1>Queue</h1>
+    <h1 data-uic="queueTitle">Queue</h1>
     <div id="qlist"></div>
   </div>
   <div id="divQ" class="hdivider" title="drag to resize"></div>
   <div id="meta">
     <h1>
-      <span class="t-heading" style="letter-spacing:.18em">Info</span>
-      <span id="metabar"><button id="metaedit" class="btn btn-sm btn-default" title="edit entry fields">edit</button></span>
+      <span class="t-heading" style="letter-spacing:.18em" data-uic="metaTitle">Info</span>
+      <span id="metabar"><button id="metaedit" class="btn btn-sm btn-default" title="edit entry fields"
+              data-uic="metaEditLabel">edit</button></span>
     </h1>
     <dl id="metadl" class="meta-view"></dl>
   </div>
@@ -1748,7 +1831,7 @@
   <div id="desk-top">
     <div id="desk-chrome">
       <div id="desk-proj">
-        <span class="project-label">Project</span>
+        <span class="project-label" data-uic="deskProjectLabel">Project</span>
         <select id="proj" title="Select project" aria-label="Select project"></select>
         <div id="gitmap" class="gitmap-nogit" title="git activity" aria-label="Project git commit activity" role="img"></div>
       </div>
@@ -1768,29 +1851,35 @@
   </div>
   <!-- Founding status sits under the project bar (hidden unless body.founding). -->
   <div id="foundinghead">
-    <span class="ivtitle">founding interview</span>
+    <span class="ivtitle" data-uic="foundingHeadTitle">founding interview</span>
     <span class="ivacts">
-      <button id="ivskip" type="button" class="btn btn-sm btn-ghost" title="leave founding for later — open the project as-is (no charter or queue yet); reselect it to resume founding">skip for now</button>
-      <button id="ivfinish" type="button" class="btn btn-sm btn-ghost" title="skip remaining chat and draft the desk proposal now">Draft Proposal ✓</button>
+      <button id="ivskip" type="button" class="btn btn-sm btn-ghost" title="leave founding for later — open the project as-is (no charter or queue yet); reselect it to resume founding"
+              data-uic="skipFoundingLabel" data-uic-title="skipFoundingHint">skip for now</button>
+      <button id="ivfinish" type="button" class="btn btn-sm btn-ghost" title="skip remaining chat and draft the desk proposal now"
+              data-uic="draftProposalLabel" data-uic-title="draftProposalHint">Draft Proposal ✓</button>
     </span>
   </div>
   <div id="divBrief" class="hdivider" title="drag to resize brief / chat"></div>
   <div id="ritual" class="actions-ritual" role="group" aria-label="Desk actions">
-    <button id="approve" class="btn btn-sm btn-default" title="Bookmark a ruling — does not apply or commit">Approve</button>
-    <button id="comment" class="btn btn-sm btn-default" title="Leave a note on this file for the agent to address during the sweep">Comment</button>
-    <button id="sweepbtn" class="btn btn-sm btn-default" title="close the sitting — apply rulings, diff &amp; assess the batch, fix/flag ripples, log the session, restock the queue">Sweep</button>
+    <button id="approve" class="btn btn-sm btn-default" title="Bookmark a ruling — does not apply or commit"
+            data-uic="approveLabel" data-uic-title="approveHint">Approve</button>
+    <button id="comment" class="btn btn-sm btn-default" title="Leave a note on this file for the agent to address during the sweep"
+            data-uic="commentLabel" data-uic-title="commentHint">Comment</button>
+    <button id="sweepbtn" class="btn btn-sm btn-default" title="close the sitting — apply rulings, diff &amp; assess the batch, fix/flag ripples, log the session, restock the queue"
+            data-uic="sweepLabel" data-uic-title="sweepHint">Sweep</button>
   </div>
   <div id="commentpanel">
-    <textarea id="commentin" spellcheck="false" placeholder="a note for the sweep, tied to this file — Enter saves · Shift+Enter newline · Esc cancels"></textarea>
-    <div class="crow"><span id="commenthint">tied to this file; the sweep reads it when it closes the sitting</span><span style="flex:1"></span><button id="commentsave" class="btn btn-sm btn-primary">save</button></div>
+    <textarea id="commentin" spellcheck="false" data-uic-ph="commentPlaceholder"
+              placeholder="a note for the sweep, tied to this file — Enter saves · Shift+Enter newline · Esc cancels"></textarea>
+    <div class="crow"><span id="commenthint" data-uic="commentTiedHint">tied to this file; the sweep reads it when it closes the sitting</span><span style="flex:1"></span><button id="commentsave" class="btn btn-sm btn-primary" data-uic="commentSaveLabel">save</button></div>
   </div>
   <div id="divDesk" class="hdivider" title="drag to resize brief / chat"></div>
   <div id="chatwrap">
     <div id="chat"></div>
     <div id="chat-live" class="sr-only" aria-live="polite" aria-atomic="true"></div>
-    <div id="spin"><span id="spinlabel">working…</span><span class="spin-elapsed" id="spinelapsed"></span></div>
+    <div id="spin"><span id="spinlabel" data-uic="spinWorking">working…</span><span class="spin-elapsed" id="spinelapsed"></span></div>
     <div id="chatbar">
-      <textarea id="chatin" placeholder="Chat with the Kettle agent…"></textarea>
+      <textarea id="chatin" data-uic-ph="chatPlaceholder" placeholder="Chat with the Kettle agent…"></textarea>
     </div>
     <!-- Agent controls sit under the chat entry (not in desk chrome) -->
     <div id="agentbar" role="group" aria-label="Agent controls">
@@ -1817,16 +1906,16 @@
 
 <div id="addbg">
   <div id="addmodal" role="dialog" aria-modal="true" aria-labelledby="addmodal-h">
-    <h2 id="addmodal-h">Add Project</h2>
-    <p class="mnote" style="margin:0 0 12px">Name a folder under your home. The interview starts in the agent pane — Draft Proposal ✓ drafts a proposal you edit, then use Found Desk.</p>
+    <h2 id="addmodal-h" data-uic="addProjectTitle">Add Project</h2>
+    <p class="mnote" style="margin:0 0 12px" data-uic="addProjectNote">Name a folder under your home. The interview starts in the agent pane — Draft Proposal ✓ drafts a proposal you edit, then use Found Desk.</p>
     <div class="add-hot">
-      <input id="addname" placeholder="name" spellcheck="false" aria-label="project name">
+      <input id="addname" data-uic-ph="addProjectNamePlaceholder" placeholder="name" spellcheck="false" aria-label="project name">
       <div class="add-pathrow">
-        <input id="addroot" placeholder="folder (absolute or ~/ path)" spellcheck="false" aria-label="project folder">
+        <input id="addroot" data-uic-ph="addProjectFolderPlaceholder" placeholder="folder (absolute or ~/ path)" spellcheck="false" aria-label="project folder">
         <button id="addbrowse" class="btn btn-sm btn-ghost browse" type="button" title="choose folder">browse…</button>
       </div>
-      <label for="addnote" class="mnote" style="margin:8px 0 4px">In a sentence or two: what is this, and what do you want from a second reader here?</label>
-      <textarea id="addnote" class="kitnote" required spellcheck="false" placeholder="e.g. a research folder that grows fast — flag anything that looks stale or contradicts what's already written" aria-label="founding sentence — what this is and what you want from a second reader here"></textarea>
+      <label for="addnote" class="mnote" style="margin:8px 0 4px" data-uic="addProjectFoundingQuestion">In a sentence or two: what is this, and what do you want from a second reader here?</label>
+      <textarea id="addnote" class="kitnote" required spellcheck="false" data-uic-ph="addProjectFoundingPlaceholder" placeholder="e.g. a research folder that grows fast — flag anything that looks stale or contradicts what's already written" aria-label="founding sentence — what this is and what you want from a second reader here"></textarea>
     </div>
     <details class="add-advanced">
       <summary>more options</summary>
@@ -1845,20 +1934,20 @@
     <div class="mrow">
       <span style="flex:1"></span>
       <button id="addcancel" class="btn btn-md btn-ghost" title="Esc">cancel</button>
-      <button id="addgo" class="btn btn-md btn-primary" title="⌘Enter">start interview</button>
+      <button id="addgo" class="btn btn-md btn-primary" title="⌘Enter" data-uic="addProjectStart">Start Interview</button>
     </div>
   </div>
 </div>
 
 <div id="setupbg">
   <div id="setupmodal" role="dialog" aria-modal="true" aria-labelledby="setupmodal-h">
-    <h2 id="setupmodal-h">Kettle</h2>
-    <div class="mnote">Pick the agent CLI that runs founding, chat, and sweeps. Kettle never stores API keys — sign in to the CLI or set its key in your shell.</div>
+    <h2 id="setupmodal-h" data-uic="setupTitle">Kettle</h2>
+    <div class="mnote" data-uic="setupNote">Pick the agent CLI that runs founding, chat, and sweeps. Kettle never stores API keys — sign in to the CLI or set its key in your shell.</div>
     <div class="mrow" style="margin-bottom:8px">
       <span class="lbl">provider</span>
       <select id="setupProvider" style="flex:1" title="Agent CLI family" aria-label="Provider"></select>
     </div>
-    <div id="setupstatus" class="mnote" style="margin:0">checking curator…</div>
+    <div id="setupstatus" class="mnote" style="margin:0" data-uic="setupChecking">checking curator…</div>
     <div id="setuprows"></div>
     <div class="mrow">
       <span style="flex:1"></span>
@@ -1869,10 +1958,10 @@
 
 <div id="sweepbg" style="position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:21;">
   <div id="sweepconfirm" role="dialog" aria-modal="true" aria-labelledby="sweepconfirm-h">
-    <h2 id="sweepconfirm-h">Sweep the Desk?</h2>
-    <div style="font-size:13px;color:var(--fg)">Closes the sitting: applies ticked rulings (launches become logged directives), diffs and assesses every reviewed entry, fixes or flags ripples, writes the session log, and restocks the queue.</div>
+    <h2 id="sweepconfirm-h" data-uic="sweepConfirmTitle">Sweep the Desk?</h2>
+    <div style="font-size:13px;color:var(--fg)" data-uic="sweepConfirmBody">Closes the sitting: applies ticked rulings (launches become logged directives), diffs and assesses every reviewed entry, fixes or flags ripples, writes the session log, and restocks the queue.</div>
     <label><input type="checkbox" id="sweepnoask"> don't ask again (button becomes a 3-second undo instead)</label>
-    <textarea id="sweepthrust" spellcheck="false" placeholder="a steer for this pass — what's most on your mind as you close the sitting. the agent reads it first (optional · ⌘Enter sweeps)"></textarea>
+    <textarea id="sweepthrust" spellcheck="false" data-uic-ph="sweepThrustPlaceholder" placeholder="a steer for this pass — what's most on your mind as you close the sitting. the agent reads it first (optional · ⌘Enter sweeps)"></textarea>
     <div style="display:flex;justify-content:flex-end;gap:8px;">
       <button id="sweepcancel" class="btn btn-md btn-ghost">cancel</button>
       <button id="sweepgo" class="btn btn-md btn-primary">sweep</button>
@@ -1882,7 +1971,7 @@
 
 <div id="refoundbg">
   <div id="refoundmodal" role="dialog" aria-modal="true" aria-labelledby="refoundmodal-h">
-    <h2 id="refoundmodal-h">Re-found this project?</h2>
+    <h2 id="refoundmodal-h" data-uic="refoundTitle">Re-found this project?</h2>
     <p class="mnote" style="margin:0">
       <strong id="refoundname">—</strong> will be reset to an unfounded seed.
       The current <code>.kettle</code> desk is copied to a backup first; your project
@@ -2286,6 +2375,24 @@
   </div>
 
   <div class="asec" data-tab="diagnostics">
+    <h2>UI Debug Mode</h2>
+    <label class="achk"><input type="checkbox" id="optUiDebug">
+      <span class="ctext"><span class="ctitle">Inspect Interface Copy</span>
+      <span class="cdesc"><span class="con">On:</span> Outlines every element whose text comes from the copy catalog and pins an inspector showing its key, its note, and the CSS tokens that size it. Alt+click an element to retype its text. Edits are saved to your own overrides file, never into the app.<br>
+      <span class="con">Off:</span> The sitting behaves normally (the default). <code>?uidebug=1</code> in the URL turns it on for one load.</span></span></label>
+    <label class="achk"><input type="checkbox" id="optUiDebugIds">
+      <span class="ctext"><span class="ctitle">Also Outline Uncatalogued Elements</span>
+      <span class="cdesc"><span class="con">On:</span> Dashes a border around every element that has an id but no catalog key — the copy still hardcoded in the page. You can override those too, but only this sitting sees the change until it is promoted to a key.<br>
+      <span class="con">Off:</span> Only catalogued copy is outlined.</span></span></label>
+    <div class="arow" style="margin-top:8px">
+      <button id="uicpromote" class="btn btn-sm btn-default">promote plan</button>
+      <button id="uicreset" class="btn btn-sm btn-ghost">clear all overrides</button>
+      <span id="uicoverstamp" class="mono-dim"></span>
+    </div>
+    <div id="uicpromotebox" class="mono-dim" style="margin-top:8px; white-space:pre-wrap"></div>
+  </div>
+
+  <div class="asec" data-tab="diagnostics">
     <h2>JavaScript Errors</h2>
     <div class="arow"><button id="errclear" class="btn btn-sm btn-default">clear</button>
       <span class="mono-dim">most recent first (last ~30)</span></div>
@@ -2368,14 +2475,114 @@
 <script src="/marked.min.js"></script>
 <script src="/purify.min.js"></script>
 <script src="/ui-copy.js"></script>
+<!-- UI debug mode overlay: inert until body.uidebug. Kept out of every pane so
+     inspecting the sitting never reflows what is being inspected. -->
+<div id="uicbadge" aria-live="polite">
+  <h3>UI Inspector</h3>
+  <dl id="uicfacts"></dl>
+  <p class="uic-note" id="uicnote"></p>
+  <div class="uic-toks" id="uictoks" hidden></div>
+  <div class="uic-acts">
+    <button id="uiccopy" class="btn btn-sm btn-default">copy ref</button>
+    <button id="uicopen" class="btn btn-sm btn-default">edit text</button>
+  </div>
+  <p class="uic-hint">hover an outlined element · alt+click to edit it</p>
+</div>
+
+<div id="uicedit" role="dialog" aria-modal="false" aria-labelledby="uicedit-h">
+  <h3 id="uicedit-h">Edit Copy</h3>
+  <p class="uic-scope" id="uiceditscope"></p>
+  <label for="uicedittext" id="uicedittextlab">text</label>
+  <textarea id="uicedittext" rows="3" spellcheck="false"></textarea>
+  <label for="uiceditshort" id="uiceditshortlab">short (narrow surfaces)</label>
+  <input id="uiceditshort" spellcheck="false">
+  <p class="uic-err" id="uicediterr"></p>
+  <div class="uic-acts">
+    <button id="uiceditsave" class="btn btn-sm btn-primary">save</button>
+    <button id="uiceditrevert" class="btn btn-sm btn-ghost">revert to shipped</button>
+    <button id="uiceditclose" class="btn btn-sm btn-ghost">close</button>
+  </div>
+</div>
+
 <script>
-/* Canonical UI strings — static/ui-copy.js (window.KETTLE_UI_COPY). Keep in
-   sync with kettle-vscode src/uiCopy.ts — see docs/UI.md. */
-const UIC = (typeof KETTLE_UI_COPY !== 'undefined' && KETTLE_UI_COPY) || {};
+/* Canonical UI strings. Source of truth is static/ui-copy.json; the server renders
+   it into /ui-copy.js with the user's overrides already merged. Edit the JSON —
+   never a string in this file, and never a generated copy. See docs/UI.md. */
+/* `let`, not `const`: UI debug mode re-fetches the catalog after an edit and
+   repaints without a reload. */
+let UIC = (typeof KETTLE_UI_COPY !== 'undefined' && KETTLE_UI_COPY) || {};
+let UIC_META = (typeof KETTLE_UI_COPY_META !== 'undefined' && KETTLE_UI_COPY_META) || {};
+let UIC_SEL = (typeof KETTLE_UI_COPY_SELECTORS !== 'undefined' && KETTLE_UI_COPY_SELECTORS) || {};
+let UIC_TOKENS = (typeof KETTLE_UI_TOKENS !== 'undefined' && KETTLE_UI_TOKENS) || {};
+let UIC_OVERRIDDEN = new Set(
+  (typeof KETTLE_UI_COPY_OVERRIDDEN !== 'undefined' && KETTLE_UI_COPY_OVERRIDDEN) || []);
 function uic(key, fallback){
   const v = UIC[key];
   return (typeof v === 'string' && v) ? v : fallback;
 }
+/* Terse variant for a narrow surface; same meaning, fewer words. Falls back to the
+   full string, so a key without a `short` is never a blank. */
+function uicShort(key, fallback){
+  const m = UIC_META[key];
+  if(m && typeof m.short === 'string' && m.short) return m.short;
+  return uic(key, fallback);
+}
+
+/* Paint catalogued copy over the literal text in the markup.
+
+   The literal stays in index.html as the fallback: if /ui-copy.js fails to load,
+   the sitting reads exactly as it did before this pass existed. That is why the
+   markup keeps real English instead of empty tagged shells.
+
+   data-uic → textContent · data-uic-title/-ph/-aria → that attribute. */
+const UIC_ATTR_MAP = {'data-uic-title': 'title', 'data-uic-ph': 'placeholder',
+                      'data-uic-aria': 'aria-label'};
+const UIC_SKIPPED = [];  /* tagged elements the pass refused — surfaced in debug mode */
+function applyUiCopy(root){
+  const scope = root || document;
+  scope.querySelectorAll('[data-uic]').forEach(el => {
+    const key = el.getAttribute('data-uic');
+    const v = uic(key, null);
+    if(v === null) return;
+    /* textContent would delete child elements. A tagged wrapper is a tagging
+       mistake, not a licence to blank the node — record it and leave it alone. */
+    if(el.children.length){ UIC_SKIPPED.push({key: key, reason: 'has child elements'}); return; }
+    el.textContent = v;
+  });
+  for(const attr in UIC_ATTR_MAP){
+    scope.querySelectorAll('[' + attr + ']').forEach(el => {
+      const v = uic(el.getAttribute(attr), null);
+      if(v !== null) el.setAttribute(UIC_ATTR_MAP[attr], v);
+    });
+  }
+  /* Selector overrides: elements whose text is still hardcoded above. Local to this
+     sitting until promoted into a real key — see kettle/uicopy.py promote_plan(). */
+  for(const sel in UIC_SEL){
+    const fields = UIC_SEL[sel];
+    let el = null;
+    try { el = document.querySelector(sel); } catch(e) { continue; }
+    if(!el || !fields) continue;
+    if(typeof fields.text === 'string' && !el.children.length) el.textContent = fields.text;
+    ['title', 'placeholder', 'aria-label'].forEach(prop => {
+      if(typeof fields[prop] === 'string') el.setAttribute(prop, fields[prop]);
+    });
+  }
+}
+/* Retuned CSS tokens (size, spacing, color) the user saved in UI debug mode. Set on
+   the root element, so every rule that already reads var(--x) picks them up and
+   nothing new is injected into the stylesheet. The server validated each name as a
+   custom property and each value as inert before it ever reached this page. */
+function applyUiTokens(){
+  const root = document.documentElement;
+  for(const name in UIC_TOKENS){
+    if(/^--[a-z][a-z0-9-]*$/.test(name)) root.style.setProperty(name, UIC_TOKENS[name]);
+  }
+}
+
+/* Run now, not from init(): the markup above is already parsed, and copy must land
+   even when init() dies on a bad project or an unreachable curator. */
+applyUiCopy();
+applyUiTokens();
 
 /* running in-memory JS error log — the diagnostics tab renders the last
    ~30, most recent first; the banner stays as the loud, immediate signal */
@@ -4899,7 +5106,7 @@ async function refreshOpenFile(wrotePaths){
 let spinTimer = null, spinStart = 0;
 function setSpinLabel(msg){
   const lab = $('spinlabel');
-  if(lab) lab.textContent = msg || 'working…';
+  if(lab) lab.textContent = msg || uic('spinWorking', 'working…');
 }
 function showSpin(msg){
   setSpinLabel(msg || 'working…');
@@ -6273,15 +6480,15 @@ function showProposalGuide(){
   }
   const ab = $('approve');
   if(ab){
-    ab.title = 'Found this desk from your edited proposal';
-    ab.textContent = 'Found Desk';
+    ab.title = uic('approveHintFounding', 'Found this desk from your edited proposal');
+    ab.textContent = uic('approveLabelFounding', 'Found Desk');
   }
 }
 function clearProposalGuideChrome(){
   const ab = $('approve');
   if(ab){
-    ab.title = 'Bookmark a ruling — does not apply or commit';
-    ab.textContent = 'Approve';
+    ab.title = uic('approveHint', 'Bookmark a ruling — does not apply or commit');
+    ab.textContent = uic('approveLabel', 'Approve');
   }
 }
 async function finishInterview(){
@@ -8277,6 +8484,84 @@ function wireAdmin(){
   };
   $('optMd').onchange = () => { saveSettings({mdHighlight: $('optMd').checked}); applyMdToggle(); };
   $('optSweepConfirm').onchange = () => saveSettings({sweepConfirm: $('optSweepConfirm').checked});
+
+  /* ---- UI debug mode controls ----
+     Kept in localStorage, not settings.json: this is a per-viewer developer
+     affordance, not desk state, and it must not follow the project to another
+     machine. `?uidebug=1` turns it on for one load without persisting. */
+  $('optUiDebug').onchange = () => setUiDebug($('optUiDebug').checked);
+  $('optUiDebugIds').onchange = () => setUiDebugIds($('optUiDebugIds').checked);
+  $('uiccopy').onclick = async () => {
+    if(!UID.ref){ uidFlash('hover an outlined element first'); return; }
+    try { await navigator.clipboard.writeText(UID.ref); uidFlash('reference copied'); }
+    catch(e){ uidFlash('clipboard blocked — the reference is in the console'); console.log(UID.ref); }
+  };
+  $('uicopen').onclick = () => {
+    const d = UID.el ? uidTarget(UID.el) : null;
+    if(d) uidOpenEditor(d); else uidFlash('hover an outlined element first');
+  };
+  $('uiceditclose').onclick = () => $('uicedit').classList.remove('open');
+  $('uiceditsave').onclick = async () => {
+    const d = UID.editing;
+    if(!d) return;
+    const text = $('uicedittext').value;
+    const patch = d.kind === 'key'
+      ? {keys: {[d.key]: {text: text, short: $('uiceditshort').value}}}
+      : {selectors: {[d.key]: {[d.where === 'text' ? 'text' : d.where]: text}}};
+    try { await uidSave(patch); $('uicedit').classList.remove('open'); }
+    catch(err){ $('uicediterr').textContent = String(err); }
+  };
+  $('uiceditrevert').onclick = async () => {
+    const d = UID.editing;
+    if(!d) return;
+    const patch = d.kind === 'key' ? {keys: {[d.key]: null}} : {selectors: {[d.key]: null}};
+    try { await uidSave(patch); $('uicedit').classList.remove('open'); }
+    catch(err){ $('uicediterr').textContent = String(err); }
+  };
+  $('uicpromote').onclick = async () => {
+    const box = $('uicpromotebox');
+    try {
+      const plan = await jget('/api/ui-copy/promote');
+      const lines = [];
+      if(plan.ready.length){
+        lines.push('Ready to land in ' + plan.catalog + ':');
+        plan.ready.forEach(r => lines.push('  ' + r.key + ': ' + JSON.stringify(r.from.text)
+          + ' -> ' + JSON.stringify(r.to.text)));
+      }
+      if(plan.needs_key.length){
+        lines.push('', 'Needs a catalog key first (still hardcoded in index.html):');
+        plan.needs_key.forEach(n => lines.push('  ' + n.selector + ': ' + n.work));
+      }
+      if((plan.tokens || []).length){
+        lines.push('', 'Token defaults to change on :root:');
+        plan.tokens.forEach(t => lines.push('  ' + t.token + ': ' + t.to));
+      }
+      box.textContent = lines.length ? lines.join('\n') : 'no overrides to promote';
+    } catch(err){ box.textContent = String(err); }
+  };
+  $('uicreset').onclick = async () => {
+    /* Build the inverse of whatever is active: the server merges, so clearing is an
+       explicit null per entry rather than a truncate-the-file route. */
+    try {
+      const pay = await jget('/api/ui-copy');
+      const patch = {keys: {}, selectors: {}, tokens: {}};
+      (pay.overridden || []).forEach(k => { patch.keys[k] = null; });
+      Object.keys(pay.selectors || {}).forEach(sel => { patch.selectors[sel] = null; });
+      Object.keys(pay.tokens || {}).forEach(t => { patch.tokens[t] = null; });
+      if(!Object.keys(patch.keys).length && !Object.keys(patch.selectors).length
+         && !Object.keys(patch.tokens).length){ uidStamp(pay); return; }
+      await uidSave(patch);
+      $('uicpromotebox').textContent = '';
+    } catch(err){ $('uicpromotebox').textContent = String(err); }
+  };
+  try {
+    const q = new URLSearchParams(location.search);
+    if(q.get('uidebug') === '1') setUiDebug(true);
+    else if(localStorage.getItem('kettleUiDebug') === '1') setUiDebug(true);
+    if(localStorage.getItem('kettleUiDebugIds') === '1') setUiDebugIds(true);
+  } catch(e){}
+  /* Show the override count without a round trip — the boot payload already has it. */
+  uidStamp({overridden: [...UIC_OVERRIDDEN], selectors: UIC_SEL, tokens: UIC_TOKENS});
   $('optAutosave').onchange = () => {
     let v = parseInt($('optAutosave').value, 10);
     if(!isFinite(v) || v < 3) v = 30;
@@ -8309,6 +8594,278 @@ function wireAdmin(){
       setAdminTab(next);
     }
   });
+}
+
+
+/* ===== UI debug mode ======================================================
+   An inspector for the sitting's own copy and layout tokens.
+
+   Why it exists: pointing an agent at "the gray text under the queue" does not
+   identify anything. Pointing it at a catalog key and a file does. So the badge's
+   real output is one pasteable line — `copy ref` — and everything else is
+   convenience on top of that.
+
+   Two things it deliberately does not do. It never writes to index.html or to
+   static/ (run-critical, and read-only once installed) — edits go to the user's
+   own overrides file through POST /api/ui-copy. And it does not offer drag-to-
+   resize: it names the CSS token that governs a measurement and lets you retune
+   the token, which is where the value actually lives. Dragging would fake a
+   precision the design system does not have.
+   ======================================================================== */
+const UID = {on: false, ids: false, el: null, ref: null};
+
+/* Which copy key (if any) a hovered element carries, and how it is bound. */
+function uidDescribe(el){
+  if(!el || el.nodeType !== 1) return null;
+  const attrs = [['data-uic', 'text'], ['data-uic-title', 'title'],
+                 ['data-uic-ph', 'placeholder'], ['data-uic-aria', 'aria-label']];
+  for(const [attr, where] of attrs){
+    const key = el.getAttribute && el.getAttribute(attr);
+    if(key) return {kind: 'key', key: key, where: where, el: el};
+  }
+  if(el.id) return {kind: 'selector', key: '#' + el.id, where: 'text', el: el};
+  return null;
+}
+
+/* Nearest inspectable ancestor — hovering a label inside a button should describe
+   the button, not report nothing. */
+function uidTarget(el){
+  for(let n = el; n && n !== document.body; n = n.parentElement){
+    const d = uidDescribe(n);
+    if(d) return d;
+  }
+  return null;
+}
+
+/* The CSS custom properties that actually govern this element: read from the rules
+   that match it, not guessed from computed values. Same-origin inline stylesheet,
+   so cssRules is readable. */
+function uidTokensFor(el){
+  const found = new Set();
+  let sheets = [];
+  try { sheets = [...document.styleSheets]; } catch(e){ return []; }
+  for(const sheet of sheets){
+    let rules = null;
+    try { rules = sheet.cssRules; } catch(e){ continue; }  /* cross-origin */
+    if(!rules) continue;
+    for(const rule of rules){
+      if(!rule.selectorText || !rule.style) continue;
+      let hit = false;
+      try { hit = el.matches(rule.selectorText); } catch(e){ continue; }
+      if(!hit) continue;
+      const m = rule.cssText.match(/var\((--[a-z0-9-]+)/g) || [];
+      for(const v of m) found.add(v.slice(4));
+    }
+  }
+  return [...found].sort();
+}
+
+/* The inspector's own message line. Overwrites the note, which the next hover
+   repaints anyway — a refused edit must say so somewhere the eye already is. */
+function uidFlash(msg){
+  const note = $('uicnote');
+  if(note){ note.textContent = msg; note.classList.add('uic-flag'); }
+}
+
+function uidCurrentToken(name){
+  const over = UIC_TOKENS[name];
+  if(typeof over === 'string') return over;
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+function uidRenderBadge(d){
+  const facts = $('uicfacts'), note = $('uicnote'), toks = $('uictoks');
+  if(!facts) return;
+  if(!d){
+    facts.innerHTML = '<dt>element</dt><dd>hover something outlined</dd>';
+    note.textContent = ''; toks.hidden = true; UID.ref = null;
+    return;
+  }
+  const keyed = d.kind === 'key';
+  const rec = keyed ? (UIC_META[d.key] || {}) : {};
+  const over = keyed ? UIC_OVERRIDDEN.has(d.key) : !!UIC_SEL[d.key];
+  const file = keyed ? 'kettle/static/ui-copy.json' : 'kettle/static/index.html';
+  const rows = [
+    ['key', d.key, 'key'],
+    ['binds', d.where, null],
+    ['owned by', file, null],
+    ['element', '<' + d.el.tagName.toLowerCase() + (d.el.id ? ' #' + d.el.id : '') + '>', null],
+  ];
+  if(!keyed) rows.push(['status', 'not catalogued — this sitting only', 'flag']);
+  if(over) rows.push(['status', 'your override', 'flag']);
+  facts.innerHTML = rows.map(([k, v, cls]) =>
+    '<dt></dt><dd' + (cls ? ' class="' + cls + '"' : '') + '></dd>').join('');
+  /* fill by node so no value is ever parsed as markup */
+  const dts = facts.querySelectorAll('dt'), dds = facts.querySelectorAll('dd');
+  rows.forEach(([k, v], i) => { dts[i].textContent = k; dds[i].textContent = v; });
+  note.classList.remove('uic-flag');
+  note.textContent = rec.note || (keyed ? '' : 'The text for this element is still '
+    + 'hardcoded in index.html. You can retype it here, but only this sitting will '
+    + 'show the change until it is promoted to a catalog key.');
+
+  /* one pasteable line — the actual deliverable */
+  UID.ref = 'kettle ui: ' + (keyed ? 'key=' + d.key : 'selector=' + d.key)
+    + ' · binds=' + d.where + ' · file=' + file
+    + ' · element=<' + d.el.tagName.toLowerCase() + (d.el.id ? ' #' + d.el.id : '') + '>'
+    + (rec.note ? '\n  note: ' + rec.note : '');
+
+  const names = uidTokensFor(d.el).slice(0, 8);
+  toks.hidden = names.length === 0;
+  toks.textContent = '';
+  if(names.length){
+    const hed = document.createElement('p');
+    hed.className = 'uic-tokhed';
+    /* Precise on purpose: these are the tokens the CSS rules matching this element
+       mention, which is not the same as the ones deciding how it looks right now —
+       a rule for another state (:hover, .btn-signature) mentions tokens too. */
+    hed.textContent = 'tokens the rules for this element read';
+    toks.append(hed);
+  }
+  names.forEach(name => {
+    const row = document.createElement('div');
+    row.className = 'uic-tok';
+    const code = document.createElement('code');
+    code.textContent = name;
+    const inp = document.createElement('input');
+    inp.value = uidCurrentToken(name);
+    inp.setAttribute('aria-label', name);
+    /* live preview while typing; persisted only on Enter or blur */
+    inp.oninput = () => document.documentElement.style.setProperty(name, inp.value);
+    inp.onkeydown = e => { if(e.key === 'Enter'){ e.preventDefault(); inp.blur(); } };
+    inp.onblur = async () => {
+      const v = inp.value.trim();
+      if(v === uidCurrentToken(name)) return;
+      try { await uidSave({tokens: {[name]: v || null}}); }
+      catch(err){ uidFlash(name + ': ' + err); inp.value = uidCurrentToken(name); }
+    };
+    row.append(code, inp);
+    toks.append(row);
+  });
+}
+
+function uidHover(e){
+  if(!UID.on) return;
+  const d = uidTarget(e.target);
+  if(UID.el && UID.el !== (d && d.el)) UID.el.classList.remove('uic-hot');
+  UID.el = d ? d.el : null;
+  if(UID.el) UID.el.classList.add('uic-hot');
+  uidRenderBadge(d);
+}
+
+/* Alt+click opens the editor. Plain clicks are left alone: the sitting stays usable
+   with the inspector on, which is the only way to inspect a state you have to click
+   your way into. */
+function uidClick(e){
+  if(!UID.on || !e.altKey) return;
+  const d = uidTarget(e.target);
+  if(!d) return;
+  e.preventDefault(); e.stopPropagation();
+  uidOpenEditor(d);
+}
+
+function uidMarkOverridden(){
+  document.querySelectorAll('.uic-over').forEach(el => el.classList.remove('uic-over'));
+  UIC_OVERRIDDEN.forEach(key => {
+    ['data-uic', 'data-uic-title', 'data-uic-ph', 'data-uic-aria'].forEach(a => {
+      document.querySelectorAll('[' + a + '="' + CSS.escape(key) + '"]')
+        .forEach(el => el.classList.add('uic-over'));
+    });
+  });
+  for(const sel in UIC_SEL){
+    let el = null;
+    try { el = document.querySelector(sel); } catch(e){ continue; }
+    if(el) el.classList.add('uic-over');
+  }
+}
+
+function setUiDebug(on){
+  UID.on = !!on;
+  document.body.classList.toggle('uidebug', UID.on);
+  const box = $('optUiDebug');
+  if(box) box.checked = UID.on;
+  try { localStorage.setItem('kettleUiDebug', UID.on ? '1' : '0'); } catch(e){}
+  if(UID.on){
+    document.addEventListener('mouseover', uidHover, true);
+    document.addEventListener('click', uidClick, true);
+    uidMarkOverridden();
+    uidRenderBadge(null);
+  } else {
+    document.removeEventListener('mouseover', uidHover, true);
+    document.removeEventListener('click', uidClick, true);
+    if(UID.el) UID.el.classList.remove('uic-hot');
+    UID.el = null;
+    $('uicedit').classList.remove('open');
+  }
+}
+
+function setUiDebugIds(on){
+  UID.ids = !!on;
+  document.body.classList.toggle('uidebug-ids', UID.ids);
+  const box = $('optUiDebugIds');
+  if(box) box.checked = UID.ids;
+  try { localStorage.setItem('kettleUiDebugIds', UID.ids ? '1' : '0'); } catch(e){}
+}
+
+/* ---- editing ---- */
+function uidOpenEditor(d){
+  UID.editing = d;
+  const keyed = d.kind === 'key';
+  $('uiceditscope').textContent = keyed
+    ? d.key + ' — reaches every viewport'
+    : d.key + ' — this sitting only, until promoted to a key';
+  const cur = keyed
+    ? (UIC[d.key] || '')
+    : ((UIC_SEL[d.key] || {})[d.where === 'text' ? 'text' : d.where] || uidLiveValue(d));
+  $('uicedittext').value = cur;
+  $('uicedittextlab').textContent = d.where === 'text' ? 'text' : d.where;
+  const showShort = keyed;
+  $('uiceditshort').value = showShort ? ((UIC_META[d.key] || {}).short || '') : '';
+  $('uiceditshortlab').hidden = !showShort;
+  $('uiceditshort').hidden = !showShort;
+  $('uicediterr').textContent = '';
+  $('uicedit').classList.add('open');
+  $('uicedittext').focus();
+}
+
+function uidLiveValue(d){
+  if(d.where === 'text') return (d.el.textContent || '').trim();
+  return d.el.getAttribute(d.where) || '';
+}
+
+/* One write path for every kind of tweak, so the reload-and-repaint is in one place. */
+async function uidSave(patch){
+  const pay = await jpost('/api/ui-copy', patch);
+  uidAdopt(pay);
+  return pay;
+}
+
+function uidAdopt(pay){
+  const keys = pay.keys || {};
+  const flat = {}, meta = {};
+  for(const k in keys){
+    flat[k] = keys[k].text || '';
+    meta[k] = {short: keys[k].short, note: keys[k].note};
+  }
+  UIC = flat; UIC_META = meta;
+  UIC_SEL = pay.selectors || {};
+  UIC_TOKENS = pay.tokens || {};
+  UIC_OVERRIDDEN = new Set(pay.overridden || []);
+  applyUiCopy();
+  applyUiTokens();
+  if(UID.on) uidMarkOverridden();
+  uidStamp(pay);
+}
+
+function uidStamp(pay){
+  const el = $('uicoverstamp');
+  if(!el) return;
+  const n = (pay.overridden || []).length + Object.keys(pay.selectors || {}).length
+          + Object.keys(pay.tokens || {}).length;
+  el.textContent = n ? n + ' override' + (n === 1 ? '' : 's') + ' active' : 'no overrides';
+}
+
+async function uidReload(){
+  try { uidAdopt(await jget('/api/ui-copy')); } catch(e){}
 }
 
 (async function init(){

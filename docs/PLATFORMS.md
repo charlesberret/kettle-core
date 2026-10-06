@@ -48,8 +48,11 @@ and founding remain distinct routes.
 | Sweep | Close the sitting under explicit policy and restock the queue |
 | Egress | Stage an outward action for review |
 
-Shared visible strings are owned by `static/ui-copy.js`. The VS Code adapter
-commits a generated TypeScript snapshot and checks it for drift.
+Shared visible strings are owned by `static/ui-copy.json`. The web and desktop
+read it through `/ui-copy.js` (rendered per request); Python viewports read it
+through `kettle.uicopy` or `GET /api/ui-copy`; the VS Code adapter commits a
+generated TypeScript snapshot and checks it for drift. A viewport that hardcodes
+a string the catalog already holds is a bug — see `docs/UI.md` § Shared UI copy.
 
 ## Adding a viewport
 

@@ -30,6 +30,7 @@ from pathlib import Path
 import kettle.server as server
 import kettle.kettle_contract as kettle_contract
 import kettle.sweepkit as sweepkit
+import kettle.uicopy as uicopy
 from unittest import mock
 
 
@@ -73,9 +74,12 @@ class Base(unittest.TestCase):
 
         self._saved = {k: getattr(server, k) for k in
                        ("PROJECTS_PATH", "SETTINGS_PATH", "BASE_ALLOWED_ROOTS", "HOME",
-                        "RUNTIME_PATH", "SERVER_TOKEN")}
+                        "RUNTIME_PATH", "SERVER_TOKEN", "UI_COPY_OVERRIDES")}
         server.PROJECTS_PATH = registry
         server.SETTINGS_PATH = self.tmp / "settings.json"
+        # Redirected for every test, not just the copy ones: a stray POST /api/ui-copy
+        # must never rewrite the developer's own sitting copy.
+        server.UI_COPY_OVERRIDES = self.tmp / uicopy.OVERRIDES_NAME
         server.BASE_ALLOWED_ROOTS = [self.tmp]
         server.HOME = self.tmp  # so add_project's under-HOME gate accepts temp roots
         server.RUNTIME_PATH = self.tmp / "cache" / "server.json"
@@ -2748,6 +2752,82 @@ class LaunchTests(unittest.TestCase):
         self.assertIsNotNone(server.start_server_preferred())
         self.assertEqual(calls, [server.DEFAULT_PORT, 0])  # tried fixed, fell back
         self.assertEqual(self.retired, [])
+
+
+class UiCopyEndpointTests(EndpointTests):
+    """The copy catalog over HTTP: read by every viewport, written by debug mode."""
+
+    def test_ui_copy_js_is_rendered_from_the_json(self):
+        req = urllib.request.Request(f"{self.base}/ui-copy.js")
+        with urllib.request.urlopen(req, timeout=10) as r:
+            body = r.read().decode()
+            self.assertEqual("application/javascript", r.headers["Content-Type"])
+        self.assertIn("root.KETTLE_UI_COPY = {", body)
+        self.assertIn('"streamIdle":"Chat stream idle"', body)
+        # nothing may close the <script> element that loads this
+        self.assertNotIn("</script", body)
+
+    def test_get_returns_the_merged_catalog(self):
+        s, j = _http("GET", f"{self.base}/api/ui-copy")
+        self.assertEqual(s, 200)
+        self.assertEqual("Queue", j["keys"]["queueTitle"]["text"])
+        self.assertEqual([], j["overridden"])
+
+    def test_post_persists_an_override_that_reaches_every_reader(self):
+        s, j = _http("POST", f"{self.base}/api/ui-copy",
+                     {"keys": {"queueTitle": {"text": "Stack"}}})
+        self.assertEqual(s, 200)
+        self.assertEqual("Stack", j["keys"]["queueTitle"]["text"])
+        self.assertEqual(["queueTitle"], j["overridden"])
+        # written where the user can find and delete it, beside settings.json
+        self.assertTrue(server.UI_COPY_OVERRIDES.is_file())
+        # and it is in the JS the next page load gets
+        with urllib.request.urlopen(f"{self.base}/ui-copy.js", timeout=10) as r:
+            self.assertIn('"queueTitle":"Stack"', r.read().decode())
+
+    def test_post_never_writes_into_package_data(self):
+        """static/ is read-only in a wheel and a temp dir in the binary."""
+        catalog = server.STATIC / "ui-copy.json"
+        before = catalog.read_bytes()
+        _http("POST", f"{self.base}/api/ui-copy",
+              {"keys": {"queueTitle": {"text": "Stack"}}})
+        self.assertEqual(before, catalog.read_bytes())
+
+    def test_post_refuses_a_broad_selector(self):
+        s, j = _http("POST", f"{self.base}/api/ui-copy",
+                     {"selectors": {"*": {"text": "x"}}})
+        self.assertEqual(s, 400)
+        self.assertIn("invalid selector", j["error"])
+        self.assertFalse(server.UI_COPY_OVERRIDES.exists())
+
+    def test_null_restores_the_shipped_string(self):
+        _http("POST", f"{self.base}/api/ui-copy",
+              {"keys": {"queueTitle": {"text": "Stack"}}})
+        s, j = _http("POST", f"{self.base}/api/ui-copy", {"keys": {"queueTitle": None}})
+        self.assertEqual(s, 200)
+        self.assertEqual("Queue", j["keys"]["queueTitle"]["text"])
+        self.assertEqual([], j["overridden"])
+
+    def test_promote_plan_names_the_work(self):
+        _http("POST", f"{self.base}/api/ui-copy",
+              {"keys": {"queueTitle": {"text": "Stack"}},
+               "selectors": {"#addgo": {"text": "go"}}})
+        s, j = _http("GET", f"{self.base}/api/ui-copy/promote")
+        self.assertEqual(s, 200)
+        self.assertEqual(["queueTitle"], [r["key"] for r in j["ready"]])
+        self.assertEqual(["#addgo"], [n["selector"] for n in j["needs_key"]])
+        self.assertIn("ui-copy.json", j["catalog"])
+
+    def test_write_route_requires_the_token(self):
+        req = urllib.request.Request(
+            f"{self.base}/api/ui-copy",
+            data=json.dumps({"keys": {"queueTitle": {"text": "Stack"}}}).encode(),
+            method="POST")
+        req.add_header("Content-Type", "application/json")
+        with self.assertRaises(urllib.error.HTTPError) as cm:
+            urllib.request.urlopen(req, timeout=10)
+        self.assertEqual(403, cm.exception.code)
+        self.assertFalse(server.UI_COPY_OVERRIDES.exists())
 
 
 class GuardTests(Base):
