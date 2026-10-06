@@ -69,6 +69,25 @@ def _k(n) -> str:
     return f"{n/1000:.0f}k" if n >= 1000 else str(n)
 
 
+def _invoked_kettle() -> Path | None:
+    """The `kettle` binary this process was started as, when it is not a PATH lookup.
+
+    `python3 -m venv .venv && .venv/bin/kettle doctor` is the clone README. That
+    binary is not on PATH, and doctor must not fail the stranger for following it.
+    """
+    if not sys.argv or not sys.argv[0]:
+        return None
+    candidate = Path(sys.argv[0])
+    if candidate.name not in {"kettle", "kettle.exe"}:
+        return None
+    try:
+        if candidate.is_file() and os.access(candidate, os.X_OK):
+            return candidate
+    except OSError:
+        return None
+    return None
+
+
 def _which_all(cmd: str = "kettle") -> list[Path]:
     """Every executable `cmd` on PATH, in resolution order (no duplicates)."""
     seen: set[str] = set()
@@ -279,12 +298,27 @@ def install_doctor_checks(
 
     # --- which kettle ---
     if not hits:
-        rows.append({
-            "name": "kettle-on-path",
-            "ok": False,
-            "detail": "no `kettle` on PATH",
-            "docs": "INSTALL.md § Install",
-        })
+        invoked = _invoked_kettle()
+        if invoked is not None:
+            rows.append({
+                "name": "kettle-on-path",
+                "ok": True,
+                "detail": f"invoked as {invoked}; not on PATH",
+                "docs": "README.md § Try it",
+            })
+            rows.append({
+                "name": "kettle-path-extras",
+                "ok": True,
+                "detail": "no other kettle on PATH",
+                "docs": "INSTALL.md § Install",
+            })
+        else:
+            rows.append({
+                "name": "kettle-on-path",
+                "ok": False,
+                "detail": "no `kettle` on PATH",
+                "docs": "INSTALL.md § Install",
+            })
     else:
         first = hits[0]
         try:
@@ -504,7 +538,8 @@ def desk_doctor_checks(
             "docs": "ARCHITECTURE.md · INSTALL.md § Registering a desk",
         })
 
-    # Split state is a real failure; legacy-only is an informational hint (still ok).
+    # Split state is a real failure. A setsweep-only desk is still the supported
+    # dual-read install, so it stays exit 0, but the mark is `hint` rather than `ok`.
     if both_desks:
         rows.append({
             "name": "legacy-migration",
@@ -518,6 +553,7 @@ def desk_doctor_checks(
         rows.append({
             "name": "legacy-migration",
             "ok": True,
+            "hint": True,
             "detail": "legacy .setsweep/ desk(s) in use — kettle migrate: "
                       + ", ".join(legacy_only[:5]),
             "docs": "INSTALL.md § Migrating from Setsweep · kettle migrate --help",
@@ -1179,24 +1215,49 @@ def cmd_egress_status(args) -> int:
     return 0
 
 
+def doctor_mark(row: dict) -> str:
+    """Scannable status. `hint` is a supported legacy desk, not a failure."""
+    if not row.get("ok"):
+        return "FAIL"
+    if row.get("hint"):
+        return "hint"
+    return "ok"
+
+
+def format_doctor(rows: list[dict]) -> tuple[str, int]:
+    """Render doctor rows. Exit 1 only when a row is not ok."""
+    width = max((len(r["name"]) for r in rows), default=8)
+    lines: list[str] = []
+    failed = 0
+    hints = 0
+    for r in rows:
+        mark = doctor_mark(r)
+        if mark == "FAIL":
+            failed += 1
+        elif mark == "hint":
+            hints += 1
+        lines.append(f"  {mark:4}  {r['name']:<{width}}  {r['detail']}")
+        if mark != "ok" and r.get("docs"):
+            lines.append(f"        → {r['docs']}")
+    lines.append("")
+    if failed:
+        lines.append(f"doctor: {failed} check(s) failed — see INSTALL.md / ARCHITECTURE.md")
+        return "\n".join(lines) + "\n", 1
+    if hints:
+        lines.append(
+            "doctor: passed, with "
+            f"{hints} hint(s) — a legacy .setsweep/ desk is still in use"
+        )
+        return "\n".join(lines) + "\n", 0
+    lines.append("doctor: all checks green")
+    return "\n".join(lines) + "\n", 0
+
+
 def cmd_doctor(_args) -> int:
     """Install + runtime health (brief 20 install seed; brief 18 expansion). Read-only."""
-    rows = doctor_checks()
-    width = max((len(r["name"]) for r in rows), default=8)
-    failed = 0
-    for r in rows:
-        mark = "ok" if r["ok"] else "FAIL"
-        if not r["ok"]:
-            failed += 1
-        print(f"  {mark:4}  {r['name']:<{width}}  {r['detail']}")
-        if not r["ok"] and r.get("docs"):
-            print(f"        → {r['docs']}")
-    print()
-    if failed:
-        print(f"doctor: {failed} check(s) failed — see INSTALL.md / ARCHITECTURE.md")
-        return 1
-    print("doctor: all checks green")
-    return 0
+    text, code = format_doctor(doctor_checks())
+    sys.stdout.write(text)
+    return code
 
 
 def cmd_migrate(args) -> int:

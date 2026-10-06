@@ -255,7 +255,7 @@ Desktop always points `DESK_PROJECTS` at Application Support. After the `.app` h
 
 | Viewport | Port behavior |
 |----------|---------------|
-| CLI `kettle --web` | Prefers **4242** (circuit-breaker / `--replace`) |
+| CLI `kettle-web` / `kettle --web` | Prefers **4242** (circuit-breaker / `--replace`) |
 | Desktop `.app` | Prefers **4242** when free; otherwise ephemeral |
 | VS Code / Cursor | Tries `kettle.serverUrl` → `server.json` → `:4242`, each validated by ping |
 

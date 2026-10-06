@@ -34,8 +34,12 @@ cd kettle-core
 python3 -m venv .venv
 .venv/bin/pip install -e .
 .venv/bin/kettle doctor
-.venv/bin/kettle --web
+.venv/bin/kettle-web
 ```
+
+`doctor` accepts that `.venv/bin/kettle` even when `kettle` is not on PATH.
+Activate the venv before the bare commands below (`source .venv/bin/activate`),
+or keep the `.venv/bin/` prefix.
 
 Open [http://127.0.0.1:4242](http://127.0.0.1:4242), add a project folder (a
 founding sentence is required), and complete the founding interview. You can
@@ -71,7 +75,8 @@ project/
 
 Every viewport attaches to the same desk and API:
 
-- `kettle` and `kettle --web` ship here.
+- `kettle-web` / `kettle --web` (HTTP sitting) and the CLI subcommands ship here.
+  Bare `kettle` execs [kettle-tui](https://github.com/charlesberret/kettle-tui).
 - [kettle-vscode](https://github.com/charlesberret/kettle-vscode) serves VS Code
   and Cursor.
 - [kettle-desktop](https://github.com/charlesberret/kettle-desktop) is a thin
