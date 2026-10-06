@@ -7,6 +7,17 @@ and Desk schema have their own integer contract versions.
 
 ### Changed
 
+- **Core's own messages use plain words.** The proposal entry core files when the agent
+  doesn't (title "Proposal", not "Desk Proposal"), the "already set up" and "already
+  finishing" notices, and the CLI help no longer say desk, found or curator. Found by the
+  TUI and VS Code companion work, where every viewport displayed them.
+- `POST /api/set-aside` refuses the proposal with the standard `{error, code}` envelope
+  (`bad_request`).
+- `tools/lint-lexicon.py` accepts paths outside core, so viewport repos can lint their own
+  files.
+- The catalog gains `dontAskAgainLabel` and `cancelLabel`; stale notes are corrected;
+  `API.md` documents `states`. The lexicon gives the VS Code panel the plain name "the
+  Kettle panel".
 - **Sweep is Finish batch on screen.** The button, its tooltip, the confirmation, the
   3-second undo (now catalog key `sweepUndoLabel`), the Behavior settings and the chat
   status lines all say what happens instead of naming an invented act. `sweep` joins the

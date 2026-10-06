@@ -309,7 +309,9 @@ def main() -> int:
     explicit = [Path(p) for p in args.paths]
     if explicit:
         for p in explicit:
-            rel = str(p.relative_to(ROOT)) if p.is_absolute() else str(p)
+            # A viewport repo lints its own files with this tool, so a path outside core is
+            # reported as given rather than crashing on relative_to.
+            rel = str(p.relative_to(ROOT)) if p.is_absolute() and p.is_relative_to(ROOT) else str(p)
             fs = check_catalog(p, terms, rel) if p.name == "ui-copy.json" else check_markdown(p, terms, rel)
             for f in fs:
                 f.setdefault("severity_hint", "error")

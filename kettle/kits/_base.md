@@ -50,7 +50,7 @@ your own files, not for the user. A user should never have to work out what a "d
 | sitting | this batch |
 | sweep | finish the batch |
 | viewport | (nothing — this is internal and never comes up) |
-| VS Code Desk | (nothing — this is internal and never comes up) |
+| VS Code Desk | the Kettle panel |
 
 Controls the user presses keep their names — Approve, Comment, Not this, Finish batch — but say what they do rather than assuming the user knows.
 <!-- END GENERATED -->

@@ -8,12 +8,12 @@ One command, several viewports onto the same desk:
   kettle --web [--port N]         same as kettle-web
   kettle projects                 list registered desks       ┐
   kettle themes                   list color themes            │
-  kettle add     <folder>         register a folder as a desk │
+  kettle add     <folder>         add a folder as a project   │
   kettle init                     register the current folder │  the CLI viewport
-  kettle found   <project>        curator founds the desk      │
-  kettle queue   <project>        show a desk's queue         │  (stdlib only)
+  kettle found   <project>        agent sets up the project   │
+  kettle queue   <project>        show a project's files      │  (stdlib only)
   kettle open|edit <project> <id> built-in TUI (--external for $EDITOR)
-  kettle chat    <project> [id]   talk to the resident curator│
+  kettle chat    <project> [id]   talk to the project's agent │
   kettle lineage <project>        who edited what              │
   kettle bind    <project>        add lineage directive to CLAUDE.md
   kettle migrate [--apply]        migrate .setsweep/ → .kettle/ (dry-run by default)

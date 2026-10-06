@@ -85,7 +85,7 @@ Not a synonym for this term:
 
 ### founding
 
-Bringing a desk into being: register, survey, interview, Draft Proposal, `Found Desk`. Founding is a conversation, not a confirmation card.
+Bringing a desk into being: register, survey, interview, the proposal, approval. Founding is a conversation, not a confirmation card. (`Found Desk` was the approval control's label until 2026-10-01; it is retired.)
 
 *casing: `lower`*
 
@@ -249,7 +249,7 @@ The control that registers a project and opens founding. docs/UI.md lists it amo
 
 ### VS Code Desk
 
-The panel kettle-vscode contributes to VS Code and Cursor. Name it in full. A bare `Desk` for the panel collides with `desk` the common noun and reads as a stray capital; write `the Desk panel` only where the context is already VS Code.
+The panel kettle-vscode contributes to VS Code and Cursor. Name it in full. A bare `Desk` for the panel collides with `desk` the common noun and reads as a stray capital; write `the Desk panel` only where the context is already VS Code. On screen it is **the Kettle panel**, matching the view's title.
 
 *casing: `title`*
 

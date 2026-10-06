@@ -12,14 +12,14 @@ to open ``$EDITOR`` instead when you want your own tools.
   kettle projects                list registered desks
   kettle add     <folder>        register a folder as a desk (first-run)
   kettle init                    register the current folder as a desk
-  kettle found   <project>       curator founds the desk: charter, memory, first queue
+  kettle found   <project>       the agent sets up the project: notes, memory, first files
   kettle queue   <project>       show a desk's queue
   kettle open    <project> <id>  show the brief, then edit the file (built-in TUI)
   kettle edit    <project> <id>  same as open (explicit name for the built-in editor)
   kettle themes                  list bundled + user color themes (marquee: kettle)
   kettle lineage <project>       who edited what: agent / user / unattributed
   kettle bind    <project>       add the lineage directive to the project's CLAUDE.md
-  kettle chat    <project> [id]  converse with the resident curator — resumes the
+  kettle chat    <project> [id]  talk with the project's agent — resumes the
                                     project session, shows the corrected token meter
                                     after each turn, records turns to the desk ledger
   kettle sweep-status <project>  mechanical CLOSE readiness (quiet / judgment / accrue)
@@ -816,7 +816,7 @@ def cmd_add(args) -> int:
     print(f"registered [{proj['id']}] {proj['name']}")
     print(f"  root: {server.project_root(proj)}")
     print(f"  desk: {server.desk_dir(proj)}  (queue seeded — awaiting founding)")
-    print(f"\nnext:  kettle found {proj['id']}     # the curator founds the desk from your files")
+    print(f"\nnext:  kettle found {proj['id']}     # the agent sets up the project from your files")
     print(f"       kettle queue {proj['id']}     # see what's been filed")
     return 0
 
@@ -1364,7 +1364,7 @@ def build_parser() -> tuple[argparse.ArgumentParser, argparse._SubParsersAction]
     e.add_argument("--external", action="store_true", help="open in $EDITOR instead")
     e.add_argument("--theme", default=None, help="theme pack id (default: kettle / settings)")
     e.set_defaults(fn=cmd_edit)
-    c = sub.add_parser("chat", help="converse with the resident curator")
+    c = sub.add_parser("chat", help="talk with the project's agent")
     c.add_argument("project"); c.add_argument("id", nargs="?")
     c.add_argument("--model", default=None); c.set_defaults(fn=cmd_chat)
     ss = sub.add_parser("sweep-status", help="CLOSE readiness (quiet / judgment / accrue)")

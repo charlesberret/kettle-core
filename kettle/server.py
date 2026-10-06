@@ -1683,16 +1683,16 @@ def ensure_proposal_entry(proj: dict) -> bool:
             return
         entries.append({
             "id": PROPOSAL_ENTRY_ID,
-            "title": "Desk Proposal",
+            "title": "Proposal",
             "path": str(proposal_path(proj)),
             "project": proj.get("name"),
             "project_root": str(project_root(proj)),
             "ask_type": "judgment",
-            "ask": "Edit this proposal until it matches your intent, then approve to found the desk",
+            "ask": "Edit this until it matches what you want, then approve it",
             "urgency": "high",
             "status": "pending",
             "founding_phase": "proposal",
-            "brief": "This is the Kettle Desk Proposal. Approving it founds the desk from this text.",
+            "brief": "This is the agent's plan for your project, starting with the files it will show you first. Approving it sets up the project from this text.",
         })
         q["entries"] = entries
         added.append(True)
@@ -2295,8 +2295,8 @@ class Handler(BaseHTTPRequestHandler):
 
                 q = mutate_queue(proj, set_aside)
                 if refused:
-                    self.send_json({"error": "The proposal can't be set aside — edit it, "
-                                             "or ask the agent to rewrite it."}, 400)
+                    self.send_err(400, "The proposal can't be set aside — edit it, "
+                                       "or ask the agent to rewrite it.", "bad_request")
                     return
                 e = find_entry(q, d["id"])
                 append_line(runtime_dir(proj) / "set-aside.log",
@@ -2651,7 +2651,7 @@ class Handler(BaseHTTPRequestHandler):
         proj = get_project(d.get("project"))
         with SWEEPS_LOCK:
             if proj["id"] in SWEEPS_IN_FLIGHT:
-                self.stream_idle("A sweep is already running for this desk — wait for it to finish.")
+                self.stream_idle("This batch is already finishing — wait for it to end.")
                 return
             SWEEPS_IN_FLIGHT.add(proj["id"])
         try:
@@ -2691,7 +2691,7 @@ class Handler(BaseHTTPRequestHandler):
                     # Reported once; a quiet desk with nothing to restock is not still failing.
                     sweepkit.write_sweep_health(proj, state="idle", phase="close", stamp=stamp,
                                                 previous=last)
-                self.stream_idle("Nothing to sweep — queue empty and quiet." + note)
+                self.stream_idle("Nothing to finish — no files are lined up and nothing has changed." + note)
                 return
         if close.get("ok") and close.get("action") == "mechanical_close" and not close.get("needs_accrue"):
             n = len((close.get("archived") or {}).get("archived") or [])
@@ -2965,10 +2965,10 @@ class Handler(BaseHTTPRequestHandler):
     def bootstrap(self, d):
         proj = get_project(d.get("project"))
         if desk_is_founded(proj):
-            self.stream_idle("Desk already founded. Use refound to start over.")
+            self.stream_idle("This project is already set up. Use Set up again to start over.")
             return
         if mark_founded_if_filed(proj, founding_step=True):
-            self.stream_idle("Queue already has content entries — marked founded.")
+            self.stream_idle("This project already has files lined up, so it counts as set up.")
             return
         prompt = build_found_prompt(proj, session_id=None, bootstrap=True)
         cmd = build_turn_cmd(
@@ -2981,12 +2981,12 @@ class Handler(BaseHTTPRequestHandler):
     def interview(self, d):
         proj = get_project(d.get("project"))
         if desk_is_founded(proj):
-            self.stream_idle("Desk already founded. Use refound to interview again.")
+            self.stream_idle("This project is already set up. Use Set up again to answer the questions again.")
             return
         if desk_is_proposing(proj):
             self.stream_idle(
-                "Desk Proposal is ready — edit it in the center pane, talk here to revise, "
-                "approve when it matches your intent.")
+                "The proposal is ready — edit it in the center pane, talk here to revise it, "
+                "and approve it when it matches what you want.")
             return
         # Tool-less interview: no provider read_only refuse — survey is core-side.
         sid = session_id_for_curator(
@@ -3035,10 +3035,10 @@ class Handler(BaseHTTPRequestHandler):
     def propose(self, d):
         proj = get_project(d.get("project"))
         if desk_is_founded(proj):
-            self.stream_idle("Desk already founded. Use refound to start over.")
+            self.stream_idle("This project is already set up. Use Set up again to start over.")
             return
         if mark_founded_if_filed(proj):
-            self.stream_idle("Queue already has content entries — marked founded.")
+            self.stream_idle("This project already has files lined up, so it counts as set up.")
             return
         turn_model = current_curator().model_for("setup", d.get("model"))
         # Prefer setup model, but resume chat-tagged interview session when compatible
@@ -3094,10 +3094,10 @@ class Handler(BaseHTTPRequestHandler):
     def found(self, d):
         proj = get_project(d.get("project"))
         if desk_is_founded(proj):
-            self.stream_idle("Desk already founded. Use refound to start over.")
+            self.stream_idle("This project is already set up. Use Set up again to start over.")
             return
         if mark_founded_if_filed(proj, founding_step=True):
-            self.stream_idle("Queue already has content entries — marked founded.")
+            self.stream_idle("This project already has files lined up, so it counts as set up.")
             return
         turn_model = current_curator().model_for("setup", d.get("model"))
         sid = session_id_for_curator(proj=proj, model=turn_model)

@@ -235,7 +235,7 @@
       "term": "founding",
       "kind": "concept",
       "casing": "lower",
-      "gloss": "Bringing a desk into being: register, survey, interview, Draft Proposal, `Found Desk`. Founding is a conversation, not a confirmation card.",
+      "gloss": "Bringing a desk into being: register, survey, interview, the proposal, approval. Founding is a conversation, not a confirmation card. (`Found Desk` was the approval control's label until 2026-10-01; it is retired.)",
       "avoid": [],
       "not_synonyms": [
         {
@@ -390,7 +390,7 @@
       "term": "VS Code Desk",
       "kind": "viewport",
       "casing": "title",
-      "gloss": "The panel kettle-vscode contributes to VS Code and Cursor. Name it in full. A bare `Desk` for the panel collides with `desk` the common noun and reads as a stray capital; write `the Desk panel` only where the context is already VS Code.",
+      "gloss": "The panel kettle-vscode contributes to VS Code and Cursor. Name it in full. A bare `Desk` for the panel collides with `desk` the common noun and reads as a stray capital; write `the Desk panel` only where the context is already VS Code. On screen it is **the Kettle panel**, matching the view's title.",
       "avoid": [],
       "not_synonyms": [
         {
@@ -398,7 +398,8 @@
           "why": "the extension is the package; the panel it contributes is the `VS Code Desk`"
         }
       ],
-      "audience": "house"
+      "audience": "house",
+      "plain": "the Kettle panel"
     }
   ],
   "_fields": {
