@@ -45,7 +45,7 @@ class LexiconShape(unittest.TestCase):
         self.assertEqual(len(ids), len(set(ids)))
         for t in doc["terms"]:
             self.assertTrue(t.get("gloss"), f"{t['id']} has no gloss")
-            self.assertIn(t["casing"], ("title", "lower"))
+            self.assertIn(t["casing"], ("title", "sentence", "lower"))
 
     def test_retired_forms_are_literal_and_linted(self):
         """A replaced label is decidable by literal match, so it stays an error."""
@@ -146,7 +146,7 @@ class HouseWordsStayOffScreen(unittest.TestCase):
         self.assertIn("project", fixes)
 
     def test_leaves_plain_copy_alone(self):
-        for ok in ["press Sweep when you are done",
+        for ok in ["press Finish batch when you are done",
                    "Edit the proposal, then approve it to set up your project",
                    "Kettle lines up a batch of files for you to review",
                    "Chat with the agent about this file"]:

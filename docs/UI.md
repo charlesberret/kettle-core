@@ -102,8 +102,8 @@ Those are two registers, and `kettle/kits/_lexicon.json` is where they stay stra
 
 | Audience | Where | Example |
 |---|---|---|
-| `house` | code, prompts, docs, our own conversation | desk, sitting, ruling, charter, founding, brief, entry |
-| `both` | anywhere, users included | project, file, queue, agent, proposal, Sweep |
+| `house` | code, prompts, docs, our own conversation | desk, sitting, sweep, ruling, charter, founding, brief, entry |
+| `both` | anywhere, users included | project, file, queue, agent, proposal, Finish batch |
 
 **A house word on screen is a CI error.** Not a style preference — the product's job is
 to be usable without a glossary, and a user should never have to work out what a "desk"
@@ -114,10 +114,10 @@ This replaces an earlier rule that enforced spelling our vocabulary consistently
 *everywhere*, screen included. That protected the vocabulary and cost the reader; it
 also hardened into CI exactly the entrenchment it should have caught.
 
-**Sweep is the one invented word we ask a user to learn**, and only because it is a
-button they press. So prose says what it does — "press Sweep: the agent applies your
-decisions" — rather than assuming they know. Any other house word in explanatory copy
-is a bug.
+**No invented words on screen, buttons included.** The button that ends a batch was
+"Sweep" until 2026-10-06; it is **Finish batch** now, and "sweep" is a house word like the
+rest. Prose that names a control still says what it does: "press Finish batch: the agent
+applies your decisions." Any house word in explanatory copy is a bug.
 
 The unit of a user's concern is **their project**. Never a desk, and never a "project
 desk".
@@ -142,9 +142,9 @@ it drifted.
 
 ```json
 "sweepLabel": {
-  "text": "Sweep",
-  "short": "sweep",
-  "note": "Ritual button: close the sitting."
+  "text": "Finish batch",
+  "short": "Finish",
+  "note": "The button that ends a batch. Internally this is a sweep; the word stays off screen."
 }
 ```
 

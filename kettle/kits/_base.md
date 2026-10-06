@@ -48,10 +48,11 @@ your own files, not for the user. A user should never have to work out what a "d
 | memory | notes on what you prefer |
 | ruling | decision |
 | sitting | this batch |
+| sweep | finish the batch |
 | viewport | (nothing — this is internal and never comes up) |
 | VS Code Desk | (nothing — this is internal and never comes up) |
 
-Controls the user presses keep their names — Approve, Comment, Sweep, Not this — but say what they do rather than assuming the user knows.
+Controls the user presses keep their names — Approve, Comment, Not this, Finish batch — but say what they do rather than assuming the user knows.
 <!-- END GENERATED -->
 
 ## The brief standard
@@ -138,7 +139,7 @@ This is **not** the inbox kit's `<root>/outbox` (approved mail drafts for an out
 See `kits/frameworks/egress.md` for Kind / Route / filename rules. Route defaults are neutral;
 override with `settings.egress.routes` for a personal fleet.
 
-## Sweep actions
+## Actions when a batch finishes
 
 `SWEEP-ACTIONS.md` (seeded at founding from kit defaults + the conversation) lists EXTRA work after the
 mechanical close / restock: git commit of sitting changes (init a repo if the project has none),

@@ -124,7 +124,7 @@ def _title_spans(masked: str, terms: list[dict]) -> list[tuple[int, int]]:
     """
     spans = []
     for t in terms:
-        if t["casing"] != "title":
+        if t["casing"] not in ("title", "sentence"):
             continue
         for m in re.finditer(re.escape(t["term"]), masked, re.I):
             spans.append((m.start(), m.end()))
@@ -158,7 +158,7 @@ def check_text(text: str, terms: list[dict], *, where: str, line_no: int) -> lis
                         "fix": f"use {term!r}",
                     })
 
-        if casing == "title":
+        if casing in ("title", "sentence"):
             # A single-word control (Sweep, Approve, Comment) shares its spelling with
             # the concept, so case cannot decide which was meant. Documented in the
             # lexicon, not enforced here.

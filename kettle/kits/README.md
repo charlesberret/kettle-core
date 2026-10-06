@@ -44,7 +44,7 @@ configured on the **project stanza** (not the kit — intake paths are personal 
   and files a queue entry (brief + a `source` field pointing at the incoming item). When `watch`
   is the project root or a subdir, intake ignores its own output (`responses/`, `outbound/`,
   `.kettle/`).
-- **Sweep routes outward** — approve is a bookmark; at sweep the approved drafts are **staged to
+- **Finishing a batch routes outward** — approve is a bookmark; at sweep the approved drafts are **staged to
   `outbound/`** (a send-queue an external tool picks up). The sweep never transmits — staging
   only, per the localhost-only invariant. See [`ARCHITECTURE.md`](../ARCHITECTURE.md) (desk model
   and tool tiers) and the inbox notes below.

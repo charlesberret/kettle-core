@@ -9,7 +9,8 @@ violation in the prompt corpus or the copy catalog, and warns elsewhere.
 ## Casing
 
 - **`title`** — A proper name — a document, or a named control that is also a title. Always exactly as `term`, mid-sentence included. docs/UI.md: signature actions that are also titles stay Title Case.
-- **`lower`** — A common noun or verb. Lowercase in prose; a capital is correct only at the start of a sentence or inside a Title Case heading. `sweep` the act is lowercase; `Sweep` the control is its own entry.
+- **`lower`** — A common noun or verb. Lowercase in prose; a capital is correct only at the start of a sentence or inside a Title Case heading. `sweep` the act is a house word; the control is `Finish batch`.
+- **`sentence`** — A two-word control name in sentence case (`Finish batch`, `Not this`). Spelled exactly as `term` when it names the control; the lowercase phrase is ordinary prose.
 
 ## Fields
 
@@ -143,7 +144,7 @@ Not a synonym for this term:
 
 ### sweep
 
-Finishing a batch: apply the user's decisions, review what changed, note the ripples, save a record, line up the next files. The one invented word Kettle asks a user to learn, and only because it is a button they press — so prose says what it does ('press Sweep: the agent applies your decisions') rather than assuming they know.
+Finishing a batch: apply the user's decisions, review what changed, note the ripples, save a record, line up the next files. House word since 2026-10-06: the button reads **Finish batch**, and prose says 'finish the batch'. Identifiers (`/api/sweep`, `sweepLabel`, `sweep.log`) are contract, not copy.
 
 *casing: `lower`*
 
@@ -228,17 +229,21 @@ Retired — must not come back (these fail the linter):
 - `finish ✓` — retired label
 - `Finish Interview` — retired label
 
+### Finish batch
+
+The button that finishes a batch (internally, a sweep). Sentence case, like the other two-word controls; prose that names it says 'press Finish batch'.
+
+*casing: `sentence` · not case-checked*
+
+Retired — must not come back (these fail the linter):
+
+- `Sweep` — the button is Finish batch on screen (2026-10-06)
+
 ### Start Interview
 
 The control that registers a project and opens founding. docs/UI.md lists it among the signature actions that are also titles.
 
 *casing: `title`*
-
-### Sweep
-
-The control that closes the sitting. The act is 'sweep' (lowercase); this entry is the named control only.
-
-*casing: `title` · not case-checked*
 
 ## Viewports
 

@@ -105,7 +105,7 @@ def render_handbook_block(doc: dict) -> str:
         plain = t.get("plain") or "(nothing — this is internal and never comes up)"
         rows.append(f"| {t['term']} | {plain} |")
     rows.append("")
-    rows.append("Controls the user presses keep their names — Approve, Comment, Sweep, Not this — "
+    rows.append("Controls the user presses keep their names — Approve, Comment, Not this, Finish batch — "
                 "but say what they do rather than assuming the user knows.")
     return "\n".join(rows)
 

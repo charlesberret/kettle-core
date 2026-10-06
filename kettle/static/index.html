@@ -837,7 +837,7 @@
   #ritual {
     flex:0 0 auto; flex-grow:0; flex-shrink:0;
     display:flex; flex-wrap:wrap; justify-content:center; align-items:center;
-    align-content:center; gap:clamp(6px, 8%, 28px); padding:8px 12px;
+    align-content:center; gap:clamp(6px, 4%, 18px); padding:8px 12px;
     background:var(--bg); z-index:2;
     height:auto; min-height:0; max-height:none;
     border-top:1px solid var(--line); border-bottom:1px solid var(--line);
@@ -1876,20 +1876,20 @@
     </span>
   </div>
   <div id="divBrief" class="hdivider" title="drag to resize brief / chat"></div>
-  <div id="ritual" class="actions-ritual" role="group" aria-label="Desk actions">
-    <button id="approve" class="btn btn-sm btn-default" title="Mark your decision on this file. Nothing changes until you press Sweep."
+  <div id="ritual" class="actions-ritual" role="group" aria-label="Actions on this file">
+    <button id="approve" class="btn btn-sm btn-default" title="Mark your decision on this file. Nothing changes until you press Finish batch."
             data-uic="approveLabel" data-uic-title="approveHint">Approve</button>
     <button id="comment" class="btn btn-sm btn-default" title="Leave a note on this file for the agent to act on"
             data-uic="commentLabel" data-uic-title="commentHint">Comment</button>
-    <button id="notthis" class="btn btn-sm btn-default" title="Set this file aside. The agent takes it as a sign of what you don't want, and tells you what it learned when you press Sweep."
+    <button id="notthis" class="btn btn-sm btn-default" title="Set this file aside. The agent takes it as a sign of what you don't want, and tells you what it learned when you finish the batch."
             data-uic="notThisLabel" data-uic-title="notThisHint">Not this</button>
-    <button id="sweepbtn" class="btn btn-sm btn-default" title="Finish this batch: apply your decisions, review what changed, note anything else it affects, and line up the next files"
-            data-uic="sweepLabel" data-uic-title="sweepHint">Sweep</button>
+    <button id="sweepbtn" class="btn btn-sm btn-default" title="Apply your decisions, review what changed, note anything else it affects, and line up the next files"
+            data-uic="sweepLabel" data-uic-title="sweepHint">Finish batch</button>
   </div>
   <div id="commentpanel">
     <textarea id="commentin" spellcheck="false" data-uic-ph="commentPlaceholder"
               placeholder="A note on this file for the agent to read when you finish this batch — Enter saves · Shift+Enter newline · Esc cancels"></textarea>
-    <div class="crow"><span id="commenthint" data-uic="commentTiedHint">This note stays with the file. The agent reads it when you press Sweep.</span><span style="flex:1"></span><button id="commentsave" class="btn btn-sm btn-primary" data-uic="commentSaveLabel">Save</button></div>
+    <div class="crow"><span id="commenthint" data-uic="commentTiedHint">This note stays with the file. The agent reads it when you finish the batch.</span><span style="flex:1"></span><button id="commentsave" class="btn btn-sm btn-primary" data-uic="commentSaveLabel">Save</button></div>
   </div>
   <div id="divDesk" class="hdivider" title="drag to resize brief / chat"></div>
   <div id="chatwrap">
@@ -1978,11 +1978,11 @@
   <div id="sweepconfirm" role="dialog" aria-modal="true" aria-labelledby="sweepconfirm-h">
     <h2 id="sweepconfirm-h" data-uic="sweepConfirmTitle">Finish This Batch?</h2>
     <div style="font-size:13px;color:var(--fg)" data-uic="sweepConfirmBody">Applies the decisions you marked, reviews what changed in each file, notes anything else it affects, saves a record of this round, and lines up the next batch.</div>
-    <label><input type="checkbox" id="sweepnoask"> don't ask again (button becomes a 3-second undo instead)</label>
+    <label><input type="checkbox" id="sweepnoask"> don't ask again (the batch then finishes after 3 seconds, with Undo)</label>
     <textarea id="sweepthrust" spellcheck="false" data-uic-ph="sweepThrustPlaceholder" placeholder="Anything on your mind as you finish? The agent reads this first (optional)"></textarea>
     <div style="display:flex;justify-content:flex-end;gap:8px;">
       <button id="sweepcancel" class="btn btn-md btn-ghost">cancel</button>
-      <button id="sweepgo" class="btn btn-md btn-primary">sweep</button>
+      <button id="sweepgo" class="btn btn-md btn-primary" data-uic="sweepLabel">Finish batch</button>
     </div>
   </div>
 </div>
@@ -2092,7 +2092,6 @@
       <button class="atab" data-tab="behavior"    role="tab" aria-selected="false">Behavior</button>
       <button class="atab" data-tab="agents"      role="tab" aria-selected="false">Agents</button>
       <button class="atab" data-tab="projects"    role="tab" aria-selected="false">Projects</button>
-      <button class="atab" data-tab="curators"    role="tab" aria-selected="false">Curators</button>
       <button class="atab" data-tab="diagnostics" role="tab" aria-selected="false">Diagnostics</button>
       <span class="atab-spacer" aria-hidden="true"></span>
       <button type="button" id="adminreload" class="btn btn-sm btn-icon btn-ghost"
@@ -2273,18 +2272,18 @@
       <span class="con">Off:</span> Preserves original file contents in unwrapped form.</span></span></label>
     <div class="adiv" role="separator"></div>
     <label class="achk"><input type="checkbox" id="optSweepConfirm">
-      <span class="ctext"><span class="ctitle">Sweep Confirmation</span>
-      <span class="cdesc"><span class="con">On:</span> Confirm before sweeping a batch of files.<br>
-      <span class="con">Off:</span> Sweep action launches with 3-second 'cancel' period.</span></span></label>
+      <span class="ctext"><span class="ctitle">Confirm Before Finishing a Batch</span>
+      <span class="cdesc"><span class="con">On:</span> Finish batch opens a short dialog first, where you can leave the agent a note.<br>
+      <span class="con">Off:</span> The batch finishes after 3 seconds; press Undo to stop it.</span></span></label>
     <label class="achk"><input type="checkbox" id="optAutoSweep">
-      <span class="ctext"><span class="ctitle">Auto-Sweep When Queue Complete</span>
-      <span class="cdesc"><span class="con">On:</span> When the last file is approved, open the sweep flow automatically.<br>
-      <span class="con">Off:</span> Sweep process must be triggered by clicking the sweep button (recommended).</span></span></label>
+      <span class="ctext"><span class="ctitle">Finish Automatically When Every File Is Decided</span>
+      <span class="cdesc"><span class="con">On:</span> When you decide the last file, finishing the batch starts on its own.<br>
+      <span class="con">Off:</span> You press Finish batch yourself (recommended).</span></span></label>
     <div class="achk achk-plain">
       <span class="achk-gutter" aria-hidden="true"></span>
       <span class="ctext ctext-row">
         <span class="ctitle">Agent Chattiness</span>
-        <select id="optSweepVerbosity" title="how much the Kettle agent narrates while founding and sweeping">
+        <select id="optSweepVerbosity" title="How much the agent narrates while setting up and finishing batches">
           <option value="quiet">quiet — only substantive lines</option>
           <option value="normal">normal — phase + entry progress (default)</option>
           <option value="verbose">verbose — live play-by-play</option>
@@ -2293,7 +2292,7 @@
     </div>
     <div class="achk achk-plain" style="margin-top:-2px;align-items:flex-start">
       <span class="achk-gutter" aria-hidden="true"></span>
-      <span class="ctext"><span class="cdesc">How much the Kettle agent narrates while founding and sweeping projects.</span></span>
+      <span class="ctext"><span class="cdesc">How much the agent narrates while setting up a project and finishing batches.</span></span>
     </div>
     <div class="adiv" role="separator"></div>
     <label class="achk"><input type="checkbox" id="optCtxCompact">
@@ -2303,7 +2302,7 @@
     <label class="achk"><input type="checkbox" id="optAutoCompact">
       <span class="ctext"><span class="ctitle">Auto-Compact the Session</span>
       <span class="cdesc"><span class="con">On:</span> Compact automatically after founding a new project, after each sweep, and when context exceeds 70% of the model window — keeps the single thread lean.<br>
-      <span class="con">Off:</span> Compact only when you click the bar or the agent maxes out its context (varies by model). Note: the founding agent session's context fills up fast over the course of the initial interview→found→chat→sweep process.</span></span></label>
+      <span class="con">Off:</span> Compact only when you click the bar or the agent maxes out its context (varies by model). Note: the founding agent session's context fills up fast over the interview, setup, chat and first batch.</span></span></label>
     <div class="achk achk-plain">
       <span class="achk-gutter" aria-hidden="true"></span>
       <span class="ctext ctext-row">
@@ -2328,13 +2327,19 @@
     </div>
   </div>
 
-  <div class="asec" data-tab="curators">
+  <div class="asec" data-tab="agents" id="kitsec">
+    <div class="adiv" role="separator" style="margin:0 0 14px"></div>
+    <div class="ctitle" style="margin:4px 0 4px">Agent Kits</div>
+    <p class="cdesc" style="margin:0 0 10px;max-width:min(100%, 58em)">
+      How the agent reads a project: what it looks for, what it shows you first, and what it does when you finish a batch.<br>
+      Pick a kit for each project in the <b>Projects</b> tab.
+    </p>
     <div class="kit-toolbar">
       <div class="kitpick-wrap">
         <div class="kitpick-face" aria-hidden="true">
           <span class="kitpick-name"></span><span class="kitpick-meta"></span>
         </div>
-        <select id="kitpick" title="a kit to view or edit" aria-label="Curator kit"></select>
+        <select id="kitpick" title="a kit to view or edit" aria-label="Agent kit"></select>
       </div>
       <div class="kit-info-wrap">
         <button type="button" id="kitinfo" class="btn btn-sm btn-icon btn-ghost"
@@ -2348,9 +2353,9 @@
           </svg>
         </button>
         <div id="kitinfo-pop" class="kit-info-pop" role="note" hidden>
-          <p>Default curator settings are read-only.</p>
-          <p>Editing a default forks a copy into your local settings.</p>
-          <p>Assign curator kits in the <b>Projects</b> tab.</p>
+          <p>The kits that ship with Kettle are read-only.</p>
+          <p>Editing one saves your own copy in your settings.</p>
+          <p>Pick a kit for each project in the <b>Projects</b> tab.</p>
         </div>
       </div>
       <div class="kit-actions">
@@ -2365,7 +2370,7 @@
       <label class="kitf"><span class="kit-lbl">review methods</span><textarea id="kf_lens" spellcheck="false"></textarea></label>
       <label class="kitf"><span class="kit-lbl">urgency rubric</span><textarea id="kf_urgency" spellcheck="false"></textarea></label>
       <label class="kitf"><span class="kit-lbl">queue priorities</span><textarea id="kf_firstQueue" spellcheck="false"></textarea></label>
-      <label class="kitf"><span class="kit-lbl">sweep process</span><textarea id="kf_sweepChecks" spellcheck="false" title="one per line"></textarea></label>
+      <label class="kitf"><span class="kit-lbl">when a batch finishes</span><textarea id="kf_sweepChecks" spellcheck="false" title="one per line"></textarea></label>
       <label class="kitf"><span class="kit-lbl">tool privileges</span><textarea id="kf_tools" spellcheck="false" placeholder="skill: /find, /remember&#10;mcp: notion-mcp, slack-mcp&#10;rag: my-awesome-rag&#10;corpus: ~/notes" title="one per line as type: ref — skill / mcp / rag / corpus (builtins Read·Grep·Edit·Write·shell are always on)"></textarea></label>
     </div>
     <details class="ap-collapse" style="margin-top:12px">
@@ -2400,7 +2405,7 @@
       <span class="con">Off:</span> The sitting behaves normally (the default). <code>?uidebug=1</code> in the URL turns it on for one load.</span></span></label>
     <label class="achk"><input type="checkbox" id="optUiDebugIds">
       <span class="ctext"><span class="ctitle">Also Outline Uncatalogued Elements</span>
-      <span class="cdesc"><span class="con">On:</span> Dashes a border around every element that has an id but no catalog key — the copy still hardcoded in the page. You can override those too, but only this sitting sees the change until it is promoted to a key.<br>
+      <span class="cdesc"><span class="con">On:</span> Dashes a border around every element that has an id but no catalog key — the copy still hardcoded in the page. You can override those too, but only this window sees the change until it is promoted to a key.<br>
       <span class="con">Off:</span> Only catalogued copy is outlined.</span></span></label>
     <div class="arow" style="margin-top:8px">
       <button id="uicpromote" class="btn btn-sm btn-default">promote plan</button>
@@ -2742,8 +2747,8 @@ let MODEL_EFFORT_SUPPORTED = {
 /** Short catalog blurbs + role tags (hydrated from /api/curator/catalog). */
 let MODEL_BLURBS = {
   haiku: 'Fast and cheap — light turns.',
-  sonnet: 'Balanced default for chat and sweeps.',
-  opus: 'Heavier reasoning for founding and hard sweeps.',
+  sonnet: 'Balanced default for chat and finishing batches.',
+  opus: 'Heavier reasoning for setting up projects and hard batches.',
   fable: 'Optional Claude family id — enable after you confirm it works.',
   'grok-composer-2.5-fast': 'Faster Grok for light turns.',
   'grok-4.5': 'Primary Grok Build CLI model.',
@@ -3671,7 +3676,7 @@ function wireAddModelModal(){
    (per-file review, also the top-bar selector). Model is a free string — any id
    the agent CLI accepts. Labels are new-user friendly (not internal task names). */
 const AGENT_TASKS = [
-  ['setup',  'planning agent', 'founding survey · sweep — agentic, edits files'],
+  ['setup',  'planning agent', 'sets up projects and finishes batches — edits files'],
   ['chat',   'chatting agent', 'per-file review — may Edit/Write under acceptEdits; prefer fences for small emendations'],
 ];
 function agentModel(task){
@@ -4201,7 +4206,7 @@ function wordCount(){ const t = ($('editor').value || '').trim(); return t ? t.s
 function refreshMetaWords(){ const w = $('metawords'); if(w) w.textContent = wordCount(); }
 function diffLine(d){
   if(!d) return '<span class="diff-muted">no baseline yet</span>';
-  if(!d.added && !d.removed) return '<span class="diff-muted">unchanged this sitting</span>';
+  if(!d.added && !d.removed) return '<span class="diff-muted">unchanged this batch</span>';
   const a = d.added ? `<span class="add">+${d.added}</span>` : '';
   const r = d.removed ? `<span class="del">−${d.removed}</span>` : '';
   return `<span class="diff-stat qdiff">${a}${r}</span> <a href="#" id="viewdiff" class="minilink">view diff</a>`;
@@ -5253,8 +5258,8 @@ async function sweep(thrust){
   $('editor').value = ''; $('editor').readOnly = true;
   $('gutter').innerHTML = ''; $('edback').innerHTML = ''; $('render').innerHTML = '';
   $('fname').textContent = '—'; clearBand();
-  if((thrust || '').trim()) addMsg('sys', 'steer for this sweep: ' + thrust.trim());
-  addMsg('sys', '— sweep started: rulings · diff · assess · ripple · log · restock —');
+  if((thrust || '').trim()) addMsg('sys', 'your note for this batch: ' + thrust.trim());
+  addMsg('sys', '— finishing the batch: your decisions, what changed, what else it affects, a record, the next files —');
   try {
     const r = await fetch('/api/sweep', {method:'POST',
       headers: apiHeaders({'Content-Type':'application/json'}),
@@ -5262,7 +5267,7 @@ async function sweep(thrust){
         thrust: (thrust || '').trim()})});
     await pipeStream(r, null, {trackCtx:true, model: agentModel('setup')});
     PROJECT_SESSION = true;   // the sweep ran on the project session — it continues the thread
-    addMsg('sys', '— sweep finished —');
+    addMsg('sys', '— batch finished —');
   } catch(err){ addMsg('err', String(err)); }
   busy = false; hideSpin(); $('sweepbtn').disabled = false;
   document.body.classList.remove('sweeping');
@@ -5291,7 +5296,7 @@ async function sweep(thrust){
       addMsg('agent', lines.join('\n'));
       addMsg('sys', 'select an entry on the left when ready — this chat stays.');
     } else {
-      addMsg('sys', 'the queue is empty — the review program may be exhausted; see the sweep report above.');
+      addMsg('sys', 'the queue is empty — the review program may be exhausted; see the agent\'s report above.');
     }
   } catch(err){ addMsg('err', String(err)); }
   await autoCompact(true);   // shed the batch-review context; the thread continues, summarized
@@ -6037,7 +6042,7 @@ async function curatorReady(){
     return true;
   }
 }
-/* ---- K · curators: the kit editor (fork-on-edit; shipped defaults stay pristine) ---- */
+/* ---- K · agent kits (Agents tab): the kit editor (fork-on-edit; shipped defaults stay pristine) ---- */
 let KITS = [], KIT_KINDS = [];
 async function loadKits(){
   try { const r = await jget('/api/kits'); KITS = r.kits || []; KIT_KINDS = r.kinds || []; }
@@ -6189,14 +6194,14 @@ function showKit(key){
   $('kf_sweepChecks').value = (k.sweepChecks || []).join('\n');
   $('kf_tools').value = (k.tools || []).map(t => `${t.type}: ${t.ref}`).join('\n');
   $('kitdel').style.display = k._source === 'user' ? '' : 'none';
-  growKitFieldsSoon(); // measure after paint when Curators tab is visible
+  growKitFieldsSoon(); // measure after paint when the Agents tab is visible
   captureKitBaseline();
   syncKitPickFace();
 }
 /** Expand curator kit textareas to full content height (no inner scroll until huge). */
 function growKitField(el){
   if(!el) return;
-  // scrollHeight is wrong while the panel or Curators tab is display:none
+  // scrollHeight is wrong while the panel or Agents tab is display:none
   if(!el.getClientRects().length) return;
   el.style.overflowY = 'hidden';
   el.style.height = 'auto';
@@ -6544,7 +6549,7 @@ function showProposalGuide(){
 function clearProposalGuideChrome(){
   const ab = $('approve');
   if(ab){
-    ab.title = uic('approveHint', 'Mark your decision on this file. Nothing changes until you press Sweep.');
+    ab.title = uic('approveHint', 'Mark your decision on this file. Nothing changes until you press Finish batch.');
     ab.textContent = uic('approveLabel', 'Approve');
   }
 }
@@ -6693,13 +6698,13 @@ function sweepClicked(){
   if(SETTINGS.sweepConfirm === false){
     if(sweepArm){  // second click during countdown = undo
       clearTimeout(sweepArm); sweepArm = null;
-      const b = $('sweepbtn'); b.classList.remove('arming'); b.textContent = 'Sweep';
+      const b = $('sweepbtn'); b.classList.remove('arming'); b.textContent = uic('sweepLabel', 'Finish batch');
       return;
     }
     const b = $('sweepbtn');
-    b.classList.add('arming'); b.textContent = 'undo';
+    b.classList.add('arming'); b.textContent = uic('sweepUndoLabel', 'Undo');
     sweepArm = setTimeout(() => {
-      sweepArm = null; b.classList.remove('arming'); b.textContent = 'Sweep';
+      sweepArm = null; b.classList.remove('arming'); b.textContent = uic('sweepLabel', 'Finish batch');
       sweep();
     }, 3000);
     return;
@@ -8325,8 +8330,9 @@ function renderErrLog(){
   }).join('');
 }
 
-const ADMIN_TABS = ['appearance','behavior','agents','projects','curators','diagnostics'];
+const ADMIN_TABS = ['appearance','behavior','agents','projects','diagnostics'];
 function setAdminTab(name){
+  if(name === 'curators') name = 'agents';   // the kit editor moved into Agents
   if(!ADMIN_TABS.includes(name)) name = ADMIN_TABS[0];
   document.querySelectorAll('#admin .atab').forEach(b => {
     const on = b.dataset.tab === name;
@@ -8339,7 +8345,7 @@ function setAdminTab(name){
   SETTINGS.adminTab = name;
   saveSettings({adminTab: name});
   // Kit fields are often filled while this tab was hidden — remeasure now that it can layout
-  if(name === 'curators') growKitFieldsSoon();
+  if(name === 'agents') growKitFieldsSoon();
 }
 /**
  * Center settings over the app viewport.
@@ -8373,7 +8379,7 @@ function openAdmin(){
   setAdminTab(SETTINGS.adminTab || ADMIN_TABS[0]);
   loadAdminDebug();
   renderLineage();
-  loadKits();   // curators tab — fetch kits, fill the editor + project kit dropdowns
+  loadKits();   // Agents tab kit editor — fetch kits, fill the editor + project kit dropdowns
   wireKitFieldGrow();
   // Focus the first tab control so keyboard users enter the dialog (brief 09).
   const firstTab = $('admin').querySelector('.atab, button, input, select');
@@ -8966,7 +8972,7 @@ async function uidReload(){
     initDividers();
     if($('chatin')) $('chatin').placeholder = uic('chatPlaceholder', 'Chat with the Kettle agent…');
     if($('commentin')) $('commentin').placeholder = uic('commentPlaceholder',
-      'a note for the sweep, tied to this file — Enter saves · Shift+Enter newline · Esc cancels');
+      'a note for the agent, tied to this file — Enter saves · Shift+Enter newline · Esc cancels');
     if($('metaedit')) $('metaedit').onclick = toggleMetaEdit;
     if($('agentsettings')) $('agentsettings').onclick = () => openAdmin();
     // Gate 1 (DESIGN): hard block until curator CLI is chosen and on PATH.

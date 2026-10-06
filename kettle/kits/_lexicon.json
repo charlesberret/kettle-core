@@ -3,7 +3,8 @@
   "_schema": 1,
   "_casing": {
     "title": "A proper name — a document, or a named control that is also a title. Always exactly as `term`, mid-sentence included. docs/UI.md: signature actions that are also titles stay Title Case.",
-    "lower": "A common noun or verb. Lowercase in prose; a capital is correct only at the start of a sentence or inside a Title Case heading. `sweep` the act is lowercase; `Sweep` the control is its own entry."
+    "lower": "A common noun or verb. Lowercase in prose; a capital is correct only at the start of a sentence or inside a Title Case heading. `sweep` the act is a house word; the control is `Finish batch`.",
+    "sentence": "A two-word control name in sentence case (`Finish batch`, `Not this`). Spelled exactly as `term` when it names the control; the lowercase phrase is ordinary prose."
   },
   "terms": [
     {
@@ -138,7 +139,7 @@
       "term": "sweep",
       "kind": "concept",
       "casing": "lower",
-      "gloss": "Finishing a batch: apply the user's decisions, review what changed, note the ripples, save a record, line up the next files. The one invented word Kettle asks a user to learn, and only because it is a button they press — so prose says what it does ('press Sweep: the agent applies your decisions') rather than assuming they know.",
+      "gloss": "Finishing a batch: apply the user's decisions, review what changed, note the ripples, save a record, line up the next files. House word since 2026-10-06: the button reads **Finish batch**, and prose says 'finish the batch'. Identifiers (`/api/sweep`, `sweepLabel`, `sweep.log`) are contract, not copy.",
       "avoid": [],
       "not_synonyms": [
         {
@@ -150,7 +151,8 @@
           "why": "a sweep does not make a git commit"
         }
       ],
-      "audience": "both"
+      "audience": "house",
+      "plain": "finish the batch"
     },
     {
       "id": "curator",
@@ -338,14 +340,20 @@
     },
     {
       "id": "sweep-control",
-      "term": "Sweep",
+      "term": "Finish batch",
       "kind": "control",
-      "casing": "title",
-      "gloss": "The control that closes the sitting. The act is 'sweep' (lowercase); this entry is the named control only.",
+      "casing": "sentence",
+      "gloss": "The button that finishes a batch (internally, a sweep). Sentence case, like the other two-word controls; prose that names it says 'press Finish batch'.",
       "avoid": [],
       "lint_case": false,
       "lint_note": "Not case-checked: the term is a single ordinary word, so a lowercase occurrence is the concept, not a misspelling of the control.",
-      "audience": "both"
+      "audience": "both",
+      "retired": [
+        {
+          "form": "Sweep",
+          "why": "the button is Finish batch on screen (2026-10-06)"
+        }
+      ]
     },
     {
       "id": "comment",

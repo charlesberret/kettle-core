@@ -434,6 +434,30 @@ class NotThis(unittest.TestCase):
         self.assertIn("uic('commentLabel', 'Comment')", function_source(self.html, "commentMark"))
 
 
+class FinishBatchAndAgentsTab(unittest.TestCase):
+    """The words a user meets in the ritual row and in settings (2026-10-06)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.html = INDEX.read_text(encoding="utf-8")
+
+    def test_the_close_button_is_finish_batch_everywhere_it_relabels(self):
+        self.assertIn('data-uic="sweepLabel" data-uic-title="sweepHint">Finish batch</button>', self.html)
+        src = function_source(self.html, "sweepClicked")
+        self.assertNotIn("'Sweep'", src)
+        self.assertIn("uic('sweepUndoLabel', 'Undo')", src)
+
+    def test_the_kit_editor_lives_in_the_agents_tab(self):
+        self.assertNotIn('data-tab="curators"', self.html)
+        self.assertIn('<div class="asec" data-tab="agents" id="kitsec">', self.html)
+        self.assertIn("const ADMIN_TABS = ['appearance','behavior','agents','projects','diagnostics'];",
+                      self.html)
+
+    def test_a_saved_curators_tab_opens_agents(self):
+        self.assertIn("if(name === 'curators') name = 'agents';",
+                      function_source(self.html, "setAdminTab"))
+
+
 class FrontendSyntaxGate(unittest.TestCase):
 
     def test_index_html_has_inline_scripts(self):

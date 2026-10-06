@@ -7,6 +7,16 @@ and Desk schema have their own integer contract versions.
 
 ### Changed
 
+- **Sweep is Finish batch on screen.** The button, its tooltip, the confirmation, the
+  3-second undo (now catalog key `sweepUndoLabel`), the Behavior settings and the chat
+  status lines all say what happens instead of naming an invented act. `sweep` joins the
+  house words; `/api/sweep`, `sweepLabel` and `sweep.log` are unchanged.
+- **The kit editor moved into the Agents tab.** Curators was a second tab about the same
+  agent; its kit editor now sits under the provider and model choices as Agent Kits. A
+  saved `adminTab: "curators"` opens Agents.
+- The ritual row's gap narrows so four controls fit one line in the default meta pane,
+  and its screen-reader label says "Actions on this file".
+
 - **The agent is called the agent.** `curator` is retired from everything a user or
   the model reads: the sitting, the copy catalog, and all 10,294 words of the prompt
   corpus. The verb `curate`, the adjective `curatorial` and the `curated` queue field

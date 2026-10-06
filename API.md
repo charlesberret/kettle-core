@@ -55,7 +55,7 @@ compatibility promise.
 appended to `.kettle/runtime/set-aside.log`. Returns `{ok, status}`.
 
 The proposal entry is refused with 400: it is approved or edited, not dismissed. A set-aside
-file always forces a judgment close at the next Sweep, where the agent decides whether the
+file always forces a judgment close when the user next finishes a batch, where the agent decides whether the
 user meant that file or that kind of file and says so in the round notes.
 
 ### `GET /api/ui-copy`
@@ -69,9 +69,9 @@ its own wording — see `docs/UI.md` § Shared UI copy.
   "_schema": 1,
   "keys": {
     "sweepLabel": {
-      "text": "Sweep",
-      "short": "sweep",
-      "note": "Ritual button: close the sitting."
+      "text": "Finish batch",
+      "short": "Finish",
+      "note": "The button that ends a batch. Internally this is a sweep; the word stays off screen."
     }
   },
   "selectors": {"#addgo": {"text": "go"}},

@@ -60,7 +60,7 @@ The reference sitting is **three vertical columns**, resizable, full height:
 │  (entry      │  floating: find,         │  Brief (ask + brief body)  │
 │   metadata)  │  reading↔source          │  ────────────────────────  │
 │              │                          │  Ritual                    │
-│              │                          │  Approve · Comment · Sweep │
+│              │                          │  Approve · … · Finish batch│
 │              │                          │  ────────────────────────  │
 │              │                          │  Agent stream + composer   │
 │              │                          │  model · context · settings│
@@ -164,10 +164,11 @@ need fuzzy find, the product problem is batch size or sweep cadence — not a se
 |---------|---------|-----|
 | **Approve** | Bookmark the user’s ruling; does **not** apply or commit | `POST /api/approve` |
 | **Comment** | Note for the sweep, tied to this entry | `POST /api/comment` |
-| **Sweep** | Close the sitting (apply/assess/restock under policy) | `POST /api/sweep` (NDJSON) |
+| **Not this** | Set the file aside; the next sweep reads it as a sign of what the user doesn't want | `POST /api/set-aside` |
+| **Finish batch** | The sweep: close the sitting (apply/assess/restock under policy) | `POST /api/sweep` (NDJSON) |
 
-During **proposing**, Approve is the signature path to found (label/behavior may
-shift to **Found Desk**); Comment and Sweep stay dimmed. During **founding**,
+During **proposing**, Approve is the signature path to found (the label stays
+**Approve**); Comment, Not this and Finish batch stay dimmed. During **founding**,
 the whole ritual strip is hidden/disabled; work is interview → Draft Proposal.
 
 **Not ritual**
@@ -231,7 +232,7 @@ Adapters must not invent a parallel state machine.
 | **Selection, not search** | Queue is a short list; open by click / arrows / Enter. |
 | **Entry-centric** | Mid, brief, info, ritual, comment all bind to the **selected entry**. |
 | **Brief beside the work** | Context is always visible while reading/editing — not only in chat history. |
-| **Ritual is explicit** | Approve is a bookmark; Sweep is the close. Labels and API must keep that meaning. |
+| **Ritual is explicit** | Approve is a bookmark; Finish batch is the close. Labels and API must keep that meaning. |
 | **One primary ink surface** | Queue file names + editor body use primary text; chrome stays gray (`UI.md`). |
 | **Shared strings** | User-visible sitting copy from `static/ui-copy.js` only. |
 | **Thin viewport** | No second desk store; discover core; honor `X-Kettle-Token` when present. |
@@ -332,7 +333,7 @@ Structure
 - [ ] Every visible region maps to a §3 job (or is an episodic overlay).
 - [ ] Queue has **no** filter/search chrome unless this doc was amended.
 - [ ] Brief is not only “whatever is in chat history.”
-- [ ] Approve / Comment / Sweep keep ritual meanings (bookmark / note / close).
+- [ ] Approve / Comment / Not this / Finish batch keep ritual meanings (bookmark / note / set aside / close).
 - [ ] Founding / proposing / founded follow core state (§4).
 
 Parity
@@ -374,6 +375,6 @@ do not require a structure revision.
 | **Desk** | Project-local `.kettle/` state + queue the sitting attaches to. |
 | **Queue entry** | One prepared review item (path, brief, ask, status, …). |
 | **Brief** | Curator-packed context for an entry; lives in the Brief region. |
-| **Ritual** | Explicit human controls: Approve, Comment, Sweep. |
+| **Ritual** | Explicit human controls: Approve, Comment, Not this, Finish batch. |
 | **Viewport** | Thin client rendering desk state via the API. |
 | **Founding** | Interview → proposal → Found Desk before a normal queue sitting. |

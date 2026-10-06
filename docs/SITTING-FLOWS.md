@@ -102,13 +102,13 @@ or this kind of file, and the next round's notes say which.
 - **MUST** label it **Not this**, and **Bring back** on a file already set aside — from the
   catalog keys `notThisLabel` / `notThisUndoLabel`.
 - **MUST** count a set-aside file as handled, beside approved: it sinks to the bottom of the list
-  and does not hold up an automatic Sweep.
+  and does not hold up an automatic finish.
 - **SHOULD** give it the least emphasis of the four controls. It is a correction, not the action
   a batch is built around.
 
 A set-aside file always makes the next close a judgment close; core never closes it quietly.
 
-### 2.4 Sweep
+### 2.4 Finish batch (sweep)
 §4.
 
 **TUI §2.** Save matched (`POST /api/save`). Approve matched as a bookmark, and the founding
@@ -207,7 +207,7 @@ post-found selects a content entry). 3.6 skip and refound **absent**.
 
 ---
 
-## 4. Sweep
+## 4. Sweep (the Finish batch button)
 
 `POST /api/sweep {project, model?, thrust?, verbosity?}` → NDJSON. `thrust` is the user's
 optional steer for this pass.

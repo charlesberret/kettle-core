@@ -70,7 +70,7 @@
       "note": "Queue empty-state body while proposing. The short form is what a status bar shows."
     },
     "noEntryBriefBody": {
-      "text": "Kettle lines up a batch of files for you to review, edit, and approve. When you are done, press Sweep: the agent applies your decisions and lines up the next batch.",
+      "text": "Kettle lines up a batch of files for you to review, edit, and approve. When you are done, press Finish batch: the agent applies your decisions and lines up the next one.",
       "short": "A batch of files to review, edit, and approve.",
       "note": "Second line of the brief when a project desk is bound and no queue entry is selected."
     },
@@ -100,7 +100,7 @@
       "note": "The same control while proposing. Same word since 2026-10-01; kept as its own key so a viewport may still differ if it needs to."
     },
     "approveHint": {
-      "text": "Mark your decision on this file. Nothing changes until you press Sweep.",
+      "text": "Mark your decision on this file. Nothing changes until you press Finish batch.",
       "note": "Tooltip on Approve. States what it does not do, which is the common misread.",
       "short": "Mark your decision on this file."
     },
@@ -119,8 +119,8 @@
       "short": "Leave a note for the agent"
     },
     "commentTiedHint": {
-      "text": "This note stays with the file. The agent reads it when you press Sweep.",
-      "short": "The agent reads this when you press Sweep",
+      "text": "This note stays with the file. The agent reads it when you finish the batch.",
+      "short": "The agent reads this when you finish the batch",
       "note": "Hint under the comment box, explaining when the note is consumed."
     },
     "commentSaveLabel": {
@@ -132,7 +132,7 @@
       "note": "Ritual control: set this file aside. One click, no explanation asked — the agent works out whether you meant this file or this kind of file, and says what it took from it in the next round notes."
     },
     "notThisHint": {
-      "text": "Set this file aside. The agent takes it as a sign of what you don't want, and tells you what it learned when you press Sweep.",
+      "text": "Set this file aside. The agent takes it as a sign of what you don't want, and tells you what it learned when you finish the batch.",
       "short": "Set this file aside",
       "note": "Tooltip on Not this."
     },
@@ -145,13 +145,18 @@
       "note": "Tooltip on Bring back."
     },
     "sweepLabel": {
-      "text": "Sweep",
-      "note": "Ritual button: close the sitting."
+      "text": "Finish batch",
+      "short": "Finish",
+      "note": "The button that ends a batch. Internally this is a sweep; the word stays off screen."
     },
     "sweepHint": {
-      "text": "Finish this batch: apply your decisions, review what changed, note anything else it affects, and line up the next files",
-      "short": "Finish this batch",
-      "note": "Tooltip on Sweep — the full list of what closing does."
+      "text": "Apply your decisions, review what changed, note anything else it affects, and line up the next files",
+      "short": "Apply your decisions and line up the next files",
+      "note": "Tooltip on Finish batch: the full list of what finishing does."
+    },
+    "sweepUndoLabel": {
+      "text": "Undo",
+      "note": "Finish batch, relabelled during the 3-second window when confirmation is off; pressing it cancels."
     },
     "foundingHeadTitle": {
       "text": "Setting up your project",
@@ -245,7 +250,7 @@
     "attached": {
       "line": "Pick a file",
       "short": "Pick a file to begin.",
-      "full": "Kettle has lined up a batch of files for you. Pick one to read it with the agent's summary. Mark your decisions as you go, then press Sweep when you are done.",
+      "full": "Kettle has lined up a batch of files for you. Pick one to read it with the agent's summary. Mark your decisions as you go, then press Finish batch when you are done.",
       "note": "Shown wherever a viewport explains an open project desk with no file selected."
     },
     "interviewing": {
@@ -269,11 +274,11 @@
     "founded": {
       "line": "Ready to begin",
       "short": "Your project is ready. Pick a file to begin.",
-      "full": "Your project is set up and the first batch of files is ready. Pick one to read it with the agent's summary, edit and comment as you go, then press Sweep when you are done.",
+      "full": "Your project is set up and the first batch of files is ready. Pick one to read it with the agent's summary, edit and comment as you go, then press Finish batch when you are done.",
       "note": "An ordinary founded project desk."
     },
     "sweeping": {
-      "line": "Sweeping…",
+      "line": "Finishing the batch…",
       "short": "Applying your decisions and lining up the next batch.",
       "full": "The agent is applying your decisions, reviewing what changed, noting anything else it affects, saving a record of this round, and lining up the next batch.",
       "note": "A sweep is running."
