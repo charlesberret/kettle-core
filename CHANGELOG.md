@@ -62,6 +62,9 @@ and Desk schema have their own integer contract versions.
 
 ### Changed
 
+- `kettle doctor` prints `hint` for a setsweep-only desk, with the migrate
+  docs pointer, and the summary is no longer "all checks green". Exit stays 0.
+  A split desk (both `.kettle/` and `.setsweep/`) is still `FAIL`.
 - **Install is no longer a venv convention.** `INSTALL.md` leads with `uv tool install` /
   `pipx` for users, a standalone binary for machines without Python, and an editable
   checkout for contributors. `~/.kettle-venv` is conventional, not required; the rule that

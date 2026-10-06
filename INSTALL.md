@@ -34,6 +34,8 @@ kettle --web              # same as kettle-web
 Two installs answering to the same name is the only install problem that actually bites.
 `kettle doctor` fails when `which -a kettle` finds installs that resolve to genuinely
 different targets; a single install anywhere is fine, canonical venv or not.
+Invoking the checkout binary directly (`.venv/bin/kettle doctor`) is also fine
+when nothing named `kettle` is on PATH. That is the clone README's first check.
 
 ```sh
 which -a kettle    # expect one path (or several symlinks to the same file)
@@ -193,7 +195,9 @@ Rules:
   Kettle user path. If the Kettle registry already exists, the registry step is skipped.
 
 `kettle doctor` reports legacy desks and split risk; its docs pointer names this
-section and `kettle migrate --help`.
+section and `kettle migrate --help`. A setsweep-only desk is a `hint` and the
+command still exits 0, because that desk is the supported dual-read install.
+Both directories at once is `FAIL`.
 
 **Sync tip:** exclude `.kettle/runtime/` from file-sync tools so the queue/chatlog/snapshots
 do not race. Durable charter/memory files under `.kettle/` may sync normally. See
