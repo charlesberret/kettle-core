@@ -68,7 +68,7 @@ const BUILTIN_THEMES = {
   kettle: {
     label: 'Kettle',
     dark: pack(
-      ['#16161e', '#d4756b', '#7dba6f', '#c8a24a', '#7d9fc7', '#9f7bc7', '#389bb4', '#d8d8e0', '#3f3f4e', '#e79187', '#9ad08e', '#ddbb70', '#98b6da', '#b495d9', '#60b1c7', '#ececf2'],
+      ['#080e1a', '#d4756b', '#7dba6f', '#c8a24a', '#7d9fc7', '#9f7bc7', '#389bb4', '#d8d8e0', '#3f3f4e', '#e79187', '#9ad08e', '#ddbb70', '#98b6da', '#b495d9', '#60b1c7', '#ececf2'],
       SLOTS_DARK, { ...IFACE_DARK, activebg: '--ansi-0' }, { ...IFACE_OPACITY_DARK, panel: 97, panel2: 97, activebg: 95 }, SLOT_OPACITY_DARK,
     ),
     light: pack(
@@ -79,7 +79,7 @@ const BUILTIN_THEMES = {
   'kettle-cerise': {
     label: 'Kettle Cerise',
     dark: pack(
-      ['#16161e', '#d4756b', '#7dba6f', '#c8a24a', '#7d9fc7', '#9f7bc7', '#389bb4', '#d8d8e0', '#3f3f4c', '#e79187', '#9ad08e', '#ddbb70', '#98b6da', '#b495d9', '#60b1c7', '#ececf2'],
+      ['#080e1a', '#d4756b', '#7dba6f', '#c8a24a', '#7d9fc7', '#9f7bc7', '#389bb4', '#d8d8e0', '#3f3f4c', '#e79187', '#9ad08e', '#ddbb70', '#98b6da', '#b495d9', '#60b1c7', '#ececf2'],
       SLOTS_DARK, { ...IFACE_DARK, activebg: '--ansi-0' }, { ...IFACE_OPACITY_DARK, panel: 97, panel2: 97, activebg: 95 }, SLOT_OPACITY_DARK,
     ),
     light: pack(
@@ -90,7 +90,7 @@ const BUILTIN_THEMES = {
   'kettle-nectar': {
     label: 'Kettle Nectar',
     dark: pack(
-      ['#16161e', '#d4756b', '#7dba6f', '#c8a24a', '#7d9fc7', '#9f7bc7', '#389bb4', '#d8d8e0', '#3f3f4c', '#e79187', '#9ad08e', '#ddbb70', '#98b6da', '#b495d9', '#60b1c7', '#ececf2'],
+      ['#080e1a', '#d4756b', '#7dba6f', '#c8a24a', '#7d9fc7', '#9f7bc7', '#389bb4', '#d8d8e0', '#3f3f4c', '#e79187', '#9ad08e', '#ddbb70', '#98b6da', '#b495d9', '#60b1c7', '#ececf2'],
       SLOTS_DARK, { ...IFACE_DARK, activebg: '--ansi-0' }, { ...IFACE_OPACITY_DARK, panel: 97, panel2: 97, activebg: 95 }, SLOT_OPACITY_DARK,
     ),
     light: pack(
@@ -101,7 +101,7 @@ const BUILTIN_THEMES = {
   'kettle-artichaut': {
     label: 'Kettle Artichaut',
     dark: pack(
-      ['#16161e', '#d4756b', '#7dba6f', '#c8a24a', '#7d9fc7', '#9f7bc7', '#389bb4', '#d8d8e0', '#3f3f4c', '#e79187', '#9ad08e', '#ddbb70', '#98b6da', '#b495d9', '#60b1c7', '#ececf2'],
+      ['#080e1a', '#d4756b', '#7dba6f', '#c8a24a', '#7d9fc7', '#9f7bc7', '#389bb4', '#d8d8e0', '#3f3f4c', '#e79187', '#9ad08e', '#ddbb70', '#98b6da', '#b495d9', '#60b1c7', '#ececf2'],
       SLOTS_DARK, { ...IFACE_DARK, activebg: '--ansi-0' }, { ...IFACE_OPACITY_DARK, panel: 97, panel2: 97, activebg: 95 }, SLOT_OPACITY_DARK,
     ),
     light: pack(
@@ -112,7 +112,7 @@ const BUILTIN_THEMES = {
   'kettle-marseille': {
     label: 'Kettle Marseille',
     dark: pack(
-      ['#16161e', '#d4756b', '#7dba6f', '#c8a24a', '#7d9fc7', '#9f7bc7', '#389bb4', '#d8d8e0', '#3f3f4c', '#e79187', '#9ad08e', '#ddbb70', '#2b8fd7', '#b495d9', '#60b1c7', '#ececf2'],
+      ['#080e1a', '#d4756b', '#7dba6f', '#c8a24a', '#7d9fc7', '#9f7bc7', '#389bb4', '#d8d8e0', '#3f3f4c', '#e79187', '#9ad08e', '#ddbb70', '#288dd4', '#b495d9', '#60b1c7', '#ececf2'],
       { ...SLOTS_DARK, mdhead: '--ansi-12' }, { ...IFACE_DARK, acc: '--ansi-12', activebg: '--ansi-0' }, { ...IFACE_OPACITY_DARK, panel: 97, panel2: 97, activebg: 95 }, SLOT_OPACITY_DARK,
     ),
     light: pack(
@@ -123,7 +123,7 @@ const BUILTIN_THEMES = {
   'kettle-cobalt': {
     label: 'Kettle Cobalt',
     dark: pack(
-      ['#16161e', '#d4756b', '#7dba6f', '#c8a24a', '#7d9fc7', '#9f7bc7', '#389bb4', '#d8d8e0', '#3f3f4c', '#e79187', '#9ad08e', '#ddbb70', '#4d83ff', '#b495d9', '#60b1c7', '#ececf2'],
+      ['#080e1a', '#d4756b', '#7dba6f', '#c8a24a', '#7d9fc7', '#9f7bc7', '#389bb4', '#d8d8e0', '#3f3f4c', '#e79187', '#9ad08e', '#ddbb70', '#457cfd', '#b495d9', '#60b1c7', '#ececf2'],
       { ...SLOTS_DARK, mdhead: '--ansi-12' }, { ...IFACE_DARK, acc: '--ansi-12', activebg: '--ansi-0' }, { ...IFACE_OPACITY_DARK, panel: 97, panel2: 97, activebg: 95 }, SLOT_OPACITY_DARK,
     ),
     light: pack(
@@ -134,7 +134,7 @@ const BUILTIN_THEMES = {
   'kettle-graphite': {
     label: 'Kettle Graphite',
     dark: pack(
-      ['#121720', '#d4756b', '#7dba6f', '#c8a24a', '#7d9fc7', '#9f7bc7', '#389bb4', '#d4d9e3', '#384150', '#e79187', '#9ad08e', '#ddbb70', '#748bab', '#b495d9', '#60b1c7', '#e9edf4'],
+      ['#080e1a', '#d4756b', '#7dba6f', '#c8a24a', '#7d9fc7', '#9f7bc7', '#389bb4', '#d4d9e3', '#384150', '#e79187', '#9ad08e', '#ddbb70', '#7188a7', '#b495d9', '#60b1c7', '#e9edf4'],
       { ...SLOTS_DARK, mdhead: '--ansi-12' }, { ...IFACE_DARK, acc: '--ansi-12', activebg: '--ansi-0' }, { ...IFACE_OPACITY_DARK, panel: 97, panel2: 97, activebg: 95 }, SLOT_OPACITY_DARK,
     ),
     light: pack(
