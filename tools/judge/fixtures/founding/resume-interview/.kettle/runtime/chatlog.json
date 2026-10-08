@@ -1,0 +1,12 @@
+{
+  "messages": [
+    {
+      "cls": "agent",
+      "text": "These are field notes, and you want every count dated. notes/field-notes.md has two dated lines. I would keep an eye on new counts rather than draft new ones."
+    },
+    {
+      "cls": "user",
+      "text": "Yes. Flag a count that arrives without a date."
+    }
+  ]
+}

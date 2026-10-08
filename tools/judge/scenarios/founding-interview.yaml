@@ -1,0 +1,168 @@
+# Headless sittings for the founding interview and `kettle found`.
+# Fixtures are synthetic. Each `fixture` path is a folder under tools/judge/.
+name: founding-interview
+description: >
+  Sittings drawn from `kettle found` and the founding sequence in
+  docs/REVIEW.md and docs/SITTING-FLOWS.md. The survey is deterministic.
+  The interview is a conversation. The project is set up only when PROJECT.md
+  exists and the queue has a content entry.
+scenarios:
+  - id: empty-folder
+    title: Empty folder
+    fixture: fixtures/founding/empty-folder
+    phase: interview
+    summary: >
+      The folder has no user files. The survey reports empty. The opening
+      asks whether this is a new project or the wrong folder, and it quotes
+      the founding sentence.
+    expect:
+      - quotes the founding sentence
+      - asks new project or wrong folder
+      - one question in prose
+      - no checklist and no card
+      - no tool use
+
+  - id: folder-with-notes
+    title: Folder with notes
+    fixture: fixtures/founding/folder-with-notes
+    phase: interview
+    summary: >
+      A README and a notes file are already here. The opening names those
+      files, quotes the founding sentence, offers a posture guess, and asks
+      one mission question. It does not invent a date the survey did not give.
+    expect:
+      - quotes the founding sentence
+      - names README.md or notes/field-notes.md
+      - dated observations only when the survey supports them
+      - one posture guess
+      - one mission question and then a stop
+      - no checklist and no card
+
+  - id: folder-with-code
+    title: Folder with code
+    fixture: fixtures/founding/folder-with-code
+    phase: interview
+    summary: >
+      A small program, not a notes folder. Observations name a file the
+      survey can see (README.md, pyproject.toml, or src/app.py). A count
+      with no file attached does not count.
+    expect:
+      - quotes the founding sentence
+      - names a file from the survey
+      - does not treat the folder as empty
+      - one question in prose
+      - no tool use
+
+  - id: resume-interview
+    title: Interrupted interview, resume
+    fixture: fixtures/founding/resume-interview
+    phase: interview
+    summary: >
+      The interview already has turns and no proposal yet. Re-entering
+      restates where things stand instead of opening as if the folder were new.
+      It does not ask the mission question a second time.
+    expect:
+      - restates where the conversation stands
+      - does not restart with a fresh mission question
+      - quotes or keeps the founding sentence
+      - no checklist and no card
+      - no proposal file yet
+
+  - id: interrupted-founding
+    title: Interrupted founding
+    fixture: fixtures/founding/interrupted-founding
+    phase: propose
+    summary: >
+      The proposal file and its queue entry are on disk. PROJECT.md is not.
+      Founding was interrupted after the proposal and before the project was
+      set up. The sitting stays on the proposal. `kettle found` may run again
+      and must not claim the project is already set up.
+    expect:
+      - DESK-PROPOSAL.md is the open plan
+      - the queue entry is the proposal, not a content file
+      - PROJECT.md is absent so the project is not set up
+      - kettle found can be run again
+      - does not mark the project set up
+
+  - id: proposal-edited
+    title: User edited the proposal
+    fixture: fixtures/founding/proposal-edited
+    phase: found
+    summary: >
+      The chat suggested leading with README.md. The proposal file on disk
+      says to lead with notes/field-notes.md. The file wins. Setting the
+      project up reads that edited proposal.
+    expect:
+      - follows the USER EDIT in DESK-PROPOSAL.md
+      - does not follow the earlier chat over the file
+      - writes PROJECT.md only as part of setting the project up
+      - first content file is notes/field-notes.md
+
+  - id: charter-without-content
+    title: Charter without a content entry
+    fixture: fixtures/founding/charter-without-content
+    phase: found
+    summary: >
+      PROJECT.md is on disk and the queue has only the proposal entry.
+      That is not a set-up project. `kettle found` reports that no content
+      entries were filed and exits without success so it can be run again.
+    expect:
+      - does not treat PROJECT.md alone as set up
+      - reports that no content entries were filed
+      - keeps the proposal editable
+      - kettle found can be run again
+
+  - id: content-without-charter
+    title: Content entry without a charter
+    fixture: fixtures/founding/content-without-charter
+    phase: found
+    summary: >
+      The queue has a content entry and PROJECT.md was not written.
+      That is not a set-up project. `kettle found` names the missing
+      charter and can be run again.
+    expect:
+      - does not treat a content entry alone as set up
+      - reports that PROJECT.md was not written
+      - kettle found can be run again
+
+  - id: already-founded
+    title: Already set up
+    fixture: fixtures/founding/already-founded
+    phase: found
+    summary: >
+      PROJECT.md exists, the queue has a content entry, and the session
+      says the project is set up. `kettle found` does not start another
+      setup. It tells the user to use Refound.
+    expect:
+      - kettle found does not start a second setup
+      - tells the user to use Refound
+      - leaves PROJECT.md and the content entry in place
+
+  - id: unmarked-on-disk
+    title: Charter and content already on disk
+    fixture: fixtures/founding/unmarked-on-disk
+    phase: found
+    summary: >
+      PROJECT.md and a content entry are already on disk, but the session
+      has not been marked set up. `kettle found` marks it from those files
+      and does not ask for another charter.
+    expect:
+      - marks the project set up from the files already on disk
+      - does not start a second interview
+      - requires both PROJECT.md and a content entry
+
+  - id: re-found
+    title: Re-found
+    fixture: fixtures/founding/re-found
+    phase: refound
+    summary: >
+      Setup was cleared and the founding sentence was kept. The append-only
+      approval line and working record are still there. The charter and the
+      proposal are gone, and the queue is waiting. The next interview quotes
+      the same sentence and does not treat the kept logs as a finished setup.
+    expect:
+      - quotes the preserved founding sentence
+      - does not treat the project as already set up
+      - keeps the approvals log and the working record
+      - charter and proposal are absent
+      - asks from the current files, which are still in the folder

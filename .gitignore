@@ -29,6 +29,10 @@ env/
 # the repo's own development desk lives here too and must stay local.
 .kettle/
 
+# Synthetic desks shipped with the sitting judge. A live project desk stays ignored.
+!tools/judge/fixtures/**/.kettle/
+!tools/judge/fixtures/**/.kettle/**
+
 # ── Personal config (both self-create on first run; see projects.example.json) ──
 projects.json
 settings.json

@@ -60,6 +60,11 @@ and Desk schema have their own integer contract versions.
 
 ### Added
 
+- **Versioned sitting scores.** `tools/judge/` hashes a rubric body, runs each
+  scenario through a caller-supplied command, and writes `scores.json` in
+  scenario order. `judge verify` recomputes the hash. The founding scenarios
+  use synthetic fixtures. The tests use a fake runner.
+
 - **The file-first journey.** Everything the agent offers reaches the user as a file, with why
   it is there and what is wanted. The handbook opens with that rule and a plain-word table
   generated from the lexicon, so the agent writes the way the screen reads.

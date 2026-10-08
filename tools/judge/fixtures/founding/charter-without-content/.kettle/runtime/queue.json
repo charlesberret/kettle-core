@@ -1,0 +1,17 @@
+{
+  "curated": "2026-04-02 founding proposal",
+  "entries": [
+    {
+      "id": "desk-proposal",
+      "title": "Proposal",
+      "path": ".kettle/DESK-PROPOSAL.md",
+      "project": "field-notes",
+      "ask_type": "judgment",
+      "ask": "Edit this until it matches what you want, then approve it",
+      "urgency": "high",
+      "status": "pending",
+      "founding_phase": "proposal",
+      "brief": "The plan for this folder, starting with the notes file."
+    }
+  ]
+}
