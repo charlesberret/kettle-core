@@ -509,6 +509,16 @@ TOOL_TIERS: dict[str, tuple[Optional[str], list[str], list[str]]] = {
 # binaries are not assumed to accept these flags.
 CLAUDE_PROJECT_ISOLATION = ["--setting-sources", "user", "--strict-mcp-config"]
 
+# Grok's tool-less interview. Each rule names a tool group Grok maps onto its own
+# tools (Read → read_file, Bash → run_terminal_command, Agent → spawn_subagent, …);
+# MCPTool(*) covers search_tool/use_tool on every connected server.
+GROK_INTERVIEW_DENY = [
+    arg
+    for rule in ("Read", "Grep", "Glob", "LS", "Bash", "Edit", "Write", "Agent",
+                 "WebFetch", "WebSearch", "MCPTool(*)")
+    for arg in ("--deny", rule)
+]
+
 # Claude's own protected paths already refuse writes to .claude/, .mcp.json and
 # .git/config, but a Claude write turn could still plant another agent's config for
 # a later Gemini/Codex turn in the same folder.
@@ -609,8 +619,13 @@ def tools_argv(tier: str, provider: str = "claude") -> list[str]:
         if provider == "gemini":
             return ["--approval-mode", "plan", "--skip-trust"]
         if provider == "grok":
-            # plan = no project writes; no --allow Bash / --always-approve
-            return ["--permission-mode", "plan"]
+            # plan mode alone still lets Grok read files and run its shell
+            # (run_terminal_command), and grok 1.0.50 ignores `--tools` headless:
+            # `--tools ""`, `none` and an empty agent-definition list all kept the
+            # full toolset. Deny rules are what Grok enforces, so the interview
+            # denies every built-in group and every MCP tool (verified live
+            # against a canary file, 2026-10-09).
+            return ["--permission-mode", "plan", *GROK_INTERVIEW_DENY]
         # Claude / cli: current CLIs require a value after --allowedTools.
         # A bare `--allowedTools` exits 1 ("argument missing").
         if provider == "claude":

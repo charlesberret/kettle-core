@@ -5,6 +5,14 @@ and Desk schema have their own integer contract versions.
 
 ## Unreleased
 
+### Security
+
+- **Grok's setup interview is tool-less again.** Plan mode alone let Grok read files and
+  run its shell (`run_terminal_command`) during the interview, and `--tools ""` does
+  nothing headless in grok 1.0.50. The interview now passes deny rules for every built-in
+  tool group and every MCP tool. Checked live against a canary file: about 30 routes
+  tried, none read it; only xAI-hosted web/X search still runs.
+
 ### Changed
 
 - **Core's own messages use plain words.** The proposal entry core files when the agent
