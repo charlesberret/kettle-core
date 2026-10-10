@@ -7,6 +7,16 @@ and Desk schema have their own integer contract versions.
 
 ### Security
 
+- **Codex and Gemini setup interviews are tool-less too.** The same live test that
+  caught Grok found both reading files: Codex's read-only sandbox still allows reads
+  through its shell (and a node REPL from the user's Codex config read files outside
+  the project), and Gemini's plan mode keeps its read tools. Codex now runs the
+  interview with the user config ignored and its tool features off; Gemini loads a
+  deny-all admin policy (`kits/policies/gemini-interview.toml`). All four providers
+  were checked against a canary inside and outside the project: none read either.
+- **Resumed Codex turns work again.** `codex exec resume` rejects `--sandbox`, which
+  Kettle passed on every turn, and needed `--skip-git-repo-check`. The sandbox is now a
+  `-c sandbox_mode=` override, which both commands accept and Codex enforces.
 - **Grok's setup interview is tool-less again.** Plan mode alone let Grok read files and
   run its shell (`run_terminal_command`) during the interview, and `--tools ""` does
   nothing headless in grok 1.0.50. The interview now passes deny rules for every built-in
