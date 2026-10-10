@@ -606,10 +606,15 @@ class TestProviderCapabilities(unittest.TestCase):
         self.assertFalse(caps["fenced_writes"])
         self.assertFalse(caps["tool_allowlist"])
         argv = tools_argv("interview", "grok")
-        self.assertNotIn("Bash", argv)
         self.assertNotIn("--always-approve", argv)
-        self.assertIn("--permission-mode", argv)
-        self.assertIn("plan", argv)
+        self.assertNotIn("--allow", argv)
+        self.assertEqual(argv[:2], ["--permission-mode", "plan"])
+        # plan mode alone kept read_file and the shell; only deny rules hold.
+        denied = {argv[i + 1] for i, a in enumerate(argv) if a == "--deny"}
+        for rule in ("Read", "Grep", "Bash", "Edit", "Write", "Agent", "MCPTool(*)"):
+            self.assertIn(rule, denied)
+        # grok ignores --tools headless; passing it would look like a fence that isn't one
+        self.assertNotIn("--tools", argv)
 
     def test_claude_family_guarantees_read_only_and_fenced_writes(self):
         for p in ("claude", "cli"):
