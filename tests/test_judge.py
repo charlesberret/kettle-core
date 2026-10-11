@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import shlex
 import subprocess
@@ -249,9 +250,46 @@ class JudgeAcceptanceTest(unittest.TestCase):
         self.assertEqual(rows[0]["error"], "score warmth is not a rubric dimension")
         self.assertEqual(rows[0]["scores"], {})
 
+    def test_run_id_and_row_carry_the_runner(self):
+        self._write_scenarios(["alpha"])
+        first = self.root / "first.json"
+        other = self.root / "other.json"
+        self.assertEqual(self._run(first, parallel=1, mode="ok").returncode, 0)
+        self.assertEqual(self._run(other, parallel=1, mode="also-ok").returncode, 0)
+        row_a = json.loads(first.read_text(encoding="utf-8"))[0]
+        row_b = json.loads(other.read_text(encoding="utf-8"))[0]
+        self.assertEqual(row_a["runner"], self._runner("ok"))
+        self.assertEqual(row_b["runner"], self._runner("also-ok"))
+        self.assertEqual(row_a["scores"], row_b["scores"])
+        self.assertEqual(row_a["rubric_sha256"], row_b["rubric_sha256"])
+        self.assertNotEqual(row_a["run_id"], row_b["run_id"])
+        expected = hashlib.sha256(
+            f"{row_a['rubric_sha256']}\nalpha\n{self._runner('ok')}".encode("utf-8")
+        ).hexdigest()[:16]
+        self.assertEqual(row_a["run_id"], expected)
+        self.assertEqual(
+            list(row_a),
+            ["scenario", "run_id", "runner", "rubric_version", "rubric_sha256", "scores", "notes"],
+        )
+
     def test_schema_rejects_a_row_missing_notes(self):
         with self.assertRaises(SchemaError):
             validate([{"scenario": "x", "run_id": "ab", "scores": {}}], load_schema())
+
+    def test_schema_requires_the_runner(self):
+        row = {
+            "scenario": "x",
+            "run_id": "0123456789abcdef",
+            "runner": "echo {scenario}",
+            "rubric_version": "0",
+            "rubric_sha256": "0" * 64,
+            "scores": {},
+            "notes": "",
+        }
+        validate([row], load_schema())
+        del row["runner"]
+        with self.assertRaises(SchemaError):
+            validate([row], load_schema())
 
     def test_runner_placeholder_is_one_argument(self):
         self.assertEqual(runner_argv("echo {scenario}", "empty-folder"), ["echo", "empty-folder"])

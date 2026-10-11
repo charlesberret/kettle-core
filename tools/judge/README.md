@@ -61,9 +61,11 @@ must be one of them. A non-zero exit, a timeout, or stdout that is not
 that object becomes an `error` row. The other scenarios still run. Rows are
 written in scenario-file order, so `--parallel 4` matches `--parallel 1`.
 
-`run_id` is the first 16 hex characters of SHA-256 over
-`rubric_sha256`, a newline, and the scenario id. Identical inputs write
-byte-identical `scores.json`.
+Each row records `runner`, the `--runner` template as given (with
+`{scenario}` unexpanded). `run_id` is the first 16 hex characters of SHA-256
+over `rubric_sha256`, a newline, the scenario id, a newline, and `runner`, so
+the same scenario scored by a different runner gets a different `run_id`.
+Identical inputs write byte-identical `scores.json`.
 
 ## Verify
 

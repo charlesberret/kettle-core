@@ -10,6 +10,7 @@
     "required": [
       "scenario",
       "run_id",
+      "runner",
       "rubric_version",
       "rubric_sha256",
       "scores",
@@ -23,7 +24,12 @@
       "run_id": {
         "type": "string",
         "pattern": "^[0-9a-f]{16}$",
-        "description": "First 16 hex chars of SHA-256 over rubric_sha256, newline, scenario id."
+        "description": "First 16 hex chars of SHA-256 over rubric_sha256, newline, scenario id, newline, runner."
+      },
+      "runner": {
+        "type": "string",
+        "minLength": 1,
+        "description": "The --runner command template as given, with {scenario} unexpanded."
       },
       "rubric_version": {
         "type": "string",

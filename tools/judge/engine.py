@@ -27,8 +27,10 @@ class RunError(ValueError):
     pass
 
 
-def run_id_for(rubric_sha256: str, scenario_id: str) -> str:
-    digest = hashlib.sha256(f"{rubric_sha256}\n{scenario_id}".encode("utf-8")).hexdigest()
+def run_id_for(rubric_sha256: str, scenario_id: str, runner: str) -> str:
+    """First 16 hex of SHA-256 over rubric hash, scenario id and runner template."""
+    text = f"{rubric_sha256}\n{scenario_id}\n{runner}"
+    digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
     return digest[:16]
 
 
@@ -85,6 +87,7 @@ def canonical_scores(rows: list[dict]) -> str:
         item = {
             "scenario": row["scenario"],
             "run_id": row["run_id"],
+            "runner": row["runner"],
             "rubric_version": row["rubric_version"],
             "rubric_sha256": row["rubric_sha256"],
             "scores": row["scores"],
@@ -141,7 +144,8 @@ def _run_one(
 ) -> dict:
     base = {
         "scenario": scenario.id,
-        "run_id": run_id_for(rubric.sha256, scenario.id),
+        "run_id": run_id_for(rubric.sha256, scenario.id, runner),
+        "runner": runner,
         "rubric_version": rubric.version,
         "rubric_sha256": rubric.sha256,
     }
