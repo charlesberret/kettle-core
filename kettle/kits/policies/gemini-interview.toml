@@ -1,0 +1,19 @@
+# Gemini policy for Kettle's setup interview, loaded with --admin-policy.
+#
+# The interview is tool-less: core passes the folder survey in the prompt. Plan
+# mode alone keeps Gemini's read-only tools, so these rules deny every built-in
+# and every MCP tool, at the admin tier so a folder's own .gemini/ policy cannot
+# re-allow one.
+
+[[rule]]
+toolName = "*"
+decision = "deny"
+priority = 999
+denyMessage = "Kettle's setup interview runs without tools."
+
+[[rule]]
+toolName = "*"
+mcpName = "*"
+decision = "deny"
+priority = 999
+denyMessage = "Kettle's setup interview runs without tools."

@@ -1795,8 +1795,7 @@ class EndpointTests(ServerFixture):
         self.assertEqual(cmd[0], server.agent_bin())
         self.assertIn("exec", cmd)
         self.assertIn("--json", cmd)
-        self.assertIn("--sandbox", cmd)
-        self.assertIn("workspace-write", cmd)
+        self.assertIn('sandbox_mode="workspace-write"', cmd)
         self.assertEqual(cmd[-1], "hello")
 
     def test_chat_streams_with_stub_gemini(self):

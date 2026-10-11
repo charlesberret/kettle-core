@@ -509,6 +509,37 @@ TOOL_TIERS: dict[str, tuple[Optional[str], list[str], list[str]]] = {
 # binaries are not assumed to accept these flags.
 CLAUDE_PROJECT_ISOLATION = ["--setting-sources", "user", "--strict-mcp-config"]
 
+def codex_sandbox(mode: str) -> list[str]:
+    """Codex sandbox as a config override. `codex exec resume` rejects `--sandbox`,
+    so the flag broke every resumed Codex turn; `-c sandbox_mode=` works on both."""
+    return ["-c", f'sandbox_mode="{mode}"']
+
+
+# Features that give Codex a tool. `-c features.X=false` rather than `--disable X`:
+# an unknown feature is a warning there and a hard error for `--disable`, so a
+# Codex release that drops one cannot break every interview.
+CODEX_INTERVIEW_FEATURES_OFF = (
+    "shell_tool", "unified_exec", "multi_agent", "view_image", "browser_use",
+    "browser_use_external", "computer_use", "in_app_browser", "apps", "skill_search",
+    "tool_suggest",
+)
+CODEX_INTERVIEW_ISOLATION = [
+    "--ignore-user-config", "--ignore-rules",
+    *[arg for f in CODEX_INTERVIEW_FEATURES_OFF for arg in ("-c", f"features.{f}=false")],
+]
+
+GEMINI_INTERVIEW_POLICY = Path(__file__).resolve().parent / "kits" / "policies" / "gemini-interview.toml"
+
+# Grok's tool-less interview. Each rule names a tool group Grok maps onto its own
+# tools (Read → read_file, Bash → run_terminal_command, Agent → spawn_subagent, …);
+# MCPTool(*) covers search_tool/use_tool on every connected server.
+GROK_INTERVIEW_DENY = [
+    arg
+    for rule in ("Read", "Grep", "Glob", "LS", "Bash", "Edit", "Write", "Agent",
+                 "WebFetch", "WebSearch", "MCPTool(*)")
+    for arg in ("--deny", rule)
+]
+
 # Claude's own protected paths already refuse writes to .claude/, .mcp.json and
 # .git/config, but a Claude write turn could still plant another agent's config for
 # a later Gemini/Codex turn in the same folder.
@@ -605,12 +636,25 @@ def tools_argv(tier: str, provider: str = "claude") -> list[str]:
     # No open shell, no always-approve — pure generation under every provider.
     if tier == "interview":
         if provider == "chatgpt":
-            return ["--sandbox", "read-only"]
+            # A read-only sandbox still lets Codex read anything on disk through its
+            # shell, and the user's config.toml brings MCP servers and plugins (a
+            # node REPL read the canary). Drop the user config and switch the tool
+            # features off (verified live against a canary file, 2026-10-10).
+            return [*codex_sandbox("read-only"), *CODEX_INTERVIEW_ISOLATION]
         if provider == "gemini":
-            return ["--approval-mode", "plan", "--skip-trust"]
+            # Plan mode keeps Gemini's read-only tools (read_file read the canary).
+            # A deny-all rule at the admin tier outranks plan mode and any policy a
+            # registered folder ships in its own .gemini/.
+            return ["--approval-mode", "plan", "--skip-trust",
+                    "--admin-policy", str(GEMINI_INTERVIEW_POLICY)]
         if provider == "grok":
-            # plan = no project writes; no --allow Bash / --always-approve
-            return ["--permission-mode", "plan"]
+            # plan mode alone still lets Grok read files and run its shell
+            # (run_terminal_command), and grok 1.0.50 ignores `--tools` headless:
+            # `--tools ""`, `none` and an empty agent-definition list all kept the
+            # full toolset. Deny rules are what Grok enforces, so the interview
+            # denies every built-in group and every MCP tool (verified live
+            # against a canary file, 2026-10-09).
+            return ["--permission-mode", "plan", *GROK_INTERVIEW_DENY]
         # Claude / cli: current CLIs require a value after --allowedTools.
         # A bare `--allowedTools` exits 1 ("argument missing").
         if provider == "claude":
@@ -623,11 +667,7 @@ def tools_argv(tier: str, provider: str = "claude") -> list[str]:
 
     if provider == "chatgpt":
         # Codex: sandbox policy stands in for tool allowlists
-        if not write and not allow:
-            return ["--sandbox", "read-only"]
-        if write:
-            return ["--sandbox", "workspace-write"]
-        return ["--sandbox", "read-only"]
+        return codex_sandbox("workspace-write" if write else "read-only")
 
     if provider == "gemini":
         # Gemini: approval-mode ≈ Claude permission-mode
@@ -776,7 +816,9 @@ def build_cmd(claude: str, prompt: str, session_id: Optional[str] = None,
     if provider == "chatgpt":
         # codex exec [--json] … PROMPT   OR   codex exec resume SID [--json] PROMPT
         if session_id:
-            cmd = [claude, "exec", "resume", session_id, "--json"]
+            # --skip-git-repo-check here too: without it a resumed turn in a folder
+            # Codex hasn't been told to trust exits before the model runs.
+            cmd = [claude, "exec", "resume", session_id, "--json", "--skip-git-repo-check"]
         else:
             cmd = [claude, "exec", "--json", "--skip-git-repo-check"]
         cmd += extra

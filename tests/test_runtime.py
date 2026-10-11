@@ -361,10 +361,36 @@ class TestDialectArgv(unittest.TestCase):
         self.assertNotIn("--verbose", cmd)
 
     def test_chatgpt_tools_use_sandbox(self):
+        # A config override, not --sandbox: `codex exec resume` rejects the flag.
         self.assertEqual(tools_argv("chat", "chatgpt"),
-                         ["--sandbox", "workspace-write"])
-        self.assertEqual(tools_argv("interview", "chatgpt"),
-                         ["--sandbox", "read-only"])
+                         ["-c", 'sandbox_mode="workspace-write"'])
+        self.assertNotIn("--sandbox", tools_argv("interview", "chatgpt"))
+
+    def test_codex_interview_drops_user_config_and_tool_features(self):
+        """A read-only sandbox still let Codex read files through its shell, and the
+        user's config.toml brought a node REPL that read the canary."""
+        argv = tools_argv("interview", "chatgpt")
+        self.assertEqual(argv[:2], ["-c", 'sandbox_mode="read-only"'])
+        self.assertIn("--ignore-user-config", argv)
+        for f in ("shell_tool", "unified_exec", "multi_agent", "view_image", "computer_use"):
+            self.assertIn(f"features.{f}=false", argv)
+        # --disable errors on a feature a later Codex drops; -c only warns
+        self.assertNotIn("--disable", argv)
+
+    def test_codex_resume_skips_the_git_repo_check(self):
+        cmd = build_cmd("codex", "hi", "SID", provider="chatgpt")
+        self.assertEqual(cmd[:6], ["codex", "exec", "resume", "SID", "--json",
+                                   "--skip-git-repo-check"])
+
+    def test_gemini_interview_denies_every_tool_at_the_admin_tier(self):
+        argv = tools_argv("interview", "gemini")
+        self.assertIn("plan", argv)
+        policy = Path(argv[argv.index("--admin-policy") + 1])
+        self.assertTrue(policy.is_file(), policy)
+        text = policy.read_text(encoding="utf-8")
+        self.assertIn('toolName = "*"', text)
+        self.assertIn('mcpName = "*"', text)
+        self.assertNotIn('decision = "allow"', text)
 
     def test_gemini_tools_use_approval_mode(self):
         bits = tools_argv("sweep", "gemini")
@@ -606,10 +632,15 @@ class TestProviderCapabilities(unittest.TestCase):
         self.assertFalse(caps["fenced_writes"])
         self.assertFalse(caps["tool_allowlist"])
         argv = tools_argv("interview", "grok")
-        self.assertNotIn("Bash", argv)
         self.assertNotIn("--always-approve", argv)
-        self.assertIn("--permission-mode", argv)
-        self.assertIn("plan", argv)
+        self.assertNotIn("--allow", argv)
+        self.assertEqual(argv[:2], ["--permission-mode", "plan"])
+        # plan mode alone kept read_file and the shell; only deny rules hold.
+        denied = {argv[i + 1] for i, a in enumerate(argv) if a == "--deny"}
+        for rule in ("Read", "Grep", "Bash", "Edit", "Write", "Agent", "MCPTool(*)"):
+            self.assertIn(rule, denied)
+        # grok ignores --tools headless; passing it would look like a fence that isn't one
+        self.assertNotIn("--tools", argv)
 
     def test_claude_family_guarantees_read_only_and_fenced_writes(self):
         for p in ("claude", "cli"):
