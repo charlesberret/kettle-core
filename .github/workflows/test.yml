@@ -14,7 +14,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        # macOS bills at 10x; run it on push to main only, not on PRs.
+        os: ${{ github.event_name == 'push' && fromJSON('["ubuntu-latest","macos-latest"]') || fromJSON('["ubuntu-latest"]') }}
         python: ["3.11", "3.14"]
     runs-on: ${{ matrix.os }}
     steps:
@@ -287,7 +288,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        # macOS bills at 10x; run it on push to main only, not on PRs.
+        os: ${{ github.event_name == 'push' && fromJSON('["ubuntu-latest","macos-latest"]') || fromJSON('["ubuntu-latest"]') }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
