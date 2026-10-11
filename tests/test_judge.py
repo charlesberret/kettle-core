@@ -38,7 +38,14 @@ RUNNER = textwrap.dedent(
     if mode == "badjson" and sid == "bad":
         print("not-json")
         raise SystemExit(0)
-    print(json.dumps({"notes": " note " + sid + " ", "scores": {"mission": 1, "tone": 2}}))
+    if mode == "unknown":
+        print(json.dumps({"notes": "", "scores": {"mission": 1, "warmth": 3}}))
+        raise SystemExit(0)
+    dims = json.load(sys.stdin)["rubric"]["dimensions"]
+    scores = {"mission": 1, "tone": 2}
+    if not set(scores) <= set(dims):
+        scores = {dim: 1 for dim in dims}
+    print(json.dumps({"notes": " note " + sid + " ", "scores": scores}))
     """
 )
 
@@ -231,6 +238,16 @@ class JudgeAcceptanceTest(unittest.TestCase):
         rows = json.loads(out.read_text(encoding="utf-8"))
         self.assertIn("not JSON", rows[0]["error"])
         validate(rows, load_schema())
+
+    def test_a_score_outside_the_rubric_dimensions_is_an_error_row(self):
+        self._write_scenarios(["alpha"])
+        out = self.root / "scores.json"
+        result = self._run(out, parallel=1, mode="unknown")
+        self.assertEqual(result.returncode, 1, result.stderr)
+        rows = json.loads(out.read_text(encoding="utf-8"))
+        validate(rows, load_schema())
+        self.assertEqual(rows[0]["error"], "score warmth is not a rubric dimension")
+        self.assertEqual(rows[0]["scores"], {})
 
     def test_schema_rejects_a_row_missing_notes(self):
         with self.assertRaises(SchemaError):

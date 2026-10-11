@@ -56,7 +56,8 @@ Stdout is one JSON object:
 {"scores": {"founding_sentence": 1}, "notes": "short prose"}
 ```
 
-Score values are integers. A non-zero exit, a timeout, or stdout that is not
+Score values are integers. When the rubric lists dimensions, every score name
+must be one of them. A non-zero exit, a timeout, or stdout that is not
 that object becomes an `error` row. The other scenarios still run. Rows are
 written in scenario-file order, so `--parallel 4` matches `--parallel 1`.
 

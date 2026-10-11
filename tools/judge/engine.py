@@ -225,6 +225,8 @@ def _parse_runner_stdout(stdout: str, rubric: Rubric) -> tuple[tuple[dict, str] 
     for key, value in scores.items():
         if not isinstance(key, str) or not key:
             return None, "a score name is empty"
+        if rubric.dimensions and key not in rubric.dimensions:
+            return None, f"score {key} is not a rubric dimension"
         if isinstance(value, bool) or not isinstance(value, int):
             return None, f"score {key} is not an integer"
         clean[key] = value
