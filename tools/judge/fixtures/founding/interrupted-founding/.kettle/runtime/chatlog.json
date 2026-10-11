@@ -1,0 +1,12 @@
+{
+  "messages": [
+    {
+      "cls": "user",
+      "text": "Keep the counts honest. Ready."
+    },
+    {
+      "cls": "agent",
+      "text": "Drafting the proposal next."
+    }
+  ]
+}

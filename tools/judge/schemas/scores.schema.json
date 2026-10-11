@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/charlesberret/kettle-core/blob/main/tools/judge/schemas/scores.schema.json",
+  "title": "Sitting judge scores",
+  "description": "One JSON array. One object per scenario run, in scenario-file order. error is present only when that run failed.",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "scenario",
+      "run_id",
+      "runner",
+      "rubric_version",
+      "rubric_sha256",
+      "scores",
+      "notes"
+    ],
+    "properties": {
+      "scenario": {
+        "type": "string",
+        "minLength": 1
+      },
+      "run_id": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{16}$",
+        "description": "First 16 hex chars of SHA-256 over rubric_sha256, newline, scenario id, newline, runner."
+      },
+      "runner": {
+        "type": "string",
+        "minLength": 1,
+        "description": "The --runner command template as given, with {scenario} unexpanded."
+      },
+      "rubric_version": {
+        "type": "string",
+        "minLength": 1
+      },
+      "rubric_sha256": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{64}$",
+        "description": "SHA-256 over the line 'dimensions: ' + the front-matter dimensions joined by commas + newline, followed by the normalised rubric body. version and the rest of the front matter are not hashed."
+      },
+      "scores": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "integer"
+        }
+      },
+      "notes": {
+        "type": "string"
+      },
+      "error": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  }
+}

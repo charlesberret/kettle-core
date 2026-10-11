@@ -26,6 +26,7 @@ python3 -m venv .venv
 | `test_kettle_main.py` | Entrypoint routing |
 | `test_survey.py` / `test_sweepkit.py` | Survey + mechanical close |
 | `test_gitmap.py` | Git/mtime activity heatmap (`kettle/gitmap.py`) |
+| `test_judge.py` | Versioned sitting judge (`tools/judge`): hash, order, errors, schema |
 | `test_migrate.py` | `kettle migrate` (`.setsweep/` → `.kettle/`, dry-run vs `--apply`) |
 
 Some modules redirect `server` globals into a tempdir and must run **serially**

@@ -1,0 +1,16 @@
+{
+  "curated": "2026-04-02 fixture",
+  "entries": [
+    {
+      "id": "field-notes",
+      "title": "Field notes",
+      "path": "notes/field-notes.md",
+      "project": "field-notes",
+      "ask_type": "judgment",
+      "ask": "Are the counts dated?",
+      "urgency": "normal",
+      "status": "pending",
+      "brief": "Two dated counts from a made-up platform."
+    }
+  ]
+}

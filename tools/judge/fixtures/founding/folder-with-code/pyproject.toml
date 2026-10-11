@@ -1,0 +1,4 @@
+[project]
+name = "sample-counts"
+version = "0.0.0"
+description = "Synthetic sample used by the sitting judge."

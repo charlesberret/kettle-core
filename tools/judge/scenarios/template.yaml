@@ -1,0 +1,13 @@
+name: template
+description: >
+  Placeholder scenario file. The founding interview lives in
+  founding-interview.yaml.
+scenarios:
+  - id: placeholder
+    title: Placeholder
+    fixture: fixtures/template/placeholder
+    phase: interview
+    summary: >
+      TODO(patron) describe the sitting this scenario stands in for.
+    expect:
+      - TODO(patron) name the pass condition

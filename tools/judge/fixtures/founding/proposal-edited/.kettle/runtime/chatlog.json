@@ -1,0 +1,12 @@
+{
+  "messages": [
+    {
+      "cls": "agent",
+      "text": "I would open with README.md first."
+    },
+    {
+      "cls": "user",
+      "text": "No. The notes file comes first. I edited the proposal."
+    }
+  ]
+}
