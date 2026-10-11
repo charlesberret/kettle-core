@@ -177,6 +177,25 @@ class JudgeAcceptanceTest(unittest.TestCase):
         ok = self._cli(["verify", str(rescored), "--rubric", str(edited)])
         self.assertEqual(ok.returncode, 0, ok.stderr)
 
+    def test_changing_only_the_dimensions_fails_verify(self):
+        self._write_scenarios(["alpha"])
+        scores = self.root / "scores.json"
+        self.assertEqual(self._run(scores, parallel=1).returncode, 0)
+        original = load_rubric(self.rubric_path)
+
+        redimensioned = self.root / "redimensioned.md"
+        redimensioned.write_text(
+            RUBRIC_TEXT.replace("  - mission\n", "  - mission\n  - warmth\n"),
+            encoding="utf-8",
+        )
+        changed = load_rubric(redimensioned)
+        self.assertEqual(changed.body, original.body)
+        self.assertEqual(changed.dimensions, ("tone", "mission", "warmth"))
+        self.assertNotEqual(changed.sha256, original.sha256)
+        failed = self._cli(["verify", str(scores), "--rubric", str(redimensioned)])
+        self.assertEqual(failed.returncode, 1, failed.stdout)
+        self.assertIn(changed.sha256, failed.stderr)
+
     def test_one_failing_scenario_is_an_error_row_and_the_rest_continue(self):
         self._write_scenarios(["good", "bad", "also-good"])
         out = self.root / "scores.json"

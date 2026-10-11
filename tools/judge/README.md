@@ -17,17 +17,20 @@ python -m tools.judge verify scores.json --rubric sitting
 ## Rubric
 
 `rubrics/<name>.md` opens with front matter (`version`, and `dimensions` in
-score order). The body after the closing `---` is what gets hashed.
+score order). The hash covers the dimension list and the body after the
+closing `---`: SHA-256 over `dimensions: ` plus the dimensions joined by commas
+and a newline, followed by the normalised body.
 
-Normalisation, then SHA-256:
+Body normalisation:
 
 - newlines become `\n`
 - trailing whitespace is stripped on each line
 - blank lines at the start and end of the body are dropped
 - the hashed text ends with one newline
 
-`version` is stored on every row and is not part of the hash. Edit the body and
-`verify` rejects scores recorded under the old hash.
+`version` is stored on every row and is not part of the hash. Edit the body or
+add, drop, or reorder a dimension and `verify` rejects scores recorded under
+the old hash.
 
 `rubrics/sitting.md` is a template. It is full of `TODO(patron)` markers.
 

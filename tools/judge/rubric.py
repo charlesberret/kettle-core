@@ -1,8 +1,9 @@
-"""Load a versioned rubric and hash its normalised body.
+"""Load a versioned rubric and hash its dimensions and normalised body.
 
 Front matter carries ``version`` and, optionally, ``dimensions``. The hash is
-SHA-256 over the body only, after normalisation, so a wording change invalidates
-old scores and a version bump that leaves the body alone does not.
+SHA-256 over a ``dimensions:`` line followed by the normalised body, so a
+wording change or a change to the dimension list invalidates old scores, and a
+version bump that leaves both alone does not.
 """
 
 from __future__ import annotations
@@ -62,7 +63,7 @@ def load_rubric(path: Path | str) -> Rubric:
             raise RubricError(f"{path}: duplicate dimension {dim}")
         dimensions.append(dim)
     normalised = normalise_body(body)
-    digest = hashlib.sha256(normalised.encode("utf-8")).hexdigest()
+    digest = hashlib.sha256(hashed_text(dimensions, normalised).encode("utf-8")).hexdigest()
     return Rubric(
         path=path.resolve(),
         version=version_s,
@@ -70,6 +71,11 @@ def load_rubric(path: Path | str) -> Rubric:
         body=normalised,
         sha256=digest,
     )
+
+
+def hashed_text(dimensions: list[str] | tuple[str, ...], normalised_body: str) -> str:
+    """The exact text the rubric hash covers: the dimension list, then the body."""
+    return "dimensions: " + ",".join(dimensions) + "\n" + normalised_body
 
 
 def split_front_matter(text: str) -> tuple[str, str]:

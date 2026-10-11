@@ -14,8 +14,9 @@ dimensions:
 
 # Sitting rubric
 
-Template for a versioned sitting score. The judge hashes this body and writes
-that hash on every row. Change the wording and old scores no longer verify.
+Template for a versioned sitting score. The judge hashes the dimension list and
+this body and writes that hash on every row. Change the wording or the
+dimensions and old scores no longer verify.
 
 TODO(patron): replace this template before treating a score as a decision.
 The integers below are a scaffold, not a scale the project has adopted.

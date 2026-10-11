@@ -60,8 +60,8 @@ and Desk schema have their own integer contract versions.
 
 ### Added
 
-- **Versioned sitting scores.** `tools/judge/` hashes a rubric body, runs each
-  scenario through a caller-supplied command, and writes `scores.json` in
+- **Versioned sitting scores.** `tools/judge/` hashes a rubric's dimensions and
+  body, runs each scenario through a caller-supplied command, and writes `scores.json` in
   scenario order. `judge verify` recomputes the hash. The founding scenarios
   use synthetic fixtures. The tests use a fake runner.
 

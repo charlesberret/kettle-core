@@ -32,7 +32,7 @@
       "rubric_sha256": {
         "type": "string",
         "pattern": "^[0-9a-f]{64}$",
-        "description": "SHA-256 of the normalised rubric body. Not a hash of the front matter."
+        "description": "SHA-256 over the line 'dimensions: ' + the front-matter dimensions joined by commas + newline, followed by the normalised rubric body. version and the rest of the front matter are not hashed."
       },
       "scores": {
         "type": "object",
