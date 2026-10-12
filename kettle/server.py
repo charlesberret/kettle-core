@@ -3156,9 +3156,13 @@ class Handler(BaseHTTPRequestHandler):
 
         try:
             # stderr merged into stdout: a second unread pipe can deadlock the CLI mid-stream
+            # The registered folder's own agent config must not run in this turn;
+            # Gemini may spawn elsewhere (see runtime.isolate_turn). Stream bookkeeping
+            # below stays keyed on the project folder.
+            spawn_cmd, spawn_cwd = runtime.isolate_turn(cmd, cwd, current_curator().provider)
             proc = subprocess.Popen(
-                cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
-                env=runtime.curator_env(),
+                spawn_cmd, cwd=str(spawn_cwd), stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT, text=True, env=runtime.curator_env(),
             )
         except Exception as exc:  # noqa: BLE001 — executable missing / spawn refused
             msg = runtime.spawn_error_text(cmd, exc, current_curator().provider)

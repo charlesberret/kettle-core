@@ -12,3 +12,11 @@ import os
 import tempfile
 
 os.environ["GIT_TEMPLATE_DIR"] = tempfile.mkdtemp(prefix="kettle-test-git-template-")
+
+# Gemini turns spawn from a per-project folder under ~/.cache/kettle (runtime.isolate_turn);
+# a test run must not create those in the developer's home.
+from pathlib import Path  # noqa: E402
+
+from kettle import runtime  # noqa: E402
+
+runtime.GEMINI_WORKSPACES = Path(tempfile.mkdtemp(prefix="kettle-test-gemini-ws-"))

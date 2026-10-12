@@ -549,10 +549,61 @@ CLAUDE_FOREIGN_AGENT_CONFIG_DENY = [
 ]
 
 # Environment variables that would make a curator CLI trust the registered folder's
-# own agent config. Gemini's `--skip-trust` currently applies *after* workspace
-# settings load, so project hooks stay off; this variable loads them (verified with
-# gemini 0.54.4). Never let it reach a curator child.
-CURATOR_ENV_DENY = frozenset({"GEMINI_CLI_TRUST_WORKSPACE"})
+# own agent config. GEMINI_CLI_TRUST_WORKSPACE trusts the workspace outright;
+# GROK_FOLDER_TRUST=0 turns Grok's folder trust off, which runs a project's hooks and
+# MCP servers in every tier, interview included. Never let either reach a curator child.
+CURATOR_ENV_DENY = frozenset({"GEMINI_CLI_TRUST_WORKSPACE", "GROK_FOLDER_TRUST"})
+
+# Gemini runs from an empty, per-project folder Kettle owns, with the project granted
+# through --include-directories. See isolate_turn.
+GEMINI_WORKSPACES = Path.home() / ".cache" / "kettle" / "gemini-workspaces"
+
+
+def _git_root(root: Path) -> Optional[Path]:
+    """The enclosing git work tree, found by walking up (no git process: running git in
+    a folder we don't trust is the thing to avoid)."""
+    for d in (root, *root.parents):
+        if (d / ".git").exists():
+            return d
+    return None
+
+
+def isolate_turn(cmd: list, cwd, provider: str = "claude") -> tuple[list, Path]:
+    """Keep a registered folder's own agent config from running inside a Kettle turn.
+
+    Returns the argv and working directory to spawn. A folder someone registers may be
+    a clone they haven't read, and Kettle runs its turns there.
+
+    - Codex: the folder (and its git root) are marked untrusted for this run, so its
+      .codex/config.toml (MCP servers, sandbox, model provider) is ignored. This also
+      stops Codex writing a permanent `trust_level = "trusted"` for every folder it
+      chats in.
+    - Gemini: `--skip-trust` trusts the workspace, and a trusted workspace loads its
+      .gemini/settings.json (a tool-discovery command runs before the model answers),
+      its policies and its .gemini/.env. Gemini has no switch to skip those, so it runs
+      from an empty folder of Kettle's own and the project is an included directory.
+      The folder lives outside the project: Gemini looks for .env upward from its cwd.
+    - Claude has CLAUDE_PROJECT_ISOLATION in its argv; Grok refuses project config in
+      an untrusted folder, and CURATOR_ENV_DENY keeps it from being told otherwise.
+    """
+    provider = "chatgpt" if provider == "codex" else provider
+    root = Path(cwd).resolve()
+    cmd = list(cmd)
+    if provider == "gemini":
+        import hashlib
+        ws = GEMINI_WORKSPACES / hashlib.sha256(str(root).encode()).hexdigest()[:16]
+        ws.mkdir(parents=True, exist_ok=True, mode=0o700)
+        return [*cmd, "--include-directories", str(root)], ws
+    if provider == "chatgpt" and cmd:
+        roots = {root}
+        git_root = _git_root(root)
+        if git_root is not None:
+            roots.add(git_root)
+        table = ",".join(f'{json.dumps(str(r))}={{trust_level="untrusted"}}'
+                         for r in sorted(roots))
+        # before the prompt, which build_cmd always puts last
+        return [*cmd[:-1], "-c", f"projects={{{table}}}", cmd[-1]], root
+    return cmd, root
 
 
 def curator_env(base: Optional[dict] = None) -> dict:
@@ -952,8 +1003,9 @@ class Runtime:
         # ledger + capture regardless.
         if cmd is None:
             cmd = build_cmd(self.claude, prompt, session_id, extra, provider=self.provider)
+        cmd, spawn_cwd = isolate_turn(cmd, cwd, self.provider)
         try:
-            proc = subprocess.Popen(cmd, cwd=str(cwd), stdout=subprocess.PIPE,
+            proc = subprocess.Popen(cmd, cwd=str(spawn_cwd), stdout=subprocess.PIPE,
                                     stderr=subprocess.STDOUT, text=True, env=curator_env())
         except OSError as exc:  # missing / non-executable CLI: report it, don't traceback
             yield {"t": "error", "s": spawn_error_text(cmd, exc, self.provider)}

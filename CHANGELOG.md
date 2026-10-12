@@ -7,6 +7,18 @@ and Desk schema have their own integer contract versions.
 
 ### Security
 
+- **A registered folder's own agent config no longer runs in Kettle's turns.** A folder
+  someone adds may be a clone they haven't read. Live tests found Codex starting an MCP
+  server from the folder's `.codex/config.toml` on chat and finish-batch turns, and
+  Gemini (which Kettle runs with `--skip-trust`) running the folder's tool-discovery
+  command and loading its `.env` in every tier. Codex now marks the folder and its git
+  root untrusted for each turn, which also stops it writing a permanent trust entry
+  for every folder it chats in. Gemini runs from an empty per-project folder under
+  `~/.cache/kettle/gemini-workspaces/`, with the project as an included directory. A
+  `GROK_FOLDER_TRUST` override is kept out of agent processes, as
+  `GEMINI_CLI_TRUST_WORKSPACE` already was. Checked live on all four providers and
+  tiers, in an untrusted folder and inside a trusted tree: no canary fired, every turn
+  replied.
 - **Codex and Gemini setup interviews are tool-less too.** The same live test that
   caught Grok found both reading files: Codex's read-only sandbox still allows reads
   through its shell (and a node REPL from the user's Codex config read files outside
