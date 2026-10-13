@@ -8,6 +8,7 @@ into a tempdir and must run serially.
 from __future__ import annotations
 
 import http.server
+import importlib.metadata
 import io
 import json
 import os
@@ -466,6 +467,16 @@ class CliTests(unittest.TestCase):
         by_name = {r["name"]: r for r in rows}
         self.assertTrue(by_name["kettle-on-path"]["ok"])
         self.assertTrue(by_name["kettle-path-extras"]["ok"])
+
+    def test_package_install_info_source_tree_when_metadata_missing(self):
+        """A worktree imports kettle before pip install -e; doctor must not say unknown."""
+        with mock.patch(
+            "importlib.metadata.distribution",
+            side_effect=importlib.metadata.PackageNotFoundError,
+        ):
+            version, mode = cli._package_install_info()
+        self.assertEqual(mode, "source-tree")
+        self.assertNotEqual(version, "unknown")
 
     def test_install_doctor_green_when_one_install_loads(self):
         modules = cli._package_modules()
