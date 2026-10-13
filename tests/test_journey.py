@@ -94,6 +94,47 @@ class FirstLook(unittest.TestCase):
             self.assertNotIn(gone, p)
 
 
+class ReaderOpening(unittest.TestCase):
+    """The opening works on folders without git and never invents mechanisms —
+    the six guardrails added after simulations showed bare quotations, tenure
+    inferred from counts, invented timers/hooks, and survey oddities repeated
+    to the user. One assertIn per edit so a rewrite cannot drop them."""
+
+    def test_founding_sentence_is_folded_in_not_quoted_bare(self):
+        self.assertIn(
+            "Fold the quotation into your first sentence; never open with the "
+            "bare quotation standing alone.",
+            prompt("interview-role"))
+
+    def test_per_file_dates_beat_counts_and_no_tenure_inference(self):
+        self.assertIn(
+            "never infer how long they have been at this or how still the "
+            "folder is from a count",
+            prompt("interview-role"))
+
+    def test_two_orientation_docs_can_be_the_one_question(self):
+        self.assertIn(
+            "the one question may instead ask which of the two is the contract "
+            "the reader should hold the work to",
+            prompt("interview-role"))
+
+    def test_what_this_does_answer_invents_no_mechanisms(self):
+        self.assertIn(
+            "Do not invent timers, watchers, hooks, or commit triggers.",
+            prompt("interview-role"))
+
+    def test_survey_oddities_stay_inside(self):
+        self.assertIn(
+            "If an observation would only be about the survey, drop it.",
+            prompt("interview-role"))
+
+    def test_empty_folder_asks_them_to_check_where_files_are(self):
+        self.assertIn(
+            "The survey sees nothing outside this folder, so ask them to check "
+            "where their files are rather than offering to look.",
+            prompt("interview-role"))
+
+
 class Proposal(unittest.TestCase):
     """The one approval before work starts is about the user's files and intent."""
 
