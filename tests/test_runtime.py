@@ -837,5 +837,64 @@ class TestRuntimeSpawn(unittest.TestCase):
             self.assertNotIn("GEMINI_CLI_TRUST_WORKSPACE", env)
             self.assertIn("PATH", env)
 
+class ProjectConfigIsolation(unittest.TestCase):
+    """A registered folder's own agent config must not run in a Kettle turn."""
+
+    def setUp(self):
+        import tempfile
+        self.tmp = Path(tempfile.mkdtemp(prefix="kettle-iso-"))
+        self.root = self.tmp / "repo" / "sub"
+        self.root.mkdir(parents=True)
+        (self.tmp / "repo" / ".git").mkdir()
+        self._ws = runtime.GEMINI_WORKSPACES
+        runtime.GEMINI_WORKSPACES = self.tmp / "ws"
+
+    def tearDown(self):
+        import shutil
+        runtime.GEMINI_WORKSPACES = self._ws
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_codex_marks_the_folder_and_its_git_root_untrusted_before_the_prompt(self):
+        cmd, cwd = runtime.isolate_turn(["codex", "exec", "--json", "PROMPT"], self.root, "chatgpt")
+        self.assertEqual(cwd, self.root.resolve())
+        self.assertEqual(cmd[-1], "PROMPT")
+        i = cmd.index("-c")
+        table = cmd[i + 1]
+        self.assertTrue(table.startswith("projects={"), table)
+        self.assertIn(f'"{self.root.resolve()}"={{trust_level="untrusted"}}', table)
+        self.assertIn(f'"{(self.tmp / "repo").resolve()}"={{trust_level="untrusted"}}', table)
+
+    def test_gemini_runs_from_its_own_folder_outside_the_project(self):
+        cmd, cwd = runtime.isolate_turn(["gemini", "-p", "P"], self.root, "gemini")
+        self.assertEqual(cmd[-2:], ["--include-directories", str(self.root.resolve())])
+        self.assertTrue(cwd.is_dir())
+        # Gemini looks for .env upward from its cwd, so the folder must not sit inside
+        # the project
+        self.assertNotIn(self.root.resolve(), [cwd, *cwd.parents])
+        # one folder per project, so resuming a session finds it again
+        _, again = runtime.isolate_turn(["gemini"], self.root, "gemini")
+        self.assertEqual(cwd, again)
+        _, other = runtime.isolate_turn(["gemini"], self.tmp, "gemini")
+        self.assertNotEqual(cwd, other)
+
+    def test_claude_and_grok_are_left_as_built(self):
+        for p in ("claude", "grok"):
+            cmd, cwd = runtime.isolate_turn(["x", "-p", "P"], self.root, p)
+            self.assertEqual(cmd, ["x", "-p", "P"])
+            self.assertEqual(cwd, self.root.resolve())
+
+    def test_folder_trust_overrides_never_reach_the_child(self):
+        env = runtime.curator_env({"GROK_FOLDER_TRUST": "0",
+                                   "GEMINI_CLI_TRUST_WORKSPACE": "true", "KEEP": "1"})
+        self.assertEqual(env, {"KEEP": "1"})
+
+    def test_both_spawn_sites_isolate(self):
+        import inspect
+        from kettle import server
+        self.assertIn("isolate_turn(", inspect.getsource(runtime.Runtime.spawn))
+        self.assertIn("runtime.isolate_turn(", inspect.getsource(server.Handler.run_curator)
+                      if hasattr(server, "Handler") else Path(server.__file__).read_text())
+
+
 if __name__ == "__main__":
     unittest.main()
