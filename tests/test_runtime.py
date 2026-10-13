@@ -290,6 +290,28 @@ class TestDialectArgv(unittest.TestCase):
         self.assertEqual(kinds[-1], "done")
         self.assertEqual(evs[-1].get("error"), None)
 
+    def test_normalize_grok_token_deltas_keep_identifiers_whole(self):
+        """Grok streams token deltas: a dotted identifier arrives as separate
+        tokens. The gap fixer must not treat the '.' boundary as a sentence
+        break — "Forms" "." "Controls" must join without a newline."""
+        lines = [
+            _ev({"type": "text", "data": " Forms"}),
+            _ev({"type": "text", "data": "."}),
+            _ev({"type": "text", "data": "Controls"}),
+        ]
+        joined = "".join(e["s"] for e in normalize(lines) if e["t"] == "text")
+        self.assertEqual(joined, " Forms.Controls")
+
+    def test_normalize_grok_token_deltas_keep_version_whole(self):
+        """Same split on a digit: "v4" "." "0" must render v4.0, not 4.\\n\\n0."""
+        lines = [
+            _ev({"type": "text", "data": "v4"}),
+            _ev({"type": "text", "data": "."}),
+            _ev({"type": "text", "data": "0"}),
+        ]
+        joined = "".join(e["s"] for e in normalize(lines) if e["t"] == "text")
+        self.assertEqual(joined, "v4.0")
+
     def test_normalize_stitches_glued_prose_blocks(self):
         """Separate assistant text events that omit a newline between sentences."""
         lines = [

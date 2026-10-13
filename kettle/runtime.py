@@ -149,8 +149,13 @@ def normalize(lines: Iterable[str],
             ev = json.loads(line)
         except json.JSONDecodeError:
             continue
+        # Grok Build CLI streams token deltas (type "text" + "data"); the gap
+        # fixer is for whole prose blocks, so deltas bypass it entirely —
+        # otherwise "Forms" "." "Controls" renders as "Forms.\n\nControls".
+        is_delta = ev.get("type") == "text" and "data" in ev
         for evt in _normalize_event(ev, meter, on_session):
-            if evt.get("t") == "text" and isinstance(evt.get("s"), str):
+            if (not is_delta and evt.get("t") == "text"
+                    and isinstance(evt.get("s"), str)):
                 fixed = gap.feed(evt["s"])
                 if fixed is not evt["s"]:
                     evt = {**evt, "s": fixed}
