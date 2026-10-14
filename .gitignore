@@ -1,72 +1,97 @@
-# ── Python ──
+# House local surface — never publish.
+.local/
+.inbox/
+.coordination/
+.claude/
+.cursor/
+.grok/
+.aider*
+.worktrees/
+
+# Secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Python
 __pycache__/
 *.py[cod]
+*.egg
 *.egg-info/
 build/
 dist/
-.pytest_cache/
-.coverage
-coverage.json
-htmlcov/
-
-# ── Virtualenvs ──
 .venv/
 venv/
 env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+coverage.json
+coverage.xml
+htmlcov/
 
-# ── macOS / editors ──
+# Node (occasional tooling; the runtime stays stdlib)
+node_modules/
+uv.lock
+*.tsbuildinfo
+.turbo/
+.cache/
+
+# OS
 .DS_Store
-*.swp
+.AppleDouble
+.LSOverride
+Thumbs.db
 *~
-.cursor/
-
-# ── File-sync conflicts (never commit) ──
+*.swp
+*.swo
+*.bak
 *SFConflict*
 
-# ── Per-project desk state ──
+# Editors
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json.example
+*.code-workspace
+*.sublime-project
+*.sublime-workspace
+
+# Logs. The sitting-judge fixtures ship a synthetic approvals log on purpose.
+*.log
+!tools/judge/fixtures/**/*.log
+
+# Per-project desk state.
 # kettle creates <project-root>/.kettle/ for each project's curator desk: the queue,
-# chat transcript, snapshots, sessions, and logs. It is per-user runtime, never committed —
-# the repo's own development desk lives here too and must stay local.
+# chat transcript, snapshots, sessions, and logs. It is per-user runtime, never committed.
+# The repo's own development desk lives here too and must stay local.
 .kettle/
 
 # Synthetic desks shipped with the sitting judge. A live project desk stays ignored.
 !tools/judge/fixtures/**/.kettle/
 !tools/judge/fixtures/**/.kettle/**
 
-# ── Personal config (both self-create on first run; see projects.example.json) ──
+# Personal config (both self-create on first run; see projects.example.json)
 projects.json
 settings.json
 
-# ── Local-only working files (kept on disk, never published) ──
-# e.g. the internal/fleet-specific design docs (DESIGN.md, LINEAGE.md) live here.
-.local/
-.inbox/
-
-# ── Ollama persona pack (local forever) ──
-# Trial / host-local Wunderkind install, skills, eval prompts, and install.sh.
-# Not product surface — never ship this tree.
+# Ollama persona pack (local forever).
+# Trial / host-local install, skills, eval prompts, and install.sh.
+# Not product surface.
 ollama/
 
-# ── Curators (temporary ignore) ──
-# Intended product surface once we have actual excellent, shippable curator
-# packs. Ignore until then so half-built experiments stay off main.
-# Remove this block when curators/ is ready to publish.
+# Curator packs until a pack is actually ready to publish.
+# Remove this block when curators/ is product surface.
 curators/
-
-# ── Ephemeral agent worktrees ──
-.worktrees/
-
-# ── Claude Code local state ──
-# settings.local.json is per-machine personal config; worktrees/ is ephemeral scratch
-# created when agents run in isolation. Nothing here is shared project config today —
-# if that changes (e.g. a committed .claude/settings.json), add a negation below.
-.claude/
 
 # Beads / Dolt files (added by bd init)
 .dolt/
 *.db
 .beads-credential-key
 .beads/proxieddb/
-
-# Agent working files (kept on disk, never published)
-.coordination/

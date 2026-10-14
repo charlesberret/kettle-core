@@ -2,7 +2,7 @@
 id: 12
 title: Unify the folder-watchers
 repo: kettle-core
-touches: [kettle_watch.py, tests/test_watch.py, crontab (fleet), ~/cloud/sync/code/bin/kettle-watch (retire)]
+touches: [kettle_watch.py, tests/test_watch.py, crontab, the out-of-repo kettle-watch fork (retire)]
 risk: normal
 depends-on: [03]
 status: open
@@ -12,8 +12,8 @@ status: open
 
 Two implementations share one name. The repo ships `kettle_watch.py` (the packaged
 `kettle-watch` console script, state under `~/.cache/kettle/`), but cron actually
-runs `~/cloud/sync/code/bin/kettle-watch` every 15 minutes — an older fork with an extra
-PICKUP pass and state under `~/.cache/claude/`. Fixes to the repo version never reach
+runs an older `kettle-watch` fork that lives outside this repository, every 15
+minutes. That fork has an extra PICKUP pass and keeps state under `~/.cache/claude/`. Fixes to the repo version never reach
 production and vice versa; their seen-state files differ, so a naive cutover would
 re-curate previously seen intake items and spam drafts. The repo version also resolves
 the registry and settings differently from the server (`DESK_PROJECTS` else

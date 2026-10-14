@@ -126,7 +126,8 @@ do not relabel user claims. CLI: `kettle lineage` / `kettle bind`. HTTP:
 Python package under `kettle/` (`server.py`, `cli.py`, `runtime.py`, …), stdlib-only
 runtime for server and CLI, with `static/` and `kits/` shipped as package data. Install
 **editable** (`pip install -e .`) for contributors, or from a wheel for a self-contained
-UI. Install: `uv tool install` / `pipx`, a standalone binary built by
+UI. Install from the kettle-core git URL with `uv tool` or `pipx`
+(`tools/install.sh`), a standalone binary built by
 `tools/build-binary.sh`, or an editable checkout (see [`INSTALL.md`](./INSTALL.md)).
 `kettle doctor` checks PATH and package-module importability.
 

@@ -437,7 +437,7 @@ def _gated_env_roots(roots: list[Path]) -> list[Path]:
 
 # The fence = these base roots + every registered project root (see allowed_roots()). Base
 # defaults to empty for portability; the author can restore prior behavior with, e.g.,
-# KETTLE_ALLOWED_ROOTS="$HOME/cloud/sync:$HOME/Library/Mobile Documents/com~apple~CloudDocs".
+# KETTLE_ALLOWED_ROOTS="$HOME/Projects:$HOME/Documents".
 BASE_ALLOWED_ROOTS = _env_allowed_roots()
 
 # Tool tiers (agent / chat / sweep / interview) are single-sourced in

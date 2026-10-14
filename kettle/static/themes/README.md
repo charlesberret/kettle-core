@@ -10,8 +10,9 @@ and the built-in CLI editor.
 | `kettle-<pack>.json` | Glaze family (cerise, nectar, artichaut, marseille, cobalt, graphite) — *generated* |
 | `*.json` | Other bundled packs (Nord, Solarized, …) |
 
-Generated files come from `~/cloud/sync/design/palettes/scripts/kettle-promote.py`;
-edit the palette there, not here (`docs/THEMES.md`).
+The marquee and the glaze family are generated. The palette library and its
+promotion script live outside this repository (`docs/THEMES.md`). Edit a pack
+here only when you mean to bypass that generator.
 
 Custom user packs load from the user themes directory (see
 [`docs/THEMES.md`](../../docs/THEMES.md)), not from this folder.
