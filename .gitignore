@@ -70,3 +70,12 @@ curators/
 
 # Agent working files (kept on disk, never published)
 .coordination/
+.grok/
+.aider*
+.idea/
+.env
+.env.*
+!.env.example
+Thumbs.db
+*.code-workspace
+node_modules/

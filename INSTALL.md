@@ -7,12 +7,34 @@ Source: [github.com/charlesberret/kettle-core](https://github.com/charlesberret/
 
 ## Install
 
-Three ways in. Pick by what you are: a user, a stranger with no Python, or a contributor.
+One line, with [uv](https://docs.astral.sh/uv/):
+
+```sh
+uv tool install --upgrade git+https://github.com/charlesberret/kettle-core.git
+```
+
+That puts `kettle` on your PATH in its own environment. Run the same line
+again to upgrade. With pipx instead of uv:
+
+```sh
+pipx install --upgrade git+https://github.com/charlesberret/kettle-core.git
+```
+
+[`tools/install.sh`](./tools/install.sh) runs the uv line when `uv` is on PATH,
+and the pipx line otherwise. Same URL either way:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/charlesberret/kettle-core/main/tools/install.sh | bash
+```
+
+The name `kettle` on PyPI, Homebrew, and npm already belongs to other
+projects. This install uses the git URL, so you get this repository. There
+is no Homebrew formula and no npm package for this Kettle.
 
 | You want | Do this | You get |
 |---|---|---|
-| To use Kettle | `uv tool install kettle` (or `pipx install kettle`) | `kettle` on PATH, its own isolated environment, upgrades with one command |
-| No Python at all | Download the `kettle` binary from a release, `chmod +x`, put it on PATH | One 9 MB file; sitting, kits and interpreter are inside it |
+| To use Kettle | the one line above | `kettle` on PATH, its own environment |
+| No Python at all | Build the standalone binary below | One file; sitting, kits and interpreter are inside it. No release download yet |
 | To work on Kettle | Clone, then `python3 -m venv .venv && .venv/bin/pip install -e .` | Editable checkout: docs, kits and prompts edit in place |
 
 All three answer the same way:

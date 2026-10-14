@@ -37,6 +37,11 @@ and Desk schema have their own integer contract versions.
 
 ### Changed
 
+- **Install from the git URL.** The name `kettle` on PyPI, Homebrew, and npm
+  already belongs to other projects. The install line is
+  `uv tool install --upgrade git+https://github.com/charlesberret/kettle-core.git`.
+  `tools/install.sh` runs that, or the same URL with pipx. There is no Homebrew
+  formula and no npm package for this Kettle, and no release binary to download yet.
 - **Core's own messages use plain words.** The proposal entry core files when the agent
   doesn't (title "Proposal", not "Desk Proposal"), the "already set up" and "already
   finishing" notices, and the CLI help no longer say desk, found or curator. Found by the
