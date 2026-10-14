@@ -365,7 +365,7 @@ class CliTests(unittest.TestCase):
         rows = cli.install_doctor_checks(
             path_hits=[
                 Path("/opt/homebrew/bin/kettle"),
-                Path("/Users/me/.local/bin/kettle"),
+                Path("/Users/user/.local/bin/kettle"),
             ],
             package_modules=["kettle", "kettle.cli", "kettle.server"],
             canonical=canon,
@@ -438,7 +438,7 @@ class CliTests(unittest.TestCase):
         doctor just for living outside the canonical venv — only genuinely conflicting
         installs (multiple distinct targets on PATH) should."""
         rows = cli.install_doctor_checks(
-            path_hits=[Path("/Users/me/project/.venv/bin/kettle")],
+            path_hits=[Path("/Users/user/project/.venv/bin/kettle")],
             package_modules=["kettle", "kettle.cli", "kettle.server"],
             top_level=["kettle"],
             canonical=cli.CANONICAL_KETTLE,
