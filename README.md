@@ -1,14 +1,14 @@
 # Kettle Core
 
-**The local-first review desk for agent work.**
+**A local-first review desk that promotes careful attention to projects coded and written with agents.**
 
 [![Tests](https://github.com/charlesberret/kettle-core/actions/workflows/test.yml/badge.svg)](https://github.com/charlesberret/kettle-core/actions/workflows/test.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-3776AB.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](./LICENSE)
 
-Kettle helps you review work prepared by coding and writing agents. A curator
-packs a short brief for each queue item; you read, edit, comment, and approve;
-a sweep closes the sitting and restocks the queue.
+Kettle gathers a coding agent's work and curates it in batches with contextual
+briefs worth reading. When you review, edit, and approve a batch, the agent
+records your rulings. A sweep closes the sitting and restocks the queue.
 
 This repository owns the Python core, first-class CLI, localhost API, desk
 format, curator kits, and reference web UI. The public project home is
