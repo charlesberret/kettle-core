@@ -67,3 +67,6 @@ curators/
 *.db
 .beads-credential-key
 .beads/proxieddb/
+
+# Agent working files (kept on disk, never published)
+.coordination/
