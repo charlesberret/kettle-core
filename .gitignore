@@ -70,3 +70,15 @@ curators/
 
 # Agent working files (kept on disk, never published)
 .coordination/
+
+# Local surface — not for a public tree
+.grok/
+.aider*
+.env
+.env.*
+!.env.example
+.mypy_cache/
+.ruff_cache/
+node_modules/
+.idea/
+Thumbs.db
