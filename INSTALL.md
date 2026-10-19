@@ -11,9 +11,11 @@ Three ways in. Pick by what you are: a user, a stranger with no Python, or a con
 
 | You want | Do this | You get |
 |---|---|---|
-| To use Kettle | `uv tool install kettle` (or `pipx install kettle`) | `kettle` on PATH, its own isolated environment, upgrades with one command |
-| No Python at all | Download the `kettle` binary from a release, `chmod +x`, put it on PATH | One 9 MB file; sitting, kits and interpreter are inside it |
+| To use Kettle | Clone, then `python3 -m venv ~/.kettle-venv && ~/.kettle-venv/bin/pip install -e .` and link `~/.kettle-venv/bin/kettle` onto your PATH (see the README) | `kettle` on PATH, with no other Python packages to install |
+| No Python at all | Build the binary from a checkout (see [Standalone binary](#standalone-binary)) | One 9 MB file; sitting, kits and interpreter are inside it |
 | To work on Kettle | Clone, then `python3 -m venv .venv && .venv/bin/pip install -e .` | Editable checkout: docs, kits and prompts edit in place |
+
+Kettle is not on PyPI yet, and there are no release downloads yet. A package named `kettle` on PyPI is an unrelated project; do not install it for Kettle.
 
 All three answer the same way:
 
