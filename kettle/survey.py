@@ -131,10 +131,25 @@ def build_survey(
     # "existing desk" signal should mean a founded charter is actually there.
     has_kettle_charter = has_kettle_dir and (root_p / ".kettle" / "PROJECT.md").is_file()
 
+    if depth != 1:
+        listed_dirs = 0
+        for ent in top:
+            if listed_dirs >= 12:
+                break
+            if ent["kind"] != "dir" or ent["name"] in _SKIP_DIR_NAMES:
+                continue  # never read inside a dir the survey would never descend
+            listed_dirs += 1
+            children = _dir_children(root_p / ent["name"])
+            if children is not None:
+                ent["children"], ent["child_count"] = children
+
+    entry_names = {e.name for e in entries}
     samples: dict[str, str] = {}
     for fname in _SAMPLE_NAMES:
         if len(samples) >= max_samples:
             break
+        if fname not in entry_names:
+            continue  # exact name only — a case-insensitive disk must not double-sample
         p = root_p / fname
         if not p.is_file():
             continue
@@ -156,7 +171,11 @@ def build_survey(
                     samples[f"{sub}/README.md"] = text
                 break
 
-    git_activity = _git_activity(root_p, max_depth=depth) if has_git else None
+    git_activity = (_git_activity(root_p, max_depth=depth, sample_names=tuple(samples))
+                    if has_git else None)
+    mtime_buckets = recent_paths = oldest_path = None
+    if not git_activity:
+        mtime_buckets, recent_paths, oldest_path = _mtime_scan(root_p, max_depth=depth)
     signals = {
         "git": has_git,
         "kettle_desk": has_kettle_charter,
@@ -180,7 +199,9 @@ def build_survey(
         "samples": samples,
         "git_activity": git_activity,
         # the filesystem walk is only the fallback when git has no usable history
-        "mtime_buckets": None if git_activity else _mtime_buckets(root_p, max_depth=depth),
+        "mtime_buckets": mtime_buckets,
+        "recent_paths": recent_paths,
+        "oldest_path": oldest_path,
         "suggested_prechecks": suggest_prechecks(empty=empty or not top, signals=signals,
                                                   samples=samples),
         "generated_at": _now(),
@@ -246,7 +267,16 @@ def as_prompt_block(survey: dict[str, Any]) -> str:
         lines.append("Top level:")
         for ent in top[:40]:
             mark = "/" if ent.get("kind") == "dir" else ""
-            lines.append(f"  - {ent.get('name', '')}{mark}")
+            children = ent.get("children") or []
+            if mark and children:
+                count = ent.get("child_count", len(children))
+                shown = ", ".join(children)
+                if count > len(children):
+                    shown += ", …"
+                noun = "entry" if count == 1 else "entries"
+                lines.append(f"  - {ent.get('name', '')}/ ({count} {noun}: {shown})")
+            else:
+                lines.append(f"  - {ent.get('name', '')}{mark}")
         if len(top) > 40:
             lines.append(f"  … ({len(top) - 40} more)")
     else:
@@ -276,6 +306,14 @@ def as_prompt_block(survey: dict[str, Any]) -> str:
         if top_paths:
             rendered = ", ".join(f"{p['path']} ({p['commits']})" for p in top_paths)
             lines.append(f"Most-changed paths (recent history): {rendered}")
+        sample_dates = git_activity.get("sample_dates") or {}
+        if sample_dates:
+            rendered = ", ".join(f"{n} {d}" for n, d in sample_dates.items())
+            lines.append(f"Orientation files last committed: {rendered}")
+        recent_commits = git_activity.get("recent_commits") or []
+        if recent_commits:
+            rendered = "; ".join(f"{c['date']} {c['subject']}" for c in recent_commits)
+            lines.append(f"Last commits: {rendered}")
     else:
         buckets = survey.get("mtime_buckets")
         if buckets:
@@ -288,6 +326,18 @@ def as_prompt_block(survey: dict[str, Any]) -> str:
                 f"{day} file(s) touched in the last 24h, "
                 f"{week} in the last 7 days, "
                 f"{month} in the last 30 days."
+            )
+        recent = survey.get("recent_paths") or []
+        if recent:
+            lines.append(
+                "Most recently touched: "
+                + ", ".join(f"{r['path']} ({r['date']})" for r in recent)
+                + "."
+            )
+        oldest = survey.get("oldest_path")
+        if oldest:
+            lines.append(
+                f"Least recently touched: {oldest['path']} ({oldest['date']})."
             )
 
     samples = survey.get("samples") or {}
@@ -357,10 +407,12 @@ def _within_depth(rel_path: str, max_depth: int | None) -> bool:
     return max_depth is None or len(Path(rel_path).parts) <= max_depth
 
 
-def _git_activity(root: Path, *, max_depth: int | None = None) -> dict[str, Any] | None:
+def _git_activity(root: Path, *, max_depth: int | None = None,
+                  sample_names: tuple[str, ...] = ()) -> dict[str, Any] | None:
     """Deterministic git enrichment for the survey: last commit date, commit volume
-    over the last 30 days, the most-changed paths in recent history, and a rough
-    author count. Local ``git log`` only — no network, no curator CLI. Returns None
+    over the last 30 days, the most-changed paths in recent history, per-sample
+    last-commit dates, the five most recent commit subjects, and a rough author
+    count. Local ``git log`` only — no network, no curator CLI. Returns None
     when the query fails (not actually a work tree despite a ``.git`` entry, empty
     repo, git missing) so callers can omit the section rather than show zeros."""
     last = _git_run(root, ["log", "-1", "--format=%cs"], timeout=_GIT_TIMEOUT)
@@ -391,23 +443,71 @@ def _git_activity(root: Path, *, max_depth: int | None = None) -> dict[str, Any]
     authors = _git_run(root, ["log", "--format=%ae"], timeout=_GIT_LOG_TIMEOUT)
     author_count = len({a.strip() for a in (authors or "").splitlines() if a.strip()}) or None
 
+    sample_dates: dict[str, str] = {}
+    for name in sample_names:
+        out = _git_run(root, ["log", "-1", "--format=%cs", "--", name],
+                       timeout=_GIT_TIMEOUT)
+        date = (out or "").strip()
+        if date:
+            sample_dates[name] = date
+
+    recent_out = _git_run(root, ["log", "-5", "--format=%cs%x09%s"],
+                          timeout=_GIT_TIMEOUT)
+    recent_commits = []
+    for line in (recent_out or "").splitlines():
+        if not line.strip():
+            continue
+        date, _, subject = line.partition("\t")
+        recent_commits.append({"date": date.strip(), "subject": subject[:72]})
+
     return {
         "last_commit_date": last,
         "commits_last_30d": commits_30d,
         "top_changed_paths": top_paths,
         "author_count": author_count,
+        "sample_dates": sample_dates,
+        "recent_commits": recent_commits,
     }
 
 
-def _mtime_buckets(root: Path, *, max_files: int = _MTIME_MAX_FILES,
-                   max_depth: int | None = None) -> dict[str, int] | None:
-    """Filesystem-mtime recency buckets (last 24h / 7d / 30d / older), skipping the
-    same noise directories as the top-level listing. Works for git and non-git roots
-    alike — the fallback signal when there is no repo, and a useful cross-check when
-    there is. Bounded so a huge tree never stalls a founding turn."""
+def _dir_children(path: Path, *, max_names: int = 8
+                  ) -> tuple[list[str], int] | None:
+    """Immediate entries of one top-level dir, filtered by the same skip sets as the
+    rest of the survey. Returns (up to ``max_names`` display names — dirs marked
+    with a trailing slash, case-insensitive sort — and the total count after
+    filtering), or None when the dir can't be read."""
+    try:
+        kids = sorted(path.iterdir(), key=lambda p: p.name.lower())
+    except OSError:
+        return None
+    names: list[str] = []
+    for k in kids:
+        if k.name in _HIDDEN_TOP_LEVEL_NAMES or k.name in _SKIP_DIR_NAMES:
+            continue
+        try:
+            is_dir = k.is_dir()
+        except OSError:
+            is_dir = False
+        names.append(k.name + "/" if is_dir else k.name)
+    return names[:max_names], len(names)
+
+
+def _mtime_scan(root: Path, *, max_files: int = _MTIME_MAX_FILES,
+                max_depth: int | None = None
+                ) -> tuple[dict[str, int] | None,
+                           list[dict[str, str]] | None,
+                           dict[str, str] | None]:
+    """Filesystem-mtime recency in one walk: buckets (last 24h / 7d / 30d / older)
+    plus the three most- and single least-recently modified files with their UTC
+    dates. Skips the same noise directories as the top-level listing and the
+    OS-noise file names, and honors the same depth bound and file cap. Works for
+    git and non-git roots alike — the fallback signal when there is no usable
+    history. Returns (None, None, None) when nothing was scanned."""
     buckets = {"last_24h": 0, "last_7d": 0, "last_30d": 0, "older": 0}
     now = datetime.now(timezone.utc).timestamp()
     scanned = 0
+    mtimes: list[tuple[float, str]] = []
+    capped = False
     try:
         for dirpath, dirnames, filenames in os.walk(root):
             level = len(Path(dirpath).relative_to(root).parts)  # 0 at the root
@@ -415,22 +515,44 @@ def _mtime_buckets(root: Path, *, max_files: int = _MTIME_MAX_FILES,
                 dirnames[:] = []            # files one level down would exceed the bound
             dirnames[:] = [d for d in dirnames if d not in _SKIP_DIR_NAMES]
             for fname in filenames:
+                if fname in _OS_NOISE_NAMES:
+                    continue                # .DS_Store et al carry no project signal
                 if scanned >= max_files:
-                    return buckets
+                    capped = True
+                    break
                 scanned += 1
                 try:
-                    age = now - (Path(dirpath) / fname).stat().st_mtime
+                    fpath = Path(dirpath) / fname
+                    mtime = fpath.stat().st_mtime
                 except OSError:
                     continue
+                age = now - mtime
                 for label, span in _MTIME_BUCKETS:
                     if age < span:
                         buckets[label] += 1
                         break
                 else:
                     buckets["older"] += 1
+                mtimes.append((mtime, fpath.relative_to(root).as_posix()))
+            if capped:
+                break
     except OSError:
-        return None
-    return buckets if scanned else None
+        return None, None, None
+    if not scanned:
+        return None, None, None
+    recent_paths = oldest_path = None
+    if mtimes:
+        newest = sorted(mtimes, key=lambda t: (-t[0], t[1]))
+        recent_paths = [
+            {"path": p, "date": _day(m)} for m, p in newest[:3]
+        ]
+        o_mtime, o_path = min(mtimes)
+        oldest_path = {"path": o_path, "date": _day(o_mtime)}
+    return buckets, recent_paths, oldest_path
+
+
+def _day(ts: float) -> str:
+    return datetime.fromtimestamp(ts, timezone.utc).strftime("%Y-%m-%d")
 
 
 def _now() -> str:

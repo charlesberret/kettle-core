@@ -1,9 +1,11 @@
 """Unit tests for the deterministic founding survey (Phase A)."""
 
 import json
+import os
 import subprocess
 import tempfile
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 
 import kettle.survey as survey
@@ -196,6 +198,195 @@ class TestBuildSurvey(unittest.TestCase):
             self.assertEqual(sum(survey.build_survey(root, max_depth=1)["mtime_buckets"].values()), 1)
             self.assertEqual(sum(survey.build_survey(root, max_depth=2)["mtime_buckets"].values()), 2)
             self.assertEqual(sum(survey.build_survey(root)["mtime_buckets"].values()), 3)
+
+    def test_readme_sampled_once_under_exact_name_matching(self):
+        """_SAMPLE_NAMES lists both README.md and Readme.md; on a case-insensitive
+        disk both resolve to the one file and the prompt block used to print the
+        README twice. Sampling must key off the names actually in the root
+        listing, so only the name that exists is sampled."""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / "README.md").write_text("# Once only\n")
+            snap = survey.build_survey(root)
+            block = survey.as_prompt_block(snap)
+        readme_samples = [k for k in snap["samples"] if k.upper().startswith("README")]
+        self.assertEqual(readme_samples, ["README.md"])
+        self.assertEqual(block.count("--- README.md ---"), 1)
+
+    def test_mtime_buckets_skip_os_noise(self):
+        """.DS_Store carries no project signal: alone it must not count as a
+        touched file, and next to real files it must not inflate the count."""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / ".DS_Store").write_text("noise")
+            snap = survey.build_survey(root)
+            self.assertIsNone(snap["mtime_buckets"])
+            self.assertIsNone(snap["recent_paths"])
+            self.assertIsNone(snap["oldest_path"])
+            self.assertNotIn("Recent activity", survey.as_prompt_block(snap))
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / ".DS_Store").write_text("noise")
+            (root / "notes.md").write_text("hi\n")
+            snap = survey.build_survey(root)
+            self.assertEqual(sum(snap["mtime_buckets"].values()), 1)
+
+    def test_non_git_recency_names_files_with_dates(self):
+        """Without git history the survey still lets the interview make a dated,
+        file-naming observation: the three newest files and the single oldest."""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / "chapters").mkdir()
+            (root / "notes").mkdir()
+            for rel, day in (
+                ("chapters/09.md", "2026-03-02"),
+                ("notes/timeline.md", "2026-09-30"),
+                ("chapters/01.md", "2026-10-03"),
+                ("chapters/04.md", "2026-10-12"),
+            ):
+                p = root / rel
+                p.write_text("x\n")
+                ts = datetime.strptime(day, "%Y-%m-%d").replace(
+                    tzinfo=timezone.utc).timestamp()
+                os.utime(p, (ts, ts))
+            snap = survey.build_survey(root)
+        self.assertIsNone(snap["git_activity"])
+        self.assertEqual(snap["recent_paths"], [
+            {"path": "chapters/04.md", "date": "2026-10-12"},
+            {"path": "chapters/01.md", "date": "2026-10-03"},
+            {"path": "notes/timeline.md", "date": "2026-09-30"},
+        ])
+        self.assertEqual(snap["oldest_path"],
+                         {"path": "chapters/09.md", "date": "2026-03-02"})
+        block = survey.as_prompt_block(snap)
+        self.assertIn(
+            "Most recently touched: chapters/04.md (2026-10-12), "
+            "chapters/01.md (2026-10-03), notes/timeline.md (2026-09-30).",
+            block,
+        )
+        self.assertIn("Least recently touched: chapters/09.md (2026-03-02).", block)
+
+    def test_recent_paths_respect_max_depth(self):
+        """The scope bound applies to per-file recency too: a file deeper than
+        max_depth must never be named."""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / "top.md").write_text("top\n")
+            (root / "sub").mkdir()
+            (root / "sub" / "deep.md").write_text("deep\n")
+            snap = survey.build_survey(root, max_depth=1)
+        self.assertEqual([r["path"] for r in snap["recent_paths"]], ["top.md"])
+        self.assertEqual(snap["oldest_path"]["path"], "top.md")
+        self.assertNotIn("deep.md", survey.as_prompt_block(snap))
+
+    def test_top_level_dirs_list_their_children(self):
+        """Each top-level dir shows up to 8 immediate entry names plus the true
+        count, so the reader can name what a folder holds without tools."""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            d = root / "chapters"
+            d.mkdir()
+            for i in range(10):
+                (d / f"{i:02d}-file.md").write_text("x\n")
+            (d / ".DS_Store").write_text("noise")  # filtered, not counted
+            (d / ".git").mkdir()                   # skip-set dir, filtered
+            snap = survey.build_survey(root)
+            ent = next(e for e in snap["top_level"] if e["name"] == "chapters")
+            block = survey.as_prompt_block(snap)
+        self.assertEqual(ent["child_count"], 10)
+        self.assertEqual(len(ent["children"]), 8)
+        self.assertEqual(ent["children"][0], "00-file.md")
+        self.assertIn("chapters/ (10 entries:", block)
+        self.assertIn("00-file.md, 01-file.md", block)
+        self.assertIn("…", block)
+        self.assertNotIn(".DS_Store", block)
+
+    def test_top_level_children_mark_dirs_and_hide_noise(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            d = root / "proj"
+            d.mkdir()
+            (d / "sub").mkdir()
+            (d / ".kettle").mkdir()
+            (d / "a.md").write_text("x\n")
+            snap = survey.build_survey(root)
+            ent = next(e for e in snap["top_level"] if e["name"] == "proj")
+        self.assertEqual(ent["child_count"], 2)
+        self.assertEqual(ent["children"], ["a.md", "sub/"])
+        self.assertIn("proj/ (2 entries: a.md, sub/)",
+                      survey.as_prompt_block(snap))
+
+    def test_top_level_children_skip_skip_set_dirs(self):
+        """A top-level dir the walk would never descend into (node_modules,
+        .venv, dist, target …) must not have its entries read or rendered —
+        it keeps the bare 'name/' line."""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            nm = root / "node_modules"
+            nm.mkdir()
+            for i in range(3):
+                (nm / f"pkg{i}.js").write_text("x\n")
+            src = root / "src"
+            src.mkdir()
+            (src / "main.py").write_text("x\n")
+            snap = survey.build_survey(root)
+            block = survey.as_prompt_block(snap)
+        nm_ent = next(e for e in snap["top_level"] if e["name"] == "node_modules")
+        src_ent = next(e for e in snap["top_level"] if e["name"] == "src")
+        self.assertNotIn("children", nm_ent)
+        self.assertNotIn("child_count", nm_ent)
+        self.assertEqual(src_ent["children"], ["main.py"])
+        self.assertIn("  - node_modules/\n", block)
+        self.assertNotIn("pkg0", block)
+        self.assertIn("src/ (1 entry: main.py)", block)
+
+    def test_top_level_children_omitted_at_depth_one(self):
+        """max_depth=1 forbids citing anything below the root — including the
+        children listing, so dirs render in the old bare form."""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / "chapters").mkdir()
+            (root / "chapters" / "01.md").write_text("x\n")
+            snap = survey.build_survey(root, max_depth=1)
+            ent = next(e for e in snap["top_level"] if e["name"] == "chapters")
+            block = survey.as_prompt_block(snap)
+        self.assertNotIn("children", ent)
+        self.assertIn("  - chapters/\n", block)
+        self.assertNotIn("entries:", block)
+
+    def test_git_activity_reports_sample_dates_and_recent_subjects(self):
+        """Git roots get the same dated observation power: the last commit date
+        per sampled orientation file and the newest commit subjects."""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            _init_git_repo(root)
+            (root / "README.md").write_text("# One\n")
+            (root / "CLAUDE.md").write_text("notes\n")
+            (root / "uncommitted.txt").write_text("never added\n")
+            _git(root, "add", "README.md", "CLAUDE.md")
+            _git(root, "commit", "-q", "-m", "Add readme and agent notes")
+            (root / "README.md").write_text("# Two\n")
+            _git(root, "add", "README.md")
+            _git(root, "commit", "-q", "-m", "Revise the readme")
+            snap = survey.build_survey(root)
+            activity = snap["git_activity"]
+            block = survey.as_prompt_block(snap)
+        self.assertIn("sample_dates", activity)
+        self.assertIn("recent_commits", activity)
+        # two commits touched README.md, one touched CLAUDE.md; uncommitted.txt
+        # was never sampled and never committed
+        self.assertEqual(set(activity["sample_dates"]), {"README.md", "CLAUDE.md"})
+        for d in activity["sample_dates"].values():
+            self.assertRegex(d, r"^\d{4}-\d{2}-\d{2}$")
+        subjects = [c["subject"] for c in activity["recent_commits"]]
+        self.assertEqual(subjects, ["Revise the readme", "Add readme and agent notes"])
+        for c in activity["recent_commits"]:
+            self.assertRegex(c["date"], r"^\d{4}-\d{2}-\d{2}$")
+        self.assertIn("Orientation files last committed: README.md "
+                      f"{activity['sample_dates']['README.md']}, CLAUDE.md "
+                      f"{activity['sample_dates']['CLAUDE.md']}", block)
+        self.assertIn("Last commits:", block)
+        self.assertIn("Revise the readme", block)
 
     def test_recent_activity_counts_read_cumulatively(self):
         snap = {"top_level": [], "signals": {}, "samples": {}, "git_activity": None,
