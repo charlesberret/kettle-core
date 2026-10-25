@@ -62,8 +62,8 @@ DEFAULT_MODELS_CLI = {
 }
 
 DEFAULT_MODELS_CHATGPT = {
-    "setup": "gpt-5.1",
-    "chat": "gpt-5.1",
+    "setup": "gpt-6-sol",
+    "chat": "gpt-6-sol",
 }
 
 DEFAULT_MODELS_GEMINI = {
@@ -138,10 +138,10 @@ MODEL_CALIBRE: dict[str, int] = {
     "grok-composer-2.5-fast": 10,
     "grok-4.5": 20,
     # ChatGPT / Codex
-    "gpt-5-mini": 10,
-    "o4-mini": 20,
-    "gpt-5.1": 30,
-    "o3": 40,
+    "gpt-5.6-luna": 10,
+    "gpt-5.6-terra": 20,
+    "gpt-5.6-sol": 30,
+    "gpt-6-sol": 40,
     # Gemini
     "gemini-2.0-flash": 10,
     "gemini-2.5-flash": 20,
@@ -183,18 +183,18 @@ CATALOG_MODELS: list[dict[str, Any]] = [
     {"id": "grok-4.5", "provider": "grok", "label": "Grok 4.5",
      "blurb": "Primary Grok Build CLI model.",
      "good_for": ["setup", "chat"], "effort_supported": True},
-    # ChatGPT / Codex: mini / small → primary → reasoning
-    {"id": "gpt-5-mini", "provider": "chatgpt", "label": "GPT-5 mini",
-     "blurb": "Cheaper Codex model for light turns.",
+    # ChatGPT / Codex: lightest → mid → reasoning → primary
+    {"id": "gpt-5.6-luna", "provider": "chatgpt", "label": "GPT-5.6 Luna",
+     "blurb": "Lightest Codex model for light turns.",
      "good_for": ["chat"], "effort_supported": True},
-    {"id": "o4-mini", "provider": "chatgpt", "label": "o4-mini",
-     "blurb": "Smaller reasoning Codex model.",
+    {"id": "gpt-5.6-terra", "provider": "chatgpt", "label": "GPT-5.6 Terra",
+     "blurb": "Mid-weight Codex model.",
      "good_for": ["chat"], "effort_supported": True},
-    {"id": "gpt-5.1", "provider": "chatgpt", "label": "GPT-5.1",
-     "blurb": "Primary Codex / ChatGPT model.",
-     "good_for": ["setup", "chat"], "effort_supported": True},
-    {"id": "o3", "provider": "chatgpt", "label": "o3",
+    {"id": "gpt-5.6-sol", "provider": "chatgpt", "label": "GPT-5.6 Sol",
      "blurb": "Reasoning-oriented Codex model.",
+     "good_for": ["setup", "chat"], "effort_supported": True},
+    {"id": "gpt-6-sol", "provider": "chatgpt", "label": "GPT-6 Sol",
+     "blurb": "Primary Codex / ChatGPT model.",
      "good_for": ["setup", "chat"], "effort_supported": True},
     # Gemini: older/faster flash → pro
     {"id": "gemini-2.0-flash", "provider": "gemini", "label": "Gemini 2.0 Flash",

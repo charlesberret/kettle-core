@@ -2654,7 +2654,7 @@ const CHATLOG_SHOW = 200;  // display cap on reload (server keeps 500)
 const MODEL_CALIBRE = {
   haiku: 10, sonnet: 20, opus: 30, fable: 40,
   'grok-composer-2.5-fast': 10, 'grok-4.5': 20,
-  'gpt-5-mini': 10, 'o4-mini': 20, 'gpt-5.1': 30, o3: 40,
+  'gpt-5.6-luna': 10, 'gpt-5.6-terra': 20, 'gpt-5.6-sol': 30, 'gpt-6-sol': 40,
   'gemini-2.0-flash': 10, 'gemini-2.5-flash': 20, 'gemini-2.5-pro': 30,
 };
 function cmpAlpha(a, b){
@@ -2688,7 +2688,7 @@ function sortProjectsAlpha(projects){
 /* Seed order is A–Z by display label (refreshed from catalog the same way). */
 let MODELS_BY_PROVIDER = {
   claude: ['fable', 'haiku', 'opus', 'sonnet'],
-  chatgpt: ['gpt-5-mini', 'gpt-5.1', 'o3', 'o4-mini'],
+  chatgpt: ['gpt-5.6-luna', 'gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-6-sol'],
   gemini: ['gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-2.5-pro'],
   grok: ['grok-composer-2.5-fast', 'grok-4.5'],
 };
@@ -2696,10 +2696,10 @@ let MODEL_LABELS = {
   haiku: 'Haiku', sonnet: 'Sonnet', opus: 'Opus', fable: 'Fable',
   'grok-4.5': 'Grok 4.5',
   'grok-composer-2.5-fast': 'Composer 2.5 fast',
-  'gpt-5.1': 'GPT-5.1',
-  'gpt-5-mini': 'GPT-5 mini',
-  o3: 'o3',
-  'o4-mini': 'o4-mini',
+  'gpt-6-sol': 'GPT-6 Sol',
+  'gpt-5.6-sol': 'GPT-5.6 Sol',
+  'gpt-5.6-terra': 'GPT-5.6 Terra',
+  'gpt-5.6-luna': 'GPT-5.6 Luna',
   'gemini-2.5-pro': 'Gemini 2.5 Pro',
   'gemini-2.5-flash': 'Gemini 2.5 Flash',
   'gemini-2.0-flash': 'Gemini 2.0 Flash',
@@ -2707,7 +2707,7 @@ let MODEL_LABELS = {
 let AGENT_DEFAULTS_BY_PROVIDER = {
   claude: {setup: 'sonnet', chat: 'sonnet'},
   grok: {setup: 'grok-4.5', chat: 'grok-4.5'},
-  chatgpt: {setup: 'gpt-5.1', chat: 'gpt-5.1'},
+  chatgpt: {setup: 'gpt-6-sol', chat: 'gpt-6-sol'},
   gemini: {setup: 'gemini-2.5-pro', chat: 'gemini-2.5-pro'},
 };
 const PROVIDER_COMMAND = {claude: 'claude', grok: 'grok', chatgpt: 'codex', gemini: 'gemini'};
@@ -2741,7 +2741,7 @@ let EFFORTS_BY_PROVIDER = {
 let MODEL_EFFORT_SUPPORTED = {
   haiku: true, sonnet: true, opus: true, fable: true,
   'grok-composer-2.5-fast': true, 'grok-4.5': true,
-  'gpt-5-mini': true, 'o4-mini': true, 'gpt-5.1': true, o3: true,
+  'gpt-5.6-luna': true, 'gpt-5.6-terra': true, 'gpt-5.6-sol': true, 'gpt-6-sol': true,
   'gemini-2.0-flash': false, 'gemini-2.5-flash': false, 'gemini-2.5-pro': false,
 };
 /** Short catalog blurbs + role tags (hydrated from /api/curator/catalog). */
@@ -2752,10 +2752,10 @@ let MODEL_BLURBS = {
   fable: 'Optional Claude family id — enable after you confirm it works.',
   'grok-composer-2.5-fast': 'Faster Grok for light turns.',
   'grok-4.5': 'Primary Grok Build CLI model.',
-  'gpt-5-mini': 'Cheaper Codex model for light turns.',
-  'o4-mini': 'Smaller reasoning Codex model.',
-  'gpt-5.1': 'Primary Codex / ChatGPT model.',
-  o3: 'Reasoning-oriented Codex model.',
+  'gpt-5.6-luna': 'Lightest Codex model for light turns.',
+  'gpt-5.6-terra': 'Mid-weight Codex model.',
+  'gpt-5.6-sol': 'Reasoning-oriented Codex model.',
+  'gpt-6-sol': 'Primary Codex / ChatGPT model.',
   'gemini-2.0-flash': 'Earlier Gemini flash id.',
   'gemini-2.5-flash': 'Fast Gemini for light turns.',
   'gemini-2.5-pro': 'Primary Gemini CLI model.',
@@ -2763,7 +2763,7 @@ let MODEL_BLURBS = {
 let MODEL_GOOD_FOR = {
   haiku: ['chat'], sonnet: ['setup', 'chat'], opus: ['setup', 'chat'], fable: ['chat'],
   'grok-composer-2.5-fast': ['chat'], 'grok-4.5': ['setup', 'chat'],
-  'gpt-5-mini': ['chat'], 'o4-mini': ['chat'], 'gpt-5.1': ['setup', 'chat'], o3: ['setup', 'chat'],
+  'gpt-5.6-luna': ['chat'], 'gpt-5.6-terra': ['chat'], 'gpt-5.6-sol': ['setup', 'chat'], 'gpt-6-sol': ['setup', 'chat'],
   'gemini-2.0-flash': ['chat'], 'gemini-2.5-flash': ['chat'], 'gemini-2.5-pro': ['setup', 'chat'],
 };
 function modelBlurb(id){
@@ -2939,7 +2939,7 @@ function modelDisplayLabel(id){
   const labels = (SETTINGS.customModelLabels || {})[modelStorageKey()] || {};
   if(labels[id]) return labels[id];
   if(MODEL_LABELS[id]) return MODEL_LABELS[id];
-  // Fallback: title-case bare tokens (sonnet → Sonnet) without mangling ids like gpt-5.1
+  // Fallback: title-case bare tokens (sonnet → Sonnet) without mangling ids like gpt-6-sol
   if(id && /^[a-z][a-z0-9]*$/i.test(id) && id === id.toLowerCase()){
     return id.charAt(0).toUpperCase() + id.slice(1);
   }
@@ -6814,7 +6814,7 @@ const CTX_WINDOWS = {
   'grok-build': 256000,
   grok: 256000,
   // Codex / Gemini
-  'gpt-5': 200000, o3: 200000, 'o4-mini': 200000,
+  'gpt-5': 200000, 'gpt-6': 200000,
   'gemini-2.5-pro': 1000000, 'gemini-2.5-flash': 1000000, 'gemini-2.0': 1000000,
 };
 function windowFor(model){
