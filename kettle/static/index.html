@@ -7326,6 +7326,13 @@ function resolvedThemeMode() {
 
 /** Session palette preview (Appearance select); falls back to saved default. */
 let APPEARANCE_THEME_ID = null;
+/* A pack preview is render-only: while PACK_PREVIEW is set the override maps
+   read as empty so the pack shows pure — SETTINGS.* stay untouched on disk and
+   in memory. Any swatch/role/opacity edit ends the preview: the edit then lands
+   on the user's real map, and the display returns to their saved default. */
+let PACK_PREVIEW = false;
+function ovr(key){ return PACK_PREVIEW ? {} : (SETTINGS[key] || {}); }
+function endPackPreview(){ PACK_PREVIEW = false; APPEARANCE_THEME_ID = null; }
 function appearanceThemeId(){
   return APPEARANCE_THEME_ID || SETTINGS.builtinTheme || 'kettle';
 }
@@ -7422,9 +7429,7 @@ function applyTheme() {
   document.documentElement.style.colorScheme = mode === 'light' ? 'light' : 'dark';
 
   const preset = builtinThemePreset();
-  const mergedColors = Object.assign({}, preset.colors, SETTINGS.colors || {});
-  const mergedSlots = Object.assign({}, preset.slots || {}, SETTINGS.slots || {});
-  const mergedIface = Object.assign({}, preset.iface || {}, SETTINGS.iface || {});
+  const mergedColors = Object.assign({}, preset.colors, ovr('colors'));
 
   for (let i = 0; i < 16; i++) {
     const name = `--ansi-${i}`;
@@ -7433,14 +7438,8 @@ function applyTheme() {
     else document.documentElement.style.removeProperty(name);
   }
 
-  const slotsHold = SETTINGS.slots;
-  const ifaceHold = SETTINGS.iface;
-  SETTINGS.slots = mergedSlots;
-  SETTINGS.iface = mergedIface;
   applyIface();
   applySlots();
-  SETTINGS.slots = slotsHold;
-  SETTINGS.iface = ifaceHold;
 }
 
 function applyColors(){
@@ -7466,17 +7465,20 @@ function applyAppearancePalette(id, {asDefault} = {}){
   id = id || appearanceThemeId();
   if(!BUILTIN_THEMES[id]) id = 'kettle';
   APPEARANCE_THEME_ID = id;
-  SETTINGS.colors = {};
-  SETTINGS.slots = {};
-  SETTINGS.iface = {};
-  SETTINGS.ifaceOpacity = {};
-  SETTINGS.slotOpacity = {};
   if(asDefault){
+    PACK_PREVIEW = false;
     SETTINGS.builtinTheme = id;
+    SETTINGS.colors = {};
+    SETTINGS.slots = {};
+    SETTINGS.iface = {};
+    SETTINGS.ifaceOpacity = {};
+    SETTINGS.slotOpacity = {};
     saveSettings({
       builtinTheme: id,
       colors: {}, slots: {}, iface: {}, ifaceOpacity: {}, slotOpacity: {},
     });
+  } else {
+    PACK_PREVIEW = true;
   }
   applyTheme();
   buildColorRows(); buildSlotRows(); buildIfaceRows();
@@ -7652,7 +7654,7 @@ function resetFonts(){
 
 function buildColorRows(){
   const box = $('colorrows'); box.innerHTML = '';
-  const c = SETTINGS.colors || {};
+  const c = ovr('colors');
   for(const [name, def, _ddLabel, plainName, idx] of PALETTE){
     const cur = isHex(c[name]) ? c[name]
       : (getComputedStyle(document.documentElement).getPropertyValue(name).trim() || def);
@@ -7671,6 +7673,7 @@ function buildColorRows(){
 }
 function setColor(name, val){
   if(!isHex(val)) return;
+  endPackPreview();
   const colors = Object.assign({}, SETTINGS.colors, {[name]: val});
   SETTINGS.colors = colors;
   saveSettings({colors});
@@ -7678,6 +7681,7 @@ function setColor(name, val){
   $('colorrows').querySelectorAll(`input[data-var="${name}"]`).forEach(i => { i.value = val; });
 }
 function resetColors(){
+  endPackPreview();
   SETTINGS.colors = {};
   saveSettings({colors: {}});
   applyTheme();
@@ -7724,18 +7728,18 @@ const palOpts = chosen => PALETTE.map(([n,,l]) =>
 
 function slotRolePick(key, def){
   const preset = builtinThemePreset();
-  const s = SETTINGS.slots || {};
+  const s = ovr('slots');
   return PAL_NAMES.includes(s[key]) ? s[key]
     : (PAL_NAMES.includes((preset.slots || {})[key]) ? preset.slots[key] : def);
 }
 function ifaceRolePick(key, def){
   const preset = builtinThemePreset();
-  const s = SETTINGS.iface || {};
+  const s = ovr('iface');
   return PAL_NAMES.includes(s[key]) ? s[key]
     : (PAL_NAMES.includes((preset.iface || {})[key]) ? preset.iface[key] : def);
 }
 function roleOpacityPct(settingsKey, presetKey, key){
-  const v = (SETTINGS[settingsKey] || {})[key];
+  const v = ovr(settingsKey)[key];
   if(typeof v === 'number' && isFinite(v)) return Math.max(0, Math.min(100, Math.round(v)));
   const pv = (builtinThemePreset()[presetKey] || {})[key];
   if(typeof pv === 'number' && isFinite(pv)) return Math.max(0, Math.min(100, Math.round(pv)));
@@ -7843,6 +7847,7 @@ function updateTintSwatch(row, key, def, pickFn, opacityFn, checkerboardKey, css
 function setRoleOpacity(settingsKey, key, raw){
   const val = Math.round(Number(raw));
   if(!isFinite(val)) return;
+  endPackPreview();
   const clamped = Math.max(0, Math.min(100, val));
   const op = Object.assign({}, SETTINGS[settingsKey] || {});
   if(clamped >= 100) delete op[key];
@@ -7892,6 +7897,7 @@ function buildTintRows(boxId, defs, cfg){
   }
   box.querySelectorAll(`select[data-${dataKey}]`).forEach(sel =>
     sel.addEventListener('change', () => {
+      endPackPreview();
       const k = sel.dataset[dataKey];
       const next = Object.assign({}, SETTINGS[settingsKey], {[k]: sel.value});
       SETTINGS[settingsKey] = next; saveSettings({[settingsKey]: next}); applyTheme();
@@ -7920,10 +7926,12 @@ function buildIfaceRows(){
   });
 }
 function resetSlots(){
+  endPackPreview();
   SETTINGS.slots = {}; SETTINGS.slotOpacity = {};
   saveSettings({slots: {}, slotOpacity: {}}); applyTheme(); buildSlotRows();
 }
 function resetIface(){
+  endPackPreview();
   SETTINGS.iface = {}; SETTINGS.ifaceOpacity = {};
   saveSettings({iface: {}, ifaceOpacity: {}}); applyTheme(); buildIfaceRows();
 }
@@ -7956,6 +7964,7 @@ function savePalette(){
 function applyPalette(){
   const name = $('palload').value; const p = (SETTINGS.palettes || {})[name];
   if(!p) return;
+  endPackPreview();
   if (p.themeMode) SETTINGS.themeMode = p.themeMode;
   if (p.builtinTheme) SETTINGS.builtinTheme = p.builtinTheme;
   SETTINGS.colors = Object.assign({}, p.colors);
@@ -8017,6 +8026,7 @@ async function installThemePack(){
       source: 'user',
     };
     SETTINGS.builtinTheme = res.id;
+    endPackPreview();
     SETTINGS.colors = {};
     SETTINGS.slots = {};
     SETTINGS.iface = {};
