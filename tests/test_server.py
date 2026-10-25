@@ -18,6 +18,7 @@ import re
 import signal
 import socket
 import shutil
+import subprocess
 import sys
 import tempfile
 import time
@@ -600,6 +601,95 @@ class HelperTests(Base):
         folder = self.tmp / "blank"; folder.mkdir()
         with self.assertRaises(ValueError):
             server.register_project("   ", str(folder))
+
+
+REPO_ROOT = Path(server.__file__).resolve().parents[1]
+
+_QUEUE_CHILD_BLOCK = (
+    "import sys, json\n"
+    "sys.path.insert(0, sys.argv[1])\n"
+    "from pathlib import Path\n"
+    "import kettle.server as server\n"
+    "root, ready, done = Path(sys.argv[2]), Path(sys.argv[3]), Path(sys.argv[4])\n"
+    "proj = {'id': 't', 'name': 'T', 'root': str(root)}\n"
+    "ready.write_text('1')\n"
+    "server.mutate_queue(proj, lambda q: q['entries'].append({'id': 'child'}))\n"
+    "done.write_text('1')\n"
+)
+
+_QUEUE_CHILD_APPEND = (
+    "import sys, json\n"
+    "sys.path.insert(0, sys.argv[1])\n"
+    "from pathlib import Path\n"
+    "import kettle.server as server\n"
+    "root, tag, n = Path(sys.argv[2]), sys.argv[3], int(sys.argv[4])\n"
+    "proj = {'id': 't', 'name': 'T', 'root': str(root)}\n"
+    "for i in range(n):\n"
+    "    server.mutate_queue(proj, lambda q: q['entries'].append({'id': f'{tag}-{i}'}))\n"
+)
+
+
+try:
+    import fcntl as _fcntl_check
+except ImportError:
+    _fcntl_check = None
+
+
+@unittest.skipIf(_fcntl_check is None, "flock unavailable on this platform")
+class QueueFileLockTests(Base):
+    """LAB-1582: queue.json read-modify-write serializes across *processes* — the
+    in-process QUEUE_LOCK cannot order the server against kettle-watch or the CLI."""
+
+    def test_mutate_queue_blocks_while_a_peer_process_holds_the_lock(self):
+        import fcntl
+        self.write_queue([])
+        lock = self.queue.parent / "queue.lock"
+        ready, done = self.tmp / "ready", self.tmp / "done"
+        fd = os.open(lock, os.O_RDWR | os.O_CREAT, 0o600)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX)
+            child = subprocess.Popen(
+                [sys.executable, "-c", _QUEUE_CHILD_BLOCK,
+                 str(REPO_ROOT), str(self.root), str(ready), str(done)])
+            deadline = time.time() + 15
+            while not ready.exists() and time.time() < deadline:
+                time.sleep(0.05)
+            self.assertTrue(ready.exists(), "child never reached the queue write")
+            time.sleep(0.5)   # a real margin past the child's remaining work
+            self.assertFalse(
+                done.exists(),
+                "another process's mutate_queue completed while this process held "
+                "the queue file lock — cross-process writes are not serialized")
+        finally:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+            os.close(fd)
+        child.wait(timeout=15)
+        self.assertTrue(done.exists(), "child never finished after the lock released")
+        q = json.loads(self.queue.read_text())
+        self.assertIn("child", [e["id"] for e in q["entries"]])
+
+    def test_concurrent_process_mutations_lose_no_updates(self):
+        n_proc, n_appends = 3, 25
+        # A fat queue widens each process's read-modify-write window so that
+        # un-serialized writers collide on nearly every iteration.
+        self.write_queue([
+            {"id": f"pad-{i}", "status": "pending", "brief": "x" * 400}
+            for i in range(200)
+        ])
+        procs = [
+            subprocess.Popen(
+                [sys.executable, "-c", _QUEUE_CHILD_APPEND,
+                 str(REPO_ROOT), str(self.root), f"p{k}", str(n_appends)])
+            for k in range(n_proc)
+        ]
+        for p in procs:
+            self.assertEqual(p.wait(timeout=60), 0)
+        entries = json.loads(self.queue.read_text())["entries"]
+        child_ids = [e["id"] for e in entries if not e["id"].startswith("pad-")]
+        self.assertEqual(sorted(child_ids),
+                         sorted(f"p{k}-{i}" for k in range(n_proc)
+                                for i in range(n_appends)),
+                         "an append from another process was lost")
 
 
 class ServerFixture(Base):
