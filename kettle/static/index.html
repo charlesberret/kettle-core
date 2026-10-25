@@ -7110,6 +7110,14 @@ if($('ctxbar')) $('ctxbar').onclick = async () => {
 
 async function loadProject(pid, opts){
   opts = opts || {};
+  if(busy){
+    // A curator turn is streaming into PROJECT — switching desks now would splice
+    // its tokens into another project's chat, chatlog and session flag (U7-B-5).
+    // Refuse, and snap the selector back to the desk that is actually loaded.
+    if($('proj').value !== PROJECT) $('proj').value = PROJECT;
+    addMsg('sys', 'a turn is in flight — switching projects waits for it to finish');
+    return;
+  }
   if(dirty){ try { await save(); } catch(e){} }
   flushChatlog();  // settle the outgoing project's transcript before switching
   PROJECT = pid;

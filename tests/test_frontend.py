@@ -11,6 +11,7 @@ PATH it fails loudly on a syntax error; where node is absent it skips with an ho
 message rather than passing silently.
 """
 
+import json
 import re
 import shutil
 import subprocess
@@ -491,6 +492,102 @@ class FrontendSyntaxGate(unittest.TestCase):
                     0,
                     f"{path.name} failed node --check:\n{proc.stderr}",
                 )
+
+
+@unittest.skipIf(NODE is None, "node not on PATH — mid-stream switch test skipped")
+class LoadProjectRefusesWhileBusy(unittest.TestCase):
+    """LAB-1585: switching projects mid-stream must be refused.
+
+    An in-flight pipeStream binds its sinks to the loaded desk; without a guard,
+    loadProject rewrites PROJECT/CHATLOG/Q under the live stream and A's tokens
+    persist into B's chatlog. The guard lives inside loadProject so every switch
+    path — the dropdown and any programmatic caller — is covered.
+    """
+
+    def _run_load(self, busy):
+        html = INDEX.read_text(encoding="utf-8")
+        # loadProject is the last top-level function; stop at the section banner
+        # so trailing const initializers don't come along.
+        body = function_source(html, "loadProject").split("\n/* =")[0]
+        script = f"""
+let PROJECT = 'a', busy = {str(busy).lower()}, dirty = false;
+const SETTINGS = {{lastProject: 'a'}};
+const calls = {{addMsg: [], jget: [], jpost: 0}};
+const noopEl = () => ({{classList: {{add(){{}}, remove(){{}}, contains: () => false}},
+                     style: {{}}, textContent: '', innerHTML: '', value: '',
+                     hidden: false, readOnly: false, disabled: false,
+                     placeholder: '', focus(){{}}, querySelectorAll: () => []}});
+const els = {{proj: Object.assign(noopEl(), {{value: 'b'}})}};  // the dropdown already moved
+const $ = id => els[id] || (els[id] = noopEl());
+const document = {{body: {{classList: {{add(){{}}, remove(){{}}, contains: () => false}}}},
+                  createElement: () => noopEl()}};
+const addMsg = (cls, text) => calls.addMsg.push(cls + '|' + text);
+const jget = async u => {{
+  calls.jget.push(u);
+  if (u.indexOf('/api/queue') === 0) throw new Error('stop-here');
+  if (u.indexOf('/api/chatlog') === 0) return {{messages: []}};
+  return {{}};
+}};
+const jpost = async () => {{ calls.jpost++; return {{}}; }};
+const flushChatlog = () => {{}};
+const save = async () => {{}};
+const setDirty = () => {{}};
+const refreshGitMap = () => {{}};
+const renderQueue = () => {{}};
+const renderInfo = () => {{}};
+const renderMeta = () => {{}};
+const exitInterview = () => {{}};
+const setProposingChrome = () => {{}};
+const setFoundingChrome = () => {{}};
+const clearProposalGuideChrome = () => {{}};
+const enterInterview = () => {{}};
+const enterProposing = async () => {{}};
+const isProposalEntry = () => false;
+const postChatlog = () => {{}};
+const scrubChatText = (c, t) => t;
+const uist = () => '';
+const uic = (k, d) => d;
+let Q = null, cur = null, PROJECT_SESSION = false, pendingMsgs = [], CHATLOG = [], restoring = false;
+const CHATLOG_SHOW = 200;
+const SKIPPED_FOUNDING = new Set();
+
+{body}
+
+(async () => {{
+  await loadProject('b');
+  console.log('KETTLE-RESULT ' + JSON.stringify({{PROJECT,
+    select: els.proj.value, addMsg: calls.addMsg, jget: calls.jget, jpost: calls.jpost}}));
+}})().catch(e => {{ console.error(e); process.exit(1); }});
+"""
+        with tempfile.NamedTemporaryFile(
+            "w", suffix=".js", delete=False, encoding="utf-8"
+        ) as fh:
+            fh.write(script)
+            tmp = fh.name
+        try:
+            proc = subprocess.run(
+                [NODE, tmp], capture_output=True, text=True, timeout=20
+            )
+        finally:
+            Path(tmp).unlink(missing_ok=True)
+        self.assertEqual(proc.returncode, 0, f"node run failed:\n{proc.stderr}")
+        line = next(l for l in proc.stdout.splitlines()
+                    if l.startswith("KETTLE-RESULT "))
+        return json.loads(line.split(" ", 1)[1])
+
+    def test_switch_refused_while_a_stream_is_in_flight(self):
+        out = self._run_load(busy=True)
+        self.assertEqual(out["PROJECT"], "a", "the loaded desk must not change mid-stream")
+        self.assertEqual(out["select"], "a", "the dropdown snaps back to the loaded desk")
+        self.assertEqual(out["jget"], [], "no desk fetch may run against the wrong project")
+        self.assertTrue(any("turn is in flight" in m for m in out["addMsg"]),
+                        "the refusal is said aloud in the loaded desk's chat")
+
+    def test_switch_proceeds_at_rest(self):
+        out = self._run_load(busy=False)
+        self.assertEqual(out["PROJECT"], "b", "at rest the switch still loads the new desk")
+        self.assertTrue(any(u.startswith("/api/queue") for u in out["jget"]),
+                        "the load reaches the queue fetch")
 
 
 if __name__ == "__main__":
