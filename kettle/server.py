@@ -3174,15 +3174,6 @@ class Handler(BaseHTTPRequestHandler):
         # represented as stream events; never attempt a second HTTP response.
         has_streamed = True
         stream_key = _stream_key(cwd)
-        with SWEEPS_LOCK:
-            CURATOR_STREAMS[stream_key] = CURATOR_STREAMS.get(stream_key, 0) + 1
-        self.send_response(200)
-        self.send_header("Content-Type", "application/x-ndjson; charset=utf-8")
-        self.send_header("Cache-Control", "no-cache")
-        self.end_headers()
-
-        if notice:  # e.g. a read-only downgrade acknowledgement, before curator output
-            self.stream_line({"t": "text", "s": str(notice) + "\n\n"})
 
         assert proc.stdout is not None
         meter = runtime.UsageMeter()
@@ -3255,6 +3246,16 @@ class Handler(BaseHTTPRequestHandler):
                 yield item
 
         try:
+            # Counter + headers inside the guarded section: a client already gone
+            # must still reach the finally (proc kill, decrement, finish).
+            with SWEEPS_LOCK:
+                CURATOR_STREAMS[stream_key] = CURATOR_STREAMS.get(stream_key, 0) + 1
+            self.send_response(200)
+            self.send_header("Content-Type", "application/x-ndjson; charset=utf-8")
+            self.send_header("Cache-Control", "no-cache")
+            self.end_headers()
+            if notice:  # a read-only downgrade acknowledgement, before curator output
+                self.stream_line({"t": "text", "s": str(notice) + "\n\n"})
             for evt in runtime.normalize(iter_lines(), meter, on_session):
                 last_event_at[0] = time.monotonic()
                 if evt["t"] == "text":
