@@ -88,6 +88,14 @@ and Desk schema have their own integer contract versions.
 - Agent chat paints GFM while the reply is still streaming.
 - New desk files and lineage records are created mode `0600`. Existing files keep their bits.
 
+### Fixed
+
+- **A provider-reported turn failure no longer retires your comments.** When a
+  provider ends a turn with its own error — Claude's `result.is_error`, Grok's
+  `end{error}` — the sweep now records `failed` instead of `done`, and comments
+  typed on queue entries stay in `comments.log` for the next sitting instead of
+  being marked closed.
+
 ### Added
 
 - **Versioned sitting scores.** `tools/judge/` hashes a rubric's dimensions and
