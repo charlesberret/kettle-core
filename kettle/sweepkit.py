@@ -37,6 +37,7 @@ def assess_close(proj: dict) -> dict[str, Any]:
     entries = list(q.get("entries") or [])
     cl_path = server.comments_log_path(proj)
     comments_map = server.parse_comments_log(cl_path)
+    comments_through = server.comments_log_line_count(proj)
 
     changed: list[dict] = []
     unchanged: list[dict] = []
@@ -108,6 +109,7 @@ def assess_close(proj: dict) -> dict[str, Any]:
         "unchanged": unchanged,
         "unknown": unknown,
         "curated": q.get("curated"),
+        "comments_through": comments_through,
         "all_approved": all_approved,
         "can_mechanical_close": can_mech,
         "fully_idle": quiet and len(entries) == 0,
@@ -155,7 +157,7 @@ def last_sweep_incomplete(proj: dict) -> bool:
     return read_sweep_health(proj).get("state") in ("running", "failed")
 
 
-def stage_inbox_approved(proj: dict) -> dict[str, Any]:
+def stage_inbox_approved(proj: dict, entry_ids: list[str] | None = None) -> dict[str, Any]:
     """Copy approved inbox drafts to outbound/. Never transmits. No-op if not inbox."""
     intake = server.intake_paths(proj)
     if not intake:
@@ -165,8 +167,9 @@ def stage_inbox_approved(proj: dict) -> dict[str, Any]:
     outbound.mkdir(parents=True, exist_ok=True)
     staged = []
     errors = []
+    want = {str(i) for i in entry_ids} if entry_ids is not None else None
     for e in server.load_queue(proj).get("entries") or []:
-        if e.get("status") != "approved":
+        if e.get("status") != "approved" or (want is not None and str(e.get("id")) not in want):
             continue
         try:
             src = server.safe_path(e["path"], server.project_root(proj))
@@ -184,6 +187,7 @@ def archive_queue(
     *,
     only_approved: bool = False,
     entry_ids: list[str] | None = None,
+    comments_through: int | None = None,
 ) -> dict[str, Any]:
     """Move selected entries to a new archive/<stamp>-batch.json and delete their snapshots.
 
@@ -231,7 +235,8 @@ def archive_queue(
     if not take:
         return {"archived": [], "remaining": len(leave), "archive_path": None}
     arch_path = moved["path"]
-    server.close_comments(proj, [e.get("id") for e in take])
+    server.close_comments(proj, [e.get("id") for e in take],
+                          through=comments_through)
 
     deleted_snaps = []
     for e in take:
@@ -381,9 +386,14 @@ def mechanical_close(proj: dict) -> dict[str, Any]:
             "status": status,
         }
 
-    # Capture entries before archive so the approval memo can list them.
-    pre_entries = list(server.load_queue(proj).get("entries") or [])
-    staged = stage_inbox_approved(proj) if status.get("is_inbox") else {"staged": []}
+    # Everything below acts on the set assess_close just approved — an entry or
+    # approval landing between assessment and close is next sweep's business,
+    # never silently archived/staged by this one.
+    assessed_ids = set(status["approved_ids"]) | set(status["pending_ids"])
+    pre_entries = [e for e in (server.load_queue(proj).get("entries") or [])
+                   if str(e.get("id")) in assessed_ids]
+    staged = (stage_inbox_approved(proj, entry_ids=list(status["approved_ids"]))
+              if status.get("is_inbox") else {"staged": []})
     approval_pub: dict[str, Any] = {"published": False}
     try:
         approval_pub = publish_approval_egress(proj, pre_entries)
@@ -392,7 +402,8 @@ def mechanical_close(proj: dict) -> dict[str, Any]:
 
     archived = archive_queue(
         proj,
-        only_approved=True if status.get("is_inbox") else False,
+        entry_ids=list(status["approved_ids"]),
+        comments_through=status["comments_through"],
     )
     extra = []
     if staged.get("staged"):
