@@ -41,7 +41,8 @@ contract backward-compatible, and advance viewport compatibility manifests after
 - Prefer small, reviewable diffs with a clear “why.”
 - Add or extend tests when you touch contracts, founding, or ritual routes.
 - Do not store API keys; do not broaden the network surface without a brief.
-- Match existing tone in kits and UI copy (`static/ui-copy.js` is core-owned).
+- Match existing tone in kits and UI copy (`kettle/static/ui-copy.json` is
+  core-owned; the sitting reads it as `GET /ui-copy.js`).
 
 ## Code of conduct
 

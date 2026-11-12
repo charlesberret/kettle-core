@@ -55,10 +55,11 @@ P5 (proposal diet: four headings, cut `founding-answers.md`, Found lands on the
 first brief) is **not done**. `propose.md` still uses the older section list.
 Do not treat that leftover as the destination.
 
-**Known sitting debt (P4):** `static/index.html` still contains confirmation-card
-parser/CSS. It must **not** upgrade agent GFM into a tick form. Agent chat
-renders GFM (headings, lists, task ticks) as display markdown. Flag remaining
-card machinery as cleanup, not as the product.
+**P4 (founding conversation):** The confirmation-card machinery is gone from
+the sitting; agent chat must **not** upgrade GFM into a tick form. Regressions
+are guarded by `tests/test_frontend.py`
+(`test_founding_does_not_upgrade_gfm_into_a_card`). See `CHANGELOG.md` for when
+it was removed.
 
 ## Current form (elsewhere)
 
