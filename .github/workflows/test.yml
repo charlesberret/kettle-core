@@ -247,6 +247,16 @@ jobs:
           print("pipx-style kettle:", out)
           PY
 
+  family-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: Core family metadata (siblings optional in CI)
+        run: python3 tools/check_family.py --core-only
+
   lexicon:
     # The prompt corpus and the copy catalog are where vocabulary drift reaches a
     # user: an LLM mirrors the casing it is shown, so a term misspelled in a prompt

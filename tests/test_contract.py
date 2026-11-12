@@ -146,6 +146,7 @@ class FamilyCheckCommand(unittest.TestCase):
             vscode=vscode,
             require_clean=False,
             run_tests=False,
+            core_only=False,
         )
 
     def run_main(self, args, *, dirty=False):
@@ -198,6 +199,44 @@ class FamilyCheckCommand(unittest.TestCase):
                 code = check_family.main()
         self.assertEqual(code, 2)
         self.assertIn("missing Kettle Git checkouts", err.getvalue())
+
+    def test_family_core_only_skips_sibling_checkouts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            core = Path(tmp) / "kettle-core"
+            core.mkdir()
+            (core / "pyproject.toml").write_text(
+                '[project]\nname = "kettle"\nversion = "0.2.0"\n',
+                encoding="utf-8",
+            )
+            (core / "kettle").mkdir()
+            (core / "kettle" / "kettle_contract.py").write_text(
+                "API_VERSION = 0\nDESK_SCHEMA_VERSION = 0\n",
+                encoding="utf-8",
+            )
+            args = SimpleNamespace(
+                core=core,
+                desktop=Path(tmp) / "missing-desktop",
+                vscode=Path(tmp) / "missing-vscode",
+                require_clean=False,
+                run_tests=False,
+                core_only=True,
+            )
+            out, err = StringIO(), StringIO()
+            with (
+                mock.patch.object(check_family, "parse_args", return_value=args),
+                mock.patch.object(check_family, "is_checkout", return_value=True),
+                mock.patch.object(
+                    check_family,
+                    "status_line",
+                    side_effect=lambda repo, version: f"{repo.name} {version}",
+                ),
+                redirect_stdout(out),
+                redirect_stderr(err),
+            ):
+                code = check_family.main()
+        self.assertEqual(code, 0, err.getvalue())
+        self.assertIn("Kettle core (core-only)", out.getvalue())
+        self.assertIn("contracts core(api=0, desk=0)", out.getvalue())
 
 
 if __name__ == "__main__":

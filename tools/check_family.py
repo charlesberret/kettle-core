@@ -130,6 +130,11 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--require-clean", action="store_true")
     parser.add_argument(
+        "--core-only",
+        action="store_true",
+        help="validate the core checkout only; sibling adapters may be absent",
+    )
+    parser.add_argument(
         "--run-tests",
         action="store_true",
         help="run core, desktop, and VS Code tests serially after compatibility checks",
@@ -137,8 +142,45 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def run_core_only(args: argparse.Namespace) -> int:
+    core = Repo("core", args.core.resolve(), (sys.executable, "-m", "pytest"))
+    if not core.path.is_dir() or not is_checkout(core):
+        print("missing Kettle Git checkouts:", file=sys.stderr)
+        print(f"  {core.name}: {core.path}", file=sys.stderr)
+        return 2
+    try:
+        version = core_version(core)
+        api_version, desk_version = contract_versions(core)
+    except (KeyError, OSError, TypeError, ValueError, json.JSONDecodeError, tomllib.TOMLDecodeError) as exc:
+        print(f"family metadata error: {exc}", file=sys.stderr)
+        return 2
+
+    print("Kettle core (core-only)")
+    print(status_line(core, version))
+    print()
+    print(f"contracts core(api={api_version}, desk={desk_version})")
+
+    failed = False
+    if args.require_clean and dirty(core):
+        print("clean-tree gate failed", file=sys.stderr)
+        failed = True
+
+    if args.run_tests:
+        print()
+        print(f"==> {core.name}: {' '.join(core.test_command)}", flush=True)
+        result = run(core, *core.test_command, capture=False)
+        if result.returncode:
+            print(f"{core.name} tests failed ({result.returncode})", file=sys.stderr)
+            failed = True
+
+    return 1 if failed else 0
+
+
 def main() -> int:
     args = parse_args()
+    if args.core_only:
+        return run_core_only(args)
+
     repos = [
         Repo("core", args.core.resolve(), (sys.executable, "-m", "pytest")),
         Repo("desktop", args.desktop.resolve(), ("npm", "test")),
