@@ -11,6 +11,7 @@ PATH it fails loudly on a syntax error; where node is absent it skips with an ho
 message rather than passing silently.
 """
 
+import json
 import re
 import shutil
 import subprocess
@@ -491,6 +492,61 @@ class FrontendSyntaxGate(unittest.TestCase):
                     0,
                     f"{path.name} failed node --check:\n{proc.stderr}",
                 )
+
+
+@unittest.skipIf(NODE is None, "node not on PATH — undo-timer behavior test skipped")
+class SweepUndoArmsOneProject(unittest.TestCase):
+    """LAB-1580: the 3s undo countdown is armed on one desk and must not close
+    whichever project happens to be loaded when it fires."""
+
+    def _run_arm_scenario(self, switch):
+        html = INDEX.read_text(encoding="utf-8")
+        body = function_source(html, "sweepClicked")
+        script = f"""
+let PROJECT = 'a', busy = false, sweepArm = null;
+const SETTINGS = {{sweepConfirm: false}};
+const swept = [];
+const noopEl = () => ({{classList: {{add(){{}}, remove(){{}}, contains: () => false}},
+                     style: {{}}, textContent: '', disabled: false, focus(){{}}}});
+const els = {{sweepbtn: noopEl(), sweepbg: noopEl(), sweepthrust: noopEl()}};
+const $ = id => els[id] || noopEl();
+const document = {{body: {{classList: {{add(){{}}, remove(){{}}, contains: () => false}}}}}};
+const uic = (k, d) => d;
+let timerFn = null;
+const setTimeout = (fn, ms) => {{ timerFn = fn; return 1; }};
+const clearTimeout = () => {{ timerFn = null; }};
+function sweep() {{ swept.push(PROJECT); }}
+
+{body}
+
+sweepClicked();                    // arm the countdown on project 'a'
+{'PROJECT = "b";' if switch else ''}
+if (timerFn) timerFn();            // the countdown fires
+console.log('KETTLE-RESULT ' + JSON.stringify({{swept}}));
+"""
+        with tempfile.NamedTemporaryFile(
+            "w", suffix=".js", delete=False, encoding="utf-8"
+        ) as fh:
+            fh.write(script)
+            tmp = fh.name
+        try:
+            proc = subprocess.run(
+                [NODE, tmp], capture_output=True, text=True, timeout=20
+            )
+        finally:
+            Path(tmp).unlink(missing_ok=True)
+        self.assertEqual(proc.returncode, 0, f"node run failed:\n{proc.stderr}")
+        line = next(l for l in proc.stdout.splitlines()
+                    if l.startswith("KETTLE-RESULT "))
+        return json.loads(line.split(" ", 1)[1])["swept"]
+
+    def test_switching_projects_mid_countdown_aborts_the_sweep(self):
+        self.assertEqual(self._run_arm_scenario(switch=True), [],
+                         "armed on 'a', loaded 'b' at fire: nothing may be swept")
+
+    def test_staying_put_still_sweeps(self):
+        self.assertEqual(self._run_arm_scenario(switch=False), ["a"],
+                         "armed on 'a' and still on 'a': the countdown sweeps 'a'")
 
 
 if __name__ == "__main__":
