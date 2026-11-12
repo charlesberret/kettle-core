@@ -334,6 +334,90 @@ Prefer `text` / `stat` in new clients. Unknown `id` values return **404**
 
 ---
 
+## Queue entry
+
+The queue is the sitting's central resource. Handlers read and write
+`.kettle/runtime/queue.json`; `GET /api/queue` returns that document plus fields
+injected only on the wire (never written back to disk).
+
+### Queue envelope
+
+| Field | Type | When present |
+|-------|------|--------------|
+| `curated` | string | Always — how this batch was stocked (may be a placeholder on a new desk) |
+| `entries` | array | Always — zero or more entry objects |
+
+```kettle-contract
+{"scope": "queue-envelope", "keys": ["curated", "entries"]}
+```
+
+### Entry fields (`entries[]`)
+
+| Field | Type | When present |
+|-------|------|--------------|
+| `id` | string | Always — stable slug for this item |
+| `title` | string | Usually — short label in the queue list |
+| `path` | string | Always — absolute path to the file under review |
+| `project` | string | Usually — registry display `name` |
+| `project_root` | string | Usually — absolute registered project root |
+| `ask_type` | string | Usually — `input` \| `tuning` \| `judgment` \| `fill` |
+| `ask` | string | Usually — one plain line: what the reviewer should do |
+| `desk_item` | string \| null | Optional — inbox/desk ordinal when the kit uses one |
+| `urgency` | string | Usually — `high` \| `medium` \| `low` |
+| `status` | string | Always — `pending` \| `approved` \| `set-aside` |
+| `unblocks` | string | Optional — one-line dependency note (`—` when none) |
+| `brief` | string | Usually — cold-re-entry brief (see queue schema in kits) |
+| `source` | string | Optional — absolute path to the upstream item (typical for inbox intake) |
+| `founding_phase` | string | Founding proposal entry only — `"proposal"` when `id` is `desk-proposal` |
+| `comment` | string | When set via `POST /api/comment` (current note on the entry) |
+| `approved` | string (ISO date) | When `status` is `approved` — set by `POST /api/approve` |
+| `set_aside` | string (ISO date) | When `status` is `set-aside` — set by `POST /api/set-aside` |
+| `diff` | object \| null | **Response only** — always present on `GET /api/queue`: `{ "added", "removed" }` line counts vs the entry snapshot, or `null` when there is no baseline |
+| `comment_history` | array | **Response only** — always present on `GET /api/queue`: `{ "date", "text" }` objects from `comments.log` (may be `[]`) |
+
+`POST /api/entry` whitelists edits to `title`, `status`, `urgency`, `ask_type`, `ask`,
+`unblocks`, `brief`, and `source` — never `id`, `path`, or session fields.
+
+```kettle-contract
+{"scope": "queue-entry", "keys": ["id", "title", "path", "project", "project_root", "ask_type", "ask", "desk_item", "urgency", "status", "unblocks", "brief", "source", "founding_phase", "comment", "approved", "set_aside", "diff", "comment_history"]}
+```
+
+---
+
+## Streaming contract
+
+Curator turns (`POST /api/chat`, `/api/compact`, `/api/sweep`, `/api/refresh-briefs`,
+`/api/bootstrap`, `/api/interview`, `/api/propose`, `/api/found`) respond with
+**HTTP 200** and `Content-Type: application/x-ndjson; charset=utf-8` once the stream
+has started. The body is **not** one JSON value — clients read newline-delimited JSON
+events until a terminal `done`. Transport is HTTP/1.0 close-delimited (default handler).
+
+| Rule | Detail |
+|------|--------|
+| Pre-stream failures | Malformed body, missing project, or curator spawn failure → ordinary JSON error (4xx/5xx), **no** NDJSON |
+| In-stream failures | `error` event, then exactly one terminal `done` — nothing follows `done` |
+| Short-circuit | Idempotent notices (`stream_idle`) still use HTTP 200 NDJSON: one `text` chunk, then `done` |
+| Idle | No normalized event for `settings.curator.idle_timeout_s` (default 300s) → `error` then `done` |
+| Disconnect | Client hang-up kills the curator subprocess |
+
+### Event kinds (`t`)
+
+| `t` | Fields (typical) | Meaning |
+|-----|------------------|---------|
+| `model` | `s`, `session?` | Model id / session id from the provider init |
+| `text` | `s` | Assistant prose chunk (viewport-visible) |
+| `tool` | `s`, `tool?`, `path?` | Tool-use hint |
+| `activity` | `s`, `kind?` | Coarse working-state chrome (not provider reasoning text) |
+| `usage` | `context`, `peak`, `window`, `output`, `cost`, `fraction`, … | Live context meter snapshot |
+| `done` | `cost?`, `ctx?`, `usage?`, `error?` | **Terminal** — exactly one per stream |
+| `error` | `s` | Failure before or during the turn (always followed by `done`) |
+
+```kettle-contract
+{"scope": "stream-event", "keys": ["model", "text", "tool", "activity", "usage", "done", "error"]}
+```
+
+---
+
 ## Auth & request guards
 
 Every route under `/api/` requires:
@@ -547,9 +631,67 @@ Settings groups added for public installs (brief 10):
 
 ### Tier 4 — desk admin
 
-Kits, lineage (`/api/lineage`, resolve/accept/bind), projects edit/delete/refound, `/api/entry`, `/api/diff`, `/api/diffstat`, `/api/admin`.
+Desk metadata, kits, lineage, registry edits, per-entry field edits, unified diffs,
+and the read-only admin overlay. All require `X-Kettle-Token` and (except admin)
+`project` where noted.
 
-**Diff caveat:** `/api/diff` returns `{ "diff": "<unified text>" }`; `/api/diffstat` returns `{ "diff": { "added", "removed" } | null }` — same key, different types.
+#### Kits
+
+| Method | Path | Body / query | Success JSON |
+|--------|------|--------------|--------------|
+| GET | `/api/kits` | — | `{ "kits": [...], "kinds": ["writing","code",...] }` — each kit includes `_key`, `_source`, and kit fields |
+| POST | `/api/kits/save` | `{ "key", "kit": {…} }` | Same shape as GET — user override stored in `settings.kits` |
+| POST | `/api/kits/delete` | `{ "key" }` | Same shape as GET — removes user override for `key` |
+
+```kettle-contract
+{"scope": "route", "method": "GET", "path": "/api/kits", "keys": ["kits", "kinds"]}
+```
+
+#### Lineage
+
+| Method | Path | Body / query | Success JSON |
+|--------|------|--------------|--------------|
+| GET | `/api/lineage` | `?project=` required | `{ "baseline_ts", "counts": {agent,user,unattributed}, "changed", "changes": [...] }` |
+| POST | `/api/lineage/resolve` | `{ "project", "path", "as"? }` | `{ "ok": true }` — `as` defaults to `"user"` |
+| POST | `/api/lineage/accept` | `{ "project" }` | `{ "ok": true, "ts", "files" }` — new baseline timestamp and file count |
+| POST | `/api/lineage/bind` | `{ "project" }` | `{ "ok": true, "file", "action", "editing_created" }` — writes lineage directive |
+
+```kettle-contract
+{"scope": "route", "method": "GET", "path": "/api/lineage", "keys": ["baseline_ts", "counts", "changed", "changes"]}
+{"scope": "route", "method": "POST", "path": "/api/lineage/resolve", "keys": ["ok"]}
+{"scope": "route", "method": "POST", "path": "/api/lineage/accept", "keys": ["ok", "ts", "files"]}
+{"scope": "route", "method": "POST", "path": "/api/lineage/bind", "keys": ["ok", "file", "action", "editing_created"]}
+```
+
+#### Registry (per-project)
+
+| Method | Path | Body | Success JSON |
+|--------|------|------|--------------|
+| POST | `/api/projects/edit` | `{ "id", "name", "root", "kit"?, "max_depth"? }` | `{ "projects", "home" }` |
+| POST | `/api/projects/delete` | `{ "id" }` | `{ "projects", "home" }` — files on disk unchanged |
+| POST | `/api/projects/refound` | `{ "id" }` | `{ "ok", "backup", "note_preserved", "kept" }` — 409 `busy` when a stream is active |
+
+```kettle-contract
+{"scope": "route", "method": "POST", "path": "/api/projects/refound", "keys": ["ok", "backup", "note_preserved", "kept"]}
+```
+
+#### Entry, diff, admin
+
+| Method | Path | Body / query | Success JSON |
+|--------|------|--------------|--------------|
+| POST | `/api/entry` | `{ "project", "id", "fields": {…} }` | `{ "ok": true, "entry": {…} }` — `entry` is the post-mutation queue row (no `diff` / `comment_history`) |
+| GET | `/api/diff` | `?project=&id=` | `{ "text", "diff" }` — unified diff string; `diff` is a legacy alias of `text` |
+| GET | `/api/diffstat` | `?project=&id=` | `{ "stat", "diff" }` — `stat` is `{added,removed}` or `null`; legacy `diff` duplicates `stat` |
+| GET | `/api/admin` | `?project=` optional highlight | `{ "server", "settings", "projects", "fleet_panels", "sentinel", "events", "watcher", "watch_health" }` — fleet panels null unless `admin.fleet_panels` |
+
+```kettle-contract
+{"scope": "route", "method": "POST", "path": "/api/entry", "keys": ["ok", "entry"]}
+{"scope": "route", "method": "GET", "path": "/api/diff", "keys": ["text", "diff"]}
+{"scope": "route", "method": "GET", "path": "/api/diffstat", "keys": ["stat", "diff"]}
+{"scope": "route", "method": "GET", "path": "/api/admin", "keys": ["server", "settings", "projects", "fleet_panels", "sentinel", "events", "watcher", "watch_health"]}
+```
+
+**Diff caveat:** `/api/diff` and `/api/diffstat` both expose a legacy `diff` key; prefer `text` / `stat` in new clients (see Diff responses above).
 
 ### Tier 5 — host-specific / experimental
 
