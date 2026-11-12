@@ -1089,6 +1089,43 @@ class EndpointTests(ServerFixture):
         self.assertIn("User comment for this entry: also check tone", prompt)
         self.assertIn("comments.log", prompt)
 
+    def _sweep_with_failure_stream(self, *lines):
+        server.comments_log_path(self.proj()).write_text(
+            "2026-06-29\talpha\tfix the TKs\n"
+        )
+        self._stub_claude(*lines)
+        s, body = self._post_stream("/api/sweep", {"project": "t"})
+        self.assertEqual(s, 200)
+        events = self._events(body)
+        self.assertTrue(events[-1].get("error"), events[-1])
+        return sweepkit.read_sweep_health(self.proj()), server.parse_comments_log(
+            server.comments_log_path(self.proj()))
+
+    def test_sweep_failure_keeps_user_comments_claude(self):
+        # Claude reports the failure on the result event itself; there is no
+        # separate error event after it. A failed sweep must not retire the
+        # user's comments.
+        health, comments = self._sweep_with_failure_stream(
+            self._init(), self._say("hit the limit"),
+            json.dumps({"type": "result", "is_error": True,
+                        "subtype": "error_max_turns"}),
+        )
+        self.assertEqual(health["state"], "failed")
+        self.assertEqual(health["error"], "error_max_turns")
+        self.assertEqual([c["text"] for c in comments["alpha"]], ["fix the TKs"])
+
+    def test_sweep_failure_keeps_user_comments_grok(self):
+        # Grok's `end` event carries the failure; its trailing `error` event is
+        # emitted after `done` and the server's loop never reaches it.
+        health, comments = self._sweep_with_failure_stream(
+            self._init(), self._say("hit the limit"),
+            json.dumps({"type": "end", "sessionId": "g1",
+                        "error": {"message": "rate limit exhausted"}}),
+        )
+        self.assertEqual(health["state"], "failed")
+        self.assertEqual(health["error"], "rate limit exhausted")
+        self.assertEqual([c["text"] for c in comments["alpha"]], ["fix the TKs"])
+
     def test_approve_marks_and_logs(self):
         s, _ = _http("POST", f"{self.base}/api/approve", {"project": "t", "id": "beta"})
         self.assertEqual(s, 200)
