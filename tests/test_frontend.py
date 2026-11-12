@@ -11,6 +11,7 @@ PATH it fails loudly on a syntax error; where node is absent it skips with an ho
 message rather than passing silently.
 """
 
+import json
 import re
 import shutil
 import subprocess
@@ -491,6 +492,83 @@ class FrontendSyntaxGate(unittest.TestCase):
                     0,
                     f"{path.name} failed node --check:\n{proc.stderr}",
                 )
+
+
+@unittest.skipIf(NODE is None, "node not on PATH — pack-preview behavior test skipped")
+class PackPreviewKeepsOverrides(unittest.TestCase):
+    """LAB-1581: a pack preview must be render-only.
+
+    Runs the real extracted functions under node: preview a pack, then edit one
+    swatch. The save payload must carry every previously stored override plus
+    the new swatch — before the fix the preview emptied SETTINGS.colors, so the
+    next save persisted a truncated map and silently deleted the user's words.
+    """
+
+    def test_preview_then_one_swatch_edit_keeps_the_saved_map(self):
+        html = INDEX.read_text(encoding="utf-8")
+        body = "\n".join(
+            function_source(html, name)
+            for name in ("ovr", "endPackPreview", "appearanceThemeId",
+                         "applyAppearancePalette", "setColor")
+        )
+        script = f"""
+let SETTINGS = {{
+  builtinTheme: 'kettle',
+  colors: {{'--ansi-1': '#112233', '--ansi-4': '#445566'}},
+  slots: {{mdhead: '--ansi-2'}},
+  iface: {{bg: '--ansi-3'}},
+  ifaceOpacity: {{bg: 80}},
+  slotOpacity: {{mdhead: 90}},
+}};
+let APPEARANCE_THEME_ID = null;
+let PACK_PREVIEW = false;
+const BUILTIN_THEMES = {{
+  kettle: {{label: 'Kettle', dark: {{colors: {{}}, slots: {{}}, iface: {{}}}}}},
+  solar:  {{label: 'Solar',  dark: {{colors: {{'--ansi-0': '#000000'}}, slots: {{}}, iface: {{}}}}}},
+}};
+const calls = [];
+function saveSettings(p) {{ calls.push(JSON.parse(JSON.stringify(p))); }}
+function applyTheme() {{}}
+function buildColorRows() {{}}
+function buildSlotRows() {{}}
+function buildIfaceRows() {{}}
+function rebuildPaletteOptions() {{}}
+function isHex(v) {{ return typeof v === 'string' && /^#[0-9a-f]{{6}}$/i.test(v); }}
+const $ = () => ({{querySelectorAll: () => []}});
+
+{body}
+
+applyAppearancePalette('solar', {{asDefault: false}});   // the preview
+setColor('--ansi-2', '#aabbcc');                          // one swatch edit
+console.log('KETTLE-RESULT ' + JSON.stringify({{calls, SETTINGS, PACK_PREVIEW, APPEARANCE_THEME_ID}}));
+"""
+        with tempfile.NamedTemporaryFile(
+            "w", suffix=".js", delete=False, encoding="utf-8"
+        ) as fh:
+            fh.write(script)
+            tmp = fh.name
+        try:
+            proc = subprocess.run(
+                [NODE, tmp], capture_output=True, text=True, timeout=20
+            )
+        finally:
+            Path(tmp).unlink(missing_ok=True)
+        self.assertEqual(proc.returncode, 0, f"node run failed:\n{proc.stderr}")
+        line = next(l for l in proc.stdout.splitlines()
+                    if l.startswith("KETTLE-RESULT "))
+        out = json.loads(line.split(" ", 1)[1])
+
+        self.assertEqual(len(out["calls"]), 1,
+                         f"preview itself must not save: {out['calls']}")
+        saved_colors = out["calls"][0]["colors"]
+        for key in ("--ansi-1", "--ansi-4"):      # pre-existing overrides
+            self.assertIn(key, saved_colors)
+        self.assertEqual(saved_colors["--ansi-2"], "#aabbcc")  # the new swatch
+        for key in ("slots", "iface", "ifaceOpacity", "slotOpacity"):
+            self.assertNotEqual(out["SETTINGS"][key], {},
+                                f"preview truncated SETTINGS.{key}")
+        self.assertFalse(out["PACK_PREVIEW"], "editing a swatch ends the preview")
+        self.assertIsNone(out["APPEARANCE_THEME_ID"])
 
 
 if __name__ == "__main__":
