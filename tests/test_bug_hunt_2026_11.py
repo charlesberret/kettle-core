@@ -1,7 +1,18 @@
-"""Expected-failure reproductions for docs/bug-hunt-2026-11.md.
+"""Strict expected failures.
 
-Each test asserts the behavior we want after a fix. While the defect remains, pytest
-reports XFAIL; the rest of the suite should stay green.
+- relative path under the supplied base:
+  https://github.com/charlesberret/kettle-core/issues/45
+- one bad working-record line aborts the read:
+  https://github.com/charlesberret/kettle-core/issues/44
+- a corrupt session file is read as empty:
+  https://github.com/charlesberret/kettle-core/issues/48
+- saving over corrupt settings drops the unread bytes:
+  https://github.com/charlesberret/kettle-core/issues/47
+- string and numeric queue ids do not match:
+  https://github.com/charlesberret/kettle-core/issues/46
+
+Each test states a contract. While the code does not meet it, pytest reports
+a strict expected failure.
 """
 
 from __future__ import annotations
@@ -74,8 +85,8 @@ def settings_sandbox(monkeypatch):
 
 
 @pytest.mark.xfail(
-    strict=False,
-    reason="safe_path must reject relative paths that leave the supplied project base",
+    strict=True,
+    reason="a relative path must stay under the supplied base",
 )
 def test_safe_path_relative_must_stay_under_base(twin_desks):
     proj_a = twin_desks["alpha"]
@@ -84,7 +95,7 @@ def test_safe_path_relative_must_stay_under_base(twin_desks):
 
 
 @pytest.mark.xfail(
-    strict=False,
+    strict=True,
     reason="read_record should skip or surface bad JSONL lines, not abort the whole read",
 )
 def test_read_record_skips_corrupt_jsonl_line(twin_desks):
@@ -106,20 +117,20 @@ def test_read_record_skips_corrupt_jsonl_line(twin_desks):
 
 
 @pytest.mark.xfail(
-    strict=False,
-    reason="corrupt session.json must not be read as an empty session",
+    strict=True,
+    reason="corrupt session.json must surface JSONDecodeError, not be read as an empty session",
 )
 def test_load_session_corrupt_json_surfaces_error(twin_desks):
     proj = {"id": "alpha", "root": str(twin_desks["alpha"])}
     sp = server.session_path(proj)
     sp.parent.mkdir(parents=True, exist_ok=True)
     sp.write_text('{"session_id": "keep-me", "status": "founded"', encoding="utf-8")
-    data = server.load_session(proj)
-    assert data.get("session_id") == "keep-me"
+    with pytest.raises(json.JSONDecodeError):
+        server.load_session(proj)
 
 
 @pytest.mark.xfail(
-    strict=False,
+    strict=True,
     reason="save_settings on corrupt disk should snapshot like load_settings, not merge {}",
 )
 def test_save_settings_corrupt_disk_preserves_backup(settings_sandbox):
@@ -130,7 +141,7 @@ def test_save_settings_corrupt_disk_preserves_backup(settings_sandbox):
 
 
 @pytest.mark.xfail(
-    strict=False,
+    strict=True,
     reason="find_entry should match numeric ids when the lookup key is a string",
 )
 def test_find_entry_coerces_string_and_int_ids():
