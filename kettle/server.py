@@ -16,6 +16,7 @@ Bundled (Electron .app):     PyInstaller sidecar; set DESK_PROJECTS for the regi
 """
 
 import base64
+import contextlib
 import difflib
 import hashlib
 import json
@@ -35,6 +36,11 @@ import threading
 import time
 import urllib.request
 import webbrowser
+
+try:
+    import fcntl
+except ImportError:      # Windows: no flock — the in-process QUEUE_LOCK still applies
+    fcntl = None
 from datetime import date, datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -253,6 +259,30 @@ def sitting_csp(body: bytes) -> str:
         "frame-ancestors 'none'",
     ])
 QUEUE_LOCK = threading.Lock()
+
+@contextlib.contextmanager
+def queue_file_lock(qp: Path):
+    """Serialize queue.json read-modify-write across *processes* (server, kettle-watch,
+    CLI) — QUEUE_LOCK only orders threads inside one process.
+
+    The lock lives on a `queue.lock` sidecar: queue.json itself is replace-by-rename
+    under atomic_write, so its inode is never stable enough to flock. The sidecar is
+    durable desk state — like every runtime file it sits inside `.kettle/` and is
+    covered by the desk's self-ignore. Writers that never take this lock (the curator
+    agent's own Write tool) cannot be fenced by it; first-party writers all can."""
+    if fcntl is None:
+        yield
+        return
+    qp = Path(qp)
+    qp.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(qp.parent / "queue.lock", os.O_RDWR | os.O_CREAT, 0o600)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        yield
+    finally:
+        fcntl.flock(fd, fcntl.LOCK_UN)
+        os.close(fd)
+
 SWEEPS_LOCK = threading.Lock()
 CURATOR_STREAMS: dict[str, int] = {}  # resolved project root → live curator streams
 SWEEPS_IN_FLIGHT: set[str] = set()  # project ids with a sweep stream open in this process
@@ -825,7 +855,7 @@ def load_queue(proj: dict) -> dict:
     may briefly unlink/truncate the file while restocking after a sweep, and a
     concurrent /api/queue (viewport refresh) must not 404 the user for that race."""
     qp = queue_path(proj)
-    with QUEUE_LOCK:
+    with QUEUE_LOCK, queue_file_lock(qp):
         for attempt in (0, 1):
             try:
                 if not os.path.lexists(qp):
@@ -848,7 +878,7 @@ def load_queue(proj: dict) -> dict:
 
 def mutate_queue(proj: dict, fn) -> dict:
     qp = queue_path(proj)
-    with QUEUE_LOCK:
+    with QUEUE_LOCK, queue_file_lock(qp):
         try:
             q = json.loads(qp.read_text())
         except FileNotFoundError:
@@ -1494,10 +1524,11 @@ def register_project(name: str, root: str, kit: str | None = None,
         atomic_write(PROJECTS_PATH, json.dumps(data, indent=2, ensure_ascii=False))
     (rp / ".kettle").mkdir(parents=True, exist_ok=True)   # new durable desk dir
     qp = queue_path(proj)
-    if not qp.exists():
-        atomic_write(qp, json.dumps(
-            dict(EMPTY_QUEUE, curated="awaiting founding curation"),
-            indent=2, ensure_ascii=False))
+    with queue_file_lock(qp):
+        if not qp.exists():
+            atomic_write(qp, json.dumps(
+                dict(EMPTY_QUEUE, curated="awaiting founding curation"),
+                indent=2, ensure_ascii=False))
     from . import egress as _egress
     _egress.ensure_egress(proj)
     note = str(note or "").strip()
@@ -1563,8 +1594,9 @@ def refound_desk(proj: dict) -> dict:
                 child.unlink()
     rt = desk / "runtime"
     rt.mkdir(parents=True, exist_ok=True)
-    atomic_write(rt / "queue.json",
-                 json.dumps(dict(EMPTY_QUEUE, curated="awaiting founding curation"), indent=2))
+    with queue_file_lock(rt / "queue.json"):
+        atomic_write(rt / "queue.json",
+                     json.dumps(dict(EMPTY_QUEUE, curated="awaiting founding curation"), indent=2))
     atomic_write(rt / "session.json", json.dumps({"founding_note": note}, indent=2))
     return {"ok": True, "backup": str(bk), "note_preserved": bool(note), "kept": sorted(kept)}
 
