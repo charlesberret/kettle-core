@@ -242,6 +242,30 @@ class TestEnsure(unittest.TestCase):
         self.assertEqual(out["curator"]["idle_timeout_s"], 12.5)
 
 
+class TestCatalogModels(unittest.TestCase):
+    """Regression guard for hand-maintained CATALOG_MODELS (see docs/MODEL-CATALOG.md)."""
+
+    def test_catalog_model_ids_unique(self):
+        ids = [m["id"] for m in curator.CATALOG_MODELS if m.get("id")]
+        self.assertEqual(
+            len(ids),
+            len(set(ids)),
+            msg="duplicate catalog ids: "
+            + ", ".join(sorted({i for i in ids if ids.count(i) > 1})),
+        )
+
+    def test_each_provider_default_in_catalog(self):
+        by_id = {m["id"]: m for m in curator.CATALOG_MODELS if m.get("id")}
+        for provider in ("claude", "grok", "chatgpt", "gemini"):
+            defaults = curator.default_models_for(provider)
+            for task, mid in defaults.items():
+                if not mid or mid == "default":
+                    continue
+                with self.subTest(provider=provider, task=task, model=mid):
+                    self.assertIn(mid, by_id, f"missing from CATALOG_MODELS")
+                    self.assertEqual(by_id[mid].get("provider"), provider)
+
+
 class TestCatalog(unittest.TestCase):
     def test_build_catalog_seed_menu_and_visible(self):
         # Pin PATH so the visibility assertions cannot pass vacuously on a host with
