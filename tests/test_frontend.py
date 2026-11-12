@@ -315,7 +315,6 @@ class ViewportRitualRegressionBar(unittest.TestCase):
         self.assertIn("'/api/compact'", self.function("runCompact"))
 
 
-@unittest.skipIf(NODE is None, "node not on PATH — frontend syntax gate skipped")
 class UiDebugMode(unittest.TestCase):
     """The copy inspector: off by default, and it never writes into the app."""
 
@@ -458,6 +457,7 @@ class FinishBatchAndAgentsTab(unittest.TestCase):
                       function_source(self.html, "setAdminTab"))
 
 
+@unittest.skipIf(NODE is None, "node not on PATH — frontend syntax gate skipped")
 class FrontendSyntaxGate(unittest.TestCase):
 
     def test_index_html_has_inline_scripts(self):
