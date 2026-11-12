@@ -5,12 +5,32 @@ on:
   push:
     branches:
       - main
+  schedule:
+    # Weekly: the vendored-deps job re-queries OSV even when nothing moved.
+    # Every other job is gated to push/PR below so a cron run costs one job.
+    - cron: "13 6 * * 1"
 
 permissions:
   contents: read
 
 jobs:
+  vendored-deps:
+    # The sanitizer is the boundary between curator output and the sitting DOM:
+    # a known advisory against a vendored build fails CI, not a later human check.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: Query OSV for the pinned vendored versions
+        run: tools/check-vendored-osv.py
+      - name: Self-check (a known-vulnerable version must fail)
+        run: |
+          tools/check-vendored-osv.py --probe dompurify@3.2.6 && exit 1 || true
+
   pytest:
+    if: github.event_name != 'schedule'
     strategy:
       fail-fast: false
       matrix:
@@ -54,6 +74,7 @@ jobs:
 
   # Wheel / pipx-style install with bundled static/ and kits/ package data.
   package-install:
+    if: github.event_name != 'schedule'
     strategy:
       fail-fast: false
       matrix:
@@ -258,6 +279,7 @@ jobs:
         run: python3 tools/check_family.py --core-only
 
   lexicon:
+    if: github.event_name != 'schedule'
     # The prompt corpus and the copy catalog are where vocabulary drift reaches a
     # user: an LLM mirrors the casing it is shown, so a term misspelled in a prompt
     # comes back in every brief the curator writes. Those two are blocking. Docs are
@@ -291,6 +313,7 @@ jobs:
           EOF
 
   standalone-binary:
+    if: github.event_name != 'schedule'
     # The one recipe that turns the package into something a stranger can run. It
     # rots silently otherwise: kettle-desktop's sidecar spec still points at the
     # pre-package layout and fails its own gate.
