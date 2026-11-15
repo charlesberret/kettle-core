@@ -22,7 +22,7 @@ documentation — not private release notes or internal dashboards.
 | -------- | ---------- | ---------------- | ---------- |
 | Claude Code | `claude` | `setup` / `chat` → `sonnet` (see `DEFAULT_MODELS`) | [Claude models overview](https://docs.anthropic.com/en/docs/about-claude/models) |
 | Grok Build CLI | `grok` | `grok-4.5` | [xAI docs](https://docs.x.ai/docs/models) |
-| ChatGPT / Codex CLI | `chatgpt` | `gpt-5.1` | [OpenAI model docs](https://platform.openai.com/docs/models) |
+| ChatGPT / Codex CLI | `chatgpt` | `gpt-6-sol` | [OpenAI model docs](https://platform.openai.com/docs/models) |
 | Gemini CLI | `gemini` | `gemini-2.5-pro` | [Gemini models](https://ai.google.dev/gemini-api/docs/models) |
 
 When adding a catalog row:
