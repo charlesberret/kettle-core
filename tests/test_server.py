@@ -1788,7 +1788,7 @@ class EndpointTests(ServerFixture):
             "curator": {
                 "provider": "chatgpt",
                 "command": "codex",
-                "models": {"setup": "gpt-5.1", "chat": "gpt-5.1", "glance": "gpt-5-mini"},
+                "models": {"setup": "gpt-6-sol", "chat": "gpt-6-sol", "glance": "gpt-5.6-luna"},
             },
         })
         cmd = server.build_turn_cmd("hello", task="chat", tools_tier="chat")
