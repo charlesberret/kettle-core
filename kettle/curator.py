@@ -162,6 +162,8 @@ def sort_models_by_calibre(ids: list[str]) -> list[str]:
 
 # Canonical model catalog (single source of truth for UIs).
 # Within each provider, list lower → higher calibre (menu / select order).
+# Hand-maintained — when a provider ships a new default or retires an id, follow
+# docs/MODEL-CATALOG.md (then run pytest tests/test_curator.py -q).
 CATALOG_MODELS: list[dict[str, Any]] = [
     # Claude: haiku → sonnet → opus → fable
     {"id": "haiku", "provider": "claude", "label": "Haiku",
