@@ -7,6 +7,14 @@ and Desk schema have their own integer contract versions.
 
 ### Security
 
+- **Vendored DOMPurify updated to 3.4.17** (was 3.2.6). The old version carried 22
+  open advisories on OSV, including GHSA-v8jm-5vwx-cfxm, a moderate-severity XSS
+  published 2026-03-03 and fixed in 3.2.7; Kettle's sanitizer is the boundary between
+  agent-written markdown and the sitting DOM (`index.html` `purifyHtml`). The build
+  comes from the `dompurify@3.4.17` npm tarball with the registry sha512 verified.
+  `marked` stays at 12.0.2 (no open advisories). Both versions are now pinned in
+  `THIRD_PARTY_NOTICES.md`.
+
 - **A registered folder's own agent config no longer runs in Kettle's turns.** A folder
   someone adds may be a clone they haven't read. Live tests found Codex starting an MCP
   server from the folder's `.codex/config.toml` on chat and finish-batch turns, and
