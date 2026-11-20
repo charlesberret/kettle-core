@@ -3268,6 +3268,12 @@ class Handler(BaseHTTPRequestHandler):
                     failure.append(str(evt.get("s") or "curator reported an error"))
                 if evt["t"] == "done":
                     pending_done = evt
+                    # Providers report failure on the done event itself (Claude
+                    # is_error, Grok end{error}); the trailing error event is
+                    # never reached after the break.
+                    if evt.get("error"):
+                        saw_error_evt = True
+                        failure.append(str(evt["error"]))
                     break
                 if not emit(evt):  # client gone
                     client_gone = True
