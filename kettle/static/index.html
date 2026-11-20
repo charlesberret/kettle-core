@@ -6703,8 +6703,10 @@ function sweepClicked(){
     }
     const b = $('sweepbtn');
     b.classList.add('arming'); b.textContent = uic('sweepUndoLabel', 'Undo');
+    const armedProject = PROJECT;   // the countdown is armed on THIS desk
     sweepArm = setTimeout(() => {
       sweepArm = null; b.classList.remove('arming'); b.textContent = uic('sweepLabel', 'Finish batch');
+      if(PROJECT !== armedProject) return;   // switched desks mid-countdown — abort, don't close a desk nobody confirmed
       sweep();
     }, 3000);
     return;
