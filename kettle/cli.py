@@ -155,6 +155,13 @@ def _package_install_info(dist_name: str = DIST_NAME) -> tuple[str, str]:
     try:
         dist = importlib.metadata.distribution(dist_name)
     except importlib.metadata.PackageNotFoundError:
+        # A git worktree or `PYTHONPATH=.` checkout imports kettle and has
+        # pyproject.toml, but no dist-info until `pip install -e .`.
+        from kettle import __version__
+
+        pyproject = Path(__file__).resolve().parent.parent / "pyproject.toml"
+        if pyproject.is_file() and __version__ != "unknown":
+            return __version__, "source-tree"
         return "unknown", "not-installed"
     version = dist.version or "unknown"
     # PEP 610 direct_url.json distinguishes editable checkouts from wheels.
