@@ -34,7 +34,7 @@ try:
     from . import kits  # the per-kind curator playbook (lens · urgency · first-queue heuristic)
 except ImportError:
     kits = None
-from .server import atomic_write, resolve_projects_path
+from .server import atomic_write, queue_file_lock, resolve_projects_path
 from .runtime import CLAUDE_FOREIGN_AGENT_CONFIG_DENY, CLAUDE_PROJECT_ISOLATION, curator_env
 
 HOME = Path.home()
@@ -176,21 +176,22 @@ def normalize_queue(queue_file: Path, proj: dict) -> None:
     """Deterministically repair what the curate agent may have dropped: a missing/empty `status`
     defaults to 'pending' (so the app caches a diff baseline and approve has something to toggle),
     and `project`/`project_root` are backfilled. Never overwrites a real status. Atomic write."""
-    try:
-        q = json.loads(queue_file.read_text())
-    except (OSError, json.JSONDecodeError):
-        return
-    root = str(Path(proj["root"]).expanduser().resolve())
-    changed = False
-    for e in q.get("entries", []):
-        if not e.get("status"):
-            e["status"] = "pending"; changed = True
-        if not e.get("project"):
-            e["project"] = proj["id"]; changed = True
-        if not e.get("project_root"):
-            e["project_root"] = root; changed = True
-    if changed:
-        atomic_write(queue_file, json.dumps(q, indent=2))
+    with queue_file_lock(queue_file):
+        try:
+            q = json.loads(queue_file.read_text())
+        except (OSError, json.JSONDecodeError):
+            return
+        root = str(Path(proj["root"]).expanduser().resolve())
+        changed = False
+        for e in q.get("entries", []):
+            if not e.get("status"):
+                e["status"] = "pending"; changed = True
+            if not e.get("project"):
+                e["project"] = proj["id"]; changed = True
+            if not e.get("project_root"):
+                e["project_root"] = root; changed = True
+        if changed:
+            atomic_write(queue_file, json.dumps(q, indent=2))
 
 
 def intake_pass(proj: dict, st: dict, settings: dict) -> int:
