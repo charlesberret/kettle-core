@@ -7,6 +7,7 @@ import json
 import shutil
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 import kettle.server as server
@@ -170,6 +171,35 @@ class CloseTests(SweepkitBase):
         self.assertIn("ROADMAP.md", body)
         self.assertIn("agent-B may resume", body)
         self.assertIn("Still pending", body)
+
+    def test_close_acts_only_on_the_assessed_set(self):
+        """LAB-1583: an entry or comment landing between assessment and close
+        must survive — the close acts on the assessed set, not the queue as it
+        stands when the archive write runs."""
+        self.seed_quiet_approved()  # e1 approved + snapshotted
+        log = server.comments_log_path(self.proj())
+
+        real_pub = sweepkit.publish_approval_egress
+
+        def inject_then_publish(proj, entries):
+            # runs after assess_close, before archive_queue — the race window
+            server.mutate_queue(proj, lambda q: q["entries"].append(
+                {"id": "late", "path": "doc.md", "status": "pending"}))
+            server.append_line(log, "2026-10-25\te1\ttyped during close\n")
+            return real_pub(proj, entries)
+
+        with mock.patch.object(
+                sweepkit, "publish_approval_egress", inject_then_publish):
+            result = sweepkit.mechanical_close(self.proj())
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["archived"]["archived"], ["e1"])
+        left = server.load_queue(self.proj())["entries"]
+        self.assertEqual([e["id"] for e in left], ["late"])
+        live = server.parse_comments_log(log)
+        self.assertEqual([c["text"] for c in live.get("e1", [])],
+                         ["typed during close"])
+        self.assertNotIn("late", live)
 
     def test_mechanical_close_refuses_when_dirty(self):
         self.seed_quiet_approved()
